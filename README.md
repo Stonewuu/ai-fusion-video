@@ -70,8 +70,8 @@ https://github.com/user-attachments/assets/be99d4c1-dc09-4616-8fba-06cb959c84c8
 
 ```bash
 # 克隆项目
-git clone https://github.com/Stonewuu/fusion-video-package.git
-cd fusion-video-package
+git clone https://github.com/Stonewuu/ai-fusion-video.git
+cd ai-fusion-video
 
 # 可选：复制并修改环境变量
 cp .env.example .env
