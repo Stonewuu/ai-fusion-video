@@ -50,6 +50,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Sparkles, Check, CloudDownload, Search } from "lucide-react";
 import {
   containerVariants,
@@ -57,7 +58,6 @@ import {
   platformIconColors,
   maskSecret,
   getPlatformFields,
-  getPlatformDefaultUrl,
 } from "../_shared";
 
 // ============================================================
@@ -151,11 +151,6 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
               value={form.platform || "openai_compatible"}
               onValueChange={v => {
                 updateField("platform", v as string);
-                // 切换平台时自动填入默认 URL
-                const defaultUrl = getPlatformDefaultUrl(v as string);
-                if (defaultUrl) {
-                  updateField("apiUrl", defaultUrl);
-                }
                 if (v === "openai_compatible") {
                   updateField("autoAppendV1Path", true);
                 }
@@ -188,13 +183,22 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
                 {field.required && <span className="text-destructive ml-0.5">*</span>}
               </Label>
               <div className="relative">
-                <Input
-                  type={field.type === "password" && !showSecrets[field.key] ? "password" : "text"}
-                  placeholder={field.placeholder}
-                  value={(form as unknown as Record<string, string>)[field.key] || ""}
-                  onChange={e => updateField(field.key as keyof ApiConfigSaveReq, e.target.value)}
-                  className="text-sm pr-9"
-                />
+                {field.multiline ? (
+                  <Textarea
+                    placeholder={field.placeholder}
+                    value={(form as unknown as Record<string, string>)[field.key] || ""}
+                    onChange={e => updateField(field.key as keyof ApiConfigSaveReq, e.target.value)}
+                    className="min-h-28 text-sm"
+                  />
+                ) : (
+                  <Input
+                    type={field.type === "password" && !showSecrets[field.key] ? "password" : "text"}
+                    placeholder={field.placeholder}
+                    value={(form as unknown as Record<string, string>)[field.key] || ""}
+                    onChange={e => updateField(field.key as keyof ApiConfigSaveReq, e.target.value)}
+                    className="text-sm pr-9"
+                  />
+                )}
                 {field.type === "password" && (
                   <button
                     type="button"
@@ -205,6 +209,9 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
                   </button>
                 )}
               </div>
+              {field.helperText && (
+                <p className="text-[10px] text-muted-foreground/70">{field.helperText}</p>
+              )}
             </div>
           ))}
 

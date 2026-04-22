@@ -142,6 +142,7 @@ export const PLATFORM_OPTIONS = [
   { value: "openai_compatible", label: "OpenAI 兼容", description: "OpenAI / DeepSeek / 智谱 / 硅基流动等" },
   { value: "volcengine", label: "火山引擎（豆包）", description: "字节跳动火山引擎豆包大模型" },
   { value: "vertex_ai", label: "Google Vertex AI", description: "Google Cloud Vertex AI Gemini" },
+  { value: "gemini", label: "Google Gemini API", description: "Google AI Studio / Gemini Developer API" },
   { value: "GoogleFlowReverseApi", label: "Google Flow Reverse API", description: "Flow2API 反向代理，图片/视频 alias 模型" },
   { value: "dashscope", label: "阿里 DashScope", description: "阿里云通义千问系列" },
   { value: "anthropic", label: "Anthropic", description: "Claude 系列模型" },

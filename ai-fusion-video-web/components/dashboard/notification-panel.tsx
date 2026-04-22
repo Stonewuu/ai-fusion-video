@@ -1324,6 +1324,86 @@ function SceneDetailResult({ data }: { data: unknown }) {
 /** 子资产列表结果 — query_asset_items */
 function AssetItemsResult({ data }: { data: unknown }) {
   const obj = data as Record<string, unknown>;
+  const assets = obj.assets as Array<Record<string, unknown>> | undefined;
+
+  if (assets && Array.isArray(assets)) {
+    const totalAssets = (obj.totalAssets as number) ?? assets.length;
+    const totalItems = assets.reduce((sum, asset) => {
+      const assetItems = asset.items as Array<Record<string, unknown>> | undefined;
+      const assetTotalItems = typeof asset.totalItems === "number"
+        ? asset.totalItems
+        : assetItems?.length ?? 0;
+      return sum + assetTotalItems;
+    }, 0);
+
+    return (
+      <div className="space-y-1.5">
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs font-medium text-foreground">子资产列表</span>
+          <span className="text-[10px] text-muted-foreground/50">
+            共 {totalAssets} 个资产
+          </span>
+          <span className="text-[10px] text-muted-foreground/50">
+            共 {totalItems} 个子资产
+          </span>
+        </div>
+
+        <ul className="space-y-0.5">
+          {assets.slice(0, 8).map((asset, i) => {
+            const status = asset.status as string | undefined;
+            const message = asset.message as string | undefined;
+            const assetType = asset.assetType == null ? undefined : String(asset.assetType);
+            const assetItems = asset.items as Array<Record<string, unknown>> | undefined;
+            const assetTotalItems = typeof asset.totalItems === "number"
+              ? asset.totalItems
+              : assetItems?.length ?? 0;
+            const previewNames = assetItems?.slice(0, 3)
+              .map(item => String(item.name || item.id || "未命名子资产"))
+              .join(" / ");
+
+            return (
+              <li
+                key={asset.assetId ? String(asset.assetId) : i}
+                className="flex items-center gap-2 text-xs text-muted-foreground/90"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-teal-400/40 shrink-0" />
+                <span className="font-medium text-foreground">
+                  {String(asset.assetName || `资产${i + 1}`)}
+                </span>
+                {assetType ? (
+                  <span className="px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 text-[10px]">
+                    {assetTypeNames[assetType] || assetType}
+                  </span>
+                ) : null}
+                {status === "error" ? (
+                  <span className="text-[10px] text-destructive">
+                    {message || "查询失败"}
+                  </span>
+                ) : (
+                  <>
+                    <span className="text-[10px] text-muted-foreground/50">
+                      {assetTotalItems} 个子资产
+                    </span>
+                    {previewNames && (
+                      <span className="text-[10px] text-muted-foreground/60 truncate">
+                        {previewNames}
+                      </span>
+                    )}
+                  </>
+                )}
+              </li>
+            );
+          })}
+          {assets.length > 8 && (
+            <li className="text-[10px] text-muted-foreground/50 pl-3">
+              …还有 {assets.length - 8} 个资产
+            </li>
+          )}
+        </ul>
+      </div>
+    );
+  }
+
   const assetName = obj.assetName as string | undefined;
   const assetType = obj.assetType as string | undefined;
   const totalItems = obj.totalItems as number | undefined;

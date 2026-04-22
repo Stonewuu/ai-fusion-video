@@ -88,6 +88,8 @@ public class AgentScopeAssistantService {
     private final ConcurrentHashMap<String, Disposable> activeSubscriptions = new ConcurrentHashMap<>();
     /** 保存 agent.call() 的 Disposable，cancelStream 时真正取消 Agent 执行 */
     private final ConcurrentHashMap<String, Disposable> agentCallSubscriptions = new ConcurrentHashMap<>();
+    /** 保存当前对话的 StreamingEventHook，供 cancelStream 时中断主/子 Agent */
+    private final ConcurrentHashMap<String, StreamingEventHook> activeStreamingHooks = new ConcurrentHashMap<>();
 
     private static final String CANCEL_FLAG_KEY = "fv:agent:cancel:";
     private static final Duration CANCEL_FLAG_TTL = Duration.ofHours(1);
@@ -118,6 +120,9 @@ public class AgentScopeAssistantService {
         String messageId = IdUtil.fastSimpleUUID();
         String mainAgentName = "ai_assistant_agent";
 
+        // 新一轮执行开始前清理上一次取消留下的 Redis 标志，避免误伤新的同会话请求。
+        clearCancelFlag(conversationId);
+
         try {
             // 1. 获取 AgentScope Model
             Model model = getAgentScopeModel(reqVO.getModelId());
@@ -143,6 +148,7 @@ public class AgentScopeAssistantService {
             // 6. 创建 StreamingEventHook
             StreamingEventHook streamingHook = new StreamingEventHook(
                     eventSink, conversationId, messageId, mainAgentName, cancellationToken);
+                activeStreamingHooks.put(conversationId, streamingHook);
 
             // 7. 构建 Toolkit（普通工具 + 子 Agent 工具）
             Toolkit toolkit = buildToolkit(reqVO, model, toolExecContext, streamingHook, cancellationToken);
@@ -160,6 +166,7 @@ public class AgentScopeAssistantService {
             }
 
             ReActAgent agent = agentBuilder.build();
+            streamingHook.registerActiveAgent(agent);
 
             // 8. 构建输入消息（需要在记录对话前构建，用于标题回退和保存）
             String inputMessage = buildInputMessage(reqVO);
@@ -276,22 +283,6 @@ public class AgentScopeAssistantService {
                     })
                     .doFinally(signalType -> {
                         activeSubscriptions.remove(conversationId);
-                        agentCallSubscriptions.remove(conversationId);
-
-                        boolean wasCancelled = signalType == SignalType.CANCEL
-                                || "cancelled".equals(terminalStatus.get())
-                                || (signalType == SignalType.ON_COMPLETE && isCancelled(conversationId));
-
-                        String finalStatus;
-                        if (signalType == SignalType.ON_ERROR || "failed".equals(terminalStatus.get())) {
-                            finalStatus = "failed";
-                        } else if (wasCancelled) {
-                            finalStatus = "cancelled";
-                        } else {
-                            finalStatus = "completed";
-                        }
-                        conversationService.finish(conversationId, finalStatus);
-                        clearCancelFlag(conversationId);
                     })
                     .subscribe();
 
@@ -301,7 +292,6 @@ public class AgentScopeAssistantService {
                     // agent.call() 返回 Mono<Msg>，Hook 会在执行过程中推送事件
                     Disposable agentDisposable = agent.call(userMsg)
                         .doOnSuccess(response -> {
-                        agentCallSubscriptions.remove(conversationId);
                         terminalStatus.compareAndSet("running", "completed");
                         // 发送 DONE 事件（不再在此保存 assistant 消息，改为在事件流中根据累积文本保存）
                         eventSink.tryEmitNext(new AiChatStreamRespVO()
@@ -312,7 +302,6 @@ public class AgentScopeAssistantService {
                         eventSink.tryEmitComplete();
                         })
                         .doOnError(e -> {
-                        agentCallSubscriptions.remove(conversationId);
                         terminalStatus.set("failed");
                         log.error("[AgentScope:stream] Agent 调用出错", e);
                         eventSink.tryEmitNext(new AiChatStreamRespVO()
@@ -323,6 +312,25 @@ public class AgentScopeAssistantService {
                             .setFinished(true));
                         eventSink.tryEmitComplete();
                         })
+                        .doFinally(signalType -> {
+                        agentCallSubscriptions.remove(conversationId);
+                        activeStreamingHooks.remove(conversationId);
+                        streamingHook.clearTrackedAgents();
+
+                        boolean wasCancelled = signalType == SignalType.CANCEL
+                                || "cancelled".equals(terminalStatus.get())
+                                || isCancelled(conversationId);
+
+                        String finalStatus;
+                        if (signalType == SignalType.ON_ERROR || "failed".equals(terminalStatus.get())) {
+                            finalStatus = wasCancelled ? "cancelled" : "failed";
+                        } else if (wasCancelled) {
+                            finalStatus = "cancelled";
+                        } else {
+                            finalStatus = "completed";
+                        }
+                        conversationService.finish(conversationId, finalStatus);
+                    })
                         .onErrorResume(e -> Mono.empty())
                         .subscribe();
                     agentCallSubscriptions.put(conversationId, agentDisposable);
@@ -331,6 +339,7 @@ public class AgentScopeAssistantService {
             return aiStreamRedisService.subscribe(conversationId);
 
         } catch (Throwable e) {
+            activeStreamingHooks.remove(conversationId);
             log.error("[AgentScope:stream] 初始化失败", e);
             try {
                 conversationService.finish(conversationId, "failed");
@@ -358,6 +367,11 @@ public class AgentScopeAssistantService {
         String cancelKey = CANCEL_FLAG_KEY + conversationId;
         stringRedisTemplate.opsForValue().set(cancelKey, "1", CANCEL_FLAG_TTL);
         log.info("[cancelStream] 已设置取消标志: {}", conversationId);
+
+        StreamingEventHook streamingHook = activeStreamingHooks.get(conversationId);
+        if (streamingHook != null) {
+            streamingHook.interruptTrackedAgents();
+        }
 
         // 1. 取消 agent.call() 的底层执行（LLM 调用 + 工具调用）
         Disposable agentSub = agentCallSubscriptions.remove(conversationId);
@@ -721,7 +735,9 @@ public class AgentScopeAssistantService {
                             subBuilder.toolkit(finalSubToolkit);
                         }
 
-                        return subBuilder.build();
+                        ReActAgent subAgent = subBuilder.build();
+                        streamingHook.registerActiveAgent(subAgent);
+                        return subAgent;
                     }, config)
                     .apply();
 

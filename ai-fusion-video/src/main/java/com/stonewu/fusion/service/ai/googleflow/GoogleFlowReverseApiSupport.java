@@ -28,6 +28,7 @@ import java.util.regex.Pattern;
 public final class GoogleFlowReverseApiSupport {
 
     public static final String PLATFORM = "GoogleFlowReverseApi";
+    public static final String DEFAULT_BASE_URL = "http://localhost:8000";
 
     private static final Pattern MARKDOWN_IMAGE_PATTERN = Pattern.compile("!\\[[^\\]]*]\\((.*?)\\)");
     private static final Pattern HTML_VIDEO_PATTERN = Pattern.compile("<video[^>]+src=['\"](.*?)['\"]", Pattern.CASE_INSENSITIVE);
@@ -111,12 +112,16 @@ public final class GoogleFlowReverseApiSupport {
         return normalized.replaceAll("(?i)/v1$", "");
     }
 
-    public static String requireBaseUrl(ApiConfig apiConfig) {
-        String baseUrl = normalizeBaseUrl(apiConfig != null ? apiConfig.getApiUrl() : null);
-        if (StrUtil.isBlank(baseUrl)) {
-            throw new BusinessException("GoogleFlowReverseApi 缺少 Base URL 配置");
+    public static String resolveBaseUrl(String baseUrl) {
+        String normalizedBaseUrl = normalizeBaseUrl(baseUrl);
+        if (StrUtil.isBlank(normalizedBaseUrl)) {
+            return DEFAULT_BASE_URL;
         }
-        return baseUrl;
+        return normalizedBaseUrl;
+    }
+
+    public static String requireBaseUrl(ApiConfig apiConfig) {
+        return resolveBaseUrl(apiConfig != null ? apiConfig.getApiUrl() : null);
     }
 
     public static JSONObject parseModelConfig(AiModel model) {

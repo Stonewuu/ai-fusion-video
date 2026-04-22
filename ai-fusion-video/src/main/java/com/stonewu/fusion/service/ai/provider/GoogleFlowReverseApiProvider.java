@@ -35,10 +35,7 @@ public class GoogleFlowReverseApiProvider extends AbstractAiProvider {
     @Override
     public List<RemoteModelVO> listRemoteModels(AiProviderContext context) {
         requireApiKey(context.getApiKey(), GoogleFlowReverseApiSupport.PLATFORM);
-        String baseUrl = GoogleFlowReverseApiSupport.normalizeBaseUrl(context.getBaseUrl());
-        if (baseUrl == null || baseUrl.isBlank()) {
-            throw new BusinessException("GoogleFlowReverseApi 缺少 Base URL 配置");
-        }
+        String baseUrl = GoogleFlowReverseApiSupport.resolveBaseUrl(context.getBaseUrl());
 
         String json = executeGet(joinUrl(baseUrl, "/v1/models/aliases"),
                 java.util.Map.of("Authorization", "Bearer " + context.getApiKey()));

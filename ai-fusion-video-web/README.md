@@ -1,36 +1,48 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ai-fusion-video-web
 
-## Getting Started
+融光前端应用，负责项目管理、剧本与分镜编辑、素材管理、Agent Pipeline 可视化和系统设置等界面能力。
 
-First, run the development server:
+完整部署说明请参考仓库根目录的 [README](../README.md)。
+
+## 技术栈
+
+- Next.js 16
+- React 19
+- TypeScript
+- Tailwind CSS v4
+- Zustand
+- Axios
+
+## 本地开发
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
+pnpm install
 pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+默认访问地址：<http://localhost:3000>
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+前端默认请求后端地址：<http://localhost:18080>
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+如需覆盖后端地址，可设置环境变量：
 
-## Learn More
+```bash
+NEXT_PUBLIC_API_BASE_URL=http://localhost:18080
+```
 
-To learn more about Next.js, take a look at the following resources:
+## 生产构建
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```bash
+pnpm build
+pnpm start
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`next.config.ts` 已启用 `standalone` 输出，便于容器化部署。
 
-## Deploy on Vercel
+## 目录说明
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `app/`：App Router 页面与布局
+- `components/`：业务组件与通用 UI 组件
+- `lib/api/`：后端接口封装
+- `lib/store/`：客户端状态管理
+- `proxy.ts`：页面访问控制与登录跳转逻辑

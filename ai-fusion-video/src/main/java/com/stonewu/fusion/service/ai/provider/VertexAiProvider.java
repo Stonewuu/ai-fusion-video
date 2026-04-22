@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.provider;
 
 import cn.hutool.core.util.StrUtil;
+import com.google.auth.oauth2.GoogleCredentials;
 import com.google.cloud.vertexai.VertexAI;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
@@ -12,14 +13,20 @@ import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.io.ByteArrayInputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Collections;
 import java.util.List;
 
 /**
- * Vertex AI / Gemini 提供商。
+ * Vertex AI 提供商。
  */
 @Component
 @Slf4j
 public class VertexAiProvider extends AbstractAiProvider {
+
+    private static final String VERTEX_AI_SCOPE = "https://www.googleapis.com/auth/cloud-platform";
 
     @Override
     public boolean supports(String platform) {
@@ -27,7 +34,7 @@ public class VertexAiProvider extends AbstractAiProvider {
             return false;
         }
         String normalized = platform.toLowerCase();
-        return "vertex_ai".equals(normalized) || "vertexai".equals(normalized) || "gemini".equals(normalized);
+        return "vertex_ai".equals(normalized) || "vertexai".equals(normalized);
     }
 
     @Override
@@ -42,10 +49,16 @@ public class VertexAiProvider extends AbstractAiProvider {
                 .model(context.getModelName());
         applyDouble(context.getConfig(), "temperature", optionsBuilder::temperature);
 
-        VertexAI vertexAI = new VertexAI.Builder()
-                .setProjectId(projectId)
-                .setLocation(location)
-                .build();
+        VertexAI.Builder builder = new VertexAI.Builder()
+            .setProjectId(projectId)
+            .setLocation(location);
+
+        GoogleCredentials credentials = loadServiceAccountCredentials(context);
+        if (credentials != null) {
+            builder.setCredentials(credentials);
+        }
+
+        VertexAI vertexAI = builder.build();
 
         return VertexAiGeminiChatModel.builder()
                 .vertexAI(vertexAI)
@@ -55,29 +68,37 @@ public class VertexAiProvider extends AbstractAiProvider {
 
     @Override
     public Model createAgentScopeModel(AiProviderContext context) {
+        String projectId = getProjectId(context);
+        if (StrUtil.isBlank(projectId)) {
+            throw new BusinessException("Vertex AI 模型缺少 projectId 配置");
+        }
+
         GeminiChatModel.Builder builder = GeminiChatModel.builder()
                 .modelName(context.getModelName())
                 .streamEnabled(true);
 
-        String projectId = getProjectId(context);
-        if (StrUtil.isNotBlank(projectId)) {
-            builder.project(projectId)
-                    .location(getLocation(context))
-                    .vertexAI(true);
-        } else {
-            requireApiKey(context.getApiKey(), "Gemini");
-            builder.apiKey(context.getApiKey());
+        builder.project(projectId)
+                .location(getLocation(context))
+                .vertexAI(true);
+
+        GoogleCredentials credentials = loadServiceAccountCredentials(context);
+        if (credentials != null) {
+            builder.credentials(credentials);
         }
         return builder.build();
     }
 
     @Override
     public List<RemoteModelVO> listRemoteModels(AiProviderContext context) {
-        throw new BusinessException("平台 " + context.getPlatform() + " 暂不支持自动获取模型列表");
+        throw new BusinessException("Vertex AI 暂未接入自动获取模型列表，请手动填写模型 code");
     }
 
     private String getProjectId(AiProviderContext context) {
         String projectId = getStr(context.getConfig(), "projectId", null);
+        if (StrUtil.isNotBlank(projectId)) {
+            return projectId;
+        }
+        projectId = getStr(context.getConfig(), "project", null);
         if (StrUtil.isNotBlank(projectId)) {
             return projectId;
         }
@@ -93,5 +114,19 @@ public class VertexAiProvider extends AbstractAiProvider {
             return context.getApiConfig().getApiUrl();
         }
         return "us-central1";
+    }
+
+    private GoogleCredentials loadServiceAccountCredentials(AiProviderContext context) {
+        String appSecret = context.getApiConfig() != null ? context.getApiConfig().getAppSecret() : null;
+        if (StrUtil.isBlank(appSecret)) {
+            return null;
+        }
+        try {
+            return GoogleCredentials.fromStream(
+                    new ByteArrayInputStream(appSecret.getBytes(StandardCharsets.UTF_8)))
+                    .createScoped(Collections.singletonList(VERTEX_AI_SCOPE));
+        } catch (IOException e) {
+            throw new BusinessException("Vertex AI 服务账号 JSON Key 无效: " + e.getMessage());
+        }
     }
 }

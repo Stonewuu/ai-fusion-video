@@ -3,7 +3,7 @@ name: Publish Docker Images
 on:
   push:
     tags:
-      - '[0-9]*'   # 匹配 0.1.0、1.0.0 等格式
+      - '[0-9]*'   # 匹配 0.2.0、1.0.0 等版本标签
 
 env:
   DOCKER_HUB_USERNAME: stonewuu

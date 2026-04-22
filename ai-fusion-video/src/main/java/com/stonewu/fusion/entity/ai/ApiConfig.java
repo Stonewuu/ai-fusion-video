@@ -28,7 +28,7 @@ public class ApiConfig extends BaseEntity {
     /** 配置名称 */
     private String name;
 
-    /** 平台标识：deepseek / dashscope / openai_compatible / ollama / anthropic / vertex_ai / GoogleFlowReverseApi */
+    /** 平台标识：deepseek / dashscope / openai_compatible / gemini / ollama / anthropic / vertex_ai / GoogleFlowReverseApi */
     private String platform;
 
     /** API 类型：1-文本对话 2-图片生成 3-视频生成 */

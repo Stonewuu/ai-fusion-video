@@ -118,6 +118,7 @@ public class AiProviderContextFactory {
             if (url.contains("anthropic")) return "anthropic";
             if (url.contains("flow2api")) return "GoogleFlowReverseApi";
             if (url.contains("localhost") || url.contains("127.0.0.1")) return "ollama";
+            if (url.contains("ai.google.dev") || url.contains("generativelanguage")) return "gemini";
             if (url.contains("googleapis.com") || url.contains("vertex")) return "vertex_ai";
             if (url.contains("openai.com")) return "openai";
             return "openai_compatible";

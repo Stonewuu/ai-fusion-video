@@ -14,6 +14,7 @@ import okhttp3.Response;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -271,6 +272,58 @@ public abstract class AbstractAiProvider implements AiProvider {
         }
         result.sort(Comparator.comparing(RemoteModelVO::getId));
         return result;
+    }
+
+    protected List<RemoteModelVO> parseGeminiModels(String json) {
+        Map<String, RemoteModelVO> deduplicated = new LinkedHashMap<>();
+        try {
+            JSONObject root = JSONUtil.parseObj(json);
+            JSONArray models = root.getJSONArray("models");
+            if (models == null) {
+                return List.of();
+            }
+            for (int index = 0; index < models.size(); index++) {
+                JSONObject item = models.getJSONObject(index);
+                if (!supportsGeminiGenerateContent(item.getJSONArray("supportedGenerationMethods"))) {
+                    continue;
+                }
+
+                String id = item.getStr("baseModelId");
+                if (StrUtil.isBlank(id)) {
+                    id = StrUtil.removePrefix(item.getStr("name"), "models/");
+                }
+                if (StrUtil.isBlank(id)) {
+                    continue;
+                }
+
+                String displayName = item.getStr("displayName");
+                deduplicated.putIfAbsent(id, RemoteModelVO.builder()
+                        .id(id)
+                        .ownedBy(StrUtil.blankToDefault(displayName, "google"))
+                        .modelType(1)
+                        .build());
+            }
+        } catch (Exception e) {
+            String responsePreview = previewResponse(json);
+            log.error("[AiProvider] 解析 Gemini 模型列表失败, responsePreview={}", responsePreview, e);
+            throw new BusinessException("解析 Gemini 模型列表响应失败。响应预览: " + responsePreview);
+        }
+        List<RemoteModelVO> result = new ArrayList<>(deduplicated.values());
+        result.sort(Comparator.comparing(RemoteModelVO::getId));
+        return result;
+    }
+
+    private boolean supportsGeminiGenerateContent(JSONArray supportedMethods) {
+        if (supportedMethods == null) {
+            return false;
+        }
+        for (int index = 0; index < supportedMethods.size(); index++) {
+            String method = supportedMethods.getStr(index);
+            if ("generateContent".equalsIgnoreCase(method)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String previewResponse(String responseBody) {

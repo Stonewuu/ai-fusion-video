@@ -215,17 +215,19 @@ export default function ProjectOverviewPage() {
     usePipelineStore();
 
   const handleAiScriptCreated = (script: { id: number; title: string }) => {
+    const scriptDisplayTitle = script.title?.trim() || project?.name?.trim() || "未命名项目";
+
     // 刷新列表
     loadAllData();
 
     // 启动 pipeline
     const pipelineId = addPipeline({
-      label: `AI 生成剧本 - ${script.title}`,
+      label: `AI 生成剧本 - ${scriptDisplayTitle}`,
       projectId,
       request: {
         agentType: "script_full_parse",
         category: "pipeline",
-        title: `AI 剧本解析：${script.title}`,
+        title: `AI 剧本解析：${scriptDisplayTitle}`,
         projectId,
         context: { scriptId: script.id },
       },
@@ -247,21 +249,23 @@ export default function ProjectOverviewPage() {
   const handleAiStoryboard = async () => {
     if (!script) return;
 
+    const scriptDisplayTitle = script.title?.trim() || project?.name?.trim() || "未命名项目";
+
     try {
       // 先创建分镜记录，获取 storyboardId
       const newStoryboard = await storyboardApi.create({
         projectId,
         scriptId: script.id,
-        title: script.title || "AI 分镜",
+        title: script.title?.trim() || project?.name?.trim() || "AI 分镜",
       });
 
       const pipelineId = addPipeline({
-        label: `AI 生成分镜 - ${script.title}`,
+        label: `AI 生成分镜 - ${scriptDisplayTitle}`,
         projectId,
         request: {
           agentType: "script_to_storyboard",
           category: "pipeline",
-          title: `AI 生成分镜：${script.title}`,
+          title: `AI 生成分镜：${scriptDisplayTitle}`,
           projectId,
           context: { scriptId: script.id, storyboardId: newStoryboard.id },
         },
