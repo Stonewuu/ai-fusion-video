@@ -188,7 +188,8 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
                     placeholder={field.placeholder}
                     value={(form as unknown as Record<string, string>)[field.key] || ""}
                     onChange={e => updateField(field.key as keyof ApiConfigSaveReq, e.target.value)}
-                    className="min-h-28 text-sm"
+                    spellCheck={false}
+                    className="min-h-28 max-h-60 overflow-auto resize-none font-mono text-xs leading-relaxed break-all whitespace-pre-wrap"
                   />
                 ) : (
                   <Input

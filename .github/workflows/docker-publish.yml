@@ -40,8 +40,8 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            stonewuu/ai-fusion-video-backend:${{ steps.version.outputs.VERSION }}
-            stonewuu/ai-fusion-video-backend:latest
+            stonewuu/ai-fusion-video:${{ steps.version.outputs.VERSION }}
+            stonewuu/ai-fusion-video:latest
           cache-from: type=gha,scope=backend
           cache-to: type=gha,mode=max,scope=backend
 
