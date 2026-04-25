@@ -67,7 +67,7 @@ public class GeminiAiProvider extends AbstractAiProvider {
         String url = joinUrl(apiBaseUrl, "/v1beta/models?pageSize=1000");
         log.info("[GeminiAiProvider] 获取 Gemini 远程模型列表: {}", url);
 
-        String response = executeGet(url, Map.of("x-goog-api-key", context.getApiKey()));
+        String response = executeGet(url, Map.of("x-goog-api-key", context.getApiKey()), context.getApiConfig());
         return parseGeminiModels(response);
     }
 

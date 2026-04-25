@@ -11,7 +11,7 @@
 	</parent>
 	<groupId>com.stonewu</groupId>
 	<artifactId>ai-fusion-video</artifactId>
-	<version>0.2.1</version>
+	<version>0.3.0</version>
 	<name>ai-fusion-video</name>
 	<description>AI-driven video creation platform</description>
 	<url>https://github.com/Stonewuu/ai-fusion-video</url>
@@ -32,13 +32,14 @@
 	<scm>
 		<connection>scm:git:https://github.com/Stonewuu/ai-fusion-video.git</connection>
 		<developerConnection>scm:git:ssh://git@github.com/Stonewuu/ai-fusion-video.git</developerConnection>
-		<tag>0.2.1</tag>
+		<tag>0.3.0</tag>
 		<url>https://github.com/Stonewuu/ai-fusion-video</url>
 	</scm>
 	<properties>
 		<java.version>21</java.version>
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<anthropic-java.version>2.26.0</anthropic-java.version>
+		<dashscope-sdk-java.version>2.22.16</dashscope-sdk-java.version>
 		<!-- 降级 Jackson 以兼容 volcengine-java-sdk-ark-runtime:1.0.17 中使用的
 		PropertyNamingStrategy.SNAKE_CASE -->
 		<jackson-bom.version>2.17.3</jackson-bom.version>
@@ -130,6 +131,18 @@
 			<groupId>com.alibaba.cloud.ai</groupId>
 			<artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
 			<version>1.1.2.0</version>
+		</dependency>
+		<!-- DashScope 官方 Java SDK（AgentScope 多模态工具同样基于该 SDK） -->
+		<dependency>
+			<groupId>com.alibaba</groupId>
+			<artifactId>dashscope-sdk-java</artifactId>
+			<version>${dashscope-sdk-java.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.slf4j</groupId>
+					<artifactId>slf4j-simple</artifactId>
+				</exclusion>
+			</exclusions>
 		</dependency>
 		<!-- Spring AI OpenAI (兼容 DeepSeek/智谱/豆包/Moonshot/硅基流动等) -->
 		<dependency>

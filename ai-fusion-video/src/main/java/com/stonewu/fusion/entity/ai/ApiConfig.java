@@ -44,6 +44,21 @@ public class ApiConfig extends BaseEntity {
     @Builder.Default
     private Boolean autoAppendV1Path = true;
 
+    /** 出站代理类型：none / http / socks5 */
+    private String proxyType;
+
+    /** 出站代理主机 */
+    private String proxyHost;
+
+    /** 出站代理端口 */
+    private Integer proxyPort;
+
+    /** 出站代理认证用户名 */
+    private String proxyUsername;
+
+    /** 出站代理认证密码 */
+    private String proxyPassword;
+
     /** API 密钥 */
     private String apiKey;
 

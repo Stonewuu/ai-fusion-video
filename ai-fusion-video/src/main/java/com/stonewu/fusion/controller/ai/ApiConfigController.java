@@ -39,6 +39,11 @@ public class ApiConfigController {
                 .name(reqVO.getName()).platform(reqVO.getPlatform())
                 .apiUrl(reqVO.getApiUrl())
                 .autoAppendV1Path(reqVO.getAutoAppendV1Path() != null ? reqVO.getAutoAppendV1Path() : true)
+                .proxyType(reqVO.getProxyType())
+                .proxyHost(reqVO.getProxyHost())
+                .proxyPort(reqVO.getProxyPort())
+                .proxyUsername(reqVO.getProxyUsername())
+                .proxyPassword(reqVO.getProxyPassword())
                 .apiKey(reqVO.getApiKey()).appId(reqVO.getAppId()).appSecret(reqVO.getAppSecret())
                 .modelId(reqVO.getModelId()).status(reqVO.getStatus() != null ? reqVO.getStatus() : 1)
                 .remark(reqVO.getRemark())
@@ -51,8 +56,10 @@ public class ApiConfigController {
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<Boolean> update(@Valid @RequestBody ApiConfigSaveReqVO reqVO) {
         apiConfigService.updateApiConfig(reqVO.getId(), reqVO.getName(), reqVO.getPlatform(),
-                reqVO.getApiUrl(), reqVO.getAutoAppendV1Path(), reqVO.getApiKey(), reqVO.getAppId(),
-                reqVO.getAppSecret(), reqVO.getModelId(), reqVO.getStatus(), reqVO.getRemark());
+            reqVO.getApiUrl(), reqVO.getAutoAppendV1Path(), reqVO.getProxyType(),
+            reqVO.getProxyHost(), reqVO.getProxyPort(), reqVO.getProxyUsername(),
+            reqVO.getProxyPassword(), reqVO.getApiKey(), reqVO.getAppId(), reqVO.getAppSecret(),
+            reqVO.getModelId(), reqVO.getStatus(), reqVO.getRemark());
         return success(true);
     }
 

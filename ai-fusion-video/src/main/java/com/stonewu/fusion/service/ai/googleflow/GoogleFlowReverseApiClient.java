@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.storage.StorageConfig;
+import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -64,7 +65,7 @@ public class GoogleFlowReverseApiClient {
 
         try {
             String requestBody = buildRequestBody(prompt, modelCode, imageUrls);
-            return executeStreamingRequest(baseUrl, apiConfig.getApiKey(), requestBody);
+            return executeStreamingRequest(baseUrl, apiConfig.getApiKey(), requestBody, apiConfig);
         } catch (IOException e) {
             log.error("[GoogleFlowReverseApi] 请求失败: model={}", modelCode, e);
             throw new BusinessException("GoogleFlowReverseApi 请求失败: " + e.getMessage());
@@ -104,7 +105,8 @@ public class GoogleFlowReverseApiClient {
         return OBJECT_MAPPER.writeValueAsString(body);
     }
 
-    private CompletionResult executeStreamingRequest(String baseUrl, String apiKey, String requestBody) throws IOException {
+    private CompletionResult executeStreamingRequest(String baseUrl, String apiKey, String requestBody,
+                                                     ApiConfig apiConfig) throws IOException {
         Request request = new Request.Builder()
                 .url(baseUrl + "/v1/chat/completions")
                 .post(RequestBody.create(requestBody, JSON))
@@ -113,7 +115,8 @@ public class GoogleFlowReverseApiClient {
                 .addHeader("Accept", "text/event-stream")
                 .build();
 
-        try (Response response = streamHttpClient.newCall(request).execute()) {
+        OkHttpClient client = AiProxySupport.okHttpClient(streamHttpClient, apiConfig);
+        try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 String errorBody = response.body() != null ? response.body().string() : "";
                 throw new BusinessException("GoogleFlowReverseApi 请求失败: HTTP " + response.code() + " " + extractErrorMessage(errorBody));

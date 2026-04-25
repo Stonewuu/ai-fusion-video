@@ -97,6 +97,13 @@ export function getPlatformFields(platform: string): PlatformField[] {
       ];
     case "dashscope":
       return [
+        {
+          key: "apiUrl",
+          label: "API 地址",
+          placeholder: "https://dashscope.aliyuncs.com（北京，留空使用默认）",
+          type: "text",
+          helperText: "只填地域根地址即可：文本模型会自动使用 /compatible-mode/v1，图片/视频生成会自动使用 /api/v1。",
+        },
         { key: "apiKey", label: "API 密钥", placeholder: "sk-...", type: "password", required: true },
       ];
     case "anthropic":

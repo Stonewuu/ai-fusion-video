@@ -38,7 +38,7 @@ public class GoogleFlowReverseApiProvider extends AbstractAiProvider {
         String baseUrl = GoogleFlowReverseApiSupport.resolveBaseUrl(context.getBaseUrl());
 
         String json = executeGet(joinUrl(baseUrl, "/v1/models/aliases"),
-                java.util.Map.of("Authorization", "Bearer " + context.getApiKey()));
+            java.util.Map.of("Authorization", "Bearer " + context.getApiKey()), context.getApiConfig());
 
         return parseDataArrayModels(json, "flow2api").stream()
                 .filter(model -> !model.getId().startsWith("veo_3_1_upsampler_"))

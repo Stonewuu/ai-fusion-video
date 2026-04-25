@@ -71,6 +71,12 @@ interface ApiConfigDialogProps {
   onSaved: () => void;
 }
 
+const PROXY_TYPE_OPTIONS = [
+  { value: "none", label: "不使用代理", description: "直连模型服务" },
+  { value: "socks5", label: "SOCKS5", description: "常见本地代理，如 127.0.0.1:7890" },
+  { value: "http", label: "HTTP", description: "HTTP/HTTPS 出站代理" },
+] as const;
+
 function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConfigDialogProps) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ApiConfigSaveReq>({ name: "" });
@@ -85,6 +91,11 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
           platform: editingConfig.platform || "",
           apiUrl: editingConfig.apiUrl || "",
           autoAppendV1Path: editingConfig.autoAppendV1Path ?? true,
+          proxyType: editingConfig.proxyType || "none",
+          proxyHost: editingConfig.proxyHost || "",
+          proxyPort: editingConfig.proxyPort ?? undefined,
+          proxyUsername: editingConfig.proxyUsername || "",
+          proxyPassword: editingConfig.proxyPassword || "",
           apiKey: editingConfig.apiKey || "",
           appId: editingConfig.appId || "",
           appSecret: editingConfig.appSecret || "",
@@ -92,7 +103,7 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
           remark: editingConfig.remark || "",
         });
       } else {
-        setForm({ name: "", platform: "openai_compatible", apiUrl: "", autoAppendV1Path: true, apiKey: "", appId: "", appSecret: "", status: 1 });
+        setForm({ name: "", platform: "openai_compatible", apiUrl: "", autoAppendV1Path: true, proxyType: "none", proxyHost: "", proxyPort: undefined, proxyUsername: "", proxyPassword: "", apiKey: "", appId: "", appSecret: "", status: 1 });
       }
       setShowSecrets({});
     }
@@ -106,10 +117,19 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
     if (!form.name.trim()) return;
     setSaving(true);
     try {
+      const proxyEnabled = form.proxyType && form.proxyType !== "none";
+      const payload: ApiConfigSaveReq = {
+        ...form,
+        proxyType: proxyEnabled ? form.proxyType : "none",
+        proxyHost: proxyEnabled ? form.proxyHost?.trim() : "",
+        proxyPort: proxyEnabled ? form.proxyPort : undefined,
+        proxyUsername: proxyEnabled ? form.proxyUsername?.trim() : "",
+        proxyPassword: proxyEnabled && form.proxyUsername?.trim() ? form.proxyPassword : "",
+      };
       if (editingConfig) {
-        await apiConfigApi.update(form);
+        await apiConfigApi.update(payload);
       } else {
-        await apiConfigApi.create(form);
+        await apiConfigApi.create(payload);
       }
       onSaved();
       onOpenChange(false);
@@ -121,6 +141,11 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
   };
 
   const fields = getPlatformFields(form.platform || "");
+  const proxyEnabled = form.proxyType && form.proxyType !== "none";
+  const proxyInvalid = Boolean(proxyEnabled && (
+    !form.proxyHost?.trim() || !form.proxyPort || form.proxyPort < 1 || form.proxyPort > 65535
+    || (!!form.proxyPassword && !form.proxyUsername?.trim())
+  ));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -249,6 +274,103 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
             </div>
           )}
 
+          <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2.5 space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">出站代理</Label>
+              <Select
+                value={form.proxyType || "none"}
+                onValueChange={v => {
+                  updateField("proxyType", v as string);
+                  if (v === "none") {
+                    updateField("proxyHost", "");
+                    updateField("proxyPort", undefined);
+                    updateField("proxyUsername", "");
+                    updateField("proxyPassword", "");
+                  }
+                }}
+                items={PROXY_TYPE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+              >
+                <SelectTrigger className="w-full text-sm">
+                  <SelectValue placeholder="选择代理类型" />
+                </SelectTrigger>
+                <SelectContent className="text-sm">
+                  <SelectGroup>
+                    {PROXY_TYPE_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                        <div>
+                          <div>{opt.label}</div>
+                          <div className="text-[10px] text-muted-foreground">{opt.description}</div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground/70">
+                仅影响后端访问当前 API 配置绑定的模型服务，适合 Vertex AI、OpenAI、Anthropic 等国外服务。支持可选代理账号密码。
+              </p>
+            </div>
+
+            {form.proxyType && form.proxyType !== "none" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-[1fr_110px] gap-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">代理主机</Label>
+                    <Input
+                      placeholder="127.0.0.1"
+                      value={form.proxyHost || ""}
+                      onChange={e => updateField("proxyHost", e.target.value)}
+                      className="text-sm font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">端口</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      placeholder="7890"
+                      value={form.proxyPort ?? ""}
+                      onChange={e => updateField("proxyPort", e.target.value ? Number(e.target.value) : undefined)}
+                      className="text-sm font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">代理用户名</Label>
+                    <Input
+                      placeholder="可选"
+                      value={form.proxyUsername || ""}
+                      onChange={e => updateField("proxyUsername", e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">代理密码</Label>
+                    <div className="relative">
+                      <Input
+                        type={showSecrets.proxyPassword ? "text" : "password"}
+                        placeholder="可选"
+                        value={form.proxyPassword || ""}
+                        onChange={e => updateField("proxyPassword", e.target.value)}
+                        className="text-sm pr-9"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecrets(prev => ({ ...prev, proxyPassword: !prev.proxyPassword }))}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showSecrets.proxyPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* 备注 */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">备注</Label>
@@ -265,7 +387,7 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
           <DialogClose render={<Button variant="outline" size="sm" />}>
             取消
           </DialogClose>
-          <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim()}>
+          <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim() || proxyInvalid}>
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
             {editingConfig ? "保存" : "创建"}
           </Button>
@@ -2351,6 +2473,11 @@ export default function AiModelsPage() {
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                         {config.apiKey && (
                           <span className="font-mono text-[10px]">{maskSecret(config.apiKey)}</span>
+                        )}
+                        {config.proxyType && config.proxyType !== "none" && config.proxyHost && config.proxyPort && (
+                          <span className="font-mono text-[10px] px-1 py-0.5 rounded bg-sky-500/10 text-sky-500">
+                            {config.proxyType}://{config.proxyHost}:{config.proxyPort}{config.proxyUsername ? " auth" : ""}
+                          </span>
                         )}
                         <span>{configModels.length} 个模型</span>
                       </div>

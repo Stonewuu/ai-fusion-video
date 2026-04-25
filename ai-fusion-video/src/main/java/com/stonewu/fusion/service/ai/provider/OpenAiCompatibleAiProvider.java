@@ -3,18 +3,15 @@ package com.stonewu.fusion.service.ai.provider;
 import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
+import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.model.OpenAIChatModel;
 import org.springframework.ai.chat.model.ChatModel;
 import lombok.extern.slf4j.Slf4j;
-import reactor.netty.http.client.HttpClient;
-import reactor.netty.resources.ConnectionProvider;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -51,26 +48,11 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
         requireApiKey(apiKey, "OpenAI Compatible (" + platform + ")");
 
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(60 * 1000);
-        requestFactory.setReadTimeout(3 * 60 * 1000);
-
-        ConnectionProvider provider = ConnectionProvider.builder("openai-compatible-provider")
-                .maxConnections(500)
-                .maxIdleTime(Duration.ofSeconds(45))
-                .maxLifeTime(Duration.ofMinutes(10))
-                .pendingAcquireTimeout(Duration.ofSeconds(60))
-                .evictInBackground(Duration.ofSeconds(30))
-                .build();
-        HttpClient httpClient = HttpClient.create(provider)
-                .compress(true)
-                .keepAlive(true)
-                .responseTimeout(Duration.ofSeconds(60));
-
         OpenAiApi.Builder apiBuilder = OpenAiApi.builder().apiKey(apiKey);
-        apiBuilder.restClientBuilder(RestClient.builder().requestFactory(requestFactory));
-        apiBuilder.webClientBuilder(WebClient.builder()
-                .clientConnector(new ReactorClientHttpConnector(httpClient)));
+        apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
+            context.getApiConfig(), 60 * 1000, 3 * 60 * 1000));
+        apiBuilder.webClientBuilder(AiProxySupport.webClientBuilder(
+            context.getApiConfig(), "openai-compatible-provider", Duration.ofSeconds(60)));
         if (StrUtil.isNotBlank(baseUrl)) {
             apiBuilder.baseUrl(baseUrl);
         }
@@ -109,6 +91,11 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
             builder.baseUrl(baseUrl);
         }
         builder.endpointPath(endpointPath);
+        io.agentscope.core.model.transport.HttpTransport proxyTransport =
+                AiProxySupport.agentScopeHttpTransport(context.getApiConfig());
+        if (proxyTransport != null) {
+            builder.httpTransport(proxyTransport);
+        }
         return builder.build();
     }
 
@@ -120,7 +107,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         log.info("[OpenAiCompatibleAiProvider] 获取远程模型列表: {}", url);
         String response = executeGet(url, context.getApiKey() == null
                 ? Map.of()
-                : Map.of("Authorization", "Bearer " + context.getApiKey()));
+            : Map.of("Authorization", "Bearer " + context.getApiKey()), context.getApiConfig());
         return parseDataArrayModels(response, context.getPlatform());
     }
 

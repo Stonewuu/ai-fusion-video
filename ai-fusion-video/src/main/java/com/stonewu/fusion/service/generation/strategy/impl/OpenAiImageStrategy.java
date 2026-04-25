@@ -13,6 +13,7 @@ import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.ImageItem;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.service.ai.AiModelService;
+import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.generation.ImageGenerationService;
 import com.stonewu.fusion.service.generation.strategy.ImageGenerationStrategy;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,10 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
         OpenAIOkHttpClient.Builder builder = OpenAIOkHttpClient.builder().apiKey(apiConfig.getApiKey());
         if (StrUtil.isNotBlank(apiConfig.getApiUrl())) {
             builder.baseUrl(apiConfig.getApiUrl());
+        }
+        java.net.Proxy proxy = AiProxySupport.javaProxyOrNull(apiConfig);
+        if (proxy != null) {
+            builder.proxy(proxy);
         }
         OpenAIClient client = builder.build();
 
