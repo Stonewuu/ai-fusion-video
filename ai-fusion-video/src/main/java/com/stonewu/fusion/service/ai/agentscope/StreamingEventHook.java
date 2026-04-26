@@ -308,6 +308,8 @@ public class StreamingEventHook implements Hook {
      */
     private void handleError(ErrorEvent event) {
         String agentName = event.getAgent().getName();
+        String parentCallId = resolveParentCallId(event);
+        boolean subAgent = isSubAgent(agentName);
         activeAgents.remove(getAgentKey(event));
         String errorMsg = event.getError() != null ? event.getError().getMessage() : "未知错误";
         log.error("[StreamingEventHook] Agent 错误: agent={}, error={}", agentName, errorMsg);
@@ -317,8 +319,9 @@ public class StreamingEventHook implements Hook {
                 .setConversationId(conversationId)
                 .setOutputType("ERROR")
                 .setError(agentName + " 执行出错: " + errorMsg)
-                .setAgentName(isSubAgent(agentName) ? agentName : null)
-                .setFinished(true));
+            .setParentToolCallId(parentCallId)
+            .setAgentName(subAgent ? agentName : null)
+            .setFinished(!subAgent));
     }
 
     // ========== 子 Agent 映射 ==========

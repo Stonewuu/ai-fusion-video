@@ -118,6 +118,14 @@ interface PipelineStoreState {
 // 存储 AbortController 的 map（不放在 zustand state 里避免序列化问题）
 const abortControllers = new Map<string, AbortController>();
 
+function isMainAgentTerminalEvent(event: AiChatStreamEvent): boolean {
+  return !event.parentToolCallId && !event.agentName && (
+    event.outputType === "DONE" ||
+    event.outputType === "ERROR" ||
+    event.outputType === "CANCELLED"
+  );
+}
+
 let idCounter = 0;
 function generateId(): string {
   return `pipeline-${Date.now()}-${++idCounter}`;
@@ -493,6 +501,11 @@ function createEventHandler(
                     },
                   ]
                 );
+              } else if (event.agentName) {
+                next.timeline.push({
+                  type: "content",
+                  text: `❌ ${event.agentName} 出错: ${event.error || "未知错误"}`,
+                });
               } else {
                 next.status = "error";
                 next.error = event.error || "未知错误";
@@ -536,11 +549,14 @@ function createEventHandler(
 
     // 完成/错误/取消时触发后续回调
     for (const event of batch) {
-      if (event.outputType === "DONE") {
+      if (event.outputType === "DONE" && isMainAgentTerminalEvent(event)) {
         abortControllers.delete(id);
         onComplete?.();
       }
-      if (event.outputType === "ERROR" || event.outputType === "CANCELLED") {
+      if (
+        (event.outputType === "ERROR" || event.outputType === "CANCELLED") &&
+        isMainAgentTerminalEvent(event)
+      ) {
         abortControllers.delete(id);
       }
     }

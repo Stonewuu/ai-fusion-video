@@ -6,7 +6,6 @@ import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import io.agentscope.core.model.AnthropicChatModel;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
-import org.springframework.ai.anthropic.AnthropicChatModel.Builder;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.model.ChatModel;
@@ -58,20 +57,9 @@ public class AnthropicAiProvider extends AbstractAiProvider {
     @Override
     public Model createAgentScopeModel(AiProviderContext context) {
         requireApiKey(context.getApiKey(), "Anthropic");
-        AnthropicChatModel.Builder builder = AnthropicChatModel.builder()
-                // .defaultOptions(GenerateOptions.builder().additionalHeader("Authorization", "Bearer " + context.getApiKey()).build())
-                .apiKey(context.getApiKey())
-                .modelName(context.getModelName())
-                .stream(true);
         GenerateOptions defaultOptions = buildReasoningOptions(context);
-        if (defaultOptions != null) {
-            builder.defaultOptions(defaultOptions);
-        }
         String rootBaseUrl = resolveRootBaseUrl(context.getBaseUrl());
-        if (StrUtil.isNotBlank(rootBaseUrl)) {
-            builder.baseUrl(rootBaseUrl);
-        }
-        return builder.build();
+        return AnthropicAgentScopeProxySupport.create(context, defaultOptions, rootBaseUrl);
     }
 
     @Override

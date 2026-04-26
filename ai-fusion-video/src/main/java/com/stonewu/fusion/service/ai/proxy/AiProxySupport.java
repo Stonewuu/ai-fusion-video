@@ -170,7 +170,7 @@ public final class AiProxySupport {
         return googleHttpTransport(resolveNullable(apiConfig));
     }
 
-    public static io.agentscope.core.model.transport.HttpTransport agentScopeHttpTransport(ApiConfig apiConfig) {
+    public static ProxyConfig agentScopeProxyConfig(ApiConfig apiConfig) {
         ProxySettings settings = resolveNullable(apiConfig);
         if (settings == null) {
             return null;
@@ -183,7 +183,14 @@ public final class AiProxySupport {
             proxyBuilder.username(settings.username());
             proxyBuilder.password(settings.passwordOrEmpty());
         }
-        ProxyConfig proxyConfig = proxyBuilder.build();
+        return proxyBuilder.build();
+    }
+
+    public static io.agentscope.core.model.transport.HttpTransport agentScopeHttpTransport(ApiConfig apiConfig) {
+        ProxyConfig proxyConfig = agentScopeProxyConfig(apiConfig);
+        if (proxyConfig == null) {
+            return null;
+        }
         HttpTransportConfig transportConfig = HttpTransportConfig.builder()
                 .connectTimeout(Duration.ofSeconds(60))
                 .readTimeout(Duration.ofMinutes(3))

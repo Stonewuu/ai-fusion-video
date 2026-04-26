@@ -55,6 +55,29 @@ public class AiStreamRedisService {
     /** 每次 XREAD 读取的最大消息数。保持为 1 以尽量按单事件透传。 */
     private static final int READ_BATCH_SIZE = 1;
 
+    public static boolean isMainAgentTerminalEvent(AiChatStreamRespVO event) {
+        return event != null
+                && StrUtil.isBlank(event.getParentToolCallId())
+                && StrUtil.isBlank(event.getAgentName())
+                && ("DONE".equals(event.getOutputType())
+                        || "ERROR".equals(event.getOutputType())
+                        || "CANCELLED".equals(event.getOutputType()));
+    }
+
+    public static boolean isMainAgentErrorEvent(AiChatStreamRespVO event) {
+        return event != null
+                && StrUtil.isBlank(event.getParentToolCallId())
+                && StrUtil.isBlank(event.getAgentName())
+                && "ERROR".equals(event.getOutputType());
+    }
+
+    public static boolean isMainAgentCancelledEvent(AiChatStreamRespVO event) {
+        return event != null
+                && StrUtil.isBlank(event.getParentToolCallId())
+                && StrUtil.isBlank(event.getAgentName())
+                && "CANCELLED".equals(event.getOutputType());
+    }
+
     // ===== 写入端（后台 AI 任务调用） =====
 
     /**
@@ -118,12 +141,10 @@ public class AiStreamRedisService {
                                     AiChatStreamRespVO event = JSONUtil.toBean(json,
                                             AiChatStreamRespVO.class);
                                     sink.next(event);
-                                    // 收到 DONE 或 ERROR 事件，结束读取
-                                    String outputType = event.getOutputType();
-                                    if ("DONE".equals(outputType) || "ERROR".equals(outputType)
-                                            || "CANCELLED".equals(outputType)) {
+                                    // 仅主 Agent 的终态事件才结束整个会话流。
+                                    if (isMainAgentTerminalEvent(event)) {
                                         log.info("读取到终止事件: conversationId={}, type={}",
-                                                conversationId, outputType);
+                                                conversationId, event.getOutputType());
                                         sink.complete();
                                         return;
                                     }

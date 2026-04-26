@@ -222,12 +222,12 @@ public class AgentScopeAssistantService {
                     .publishOn(Schedulers.boundedElastic())
                     .takeWhile(event -> !isCancelled(conversationId))
                     .doOnNext(event -> {
-                        String outputType = event.getOutputType();
-                        if ("ERROR".equals(outputType)) {
+                        if (AiStreamRedisService.isMainAgentErrorEvent(event)) {
                             terminalStatus.set("failed");
-                        } else if ("CANCELLED".equals(outputType)) {
+                        } else if (AiStreamRedisService.isMainAgentCancelledEvent(event)) {
                             terminalStatus.set("cancelled");
-                        } else if ("DONE".equals(outputType)) {
+                        } else if (AiStreamRedisService.isMainAgentTerminalEvent(event)
+                                && "DONE".equals(event.getOutputType())) {
                             terminalStatus.compareAndSet("running", "completed");
                         }
 
