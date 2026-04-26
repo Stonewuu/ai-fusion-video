@@ -48,6 +48,11 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
         requireApiKey(apiKey, "OpenAI Compatible (" + platform + ")");
 
+        if (shouldUseResponsesApi(context)) {
+            log.warn("[OpenAiCompatibleAiProvider] Responses API 目前仅接入 AgentScope 主链路，Spring AI ChatModel 仍回退到 chat/completions: model={}",
+                    context.getModelName());
+        }
+
         OpenAiApi.Builder apiBuilder = OpenAiApi.builder().apiKey(apiKey);
         apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
             context.getApiConfig(), 60 * 1000, 3 * 60 * 1000));
@@ -79,11 +84,20 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
         requireApiKey(apiKey, "OpenAI Compatible (" + platform + ")");
 
+        GenerateOptions generateOptions = buildGenerateOptions(context);
+        if (shouldUseResponsesApi(context)) {
+            return new OpenAiResponsesAgentScopeModel(
+                    context.getApiConfig(),
+                    apiKey,
+                    baseUrl,
+                    context.getModelName(),
+                    generateOptions);
+        }
+
         OpenAIChatModel.Builder builder = OpenAIChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(context.getModelName())
                 .stream(true);
-        GenerateOptions generateOptions = buildReasoningOptions(context);
         if (generateOptions != null) {
             builder.generateOptions(generateOptions);
         }
@@ -111,9 +125,28 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         return parseDataArrayModels(response, context.getPlatform());
     }
 
-    private GenerateOptions buildReasoningOptions(AiProviderContext context) {
+    private GenerateOptions buildGenerateOptions(AiProviderContext context) {
         GenerateOptions.Builder builder = GenerateOptions.builder();
         boolean hasOptions = false;
+
+        Double temperature = getConfigDoubleValue(context.getConfig(), "temperature");
+        if (temperature != null) {
+            builder.temperature(temperature);
+            hasOptions = true;
+        }
+
+        Double topP = getConfigDoubleValue(context.getConfig(), "topP", "top_p");
+        if (topP != null) {
+            builder.topP(topP);
+            hasOptions = true;
+        }
+
+        Integer maxTokens = getConfigInteger(context.getConfig(), "maxTokens", "max_tokens");
+        if (maxTokens != null) {
+            builder.maxTokens(maxTokens);
+            builder.maxCompletionTokens(maxTokens);
+            hasOptions = true;
+        }
 
         String reasoningEffort = getConfigString(context.getConfig(), "reasoningEffort", "reasoning_effort");
         if (StrUtil.isNotBlank(reasoningEffort)) {
@@ -137,6 +170,36 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         }
 
         return hasOptions ? builder.build() : null;
+    }
+
+    private boolean shouldUseResponsesApi(AiProviderContext context) {
+        Boolean useResponsesApi = getConfigBoolean(context.getConfig(),
+                "useResponsesApi", "useResponses", "responseApi", "responsesApi");
+        if (useResponsesApi != null) {
+            return useResponsesApi;
+        }
+
+        String apiMode = getConfigString(context.getConfig(),
+                "apiMode", "api_mode", "openaiApiMode", "openai_api_mode");
+        if (StrUtil.isBlank(apiMode)) {
+            return false;
+        }
+
+        String normalized = apiMode.trim().toLowerCase();
+        return "responses".equals(normalized) || "response".equals(normalized);
+    }
+
+    private Double getConfigDoubleValue(Map<String, Object> config, String... keys) {
+        Object value = getConfigValue(config, keys);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return toDouble(value);
+        } catch (Exception e) {
+            log.warn("[OpenAiCompatibleAiProvider] 参数解析失败: keys={}, value={}", String.join(",", keys), value);
+            return null;
+        }
     }
 
     private String resolveCompletionsPath(AiProviderContext context) {

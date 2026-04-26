@@ -36,7 +36,7 @@ public class StorageConfigService {
     /**
      * 获取默认存储配置，未设置默认时返回 null（将回退到本地存储）
      */
-    @Cacheable(value = "storageConfig", key = "'default'")
+    @Cacheable(value = "storageConfig", key = "'default'", unless = "#result == null")
     public StorageConfig getDefaultConfig() {
         return storageConfigMapper.selectOne(
                 new LambdaQueryWrapper<StorageConfig>()

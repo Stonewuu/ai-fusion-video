@@ -337,7 +337,7 @@ public class GenerationModelCapabilityService {
                 }
                 yield new ImageModelCapability(false, 0, 0);
             }
-            case "openai", "openai_compatible", "vertex_ai", "vertexai" -> new ImageModelCapability(false, 0, 0);
+            case "openai_compatible", "vertex_ai", "vertexai" -> new ImageModelCapability(false, 0, 0);
             default -> new ImageModelCapability(false, 0, 0);
         };
     }
@@ -448,7 +448,11 @@ public class GenerationModelCapabilityService {
     }
 
     private String normalizePlatform(String platform) {
-        return platform == null ? "" : platform.trim().toLowerCase(Locale.ROOT);
+        if (platform == null) {
+            return "";
+        }
+        String normalized = platform.trim().toLowerCase(Locale.ROOT);
+        return "openai".equals(normalized) ? "openai_compatible" : normalized;
     }
 
     private String modelLabel(AiModel model) {

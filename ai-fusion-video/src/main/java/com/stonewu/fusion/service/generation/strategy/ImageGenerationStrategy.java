@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * 图片生成策略接口
  * <p>
- * 不同平台（火山引擎/OpenAI/Vertex AI）实现此接口
+ * 不同平台（火山引擎/OpenAI 兼容/Vertex AI）实现此接口
  */
 public interface ImageGenerationStrategy {
 

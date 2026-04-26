@@ -17,24 +17,35 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class GenerationModelCapabilityServiceTests {
 
-        private final GenerationModelCapabilityService service = new GenerationModelCapabilityService(null, new ModelPresetService());
+                private final ModelPresetService presetService = createPresetService();
+                private final GenerationModelCapabilityService service = new GenerationModelCapabilityService(null, presetService);
+
+        private static ModelPresetService createPresetService() {
+                ModelPresetService presetService = new ModelPresetService();
+                presetService.init();
+                return presetService;
+        }
 
     @Test
-    void shouldMarkOpenAiImageModelAsNoReferenceImageSupport() {
-        AiModel model = AiModel.builder()
-                .name("GPT Image 1")
-                .code("gpt-image-1")
-                .build();
+    void shouldUsePresetReferenceImageCapabilityForSupportedOpenAiImageModels() {
+        List<String> supportedCodes = List.of("gpt-image-1", "gpt-image-1.5", "gpt-image-1-mini", "gpt-image-2");
 
-        GenerationModelCapabilityService.ImageModelCapability capability = service.resolveImageCapability(model, "openai_compatible");
+        supportedCodes.forEach(modelCode -> {
+            AiModel model = AiModel.builder()
+                    .name(modelCode)
+                    .code(modelCode)
+                    .build();
 
-        assertFalse(capability.supportsReferenceImages());
-        assertEquals(0, capability.minReferenceImages());
-        assertEquals(0, capability.maxReferenceImages());
+            GenerationModelCapabilityService.ImageModelCapability capability = service.resolveImageCapability(model, "openai");
+
+            assertTrue(capability.supportsReferenceImages(), modelCode);
+            assertEquals(0, capability.minReferenceImages(), modelCode);
+            assertEquals(16, capability.maxReferenceImages(), modelCode);
+        });
     }
 
     @Test
-    void shouldRejectReferenceImagesForOpenAiImageModel() {
+    void shouldAllowReferenceImagesForPresetSupportedOpenAiImageModel() {
         AiModel model = AiModel.builder()
                 .name("GPT Image 1")
                 .code("gpt-image-1")
@@ -43,8 +54,50 @@ class GenerationModelCapabilityServiceTests {
                 .refImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
                 .build();
 
+        service.validateImageTask(model, task, "openai");
+    }
+
+    @Test
+    void shouldExposeOfficialOpenAiImagePresetSizesAndRatios() {
+        AiModel dallE3 = AiModel.builder()
+                .name("DALL·E 3")
+                .code("dall-e-3")
+                .build();
+        var dallE3Config = service.getMergedModelConfig(dallE3);
+
+        assertEquals(List.of("1:1", "7:4", "4:7"),
+                JSONUtil.toList(dallE3Config.getJSONArray("supportedAspectRatios"), String.class));
+        assertEquals("1792x1024",
+                dallE3Config.getJSONObject("supportedSizes").getJSONObject("standard").getStr("7:4"));
+
+        AiModel gptImage2 = AiModel.builder()
+                .name("GPT Image 2")
+                .code("gpt-image-2")
+                .build();
+        var gptImage2Config = service.getMergedModelConfig(gptImage2);
+
+        assertEquals(List.of("1:1", "2:3", "3:2", "16:9", "9:16"),
+                JSONUtil.toList(gptImage2Config.getJSONArray("supportedAspectRatios"), String.class));
+        assertEquals(655360, gptImage2Config.getInt("minPixels"));
+        assertEquals(8294400, gptImage2Config.getInt("maxPixels"));
+        assertEquals("2048x1152",
+                gptImage2Config.getJSONObject("supportedSizes").getJSONObject("2K").getStr("16:9"));
+        assertEquals("2160x3840",
+                gptImage2Config.getJSONObject("supportedSizes").getJSONObject("4K").getStr("9:16"));
+    }
+
+    @Test
+    void shouldRejectReferenceImagesForDallE3Preset() {
+        AiModel model = AiModel.builder()
+                .name("DALL·E 3")
+                .code("dall-e-3")
+                .build();
+        ImageTask task = ImageTask.builder()
+                .refImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .build();
+
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.validateImageTask(model, task, "openai_compatible"));
+                () -> service.validateImageTask(model, task, "openai"));
 
         assertTrue(ex.getMessage().contains("不支持参考图输入"));
     }

@@ -180,7 +180,7 @@ export const MODEL_TYPE_LABELS: Record<number, string> = {
 /** 平台标签映射 */
 export const PLATFORM_LABELS: Record<string, string> = {
   openai_compatible: "OpenAI 兼容",
-  openai: "OpenAI",
+  openai: "OpenAI 兼容",
   deepseek: "DeepSeek",
   volcengine: "火山引擎",
   zhipu: "智谱",

@@ -1,0 +1,33 @@
+# Workspace runtime data
+/data/
+/logs/
+*.log
+*.pid
+*.pid.lock
+hs_err_pid*
+replay_pid*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# IDE and editor artifacts
+.idea/
+*.iml
+*.ipr
+*.iws
+*.swp
+*.swo
+*~
+
+# OS-generated files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Patch / merge leftovers
+*.orig
+*.rej
+
+# Root .vscode is intentionally not ignored here.
+# Subproject-level .vscode rules remain in their own .gitignore files.
