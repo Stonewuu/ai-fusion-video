@@ -71,6 +71,12 @@ interface ApiConfigDialogProps {
   onSaved: () => void;
 }
 
+const PROXY_TYPE_OPTIONS = [
+  { value: "none", label: "不使用代理", description: "直连模型服务" },
+  { value: "socks5", label: "SOCKS5", description: "常见本地代理，如 127.0.0.1:7890" },
+  { value: "http", label: "HTTP", description: "HTTP/HTTPS 出站代理" },
+] as const;
+
 function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConfigDialogProps) {
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState<ApiConfigSaveReq>({ name: "" });
@@ -85,6 +91,11 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
           platform: editingConfig.platform || "",
           apiUrl: editingConfig.apiUrl || "",
           autoAppendV1Path: editingConfig.autoAppendV1Path ?? true,
+          proxyType: editingConfig.proxyType || "none",
+          proxyHost: editingConfig.proxyHost || "",
+          proxyPort: editingConfig.proxyPort ?? undefined,
+          proxyUsername: editingConfig.proxyUsername || "",
+          proxyPassword: editingConfig.proxyPassword || "",
           apiKey: editingConfig.apiKey || "",
           appId: editingConfig.appId || "",
           appSecret: editingConfig.appSecret || "",
@@ -92,7 +103,7 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
           remark: editingConfig.remark || "",
         });
       } else {
-        setForm({ name: "", platform: "openai_compatible", apiUrl: "", autoAppendV1Path: true, apiKey: "", appId: "", appSecret: "", status: 1 });
+        setForm({ name: "", platform: "openai_compatible", apiUrl: "", autoAppendV1Path: true, proxyType: "none", proxyHost: "", proxyPort: undefined, proxyUsername: "", proxyPassword: "", apiKey: "", appId: "", appSecret: "", status: 1 });
       }
       setShowSecrets({});
     }
@@ -106,10 +117,19 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
     if (!form.name.trim()) return;
     setSaving(true);
     try {
+      const proxyEnabled = form.proxyType && form.proxyType !== "none";
+      const payload: ApiConfigSaveReq = {
+        ...form,
+        proxyType: proxyEnabled ? form.proxyType : "none",
+        proxyHost: proxyEnabled ? form.proxyHost?.trim() : "",
+        proxyPort: proxyEnabled ? form.proxyPort : undefined,
+        proxyUsername: proxyEnabled ? form.proxyUsername?.trim() : "",
+        proxyPassword: proxyEnabled && form.proxyUsername?.trim() ? form.proxyPassword : "",
+      };
       if (editingConfig) {
-        await apiConfigApi.update(form);
+        await apiConfigApi.update(payload);
       } else {
-        await apiConfigApi.create(form);
+        await apiConfigApi.create(payload);
       }
       onSaved();
       onOpenChange(false);
@@ -121,18 +141,23 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
   };
 
   const fields = getPlatformFields(form.platform || "");
+  const proxyEnabled = form.proxyType && form.proxyType !== "none";
+  const proxyInvalid = Boolean(proxyEnabled && (
+    !form.proxyHost?.trim() || !form.proxyPort || form.proxyPort < 1 || form.proxyPort > 65535
+    || (!!form.proxyPassword && !form.proxyUsername?.trim())
+  ));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-lg max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{editingConfig ? "编辑 API 配置" : "新建 API 配置"}</DialogTitle>
           <DialogDescription>
             配置外部 AI 服务的 API 接入信息
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto min-h-0 px-1 -mx-1">
           {/* 配置名称 */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">配置名称</Label>
@@ -249,6 +274,103 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
             </div>
           )}
 
+          <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2.5 space-y-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">出站代理</Label>
+              <Select
+                value={form.proxyType || "none"}
+                onValueChange={v => {
+                  updateField("proxyType", v as string);
+                  if (v === "none") {
+                    updateField("proxyHost", "");
+                    updateField("proxyPort", undefined);
+                    updateField("proxyUsername", "");
+                    updateField("proxyPassword", "");
+                  }
+                }}
+                items={PROXY_TYPE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+              >
+                <SelectTrigger className="w-full text-sm">
+                  <SelectValue placeholder="选择代理类型" />
+                </SelectTrigger>
+                <SelectContent className="text-sm">
+                  <SelectGroup>
+                    {PROXY_TYPE_OPTIONS.map(opt => (
+                      <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                        <div>
+                          <div>{opt.label}</div>
+                          <div className="text-[10px] text-muted-foreground">{opt.description}</div>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              <p className="text-[10px] text-muted-foreground/70">
+                仅影响后端访问当前 API 配置绑定的模型服务，适合 Vertex AI、OpenAI、Anthropic 等国外服务。支持可选代理账号密码。
+              </p>
+            </div>
+
+            {form.proxyType && form.proxyType !== "none" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-[1fr_110px] gap-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">代理主机</Label>
+                    <Input
+                      placeholder="127.0.0.1"
+                      value={form.proxyHost || ""}
+                      onChange={e => updateField("proxyHost", e.target.value)}
+                      className="text-sm font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">端口</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={65535}
+                      placeholder="7890"
+                      value={form.proxyPort ?? ""}
+                      onChange={e => updateField("proxyPort", e.target.value ? Number(e.target.value) : undefined)}
+                      className="text-sm font-mono"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">代理用户名</Label>
+                    <Input
+                      placeholder="可选"
+                      value={form.proxyUsername || ""}
+                      onChange={e => updateField("proxyUsername", e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">代理密码</Label>
+                    <div className="relative">
+                      <Input
+                        type={showSecrets.proxyPassword ? "text" : "password"}
+                        placeholder="可选"
+                        value={form.proxyPassword || ""}
+                        onChange={e => updateField("proxyPassword", e.target.value)}
+                        className="text-sm pr-9"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSecrets(prev => ({ ...prev, proxyPassword: !prev.proxyPassword }))}
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      >
+                        {showSecrets.proxyPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           {/* 备注 */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">备注</Label>
@@ -261,11 +383,11 @@ function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConf
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <DialogClose render={<Button variant="outline" size="sm" />}>
             取消
           </DialogClose>
-          <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim()}>
+          <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim() || proxyInvalid}>
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
             {editingConfig ? "保存" : "创建"}
           </Button>
@@ -344,7 +466,6 @@ const COMMON_TIERS = ["1K", "2K", "3K", "4K"];
 
 const OPENAI_REASONING_PLATFORMS = new Set([
   "openai_compatible",
-  "openai",
   "deepseek",
   "zhipu",
   "moonshot",
@@ -353,7 +474,8 @@ const OPENAI_REASONING_PLATFORMS = new Set([
 ]);
 
 function normalizePlatform(platform: string | null | undefined): string {
-  return (platform || "").toLowerCase();
+  const normalized = (platform || "").toLowerCase();
+  return normalized === "openai" ? "openai_compatible" : normalized;
 }
 
 function isOpenAiReasoningPlatform(platform: string | null | undefined): boolean {
@@ -378,6 +500,27 @@ const REASONING_CONFIG_KEYS = [
   "thinking",
 ];
 
+const OPENAI_RESPONSE_MODE_CONFIG_KEYS = [
+  "apiMode",
+  "api_mode",
+  "openaiApiMode",
+  "openai_api_mode",
+  "responseApi",
+  "responsesApi",
+  "useResponsesApi",
+  "useResponses",
+];
+
+const OPENAI_IMAGE_MODE_CONFIG_KEYS = [
+  "openaiImageApiMode",
+  "openai_image_api_mode",
+  "imageApiMode",
+  "image_api_mode",
+  "useResponsesImageApi",
+  "useResponseImageApi",
+  "responsesImageApi",
+];
+
 function supportsReasoningConfig(platform: string | null | undefined): boolean {
   return (
     isOpenAiReasoningPlatform(platform) ||
@@ -386,12 +529,52 @@ function supportsReasoningConfig(platform: string | null | undefined): boolean {
   );
 }
 
-function stripReasoningConfig(configJson: string | undefined): string {
+function supportsOpenAiResponsesMode(platform: string | null | undefined): boolean {
+  return isOpenAiReasoningPlatform(platform);
+}
+
+function stripConfigKeys(configJson: string | undefined, keys: readonly string[]): string {
   const next = { ...parseConfigJson(configJson) };
-  REASONING_CONFIG_KEYS.forEach((key) => {
+  keys.forEach((key) => {
     delete next[key];
   });
   return Object.keys(next).length > 0 ? JSON.stringify(next) : "";
+}
+
+function stripReasoningConfig(configJson: string | undefined): string {
+  return stripConfigKeys(configJson, REASONING_CONFIG_KEYS);
+}
+
+function stripOpenAiResponsesModeConfig(configJson: string | undefined): string {
+  return stripConfigKeys(configJson, OPENAI_RESPONSE_MODE_CONFIG_KEYS);
+}
+
+function stripOpenAiImageModeConfig(configJson: string | undefined): string {
+  return stripConfigKeys(configJson, OPENAI_IMAGE_MODE_CONFIG_KEYS);
+}
+
+function sanitizeModelConfigJson({
+  configJson,
+  modelType,
+  platform,
+  supportReasoning,
+}: {
+  configJson: string | undefined;
+  modelType: number;
+  platform: string | null | undefined;
+  supportReasoning: boolean;
+}): string {
+  let next = configJson || "";
+
+  if (!(modelType === 1 && supportReasoning && supportsReasoningConfig(platform))) {
+    next = stripReasoningConfig(next);
+  }
+  if (!(modelType === 1 && supportsOpenAiResponsesMode(platform))) {
+    next = stripOpenAiResponsesModeConfig(next);
+  }
+  next = stripOpenAiImageModeConfig(next);
+
+  return next;
 }
 
 function getPositiveNumberValue(value: number | undefined): number | "" {
@@ -424,6 +607,16 @@ function getConfigStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0) : [];
 }
 
+function getFirstConfigString(value: Record<string, unknown>, keys: readonly string[]): string | undefined {
+  for (const key of keys) {
+    const current = value[key];
+    if (typeof current === "string" && current.trim().length > 0) {
+      return current;
+    }
+  }
+  return undefined;
+}
+
 interface CapabilityChipDef {
   label: string;
   tone: "positive" | "muted" | "info";
@@ -434,12 +627,25 @@ interface GenerationCapabilityView {
   summary: string;
 }
 
+function isEquivalentPresetPlatform(
+  presetPlatform: string | null | undefined,
+  selectedPlatform: string | null | undefined
+): boolean {
+  if (!selectedPlatform) {
+    return true;
+  }
+  if (!presetPlatform) {
+    return false;
+  }
+  return normalizePlatform(presetPlatform) === normalizePlatform(selectedPlatform);
+}
+
 function findMatchingPreset(model: AiModel, platform: string | null | undefined, presets: ModelPreset[]): ModelPreset | null {
   return presets.find(preset => {
     if (preset.code !== model.code || preset.modelType !== model.modelType) {
       return false;
     }
-    return !platform || preset.platform === platform;
+    return isEquivalentPresetPlatform(preset.platform, platform);
   }) || null;
 }
 
@@ -1612,7 +1818,7 @@ function FetchRemoteModelsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg flex flex-col max-h-[85vh]">
+      <DialogContent className="sm:max-w-lg max-h-[calc(100vh-2rem)] sm:max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle>获取可用模型</DialogTitle>
           <DialogDescription>
@@ -1620,7 +1826,7 @@ function FetchRemoteModelsDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3 min-h-0">
+        <div className="flex flex-col gap-3 min-h-0 overflow-y-auto px-1 -mx-1">
           {/* 搜索框 + 模型类型选择 */}
           <div className="flex items-center gap-2 shrink-0">
             <div className="relative flex-1">
@@ -1873,19 +2079,42 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
     if (p.code !== form.code || p.modelType !== form.modelType) {
       return false;
     }
-    return !selectedPlatform || p.platform === selectedPlatform;
+    return isEquivalentPresetPlatform(p.platform, selectedPlatform);
   }) || null;
   const visiblePresets = !selectedPlatform
     ? presets
-    : presets.filter(p => p.platform === selectedPlatform);
+    : presets.filter(p => isEquivalentPresetPlatform(p.platform, selectedPlatform));
+  const matchedPresetConfig = matchedPreset?.config as Record<string, unknown> | undefined;
+  const effectiveModelConfig = mergeConfigObjects(matchedPresetConfig || {}, parseConfigJson(form.config));
+  const showOpenAiResponsesMode = form.modelType === 1 && supportsOpenAiResponsesMode(selectedPlatform);
+  const apiModeValue = getFirstConfigString(effectiveModelConfig, OPENAI_RESPONSE_MODE_CONFIG_KEYS) ?? "__unset__";
+
+  const updateOpenAiResponsesMode = (rawValue: string) => {
+    const next = { ...effectiveModelConfig };
+    OPENAI_RESPONSE_MODE_CONFIG_KEYS.forEach((key) => {
+      delete next[key];
+    });
+    if (rawValue !== "__unset__") {
+      next[OPENAI_RESPONSE_MODE_CONFIG_KEYS[0]] = rawValue;
+    }
+
+    const cleaned = Object.fromEntries(
+      Object.entries(next).filter(([, value]) => value !== "" && value !== undefined && value !== null)
+    );
+    const overrides = diffConfigObjects(matchedPresetConfig || {}, cleaned);
+    updateField("config", Object.keys(overrides).length > 0 ? JSON.stringify(overrides) : "");
+  };
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.code.trim() || !form.apiConfigId) return;
     setSaving(true);
     try {
-      const normalizedConfig = form.modelType === 1 && form.supportReasoning && supportsReasoningConfig(selectedPlatform)
-        ? form.config
-        : stripReasoningConfig(form.config);
+      const normalizedConfig = sanitizeModelConfigJson({
+        configJson: form.config,
+        modelType: form.modelType,
+        platform: selectedPlatform,
+        supportReasoning: !!form.supportReasoning,
+      });
 
       if (editingModel) {
         const updateReq: AiModelUpdateReq = {
@@ -1921,7 +2150,7 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg flex flex-col max-h-[85vh]">
+      <DialogContent className="sm:max-w-lg max-h-[calc(100vh-2rem)] sm:max-h-[85vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle>{editingModel ? "编辑 AI 模型" : "新建 AI 模型"}</DialogTitle>
           <DialogDescription>
@@ -2005,8 +2234,13 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
                     next.supportVision = false;
                     next.supportReasoning = false;
                     next.contextWindow = 0;
-                    next.config = stripReasoningConfig(prev.config);
                   }
+                  next.config = sanitizeModelConfigJson({
+                    configJson: prev.config,
+                    modelType: nextType,
+                    platform: selectedPlatform,
+                    supportReasoning: nextType === 1 ? !!prev.supportReasoning : false,
+                  });
                   return next;
                 });
               }}
@@ -2039,8 +2273,15 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
                   const next = { ...prev, apiConfigId: nextApiConfigId };
                   if (!supportsReasoningConfig(nextPlatform)) {
                     next.supportReasoning = false;
-                    next.config = stripReasoningConfig(prev.config);
                   }
+                  next.config = sanitizeModelConfigJson({
+                    configJson: prev.config,
+                    modelType: prev.modelType,
+                    platform: nextPlatform,
+                    supportReasoning: prev.modelType === 1 && supportsReasoningConfig(nextPlatform)
+                      ? !!prev.supportReasoning
+                      : false,
+                  });
                   return next;
                 });
               }}
@@ -2084,6 +2325,36 @@ function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultAp
               设为默认模型
             </Label>
           </div>
+
+          {showOpenAiResponsesMode && (
+            <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-3">
+              <div>
+                <Label className="text-[11px] text-muted-foreground">OpenAI 兼容对话接口</Label>
+                <p className="text-[10px] text-muted-foreground/70 mt-1">切到 Responses 后会走新的 OpenAI 兼容 Responses 主链路；保留自动时继续沿用预设默认值或 chat/completions。</p>
+              </div>
+
+              <Select
+                value={apiModeValue}
+                onValueChange={v => updateOpenAiResponsesMode(String(v))}
+                items={[
+                  { value: "__unset__", label: "自动" },
+                  { value: "chat_completions", label: "Chat Completions" },
+                  { value: "responses", label: "Responses API" },
+                ]}
+              >
+                <SelectTrigger className="w-full text-sm">
+                  <SelectValue placeholder="选择对话接口模式" />
+                </SelectTrigger>
+                <SelectContent className="text-sm">
+                  <SelectGroup>
+                    <SelectItem value="__unset__" className="text-sm">自动</SelectItem>
+                    <SelectItem value="chat_completions" className="text-sm">Chat Completions</SelectItem>
+                    <SelectItem value="responses" className="text-sm">Responses API</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-3">
             <div className="flex items-center justify-between gap-3">
@@ -2351,6 +2622,11 @@ export default function AiModelsPage() {
                       <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                         {config.apiKey && (
                           <span className="font-mono text-[10px]">{maskSecret(config.apiKey)}</span>
+                        )}
+                        {config.proxyType && config.proxyType !== "none" && config.proxyHost && config.proxyPort && (
+                          <span className="font-mono text-[10px] px-1 py-0.5 rounded bg-sky-500/10 text-sky-500">
+                            {config.proxyType}://{config.proxyHost}:{config.proxyPort}{config.proxyUsername ? " auth" : ""}
+                          </span>
                         )}
                         <span>{configModels.length} 个模型</span>
                       </div>

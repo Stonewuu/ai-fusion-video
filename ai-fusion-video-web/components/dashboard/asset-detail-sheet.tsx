@@ -181,7 +181,7 @@ function CoverSelectorDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden bg-card/95 backdrop-blur-md rounded-2xl p-0 gap-0">
+      <DialogContent className="max-w-2xl max-h-[calc(100vh-2rem)] sm:max-h-[80vh] flex flex-col overflow-hidden bg-card/95 backdrop-blur-md rounded-2xl p-0 gap-0">
         <DialogHeader className="px-6 py-5 border-b border-border/30 shrink-0">
           <DialogTitle className="text-base font-semibold">从资产库选择封面</DialogTitle>
           <DialogDescription className="text-xs">点击展开项目中的资产，点击图片以选取该图片为当前主资产封面</DialogDescription>

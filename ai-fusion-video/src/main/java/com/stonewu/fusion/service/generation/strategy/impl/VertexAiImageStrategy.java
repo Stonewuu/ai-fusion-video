@@ -11,6 +11,7 @@ import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.ImageItem;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.service.ai.AiModelService;
+import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.generation.ImageGenerationService;
 import com.stonewu.fusion.service.generation.strategy.ImageGenerationStrategy;
 import com.stonewu.fusion.service.storage.MediaStorageService;
@@ -37,10 +38,9 @@ import java.util.concurrent.TimeUnit;
  * 通过 Vertex AI REST API 调用 Imagen 模型进行文生图。
  * <p>
  * ApiConfig 字段映射：
- * - apiKey: Google Cloud 项目 ID (Project ID)
- * - appId: location (如 us-central1)
+ * - appId: Google Cloud 项目 ID (Project ID)
+ * - apiUrl: location (如 us-central1)，也可填写完整 predict URL 覆盖默认地址
  * - appSecret: 服务账号 JSON Key 内容（完整 JSON 字符串）
- * - apiUrl: 可选，自定义 endpoint URL
  */
 @Component
 @RequiredArgsConstructor
@@ -71,12 +71,12 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
             throw new BusinessException("当前图片模型 " + modelCode + " 使用的是 Vertex AI Imagen 文生图接口，不支持参考图输入");
         }
 
-        String projectId = apiConfig.getApiKey();
-        String location = StrUtil.blankToDefault(apiConfig.getAppId(), "us-central1");
+        String projectId = resolveProjectId(apiConfig);
+        String location = resolveLocation(apiConfig);
 
         // 构建请求 URL
         String url;
-        if (StrUtil.isNotBlank(apiConfig.getApiUrl())) {
+        if (isCustomPredictUrl(apiConfig.getApiUrl())) {
             url = apiConfig.getApiUrl();
         } else {
             url = String.format(
@@ -101,7 +101,8 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
                     .post(RequestBody.create(requestBody, MediaType.get("application/json")))
                     .build();
 
-            try (Response response = okHttpClient.newCall(request).execute()) {
+            OkHttpClient client = AiProxySupport.okHttpClient(okHttpClient, apiConfig);
+            try (Response response = client.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     String errorBody = response.body() != null ? response.body().string() : "unknown";
                     throw new RuntimeException("Vertex AI 请求失败: HTTP " + response.code() + " - " + errorBody);
@@ -216,8 +217,10 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
             throw new RuntimeException("Vertex AI 配置缺少服务账号 JSON Key（appSecret 字段）");
         }
 
-        GoogleCredentials credentials = GoogleCredentials
-                .fromStream(new ByteArrayInputStream(apiConfig.getAppSecret().getBytes(StandardCharsets.UTF_8)))
+        var transportFactory = AiProxySupport.googleHttpTransportFactory(apiConfig);
+        GoogleCredentials credentials = (transportFactory == null
+            ? GoogleCredentials.fromStream(new ByteArrayInputStream(apiConfig.getAppSecret().getBytes(StandardCharsets.UTF_8)))
+            : GoogleCredentials.fromStream(new ByteArrayInputStream(apiConfig.getAppSecret().getBytes(StandardCharsets.UTF_8)), transportFactory))
                 .createScoped(Collections.singletonList(VERTEX_AI_SCOPE));
         credentials.refreshIfExpired();
         return credentials.getAccessToken().getTokenValue();
@@ -234,6 +237,37 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
         if (Math.abs(ratio - 4.0 / 3.0) < 0.05) return "4:3";
         if (Math.abs(ratio - 3.0 / 4.0) < 0.05) return "3:4";
         return "1:1";
+    }
+
+    private String resolveProjectId(ApiConfig apiConfig) {
+        String projectId = apiConfig != null ? apiConfig.getAppId() : null;
+        if (StrUtil.isNotBlank(projectId)) {
+            return projectId;
+        }
+        // 兼容早期配置：曾使用 apiKey 存放 Project ID。
+        projectId = apiConfig != null ? apiConfig.getApiKey() : null;
+        if (StrUtil.isBlank(projectId)) {
+            throw new BusinessException("Vertex AI 配置缺少 Project ID");
+        }
+        return projectId;
+    }
+
+    private String resolveLocation(ApiConfig apiConfig) {
+        String location = apiConfig != null ? apiConfig.getApiUrl() : null;
+        if (StrUtil.isNotBlank(location) && !isCustomPredictUrl(location)) {
+            return location;
+        }
+        // 兼容早期配置：当 apiKey 存 Project ID 时，appId 可能存放 location。
+        if (apiConfig != null && StrUtil.isBlank(apiConfig.getApiUrl())
+                && StrUtil.isNotBlank(apiConfig.getApiKey()) && StrUtil.isNotBlank(apiConfig.getAppId())) {
+            return apiConfig.getAppId();
+        }
+        return "us-central1";
+    }
+
+    private boolean isCustomPredictUrl(String apiUrl) {
+        return StrUtil.startWithIgnoreCase(apiUrl, "http://")
+                || StrUtil.startWithIgnoreCase(apiUrl, "https://");
     }
 
     private AiModel resolveModel(ImageTask task) {

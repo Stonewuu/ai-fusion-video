@@ -83,15 +83,15 @@ function ProfileDialog({ open, onOpenChange, user, onSaved }: ProfileDialogProps
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-md max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>编辑个人信息</DialogTitle>
           <DialogDescription>
             修改你的昵称、邮箱和手机号
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto min-h-0 px-1 -mx-1">
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">昵称</Label>
             <Input
@@ -121,20 +121,19 @@ function ProfileDialog({ open, onOpenChange, user, onSaved }: ProfileDialogProps
               className="text-sm"
             />
           </div>
+          {/* 反馈消息 */}
+          {successMsg && (
+            <div className="flex items-center gap-1.5 text-xs text-green-500">
+              <Check className="h-3.5 w-3.5" />
+              {successMsg}
+            </div>
+          )}
+          {errorMsg && (
+            <p className="text-xs text-destructive">{errorMsg}</p>
+          )}
         </div>
 
-        {/* 反馈消息 */}
-        {successMsg && (
-          <div className="flex items-center gap-1.5 text-xs text-green-500">
-            <Check className="h-3.5 w-3.5" />
-            {successMsg}
-          </div>
-        )}
-        {errorMsg && (
-          <p className="text-xs text-destructive">{errorMsg}</p>
-        )}
-
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <DialogClose render={<Button variant="outline" size="sm" />}>
             取消
           </DialogClose>

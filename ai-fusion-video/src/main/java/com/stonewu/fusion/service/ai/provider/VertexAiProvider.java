@@ -1,10 +1,19 @@
 package com.stonewu.fusion.service.ai.provider;
 
 import cn.hutool.core.util.StrUtil;
+import com.google.api.gax.core.FixedCredentialsProvider;
+import com.google.api.gax.httpjson.InstantiatingHttpJsonChannelProvider;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.cloud.vertexai.Transport;
 import com.google.cloud.vertexai.VertexAI;
+import com.google.cloud.vertexai.api.LlmUtilityServiceClient;
+import com.google.cloud.vertexai.api.LlmUtilityServiceSettings;
+import com.google.cloud.vertexai.api.PredictionServiceClient;
+import com.google.cloud.vertexai.api.PredictionServiceSettings;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
+import com.stonewu.fusion.entity.ai.ApiConfig;
+import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import io.agentscope.core.model.GeminiChatModel;
 import io.agentscope.core.model.Model;
 import org.springframework.ai.chat.model.ChatModel;
@@ -49,13 +58,20 @@ public class VertexAiProvider extends AbstractAiProvider {
                 .model(context.getModelName());
         applyDouble(context.getConfig(), "temperature", optionsBuilder::temperature);
 
+        String endpoint = resolveVertexEndpoint(location);
         VertexAI.Builder builder = new VertexAI.Builder()
             .setProjectId(projectId)
-            .setLocation(location);
+            .setLocation(location)
+            .setApiEndpoint(endpoint)
+            .setTransport(Transport.REST);
 
-        GoogleCredentials credentials = loadServiceAccountCredentials(context);
+        GoogleCredentials credentials = loadGoogleCredentials(context);
         if (credentials != null) {
             builder.setCredentials(credentials);
+        }
+        if (AiProxySupport.isEnabled(context.getApiConfig())) {
+            builder.setPredictionClientSupplier(() -> createPredictionServiceClient(context.getApiConfig(), endpoint, credentials));
+            builder.setLlmClientSupplier(() -> createLlmUtilityServiceClient(context.getApiConfig(), endpoint, credentials));
         }
 
         VertexAI vertexAI = builder.build();
@@ -81,7 +97,7 @@ public class VertexAiProvider extends AbstractAiProvider {
                 .location(getLocation(context))
                 .vertexAI(true);
 
-        GoogleCredentials credentials = loadServiceAccountCredentials(context);
+        GoogleCredentials credentials = loadGoogleCredentials(context);
         if (credentials != null) {
             builder.credentials(credentials);
         }
@@ -116,17 +132,67 @@ public class VertexAiProvider extends AbstractAiProvider {
         return "us-central1";
     }
 
-    private GoogleCredentials loadServiceAccountCredentials(AiProviderContext context) {
-        String appSecret = context.getApiConfig() != null ? context.getApiConfig().getAppSecret() : null;
-        if (StrUtil.isBlank(appSecret)) {
-            return null;
-        }
+    private String resolveVertexEndpoint(String location) {
+        return StrUtil.blankToDefault(location, "us-central1") + "-aiplatform.googleapis.com:443";
+    }
+
+    private GoogleCredentials loadGoogleCredentials(AiProviderContext context) {
+        ApiConfig apiConfig = context.getApiConfig();
+        String appSecret = apiConfig != null ? apiConfig.getAppSecret() : null;
+        boolean proxyEnabled = AiProxySupport.isEnabled(apiConfig);
         try {
-            return GoogleCredentials.fromStream(
-                    new ByteArrayInputStream(appSecret.getBytes(StandardCharsets.UTF_8)))
-                    .createScoped(Collections.singletonList(VERTEX_AI_SCOPE));
+            GoogleCredentials credentials;
+            if (StrUtil.isNotBlank(appSecret)) {
+                var transportFactory = AiProxySupport.googleHttpTransportFactory(apiConfig);
+                credentials = transportFactory == null
+                        ? GoogleCredentials.fromStream(new ByteArrayInputStream(appSecret.getBytes(StandardCharsets.UTF_8)))
+                        : GoogleCredentials.fromStream(new ByteArrayInputStream(appSecret.getBytes(StandardCharsets.UTF_8)), transportFactory);
+            } else if (proxyEnabled) {
+                credentials = GoogleCredentials.getApplicationDefault(AiProxySupport.googleHttpTransportFactory(apiConfig));
+            } else {
+                return null;
+            }
+            return credentials.createScoped(Collections.singletonList(VERTEX_AI_SCOPE));
         } catch (IOException e) {
-            throw new BusinessException("Vertex AI 服务账号 JSON Key 无效: " + e.getMessage());
+            throw new BusinessException("Vertex AI 凭证加载失败: " + e.getMessage());
+        }
+    }
+
+    private PredictionServiceClient createPredictionServiceClient(ApiConfig apiConfig, String endpoint,
+                                                                 GoogleCredentials credentials) {
+        try {
+            var transportProvider = InstantiatingHttpJsonChannelProvider.newBuilder()
+                    .setEndpoint(endpoint)
+                    .setHttpTransport(AiProxySupport.googleHttpTransport(apiConfig))
+                    .build();
+            PredictionServiceSettings.Builder settingsBuilder = PredictionServiceSettings.newHttpJsonBuilder()
+                    .setEndpoint(endpoint)
+                    .setTransportChannelProvider(transportProvider);
+            if (credentials != null) {
+                settingsBuilder.setCredentialsProvider(FixedCredentialsProvider.create(credentials));
+            }
+            return PredictionServiceClient.create(settingsBuilder.build());
+        } catch (IOException e) {
+            throw new BusinessException("创建 Vertex AI Prediction 代理客户端失败: " + e.getMessage());
+        }
+    }
+
+    private LlmUtilityServiceClient createLlmUtilityServiceClient(ApiConfig apiConfig, String endpoint,
+                                                                 GoogleCredentials credentials) {
+        try {
+            var transportProvider = InstantiatingHttpJsonChannelProvider.newBuilder()
+                    .setEndpoint(endpoint)
+                    .setHttpTransport(AiProxySupport.googleHttpTransport(apiConfig))
+                    .build();
+            LlmUtilityServiceSettings.Builder settingsBuilder = LlmUtilityServiceSettings.newHttpJsonBuilder()
+                    .setEndpoint(endpoint)
+                    .setTransportChannelProvider(transportProvider);
+            if (credentials != null) {
+                settingsBuilder.setCredentialsProvider(FixedCredentialsProvider.create(credentials));
+            }
+            return LlmUtilityServiceClient.create(settingsBuilder.build());
+        } catch (IOException e) {
+            throw new BusinessException("创建 Vertex AI LLM 代理客户端失败: " + e.getMessage());
         }
     }
 }

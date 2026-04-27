@@ -1,0 +1,244 @@
+[
+  {
+    "code": "wan2.7-image-pro",
+    "name": "Wan 2.7 Image Pro",
+    "platform": "dashscope",
+    "modelType": 2,
+    "description": "阿里云百炼万相 2.7 专业图片生成模型，支持文生图、参考图生成与 1K~4K 分辨率",
+    "capabilities": ["文生图", "图生图", "多图参考", "1K/2K/4K"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 10,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 921600,
+      "maxPixels": 16777216,
+      "promptExtend": true,
+      "watermark": false,
+      "supportedAspectRatios": ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "3:4": "864x1152",
+          "4:3": "1152x864",
+          "16:9": "1312x736",
+          "9:16": "736x1312",
+          "2:3": "832x1248",
+          "3:2": "1248x832",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:4": "1728x2304",
+          "4:3": "2304x1728",
+          "16:9": "2848x1600",
+          "9:16": "1600x2848",
+          "2:3": "1664x2496",
+          "3:2": "2496x1664",
+          "21:9": "3136x1344"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "3:4": "3520x4704",
+          "4:3": "4704x3520",
+          "16:9": "5504x3040",
+          "9:16": "3040x5504",
+          "2:3": "3328x4992",
+          "3:2": "4992x3328",
+          "21:9": "6240x2656"
+        }
+      }
+    }
+  },
+  {
+    "code": "wan2.7-image",
+    "name": "Wan 2.7 Image",
+    "platform": "dashscope",
+    "modelType": 2,
+    "description": "阿里云百炼万相 2.7 图片生成模型，支持文生图、参考图生成与 1K~2K 分辨率",
+    "capabilities": ["文生图", "图生图", "多图参考", "1K/2K"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 10,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 921600,
+      "maxPixels": 4194304,
+      "promptExtend": true,
+      "watermark": false,
+      "supportedAspectRatios": ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "3:4": "864x1152",
+          "4:3": "1152x864",
+          "16:9": "1312x736",
+          "9:16": "736x1312",
+          "2:3": "832x1248",
+          "3:2": "1248x832",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:4": "1728x2304",
+          "4:3": "2304x1728",
+          "16:9": "2848x1600",
+          "9:16": "1600x2848",
+          "2:3": "1664x2496",
+          "3:2": "2496x1664",
+          "21:9": "3136x1344"
+        }
+      }
+    }
+  },
+  {
+    "code": "qwen-image-2.0-pro",
+    "name": "Qwen Image 2.0 Pro",
+    "platform": "dashscope",
+    "modelType": 2,
+    "description": "阿里云百炼 Qwen Image 2.0 Pro 图像生成模型，支持高质量文生图与参考图编辑",
+    "capabilities": ["文生图", "图像编辑", "参考图"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 2,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 262144,
+      "maxPixels": 4194304,
+      "watermark": false,
+      "supportedAspectRatios": ["1:1", "3:4", "4:3", "16:9", "9:16"],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "3:4": "864x1152",
+          "4:3": "1152x864",
+          "16:9": "1312x736",
+          "9:16": "736x1312"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:4": "1728x2304",
+          "4:3": "2304x1728",
+          "16:9": "2848x1600",
+          "9:16": "1600x2848"
+        }
+      }
+    }
+  },
+  {
+    "code": "qwen-image-2.0",
+    "name": "Qwen Image 2.0",
+    "platform": "dashscope",
+    "modelType": 2,
+    "description": "阿里云百炼 Qwen Image 2.0 图像生成模型，支持文生图与参考图编辑",
+    "capabilities": ["文生图", "图像编辑", "参考图"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 2,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 262144,
+      "maxPixels": 4194304,
+      "watermark": false,
+      "supportedAspectRatios": ["1:1", "3:4", "4:3", "16:9", "9:16"],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "3:4": "864x1152",
+          "4:3": "1152x864",
+          "16:9": "1312x736",
+          "9:16": "736x1312"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:4": "1728x2304",
+          "4:3": "2304x1728",
+          "16:9": "2848x1600",
+          "9:16": "1600x2848"
+        }
+      }
+    }
+  },
+  {
+    "code": "qwen-image-max",
+    "name": "Qwen Image Max",
+    "platform": "dashscope",
+    "modelType": 2,
+    "description": "阿里云百炼 Qwen Image Max 文生图模型",
+    "capabilities": ["文生图"],
+    "config": {
+      "supportReferenceImages": false,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 0,
+      "defaultWidth": 1328,
+      "defaultHeight": 1328,
+      "watermark": false,
+      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16"],
+      "supportedSizes": {
+        "标准": {
+          "1:1": "1328x1328",
+          "4:3": "1472x1104",
+          "3:4": "1104x1472",
+          "16:9": "1664x928",
+          "9:16": "928x1664"
+        }
+      }
+    }
+  },
+  {
+    "code": "qwen-image-plus",
+    "name": "Qwen Image Plus",
+    "platform": "dashscope",
+    "modelType": 2,
+    "description": "阿里云百炼 Qwen Image Plus 文生图模型",
+    "capabilities": ["文生图"],
+    "config": {
+      "supportReferenceImages": false,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 0,
+      "defaultWidth": 1328,
+      "defaultHeight": 1328,
+      "watermark": false,
+      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16"],
+      "supportedSizes": {
+        "标准": {
+          "1:1": "1328x1328",
+          "4:3": "1472x1104",
+          "3:4": "1104x1472",
+          "16:9": "1664x928",
+          "9:16": "928x1664"
+        }
+      }
+    }
+  },
+  {
+    "code": "qwen-image",
+    "name": "Qwen Image",
+    "platform": "dashscope",
+    "modelType": 2,
+    "description": "阿里云百炼 Qwen Image 基础文生图模型",
+    "capabilities": ["文生图"],
+    "config": {
+      "supportReferenceImages": false,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 0,
+      "defaultWidth": 1328,
+      "defaultHeight": 1328,
+      "watermark": false,
+      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16"],
+      "supportedSizes": {
+        "标准": {
+          "1:1": "1328x1328",
+          "4:3": "1472x1104",
+          "3:4": "1104x1472",
+          "16:9": "1664x928",
+          "9:16": "928x1664"
+        }
+      }
+    }
+  }
+]

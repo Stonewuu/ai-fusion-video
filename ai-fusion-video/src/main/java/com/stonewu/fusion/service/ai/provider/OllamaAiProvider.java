@@ -62,7 +62,7 @@ public class OllamaAiProvider extends AbstractAiProvider {
         }
         String url = baseUrl + "/api/tags";
         log.info("[OllamaAiProvider] 获取远程模型列表: {}", url);
-        String response = executeGet(url, java.util.Map.of());
+        String response = executeGet(url, java.util.Map.of(), context.getApiConfig());
         return parseOllamaTags(response);
     }
 }

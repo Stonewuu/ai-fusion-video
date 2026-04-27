@@ -5,7 +5,7 @@
   <strong>融光，基于 Agent 的智能视频创作平台</strong>
 </p>
 <p align="center">
-  <img src="https://img.shields.io/badge/version-0.2.1-blue" alt="version" />
+  <img src="https://img.shields.io/badge/version-0.3.0-blue" alt="version" />
 </p>
 
 ---

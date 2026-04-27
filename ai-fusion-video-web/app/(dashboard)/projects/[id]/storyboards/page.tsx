@@ -625,7 +625,7 @@ export default function StoryboardTabPage() {
                   </button>
                 }
               />
-              <SheetContent side="right" className="w-[300px] p-0 border-l-0 flex flex-col pt-12 overflow-hidden">
+              <SheetContent side="right" className="w-[300px] p-0 border-l-0 flex flex-col pt-12 overflow-y-auto">
                 <StoryboardRefPanel
                   storyboard={storyboard}
                   items={allItems}

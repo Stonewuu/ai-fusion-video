@@ -130,15 +130,15 @@ function StorageConfigDialog({ open, onOpenChange, editingConfig, onSaved }: Sto
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
+      <DialogContent className="sm:max-w-lg max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+        <DialogHeader className="shrink-0">
           <DialogTitle>{editingConfig ? "编辑存储配置" : "新建存储配置"}</DialogTitle>
           <DialogDescription>
             配置文件存储后端（本地磁盘 / S3 兼容存储）
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="space-y-4 overflow-y-auto min-h-0 px-1 -mx-1">
           {/* 配置名称 */}
           <div className="space-y-1.5">
             <Label className="text-xs text-muted-foreground">配置名称</Label>
@@ -216,7 +216,7 @@ function StorageConfigDialog({ open, onOpenChange, editingConfig, onSaved }: Sto
           </div>
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="shrink-0">
           <DialogClose render={<Button variant="outline" size="sm" />}>
             取消
           </DialogClose>

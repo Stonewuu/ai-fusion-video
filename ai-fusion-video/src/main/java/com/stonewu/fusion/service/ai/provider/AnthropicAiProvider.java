@@ -2,16 +2,17 @@ package com.stonewu.fusion.service.ai.provider;
 
 import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
+import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import io.agentscope.core.model.AnthropicChatModel;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
-import org.springframework.ai.anthropic.AnthropicChatModel.Builder;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.model.ChatModel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 
@@ -32,6 +33,10 @@ public class AnthropicAiProvider extends AbstractAiProvider {
         requireApiKey(context.getApiKey(), "Anthropic");
 
         AnthropicApi.Builder apiBuilder = AnthropicApi.builder().apiKey(context.getApiKey());
+        apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
+            context.getApiConfig(), 60 * 1000, 3 * 60 * 1000));
+        apiBuilder.webClientBuilder(AiProxySupport.webClientBuilder(
+            context.getApiConfig(), "anthropic-provider", Duration.ofSeconds(60)));
         String rootBaseUrl = resolveRootBaseUrl(context.getBaseUrl());
         if (StrUtil.isNotBlank(rootBaseUrl)) {
             apiBuilder.baseUrl(rootBaseUrl);
@@ -52,20 +57,9 @@ public class AnthropicAiProvider extends AbstractAiProvider {
     @Override
     public Model createAgentScopeModel(AiProviderContext context) {
         requireApiKey(context.getApiKey(), "Anthropic");
-        AnthropicChatModel.Builder builder = AnthropicChatModel.builder()
-                // .defaultOptions(GenerateOptions.builder().additionalHeader("Authorization", "Bearer " + context.getApiKey()).build())
-                .apiKey(context.getApiKey())
-                .modelName(context.getModelName())
-                .stream(true);
         GenerateOptions defaultOptions = buildReasoningOptions(context);
-        if (defaultOptions != null) {
-            builder.defaultOptions(defaultOptions);
-        }
         String rootBaseUrl = resolveRootBaseUrl(context.getBaseUrl());
-        if (StrUtil.isNotBlank(rootBaseUrl)) {
-            builder.baseUrl(rootBaseUrl);
-        }
-        return builder.build();
+        return AnthropicAgentScopeProxySupport.create(context, defaultOptions, rootBaseUrl);
     }
 
     @Override
@@ -78,7 +72,7 @@ public class AnthropicAiProvider extends AbstractAiProvider {
         String response = executeGet(url, Map.of(
                 "x-api-key", context.getApiKey(),
                 "anthropic-version", "2023-06-01"
-        ));
+        ), context.getApiConfig());
         return parseDataArrayModels(response, "anthropic");
     }
 

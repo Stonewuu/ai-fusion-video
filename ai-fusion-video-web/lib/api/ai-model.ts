@@ -101,6 +101,11 @@ export interface ApiConfig {
   platform: string | null;
   apiUrl: string | null;
   autoAppendV1Path: boolean;
+  proxyType: string | null;
+  proxyHost: string | null;
+  proxyPort: number | null;
+  proxyUsername: string | null;
+  proxyPassword: string | null;
   apiKey: string | null;
   appId: string | null;
   appSecret: string | null;
@@ -118,6 +123,11 @@ export interface ApiConfigSaveReq {
   platform?: string;
   apiUrl?: string;
   autoAppendV1Path?: boolean;
+  proxyType?: string;
+  proxyHost?: string;
+  proxyPort?: number;
+  proxyUsername?: string;
+  proxyPassword?: string;
   apiKey?: string;
   appId?: string;
   appSecret?: string;
@@ -144,7 +154,7 @@ export const PLATFORM_OPTIONS = [
   { value: "vertex_ai", label: "Google Vertex AI", description: "Google Cloud Vertex AI Gemini" },
   { value: "gemini", label: "Google Gemini API", description: "Google AI Studio / Gemini Developer API" },
   { value: "GoogleFlowReverseApi", label: "Google Flow Reverse API", description: "Flow2API 反向代理，图片/视频 alias 模型" },
-  { value: "dashscope", label: "阿里 DashScope", description: "阿里云通义千问系列" },
+  { value: "dashscope", label: "阿里 DashScope", description: "阿里云百炼 / DashScope（通义千问、万相、Qwen-Image）" },
   { value: "anthropic", label: "Anthropic", description: "Claude 系列模型" },
   { value: "ollama", label: "Ollama", description: "本地部署的开源模型" },
 ] as const;
@@ -170,7 +180,7 @@ export const MODEL_TYPE_LABELS: Record<number, string> = {
 /** 平台标签映射 */
 export const PLATFORM_LABELS: Record<string, string> = {
   openai_compatible: "OpenAI 兼容",
-  openai: "OpenAI",
+  openai: "OpenAI 兼容",
   deepseek: "DeepSeek",
   volcengine: "火山引擎",
   zhipu: "智谱",

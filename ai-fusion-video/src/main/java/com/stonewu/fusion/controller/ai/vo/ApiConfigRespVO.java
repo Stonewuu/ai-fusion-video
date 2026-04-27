@@ -12,6 +12,11 @@ public class ApiConfigRespVO {
     private String platform;
     private String apiUrl;
     private Boolean autoAppendV1Path;
+    private String proxyType;
+    private String proxyHost;
+    private Integer proxyPort;
+    private String proxyUsername;
+    private String proxyPassword;
     private String apiKey;
     private String appId;
     private String appSecret;

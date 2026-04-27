@@ -3,18 +3,15 @@ package com.stonewu.fusion.service.ai.provider;
 import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
+import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
 import io.agentscope.core.model.OpenAIChatModel;
 import org.springframework.ai.chat.model.ChatModel;
 import lombok.extern.slf4j.Slf4j;
-import reactor.netty.http.client.HttpClient;
-import reactor.netty.resources.ConnectionProvider;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
-import org.springframework.http.client.SimpleClientHttpRequestFactory;
-import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -51,26 +48,16 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
         requireApiKey(apiKey, "OpenAI Compatible (" + platform + ")");
 
-        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
-        requestFactory.setConnectTimeout(60 * 1000);
-        requestFactory.setReadTimeout(3 * 60 * 1000);
-
-        ConnectionProvider provider = ConnectionProvider.builder("openai-compatible-provider")
-                .maxConnections(500)
-                .maxIdleTime(Duration.ofSeconds(45))
-                .maxLifeTime(Duration.ofMinutes(10))
-                .pendingAcquireTimeout(Duration.ofSeconds(60))
-                .evictInBackground(Duration.ofSeconds(30))
-                .build();
-        HttpClient httpClient = HttpClient.create(provider)
-                .compress(true)
-                .keepAlive(true)
-                .responseTimeout(Duration.ofSeconds(60));
+        if (shouldUseResponsesApi(context)) {
+            log.warn("[OpenAiCompatibleAiProvider] Responses API 目前仅接入 AgentScope 主链路，Spring AI ChatModel 仍回退到 chat/completions: model={}",
+                    context.getModelName());
+        }
 
         OpenAiApi.Builder apiBuilder = OpenAiApi.builder().apiKey(apiKey);
-        apiBuilder.restClientBuilder(RestClient.builder().requestFactory(requestFactory));
-        apiBuilder.webClientBuilder(WebClient.builder()
-                .clientConnector(new ReactorClientHttpConnector(httpClient)));
+        apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
+            context.getApiConfig(), 60 * 1000, 3 * 60 * 1000));
+        apiBuilder.webClientBuilder(AiProxySupport.webClientBuilder(
+            context.getApiConfig(), "openai-compatible-provider", Duration.ofSeconds(60)));
         if (StrUtil.isNotBlank(baseUrl)) {
             apiBuilder.baseUrl(baseUrl);
         }
@@ -97,11 +84,20 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
         requireApiKey(apiKey, "OpenAI Compatible (" + platform + ")");
 
+        GenerateOptions generateOptions = buildGenerateOptions(context);
+        if (shouldUseResponsesApi(context)) {
+            return new OpenAiResponsesAgentScopeModel(
+                    context.getApiConfig(),
+                    apiKey,
+                    baseUrl,
+                    context.getModelName(),
+                    generateOptions);
+        }
+
         OpenAIChatModel.Builder builder = OpenAIChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(context.getModelName())
                 .stream(true);
-        GenerateOptions generateOptions = buildReasoningOptions(context);
         if (generateOptions != null) {
             builder.generateOptions(generateOptions);
         }
@@ -109,6 +105,11 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
             builder.baseUrl(baseUrl);
         }
         builder.endpointPath(endpointPath);
+        io.agentscope.core.model.transport.HttpTransport proxyTransport =
+                AiProxySupport.agentScopeHttpTransport(context.getApiConfig());
+        if (proxyTransport != null) {
+            builder.httpTransport(proxyTransport);
+        }
         return builder.build();
     }
 
@@ -120,13 +121,32 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         log.info("[OpenAiCompatibleAiProvider] 获取远程模型列表: {}", url);
         String response = executeGet(url, context.getApiKey() == null
                 ? Map.of()
-                : Map.of("Authorization", "Bearer " + context.getApiKey()));
+            : Map.of("Authorization", "Bearer " + context.getApiKey()), context.getApiConfig());
         return parseDataArrayModels(response, context.getPlatform());
     }
 
-    private GenerateOptions buildReasoningOptions(AiProviderContext context) {
+    private GenerateOptions buildGenerateOptions(AiProviderContext context) {
         GenerateOptions.Builder builder = GenerateOptions.builder();
         boolean hasOptions = false;
+
+        Double temperature = getConfigDoubleValue(context.getConfig(), "temperature");
+        if (temperature != null) {
+            builder.temperature(temperature);
+            hasOptions = true;
+        }
+
+        Double topP = getConfigDoubleValue(context.getConfig(), "topP", "top_p");
+        if (topP != null) {
+            builder.topP(topP);
+            hasOptions = true;
+        }
+
+        Integer maxTokens = getConfigInteger(context.getConfig(), "maxTokens", "max_tokens");
+        if (maxTokens != null) {
+            builder.maxTokens(maxTokens);
+            builder.maxCompletionTokens(maxTokens);
+            hasOptions = true;
+        }
 
         String reasoningEffort = getConfigString(context.getConfig(), "reasoningEffort", "reasoning_effort");
         if (StrUtil.isNotBlank(reasoningEffort)) {
@@ -150,6 +170,36 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         }
 
         return hasOptions ? builder.build() : null;
+    }
+
+    private boolean shouldUseResponsesApi(AiProviderContext context) {
+        Boolean useResponsesApi = getConfigBoolean(context.getConfig(),
+                "useResponsesApi", "useResponses", "responseApi", "responsesApi");
+        if (useResponsesApi != null) {
+            return useResponsesApi;
+        }
+
+        String apiMode = getConfigString(context.getConfig(),
+                "apiMode", "api_mode", "openaiApiMode", "openai_api_mode");
+        if (StrUtil.isBlank(apiMode)) {
+            return false;
+        }
+
+        String normalized = apiMode.trim().toLowerCase();
+        return "responses".equals(normalized) || "response".equals(normalized);
+    }
+
+    private Double getConfigDoubleValue(Map<String, Object> config, String... keys) {
+        Object value = getConfigValue(config, keys);
+        if (value == null) {
+            return null;
+        }
+        try {
+            return toDouble(value);
+        } catch (Exception e) {
+            log.warn("[OpenAiCompatibleAiProvider] 参数解析失败: keys={}, value={}", String.join(",", keys), value);
+            return null;
+        }
     }
 
     private String resolveCompletionsPath(AiProviderContext context) {

@@ -43,6 +43,35 @@ useEffect(() => {
 
 **适用组件**：glow-menu 内的下拉菜单、带 `overflow-hidden` 的卡片内的 Tooltip/Popover 等。
 
+## 2. Dialog / 弹窗小视口兜底规则
+
+**场景**：表单型 Dialog、长列表 Dialog、自定义 Portal 详情弹层在笔记本小窗口、浏览器缩放、移动端横屏时，内容高度可能超过视口。
+
+**问题**：如果只给弹窗设宽度，不限制高度或不拆分内部滚动区，底部按钮会被挤出视口，用户无法提交或关闭。
+
+**解决方案**：不要改基础 `components/ui/dialog.tsx`，在具体使用处套统一结构。
+
+```tsx
+<DialogContent className="sm:max-w-lg max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
+  <DialogHeader className="shrink-0" />
+
+  <div className="min-h-0 overflow-y-auto px-1 -mx-1">
+    {/* 长表单 / 长列表内容 */}
+  </div>
+
+  <DialogFooter className="shrink-0" />
+</DialogContent>
+```
+
+**补充规则**：
+
+1. `DialogContent` 至少加 `max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden`
+2. `DialogHeader`、`DialogFooter` 加 `shrink-0`，保证头尾不被压缩
+3. 中间内容区单独加 `min-h-0 overflow-y-auto`
+4. 列表型弹窗优先让列表区自己滚动；表单型弹窗优先让表单主体滚动
+5. 移动端右侧详情 `Sheet` 如果内容可能变长，使用 `overflow-y-auto`，不要写死 `overflow-hidden`
+6. 自定义 Portal 图片/详情弹层要同时限制 `max-h` / `max-w`，并给外层留 `px`、`py` 安全边距
+
 # 布局高度管理规则
 
 ## 整体布局结构

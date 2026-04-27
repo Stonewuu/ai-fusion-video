@@ -6,6 +6,8 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
+import com.stonewu.fusion.entity.ai.ApiConfig;
+import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -194,10 +196,15 @@ public abstract class AbstractAiProvider implements AiProvider {
     }
 
     protected String executeGet(String url, Map<String, String> headers) {
+        return executeGet(url, headers, null);
+    }
+
+    protected String executeGet(String url, Map<String, String> headers, ApiConfig apiConfig) {
         Request.Builder builder = new Request.Builder().url(url).get();
         headers.forEach(builder::addHeader);
+        OkHttpClient client = AiProxySupport.okHttpClient(httpClient, apiConfig);
 
-        try (Response response = httpClient.newCall(builder.build()).execute()) {
+        try (Response response = client.newCall(builder.build()).execute()) {
             if (!response.isSuccessful()) {
                 String body = response.body() != null ? response.body().string() : "";
                 log.error("[AiProvider] 请求失败: url={}, code={}, message={}, body={}",

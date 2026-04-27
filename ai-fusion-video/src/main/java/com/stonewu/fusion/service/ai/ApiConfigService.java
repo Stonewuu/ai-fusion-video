@@ -7,6 +7,7 @@ import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.mapper.ai.ApiConfigMapper;
+import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +26,7 @@ public class ApiConfigService {
             apiConfig.setAutoAppendV1Path(true);
         }
         apiConfig.setApiUrl(normalizeApiUrl(apiConfig.getPlatform(), apiConfig.getApiUrl()));
+        normalizeProxyConfig(apiConfig);
         apiConfigMapper.insert(apiConfig);
         return apiConfig.getId();
     }
@@ -32,6 +34,8 @@ public class ApiConfigService {
     @Transactional
     public void updateApiConfig(Long id, String name, String platform, String apiUrl,
                                  Boolean autoAppendV1Path,
+                                 String proxyType, String proxyHost, Integer proxyPort,
+                                 String proxyUsername, String proxyPassword,
                                  String apiKey, String appId, String appSecret,
                                  Long modelId, Integer status, String remark) {
         ApiConfig config = apiConfigMapper.selectById(id);
@@ -41,12 +45,18 @@ public class ApiConfigService {
         if (platform != null) config.setPlatform(platform);
         if (apiUrl != null) config.setApiUrl(normalizeApiUrl(effectivePlatform, apiUrl));
         if (autoAppendV1Path != null) config.setAutoAppendV1Path(autoAppendV1Path);
+        if (proxyType != null) config.setProxyType(proxyType);
+        if (proxyHost != null) config.setProxyHost(proxyHost);
+        if (proxyPort != null) config.setProxyPort(proxyPort);
+        if (proxyUsername != null) config.setProxyUsername(proxyUsername);
+        if (proxyPassword != null) config.setProxyPassword(proxyPassword);
         if (apiKey != null) config.setApiKey(apiKey);
         if (appId != null) config.setAppId(appId);
         if (appSecret != null) config.setAppSecret(appSecret);
         if (modelId != null) config.setModelId(modelId);
         if (status != null) config.setStatus(status);
         if (remark != null) config.setRemark(remark);
+        normalizeProxyConfig(config);
         apiConfigMapper.updateById(config);
     }
 
@@ -100,6 +110,40 @@ public class ApiConfigService {
             return null;
         }
         return normalizedApiUrl;
+    }
+
+    private void normalizeProxyConfig(ApiConfig config) {
+        String proxyType = AiProxySupport.normalizeProxyType(config.getProxyType());
+        if (AiProxySupport.TYPE_NONE.equals(proxyType)) {
+            config.setProxyType(null);
+            config.setProxyHost(null);
+            config.setProxyPort(null);
+            config.setProxyUsername(null);
+            config.setProxyPassword(null);
+            return;
+        }
+        if (!AiProxySupport.isSupportedProxyType(proxyType)) {
+            throw new BusinessException("不支持的代理类型: " + config.getProxyType());
+        }
+        if (StrUtil.isBlank(config.getProxyHost())) {
+            throw new BusinessException("启用代理时代理主机不能为空");
+        }
+        Integer proxyPort = config.getProxyPort();
+        if (proxyPort == null || proxyPort <= 0 || proxyPort > 65535) {
+            throw new BusinessException("启用代理时代理端口必须在 1-65535 之间");
+        }
+        String proxyUsername = StrUtil.trim(config.getProxyUsername());
+        if (StrUtil.isBlank(proxyUsername)) {
+            if (StrUtil.isNotBlank(config.getProxyPassword())) {
+                throw new BusinessException("启用代理认证时代理用户名不能为空");
+            }
+            config.setProxyUsername(null);
+            config.setProxyPassword(null);
+        } else {
+            config.setProxyUsername(proxyUsername);
+        }
+        config.setProxyType(proxyType);
+        config.setProxyHost(config.getProxyHost().trim());
     }
 
     private boolean isSameApiUrl(String currentApiUrl, String defaultApiUrl) {

@@ -324,9 +324,20 @@ public class GenerationModelCapabilityService {
 
     private ImageModelCapability inferImageCapability(AiModel model, String platform) {
         String normalizedPlatform = normalizePlatform(platform);
+        String code = model != null && StrUtil.isNotBlank(model.getCode())
+                ? model.getCode().toLowerCase(Locale.ROOT) : "";
         return switch (normalizedPlatform) {
             case "googleflowreverseapi" -> new ImageModelCapability(true, 0, null);
-            case "openai", "openai_compatible", "vertex_ai", "vertexai" -> new ImageModelCapability(false, 0, 0);
+            case "dashscope" -> {
+                if (code.startsWith("wan2.7-image") || code.startsWith("wan2.6-image")) {
+                    yield new ImageModelCapability(true, 0, 10);
+                }
+                if (code.startsWith("qwen-image-2.0")) {
+                    yield new ImageModelCapability(true, 0, 2);
+                }
+                yield new ImageModelCapability(false, 0, 0);
+            }
+            case "openai_compatible", "vertex_ai", "vertexai" -> new ImageModelCapability(false, 0, 0);
             default -> new ImageModelCapability(false, 0, 0);
         };
     }
@@ -377,6 +388,33 @@ public class GenerationModelCapabilityService {
             }
         }
 
+        if ("dashscope".equals(normalizedPlatform)) {
+            if (code.contains("wan2.7-r2v")) {
+                return new VideoModelCapability(false, false, true, true, true,
+                        0, 10, 10, 3, 3);
+            }
+            if (code.contains("wan2.7-videoedit")) {
+                return new VideoModelCapability(false, false, true, true, false,
+                        0, 3, 3, 1, 0);
+            }
+            if (code.contains("wan2.7-i2v")) {
+                return new VideoModelCapability(true, true, false, true, true,
+                        1, 2, 0, 1, 1);
+            }
+            if (code.contains("kf2v")) {
+                return new VideoModelCapability(true, true, false, false, false,
+                        2, 2, 0, 0, 0);
+            }
+            if (code.contains("i2v")) {
+                return new VideoModelCapability(true, false, false, false, true,
+                        1, 1, 0, 0, 1);
+            }
+            if (code.contains("t2v")) {
+                return new VideoModelCapability(false, false, false, false, true,
+                        0, 0, 0, 0, 1);
+            }
+        }
+
         return new VideoModelCapability(false, false, false, false, false,
                 0, 0, 0, 0, 0);
     }
@@ -410,7 +448,11 @@ public class GenerationModelCapabilityService {
     }
 
     private String normalizePlatform(String platform) {
-        return platform == null ? "" : platform.trim().toLowerCase(Locale.ROOT);
+        if (platform == null) {
+            return "";
+        }
+        String normalized = platform.trim().toLowerCase(Locale.ROOT);
+        return "openai".equals(normalized) ? "openai_compatible" : normalized;
     }
 
     private String modelLabel(AiModel model) {

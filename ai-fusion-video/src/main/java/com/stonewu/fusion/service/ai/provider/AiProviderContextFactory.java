@@ -105,7 +105,7 @@ public class AiProviderContextFactory {
 
     private String resolvePlatform(ApiConfig apiConfig, String baseUrl) {
         if (apiConfig != null && StrUtil.isNotBlank(apiConfig.getPlatform())) {
-            return apiConfig.getPlatform();
+            return normalizePlatform(apiConfig.getPlatform());
         }
         if (StrUtil.isNotBlank(baseUrl)) {
             String url = baseUrl.toLowerCase();
@@ -120,9 +120,13 @@ public class AiProviderContextFactory {
             if (url.contains("localhost") || url.contains("127.0.0.1")) return "ollama";
             if (url.contains("ai.google.dev") || url.contains("generativelanguage")) return "gemini";
             if (url.contains("googleapis.com") || url.contains("vertex")) return "vertex_ai";
-            if (url.contains("openai.com")) return "openai";
+            if (url.contains("openai.com")) return "openai_compatible";
             return "openai_compatible";
         }
         return "openai_compatible";
+    }
+
+    private String normalizePlatform(String platform) {
+        return "openai".equalsIgnoreCase(platform) ? "openai_compatible" : platform;
     }
 }

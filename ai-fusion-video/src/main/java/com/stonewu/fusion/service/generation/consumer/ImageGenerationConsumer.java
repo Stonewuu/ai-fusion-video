@@ -22,6 +22,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -212,7 +213,7 @@ public class ImageGenerationConsumer {
                     if (model.getApiConfigId() != null) {
                         apiConfig = apiConfigService.getById(model.getApiConfigId());
                         if (strategy == null && apiConfig != null) {
-                            strategy = map.get(apiConfig.getPlatform());
+                            strategy = resolveStrategyByPlatform(map, apiConfig.getPlatform());
                         }
                     }
                 }
@@ -300,6 +301,28 @@ public class ImageGenerationConsumer {
             throw new BusinessException("图片生成任务缺少 modelId，无法路由到模型队列");
         }
         return MODEL_QUEUE_PREFIX + modelId;
+    }
+
+    private ImageGenerationStrategy resolveStrategyByPlatform(Map<String, ImageGenerationStrategy> map,
+                                                             String platform) {
+        if (platform == null) {
+            return null;
+        }
+
+        String normalizedPlatform = "openai".equalsIgnoreCase(platform)
+                ? "openai_compatible"
+                : platform.toLowerCase(Locale.ROOT);
+
+        ImageGenerationStrategy strategy = map.get(normalizedPlatform);
+        if (strategy != null) {
+            return strategy;
+        }
+
+        return switch (normalizedPlatform) {
+            case "openai_compatible" -> map.get("openai");
+            case "vertexai" -> map.get("vertex_ai");
+            default -> null;
+        };
     }
 
     @PreDestroy
