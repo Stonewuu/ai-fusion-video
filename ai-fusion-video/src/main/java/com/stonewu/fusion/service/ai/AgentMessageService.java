@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.mapper.ai.AgentMessageMapper;
 import lombok.RequiredArgsConstructor;
@@ -40,15 +41,17 @@ public class AgentMessageService {
 
     public AgentMessage saveAssistantMessage(String conversationId, String content,
                                              String reasoningContent, Long reasoningDurationMs) {
-        if (content == null || content.isEmpty()) {
+        boolean hasContent = StrUtil.isNotEmpty(content);
+        boolean hasReasoning = StrUtil.isNotEmpty(reasoningContent);
+        if (!hasContent && !hasReasoning) {
             return null;
         }
         int nextOrder = messageMapper.findMaxMessageOrder(conversationId) + 1;
         AgentMessage message = AgentMessage.builder()
                 .conversationId(conversationId)
                 .role("assistant")
-                .content(content)
-                .reasoningContent(reasoningContent)
+                .content(hasContent ? content : null)
+                .reasoningContent(hasReasoning ? reasoningContent : null)
                 .reasoningDurationMs(reasoningDurationMs)
                 .messageOrder(nextOrder)
                 .build();

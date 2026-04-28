@@ -25,10 +25,9 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Think } from "@ant-design/x";
 import { XMarkdown } from "@ant-design/x-markdown";
 import { cn } from "@/lib/utils";
-import { StreamMarkdown } from "@/components/dashboard/stream-markdown";
+import { StreamThink } from "@/components/dashboard/stream-think";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { GenerationModelCapabilitiesResult } from "@/components/dashboard/generation-model-capabilities-result";
 import {
@@ -490,17 +489,14 @@ function SubAgentCard({
                       ? "思考中"
                       : "思考";
                   return (
-                    <Think
+                    <StreamThink
                       key={`sub-reasoning-${cidx}`}
-                      style={{ maxHeight: 120, overflowY: "auto" }}
                       title={childTitle}
-                    >
-                      <StreamMarkdown
-                        content={child.text}
-                        compact
-                        streaming={childIsStreaming}
-                      />
-                    </Think>
+                      content={child.text}
+                      compact
+                      maxHeight={120}
+                      streaming={childIsStreaming}
+                    />
                   );
                 }
                 if (child.type === "tool") {
@@ -574,12 +570,11 @@ function MessageTimeline({ reasoningText, reasoningDurationMs, timeline, streami
     <>
       {/* 历史兼容：旧数据里 reasoning 仍是单独字段时，作为头部兜底展示 */}
       {!hasTimelineReasoning && reasoningText && (
-        <Think
-          style={{ maxHeight: 192, overflowY: "auto" }}
+        <StreamThink
           title={reasoningTitle}
-        >
-          <StreamMarkdown content={reasoningText} streaming={!!streaming} />
-        </Think>
+          content={reasoningText}
+          streaming={!!streaming}
+        />
       )}
 
       {/* 时间线条目 */}
@@ -591,16 +586,12 @@ function MessageTimeline({ reasoningText, reasoningDurationMs, timeline, streami
               ? "思考中"
               : "思考";
           return (
-            <Think
+            <StreamThink
               key={`reasoning-${idx}`}
-              style={{ maxHeight: 192, overflowY: "auto" }}
               title={itemTitle}
-            >
-              <StreamMarkdown
-                content={item.text}
-                streaming={streaming && idx === timeline.length - 1}
-              />
-            </Think>
+              content={item.text}
+              streaming={streaming && idx === timeline.length - 1}
+            />
           );
         }
 
