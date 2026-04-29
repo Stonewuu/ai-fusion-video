@@ -24,7 +24,8 @@ ARG NEXT_PUBLIC_API_BASE_URL=/api
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV NEXT_TELEMETRY_DISABLED=1
 
-RUN corepack enable pnpm && pnpm build
+RUN corepack enable pnpm
+RUN --mount=type=cache,target=/build/.next/cache pnpm build
 
 # ---------- 阶段 3: 运行 ----------
 FROM node:20-alpine
