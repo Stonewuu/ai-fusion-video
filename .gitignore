@@ -31,3 +31,4 @@ Desktop.ini
 
 # Root .vscode is intentionally not ignored here.
 # Subproject-level .vscode rules remain in their own .gitignore files.
+ai-fusion-video/data/
