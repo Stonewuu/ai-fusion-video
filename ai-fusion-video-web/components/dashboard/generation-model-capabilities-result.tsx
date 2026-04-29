@@ -90,6 +90,7 @@ function ImageCapabilitySection({ data }: { data: CapabilityResultRecord }) {
   }
 
   const supportsReferenceImages = toBoolean(data.supportsReferenceImages);
+  const asyncMode = toBoolean(data.asyncMode);
   const minReferenceImages = toNumber(data.minReferenceImages);
   const maxReferenceImages = toNumber(data.maxReferenceImages);
   const supportedAspectRatios = toStringArray(data.supportedAspectRatios);
@@ -110,12 +111,14 @@ function ImageCapabilitySection({ data }: { data: CapabilityResultRecord }) {
           tone={supportsReferenceImages ? "positive" : "muted"}
         />
         <CapabilityBadge label={`最少参考图 ${minReferenceImages ?? 0} 张`} tone="info" />
+        {asyncMode && <CapabilityBadge label="异步任务" tone="positive" />}
         {supportedAspectRatios.length > 0 && <CapabilityBadge label={`${supportedAspectRatios.length} 种比例`} tone="info" />}
         {supportedSizes.length > 0 && <CapabilityBadge label={`${supportedSizes.length} 个尺寸档`} tone="info" />}
       </div>
 
       <div className="space-y-1">
         <DetailRow label="默认尺寸" value={`${toNumber(data.defaultWidth) ?? "?"} × ${toNumber(data.defaultHeight) ?? "?"}`} />
+        <DetailRow label="异步模式" value={asyncMode ? "已启用" : "未启用"} />
         <DetailRow label="支持比例" value={formatList(supportedAspectRatios)} />
         <DetailRow label="尺寸档位" value={supportedSizes.length > 0 ? supportedSizes.join(" / ") : "未声明"} />
         <DetailRow label="调用建议" value={toText(data.toolGuidance) || "按模型支持情况组织 imageUrls。"} />

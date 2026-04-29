@@ -244,6 +244,8 @@ public class GenerationModelCapabilityService {
                 .set("supportsReferenceImages", capability.supportsReferenceImages())
                 .set("minReferenceImages", capability.minReferenceImages())
                 .set("maxReferenceImages", capability.maxReferenceImages())
+                .set("asyncMode", Boolean.TRUE.equals(getBoolean(config,
+                    "asyncMode", "useAsyncMode", "asyncTaskMode", "enableAsyncTask", "asyncEnabled")))
                 .set("supportedAspectRatios", getStringList(config, "supportedAspectRatios"))
                 .set("supportedSizes", copyJsonObject(config, "supportedSizes"))
                 .set("defaultWidth", getInteger(config, "defaultWidth"))

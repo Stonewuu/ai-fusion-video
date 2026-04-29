@@ -662,6 +662,7 @@ function getCapabilityChipClassName(tone: CapabilityChipDef["tone"]): string {
 
 function buildImageCapabilityView(config: Record<string, unknown>): GenerationCapabilityView {
   const supportsReferenceImages = getConfigBooleanValue(config.supportReferenceImages);
+  const asyncMode = getConfigBooleanValue(config.asyncMode);
   const maxReferenceImages = getOptionalConfigNumber(config.maxReferenceImages);
   const aspectRatioCount = getConfigStringArray(config.supportedAspectRatios).length;
   const supportedSizes = isConfigRecord(config.supportedSizes) ? Object.keys(config.supportedSizes).length : 0;
@@ -676,12 +677,15 @@ function buildImageCapabilityView(config: Record<string, unknown>): GenerationCa
   if (supportedSizes > 0) {
     chips.push({ label: `${supportedSizes} 个尺寸档`, tone: "info" });
   }
+  if (asyncMode) {
+    chips.push({ label: "异步任务", tone: "positive" });
+  }
 
   return {
     chips,
     summary: supportsReferenceImages
-      ? `支持参考图输入${maxReferenceImages && maxReferenceImages > 0 ? `，最多 ${maxReferenceImages} 张` : ""}`
-      : "不支持参考图输入，当前模型只适合文生图。",
+      ? `支持参考图输入${maxReferenceImages && maxReferenceImages > 0 ? `，最多 ${maxReferenceImages} 张` : ""}${asyncMode ? "；已开启异步任务模式" : ""}`
+      : `不支持参考图输入，当前模型只适合文生图。${asyncMode ? "已开启异步任务模式。" : ""}`,
   };
 }
 
@@ -1285,6 +1289,7 @@ function ModelConfigForm({
   };
 
   const supportsImageReferenceInputs = getConfigBooleanValue(configObj.supportReferenceImages);
+  const supportsAsyncImageTaskMode = getConfigBooleanValue(configObj.asyncMode);
   const supportsFirstFrame = getConfigBooleanValue(configObj.supportFirstFrame);
   const supportsLastFrame = getConfigBooleanValue(configObj.supportLastFrame);
   const supportsVideoReferenceImages = getConfigBooleanValue(configObj.supportReferenceImages);
@@ -1481,6 +1486,24 @@ function ModelConfigForm({
                       hint="限制单次 generate_image 可传入的 imageUrls 数量。"
                     />
                   </div>
+                </div>
+              )}
+
+              {modelType === 2 && normalizedPlatform === "openai_compatible" && (
+                <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-3">
+                  <div>
+                    <Label className="text-[11px] text-muted-foreground">OpenAI 兼容图片任务模式</Label>
+                    <p className="text-[10px] text-muted-foreground/70 mt-1">
+                      开启后，图片生成会按异步任务模式提交，并通过通用任务查询接口轮询结果。
+                    </p>
+                  </div>
+
+                  <ToggleSettingCard
+                    checked={supportsAsyncImageTaskMode}
+                    title="启用异步模式"
+                    description="适用于返回 task_id 后再查询结果的 OpenAI 兼容图片接口；关闭时保持同步 images/generations 或 images/edits 调用。"
+                    onToggle={() => updateComplexField("asyncMode", !supportsAsyncImageTaskMode)}
+                  />
                 </div>
               )}
 
