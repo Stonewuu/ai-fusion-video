@@ -76,14 +76,24 @@ class GenerationModelCapabilityServiceTests {
                 .build();
         var gptImage2Config = service.getMergedModelConfig(gptImage2);
 
-        assertEquals(List.of("1:1", "2:3", "3:2", "16:9", "9:16"),
+        assertEquals(List.of("auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5",
+                        "16:9", "9:16", "2:1", "1:2", "21:9", "9:21"),
                 JSONUtil.toList(gptImage2Config.getJSONArray("supportedAspectRatios"), String.class));
+        assertFalse(gptImage2Config.getBool("asyncMode"));
+        assertTrue(gptImage2Config.getBool("supportCustomSize"));
+        assertEquals(16, gptImage2Config.getInt("sizeMultiple"));
+        assertEquals(3840, gptImage2Config.getInt("maxEdge"));
+        assertEquals(3, gptImage2Config.getInt("maxAspectRatio"));
         assertEquals(655360, gptImage2Config.getInt("minPixels"));
         assertEquals(8294400, gptImage2Config.getInt("maxPixels"));
         assertEquals("2048x1152",
                 gptImage2Config.getJSONObject("supportedSizes").getJSONObject("2K").getStr("16:9"));
+        assertEquals("2048x1360",
+                gptImage2Config.getJSONObject("supportedSizes").getJSONObject("2K").getStr("3:2"));
         assertEquals("2160x3840",
                 gptImage2Config.getJSONObject("supportedSizes").getJSONObject("4K").getStr("9:16"));
+        assertEquals("3840x1648",
+                gptImage2Config.getJSONObject("supportedSizes").getJSONObject("4K").getStr("21:9"));
     }
 
     @Test

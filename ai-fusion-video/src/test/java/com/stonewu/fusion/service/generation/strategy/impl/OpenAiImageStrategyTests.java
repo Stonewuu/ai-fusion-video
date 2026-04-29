@@ -5,6 +5,7 @@ import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.ImageItem;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.service.ai.AiModelService;
+import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.generation.ImageGenerationService;
 import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
@@ -37,6 +38,7 @@ class OpenAiImageStrategyTests {
                 OpenAiImageStrategy strategy = new OpenAiImageStrategy(
                                 mock(ImageGenerationService.class),
                                 mock(AiModelService.class),
+                                mock(ModelPresetService.class),
                                 mock(MediaStorageService.class),
                                 storageConfigService
                 );
@@ -69,6 +71,7 @@ class OpenAiImageStrategyTests {
         OpenAiImageStrategy strategy = new OpenAiImageStrategy(
                 mock(ImageGenerationService.class),
                 mock(AiModelService.class),
+                mock(ModelPresetService.class),
                 mock(MediaStorageService.class),
                 storageConfigService
         );
@@ -105,6 +108,7 @@ class OpenAiImageStrategyTests {
         OpenAiImageStrategy strategy = new OpenAiImageStrategy(
                 mock(ImageGenerationService.class),
                 mock(AiModelService.class),
+                mock(ModelPresetService.class),
                 mediaStorageService,
                 storageConfigService
         );
@@ -120,37 +124,52 @@ class OpenAiImageStrategyTests {
         verify(mediaStorageService).storeBytes(imageBytes, "images", "png");
     }
 
-        @Test
-        void generateAllowsOfficialCustomGptImage2Resolution() throws Exception {
-                AtomicReference<String> requestBody = new AtomicReference<>();
+    @Test
+    void generateAllowsConfiguredCustomImageResolution() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
 
-                server = HttpServer.create(new InetSocketAddress(0), 0);
-                server.createContext("/images/generations", exchange -> {
-                        requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-                        writeJson(exchange, 200, """
-                                        {"data":[{"url":"https://example.com/generated-2k.png"}]}
-                                        """);
-                });
-                server.start();
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/images/generations", exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            writeJson(exchange, 200, """
+                    {"data":[{"url":"https://example.com/generated-2k.png"}]}
+                    """);
+        });
+        server.start();
 
-                OpenAiImageStrategy strategy = new OpenAiImageStrategy(
-                                mock(ImageGenerationService.class),
-                                mock(AiModelService.class),
-                                mock(MediaStorageService.class),
-                                storageConfigService
-                );
-                ApiConfig apiConfig = ApiConfig.builder()
-                                .platform("openai_compatible")
-                                .apiUrl("http://localhost:" + server.getAddress().getPort())
-                                .apiKey("test-key")
-                                .autoAppendV1Path(false)
-                                .build();
+        ModelPresetService modelPresetService = mock(ModelPresetService.class);
+        when(modelPresetService.getPresetConfig("gpt-image-2")).thenReturn("""
+                {
+                  "supportCustomSize": true,
+                  "sizeMultiple": 16,
+                  "maxEdge": 3840,
+                  "maxAspectRatio": 3,
+                  "minPixels": 655360,
+                  "maxPixels": 8294400,
+                  "defaultWidth": 1024,
+                  "defaultHeight": 1024
+                }
+                """);
 
-                List<String> urls = strategy.generate("a scenic panorama", "gpt-image-2", 2560, 1440, 1, null, apiConfig);
+        OpenAiImageStrategy strategy = new OpenAiImageStrategy(
+                mock(ImageGenerationService.class),
+                mock(AiModelService.class),
+                modelPresetService,
+                mock(MediaStorageService.class),
+                storageConfigService
+        );
+        ApiConfig apiConfig = ApiConfig.builder()
+                .platform("openai_compatible")
+                .apiUrl("http://localhost:" + server.getAddress().getPort())
+                .apiKey("test-key")
+                .autoAppendV1Path(false)
+                .build();
 
-                assertThat(urls).containsExactly("https://example.com/generated-2k.png");
-                assertThat(requestBody.get()).contains("\"size\":\"2560x1440\"");
-        }
+        List<String> urls = strategy.generate("a scenic panorama", "gpt-image-2", 2560, 1440, 1, null, apiConfig);
+
+        assertThat(urls).containsExactly("https://example.com/generated-2k.png");
+        assertThat(requestBody.get()).contains("\"size\":\"2560x1440\"");
+    }
 
     @Test
     void submitUsesImagesGenerateApiForGptImage2() throws Exception {
@@ -184,6 +203,7 @@ class OpenAiImageStrategyTests {
         OpenAiImageStrategy strategy = new OpenAiImageStrategy(
                 imageGenerationService,
                 aiModelService,
+                mock(ModelPresetService.class),
                 mediaStorageService,
                 storageConfigService
         );
@@ -243,6 +263,7 @@ class OpenAiImageStrategyTests {
         OpenAiImageStrategy strategy = new OpenAiImageStrategy(
                 mock(ImageGenerationService.class),
                 mock(AiModelService.class),
+                mock(ModelPresetService.class),
                 mediaStorageService,
                 storageConfigService
         );
@@ -271,6 +292,70 @@ class OpenAiImageStrategyTests {
         assertThat(requestBody.get()).contains("name=\"prompt\"");
         assertThat(requestBody.get()).contains("edit this image");
         verify(mediaStorageService).storeBytes(generatedBytes, "images", "png");
+    }
+
+    @Test
+    void generateUsesConfiguredAsyncTaskMode() throws Exception {
+        AtomicReference<String> generationPath = new AtomicReference<>();
+        AtomicReference<String> taskPath = new AtomicReference<>();
+        AtomicReference<String> generationBody = new AtomicReference<>();
+
+        server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/v1/images/generations", exchange -> {
+            generationPath.set(exchange.getRequestURI().getPath());
+            generationBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            writeJson(exchange, 200, """
+                    {"code":200,"data":[{"status":"submitted","task_id":"task-123"}]}
+                    """);
+        });
+        server.createContext("/v1/tasks/task-123", exchange -> {
+            taskPath.set(exchange.getRequestURI().getPath());
+            writeJson(exchange, 200, """
+                    {"code":200,"data":{"id":"task-123","status":"completed","progress":100,"result":{"images":[{"url":["https://example.com/async.png"]}]}}}
+                    """);
+        });
+        server.start();
+
+        ModelPresetService modelPresetService = mock(ModelPresetService.class);
+        when(modelPresetService.getPresetConfig("gpt-image-2-official")).thenReturn("""
+                {
+                  "asyncMode": true,
+                  "asyncTaskInitialDelaySeconds": 0,
+                  "asyncTaskPollIntervalSeconds": 0,
+                  "asyncTaskTimeoutSeconds": 5,
+                  "defaultWidth": 1024,
+                  "defaultHeight": 1024
+                }
+                """);
+
+        OpenAiImageStrategy strategy = new OpenAiImageStrategy(
+                mock(ImageGenerationService.class),
+                mock(AiModelService.class),
+                modelPresetService,
+                mock(MediaStorageService.class),
+                storageConfigService
+        );
+        ApiConfig apiConfig = ApiConfig.builder()
+                .platform("openai_compatible")
+                .apiUrl("http://localhost:" + server.getAddress().getPort())
+                .apiKey("test-key")
+                .build();
+
+        List<String> urls = strategy.generate(
+                "a test prompt",
+                "gpt-image-2-official",
+                1024,
+                1024,
+                1,
+                List.of("https://example.com/reference.png"),
+                apiConfig
+        );
+
+        assertThat(urls).containsExactly("https://example.com/async.png");
+        assertThat(generationPath.get()).isEqualTo("/v1/images/generations");
+        assertThat(taskPath.get()).isEqualTo("/v1/tasks/task-123");
+        assertThat(generationBody.get()).contains("\"image_urls\":[\"https://example.com/reference.png\"]");
+        assertThat(generationBody.get()).doesNotContain("asyncMode");
     }
 
     private static void writeJson(HttpExchange exchange, int status, String body) throws IOException {

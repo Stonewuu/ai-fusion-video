@@ -12,6 +12,7 @@ import com.stonewu.fusion.entity.generation.ImageItem;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.ai.AiModelService;
+import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.generation.ImageGenerationService;
 import com.stonewu.fusion.service.generation.strategy.ImageGenerationStrategy;
@@ -37,6 +38,7 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -52,16 +54,16 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
     private static final String DEFAULT_BASE_URL = "https://api.openai.com";
     private static final String DEFAULT_IMAGE_MODEL = "gpt-image-1";
     private static final String DEFAULT_LOCAL_MEDIA_BASE_PATH = "./data/media";
-    private static final int GPT_IMAGE_2_SIZE_MULTIPLE = 16;
-    private static final int GPT_IMAGE_2_MAX_EDGE = 3840;
-    private static final long GPT_IMAGE_2_MIN_PIXELS = 655_360L;
-    private static final long GPT_IMAGE_2_MAX_PIXELS = 8_294_400L;
+    private static final int DEFAULT_ASYNC_TASK_INITIAL_DELAY_SECONDS = 10;
+    private static final int DEFAULT_ASYNC_TASK_POLL_INTERVAL_SECONDS = 5;
+    private static final int DEFAULT_ASYNC_TASK_TIMEOUT_SECONDS = 180;
     private static final int RESPONSE_PREVIEW_LENGTH = 240;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final MediaType JSON_MEDIA_TYPE = MediaType.get("application/json");
 
     private final ImageGenerationService imageGenerationService;
     private final AiModelService aiModelService;
+    private final ModelPresetService modelPresetService;
     private final MediaStorageService mediaStorageService;
     private final StorageConfigService storageConfigService;
     private final OkHttpClient okHttpClient = new OkHttpClient.Builder()
@@ -82,7 +84,9 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
             throw new BusinessException("OpenAI 图片模型缺少 apiKey 配置");
         }
 
-        return generateInternal(prompt, modelCode, width, height, count, imageUrls, apiConfig, null);
+        String actualModelCode = StrUtil.blankToDefault(modelCode, DEFAULT_IMAGE_MODEL);
+        JSONObject modelConfig = resolveModelConfig(actualModelCode, null);
+        return generateInternal(prompt, actualModelCode, width, height, count, imageUrls, apiConfig, modelConfig);
     }
 
     private List<String> generateInternal(String prompt, String modelCode, int width, int height, int count,
@@ -90,17 +94,22 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
                                           ApiConfig apiConfig,
                                           JSONObject modelConfig) {
         String actualModelCode = StrUtil.blankToDefault(modelCode, DEFAULT_IMAGE_MODEL);
+        if (isAsyncMode(modelConfig)) {
+            return generateViaAsyncGenerations(prompt, actualModelCode, width, height, count, imageUrls,
+                    apiConfig, modelConfig);
+        }
         if (imageUrls != null && !imageUrls.isEmpty()) {
             return generateViaEdits(prompt, actualModelCode, width, height, count, imageUrls, apiConfig, modelConfig);
         }
 
-        return generateViaGenerations(prompt, actualModelCode, width, height, count, apiConfig, modelConfig);
+        return generateViaGenerations(prompt, actualModelCode, width, height, count, null, apiConfig, modelConfig);
     }
 
     private List<String> generateViaGenerations(String prompt, String modelCode, int width, int height, int count,
+                                                List<String> imageUrls,
                                                 ApiConfig apiConfig, JSONObject modelConfig) {
         String requestUrl = resolveImagesGenerateUrl(apiConfig);
-        String requestBody = buildGenerationRequestBody(prompt, modelCode, width, height, count, modelConfig);
+        String requestBody = buildGenerationRequestBody(prompt, modelCode, width, height, count, imageUrls, modelConfig);
 
         log.info("[OpenAI] 调用文生图 API: model={}, prompt={}, size={}x{}, url={}",
                 modelCode, prompt, width, height, requestUrl);
@@ -125,21 +134,133 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
         }
     }
 
+    private List<String> generateViaAsyncGenerations(String prompt, String modelCode, int width, int height, int count,
+                                                     List<String> imageUrls,
+                                                     ApiConfig apiConfig,
+                                                     JSONObject modelConfig) {
+        String platformTaskId = submitAsyncGeneration(prompt, modelCode, width, height, count, imageUrls,
+                apiConfig, modelConfig);
+        return waitForAsyncTask(platformTaskId, apiConfig, modelConfig);
+    }
+
+    private String submitAsyncGeneration(String prompt, String modelCode, int width, int height, int count,
+                                         List<String> imageUrls,
+                                         ApiConfig apiConfig,
+                                         JSONObject modelConfig) {
+        String requestUrl = resolveImagesGenerateUrl(apiConfig);
+        String requestBody = buildGenerationRequestBody(prompt, modelCode, width, height, count, imageUrls, modelConfig);
+
+        log.info("[OpenAI] 调用异步生图提交 API: model={}, prompt={}, size={}x{}, url={}",
+                modelCode, prompt, width, height, requestUrl);
+
+        Request request = new Request.Builder()
+                .url(requestUrl)
+                .addHeader("Authorization", "Bearer " + apiConfig.getApiKey())
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(requestBody, JSON_MEDIA_TYPE))
+                .build();
+
+        OkHttpClient client = AiProxySupport.okHttpClient(okHttpClient, apiConfig);
+        try (Response response = client.newCall(request).execute()) {
+            String responseBody = response.body() != null ? response.body().string() : "";
+            if (!response.isSuccessful()) {
+                throw new RuntimeException("OpenAI 异步图片任务提交失败: HTTP " + response.code()
+                        + (StrUtil.isNotBlank(responseBody) ? " - " + responseBody : ""));
+            }
+            return parseAsyncTaskId(responseBody);
+        } catch (IOException e) {
+            throw new RuntimeException("OpenAI 异步图片任务提交异常: " + e.getMessage(), e);
+        }
+    }
+
+    private List<String> waitForAsyncTask(String platformTaskId, ApiConfig apiConfig, JSONObject modelConfig) {
+        sleepQuietly(resolveAsyncInitialDelayMillis(modelConfig));
+
+        long pollIntervalMillis = resolveAsyncPollIntervalMillis(modelConfig);
+        long deadline = System.currentTimeMillis() + resolveAsyncTimeoutMillis(modelConfig);
+
+        while (System.currentTimeMillis() <= deadline) {
+            AsyncTaskResult result = fetchAsyncTaskResult(platformTaskId, apiConfig, modelConfig);
+            if (result.completed()) {
+                if (result.urls().isEmpty()) {
+                    throw new RuntimeException("OpenAI 异步图片任务已完成但未返回图片 URL");
+                }
+                return result.urls();
+            }
+            if (result.failed()) {
+                throw new RuntimeException("OpenAI 异步图片任务失败: "
+                        + StrUtil.blankToDefault(result.errorMessage(), "未知错误"));
+            }
+            sleepQuietly(pollIntervalMillis);
+        }
+
+        throw new RuntimeException("OpenAI 异步图片任务轮询超时: taskId=" + platformTaskId);
+    }
+
+    private AsyncTaskResult fetchAsyncTaskResult(String platformTaskId, ApiConfig apiConfig, JSONObject modelConfig) {
+        String requestUrl = resolveAsyncTaskUrl(apiConfig, modelConfig, platformTaskId);
+        Request request = new Request.Builder()
+                .url(requestUrl)
+                .addHeader("Authorization", "Bearer " + apiConfig.getApiKey())
+                .get()
+                .build();
+
+        OkHttpClient client = AiProxySupport.okHttpClient(okHttpClient, apiConfig);
+        try (Response response = client.newCall(request).execute()) {
+            String responseBody = response.body() != null ? response.body().string() : "";
+            if (!response.isSuccessful()) {
+                throw new RuntimeException("OpenAI 异步图片任务查询失败: HTTP " + response.code()
+                        + (StrUtil.isNotBlank(responseBody) ? " - " + responseBody : ""));
+            }
+            return parseAsyncTaskResult(responseBody);
+        } catch (IOException e) {
+            throw new RuntimeException("OpenAI 异步图片任务查询异常: " + e.getMessage(), e);
+        }
+    }
+
     @Override
     public String submit(ImageTask task, ApiConfig apiConfig) {
         AiModel model = resolveModel(task);
         String modelCode = (model != null && StrUtil.isNotBlank(model.getCode())) ? model.getCode() : "dall-e-3";
-        int[] size = resolveDefaultSize(model, task);
+        JSONObject modelConfig = resolveModelConfig(modelCode, model);
+        int[] size = resolveConfiguredSize(task, modelConfig);
         int count = (task.getCount() != null && task.getCount() > 0) ? task.getCount() : 1;
-        JSONObject modelConfig = parseModelConfig(model);
 
         // 解析参考图（图生图场景）
         List<String> imageUrls = parseRefImageUrls(task.getRefImageUrls());
 
+        if (isAsyncMode(modelConfig)) {
+            String platformTaskId = submitAsyncGeneration(task.getPrompt(), modelCode, size[0], size[1], count,
+                    imageUrls, apiConfig, modelConfig);
+            log.info("[OpenAI] 异步生图已提交: taskId={}, platformTaskId={}", task.getTaskId(), platformTaskId);
+            return platformTaskId;
+        }
+
         List<String> urls = generateInternal(task.getPrompt(), modelCode, size[0], size[1], count, imageUrls,
             apiConfig, modelConfig);
 
-        // 更新数据库记录
+        updateImageTaskResults(task, urls);
+
+        log.info("[OpenAI] 文生图完成: taskId={}, imageCount={}", task.getTaskId(), urls.size());
+        return task.getTaskId();
+    }
+
+    @Override
+    public void poll(String platformTaskId, ImageTask task, ApiConfig apiConfig) {
+        AiModel model = resolveModel(task);
+        String modelCode = (model != null && StrUtil.isNotBlank(model.getCode())) ? model.getCode() : DEFAULT_IMAGE_MODEL;
+        JSONObject modelConfig = resolveModelConfig(modelCode, model);
+        if (!isAsyncMode(modelConfig) || StrUtil.isBlank(platformTaskId)) {
+            return;
+        }
+
+        List<String> urls = waitForAsyncTask(platformTaskId, apiConfig, modelConfig);
+        updateImageTaskResults(task, urls);
+        log.info("[OpenAI] 异步生图完成: taskId={}, platformTaskId={}, imageCount={}",
+                task.getTaskId(), platformTaskId, urls.size());
+    }
+
+    private void updateImageTaskResults(ImageTask task, List<String> urls) {
         List<ImageItem> items = imageGenerationService.listItems(task.getId());
         for (int i = 0; i < urls.size() && i < items.size(); i++) {
             ImageItem item = items.get(i);
@@ -150,14 +271,6 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
 
         task.setSuccessCount(Math.min(urls.size(), items.size()));
         imageGenerationService.update(task);
-
-        log.info("[OpenAI] 文生图完成: taskId={}, imageCount={}", task.getTaskId(), urls.size());
-        return task.getTaskId();
-    }
-
-    @Override
-    public void poll(String platformTaskId, ImageTask task, ApiConfig apiConfig) {
-        // OpenAI images.generate 是同步 API，submit 中已处理完成，无需轮询
     }
 
     private AiModel resolveModel(ImageTask task) {
@@ -172,60 +285,47 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
 
     /**
      * 将像素尺寸映射到 OpenAI 支持的尺寸值。
-     * GPT Image 2 按官方约束支持任意合法分辨率，其余模型使用固定枚举值。
+     * 支持的固定尺寸、自定义尺寸开关和尺寸约束均从模型 config JSON 读取。
      */
-    private String mapSize(String modelCode, int width, int height) {
+    private String mapSize(String modelCode, int width, int height, JSONObject modelConfig) {
         String actualModelCode = StrUtil.blankToDefault(modelCode, DEFAULT_IMAGE_MODEL);
         String sizeStr = width + "x" + height;
-        if ("gpt-image-2".equalsIgnoreCase(actualModelCode)) {
-            if (isValidGptImage2Size(width, height)) {
-                return sizeStr;
-            }
-            log.warn("[OpenAI] GPT Image 2 请求尺寸 {} 不满足官方约束，回退到 1024x1024", sizeStr);
-            return "1024x1024";
+        if (isConfiguredSizeSupported(modelConfig, sizeStr)
+                || (isCustomSizeEnabled(modelConfig) && isValidConfiguredCustomSize(width, height, modelConfig))) {
+            return sizeStr;
         }
-        return switch (sizeStr) {
-            case "256x256", "512x512", "1024x1024", "1024x1792", "1792x1024" -> sizeStr;
-            case "1024x1536", "1536x1024" -> sizeStr;
-            default -> {
-                log.warn("[OpenAI] 模型 {} 不支持尺寸 {}，回退到 1024x1024", actualModelCode, sizeStr);
-                yield "1024x1024";
-            }
-        };
-    }
 
-    private boolean isValidGptImage2Size(int width, int height) {
-        if (width <= 0 || height <= 0) {
-            return false;
+        String fallback = resolveFallbackSize(modelConfig);
+        if (!sizeStr.equalsIgnoreCase(fallback)) {
+            log.warn("[OpenAI] 模型 {} 不支持尺寸 {}，回退到 {}", actualModelCode, sizeStr, fallback);
         }
-        if (width % GPT_IMAGE_2_SIZE_MULTIPLE != 0 || height % GPT_IMAGE_2_SIZE_MULTIPLE != 0) {
-            return false;
-        }
-        int longEdge = Math.max(width, height);
-        int shortEdge = Math.min(width, height);
-        if (longEdge > GPT_IMAGE_2_MAX_EDGE) {
-            return false;
-        }
-        if ((long) longEdge > (long) shortEdge * 3L) {
-            return false;
-        }
-        long pixels = (long) width * height;
-        return pixels >= GPT_IMAGE_2_MIN_PIXELS && pixels <= GPT_IMAGE_2_MAX_PIXELS;
+        return fallback;
     }
 
     private String buildGenerationRequestBody(String prompt, String modelCode, int width, int height, int count,
+                                              List<String> imageUrls,
                                               JSONObject modelConfig) {
         try {
             var root = OBJECT_MAPPER.createObjectNode();
             root.put("prompt", prompt);
             root.put("model", StrUtil.blankToDefault(modelCode, DEFAULT_IMAGE_MODEL));
             root.put("n", Math.max(count, 1));
-            root.put("size", mapSize(modelCode, width, height));
+            root.put("size", mapSize(modelCode, width, height, modelConfig));
+            if (imageUrls != null && !imageUrls.isEmpty()) {
+                var imageUrlArray = root.putArray("image_urls");
+                imageUrls.stream()
+                        .filter(StrUtil::isNotBlank)
+                        .map(String::trim)
+                        .forEach(imageUrlArray::add);
+            }
             appendOptionalString(root, "quality", getString(modelConfig, "quality", "imageQuality"));
+            appendOptionalString(root, "resolution", getString(modelConfig, "resolution", "defaultResolution"));
             appendOptionalString(root, "background", getString(modelConfig, "background"));
             appendOptionalString(root, "moderation", getString(modelConfig, "moderation"));
             appendOptionalString(root, "output_format", getString(modelConfig, "outputFormat", "output_format"));
+            appendOptionalInteger(root, "output_compression", getInteger(modelConfig, "outputCompression", "output_compression"));
             appendOptionalString(root, "response_format", getString(modelConfig, "responseFormat", "response_format"));
+            appendOptionalString(root, "mask_url", getString(modelConfig, "maskUrl", "mask_url"));
             appendOptionalString(root, "style", getString(modelConfig, "style"));
             return OBJECT_MAPPER.writeValueAsString(root);
         } catch (Exception e) {
@@ -267,12 +367,14 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
                 .addFormDataPart("model", StrUtil.blankToDefault(modelCode, DEFAULT_IMAGE_MODEL))
                 .addFormDataPart("prompt", prompt)
                 .addFormDataPart("n", String.valueOf(Math.max(count, 1)))
-            .addFormDataPart("size", mapSize(modelCode, width, height));
+            .addFormDataPart("size", mapSize(modelCode, width, height, modelConfig));
 
         appendOptionalFormField(builder, "quality", getString(modelConfig, "quality", "imageQuality"));
+        appendOptionalFormField(builder, "resolution", getString(modelConfig, "resolution", "defaultResolution"));
         appendOptionalFormField(builder, "background", getString(modelConfig, "background"));
         appendOptionalFormField(builder, "moderation", getString(modelConfig, "moderation"));
         appendOptionalFormField(builder, "output_format", getString(modelConfig, "outputFormat", "output_format"));
+        appendOptionalFormField(builder, "output_compression", getString(modelConfig, "outputCompression", "output_compression"));
         appendOptionalFormField(builder, "style", getString(modelConfig, "style"));
 
         for (int i = 0; i < imageUrls.size(); i++) {
@@ -333,6 +435,133 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
         }
     }
 
+    private String parseAsyncTaskId(String responseBody) {
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(responseBody);
+            String errorMessage = extractErrorMessage(root);
+            if (StrUtil.isNotBlank(errorMessage)) {
+                throw new RuntimeException("OpenAI 异步图片任务提交失败: " + errorMessage);
+            }
+
+            JsonNode data = root.path("data");
+            JsonNode taskNode = data.isArray() && !data.isEmpty() ? data.get(0) : data;
+            String taskId = firstText(taskNode, "task_id", "taskId", "id");
+            if (StrUtil.isBlank(taskId)) {
+                taskId = firstText(root, "task_id", "taskId", "id");
+            }
+            if (StrUtil.isBlank(taskId)) {
+                throw new RuntimeException("OpenAI 异步图片任务提交响应中未找到 task_id，响应预览: "
+                        + previewResponse(responseBody));
+            }
+            return taskId;
+        } catch (IOException e) {
+            throw new RuntimeException("解析 OpenAI 异步图片任务提交响应失败: " + e.getMessage(), e);
+        }
+    }
+
+    private AsyncTaskResult parseAsyncTaskResult(String responseBody) {
+        try {
+            JsonNode root = OBJECT_MAPPER.readTree(responseBody);
+            String errorMessage = extractErrorMessage(root);
+            if (StrUtil.isNotBlank(errorMessage)) {
+                return new AsyncTaskResult(null, true, false, List.of(), errorMessage);
+            }
+
+            JsonNode data = root.path("data");
+            JsonNode taskNode = data.isArray() && !data.isEmpty() ? data.get(0) : data;
+            if (taskNode.isMissingNode() || taskNode.isNull()) {
+                taskNode = root;
+            }
+
+            String status = StrUtil.blankToDefault(firstText(taskNode, "status", "state"),
+                    firstText(root, "status", "state"));
+            String normalizedStatus = status == null ? "" : status.trim().toLowerCase(Locale.ROOT);
+            if (isAsyncSuccessStatus(normalizedStatus)) {
+                return new AsyncTaskResult(status, false, true, extractAsyncImageUrls(root), null);
+            }
+            if (isAsyncFailureStatus(normalizedStatus)) {
+                return new AsyncTaskResult(status, true, false, List.of(), extractAsyncErrorMessage(root, taskNode));
+            }
+
+            return new AsyncTaskResult(status, false, false, List.of(), null);
+        } catch (IOException e) {
+            throw new RuntimeException("解析 OpenAI 异步图片任务查询响应失败: " + e.getMessage(), e);
+        }
+    }
+
+    private List<String> extractAsyncImageUrls(JsonNode root) {
+        List<String> urls = new ArrayList<>();
+        JsonNode data = root.path("data");
+        JsonNode taskNode = data.isArray() && !data.isEmpty() ? data.get(0) : data;
+        collectAsyncImageUrls(taskNode.path("result").path("images"), urls);
+        collectAsyncImageUrls(taskNode.path("images"), urls);
+        collectAsyncImageUrls(root.path("result").path("images"), urls);
+        collectAsyncImageUrls(root.path("images"), urls);
+
+        if (urls.isEmpty() && data.isArray()) {
+            for (JsonNode item : data) {
+                collectUrlFields(item, urls);
+            }
+        }
+        return urls;
+    }
+
+    private void collectAsyncImageUrls(JsonNode imagesNode, List<String> urls) {
+        if (imagesNode == null || imagesNode.isMissingNode() || imagesNode.isNull()) {
+            return;
+        }
+        if (imagesNode.isArray()) {
+            for (JsonNode imageNode : imagesNode) {
+                collectUrlFields(imageNode, urls);
+            }
+            return;
+        }
+        collectUrlFields(imagesNode, urls);
+    }
+
+    private void collectUrlFields(JsonNode node, List<String> urls) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return;
+        }
+        collectUrlValue(node.path("url"), urls);
+        collectUrlValue(node.path("urls"), urls);
+        collectUrlValue(node.path("image_url"), urls);
+        collectUrlValue(node.path("imageUrl"), urls);
+    }
+
+    private void collectUrlValue(JsonNode value, List<String> urls) {
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            return;
+        }
+        if (value.isArray()) {
+            for (JsonNode item : value) {
+                collectUrlValue(item, urls);
+            }
+            return;
+        }
+        if (value.isTextual() && StrUtil.isNotBlank(value.asText())) {
+            urls.add(value.asText().trim());
+        }
+    }
+
+    private boolean isAsyncSuccessStatus(String status) {
+        return "completed".equals(status) || "succeeded".equals(status)
+                || "success".equals(status) || "done".equals(status);
+    }
+
+    private boolean isAsyncFailureStatus(String status) {
+        return "failed".equals(status) || "error".equals(status)
+                || "cancelled".equals(status) || "canceled".equals(status);
+    }
+
+    private String extractAsyncErrorMessage(JsonNode root, JsonNode taskNode) {
+        String message = firstText(taskNode, "error", "error_message", "errorMessage", "message");
+        if (StrUtil.isNotBlank(message)) {
+            return message;
+        }
+        return StrUtil.blankToDefault(extractErrorMessage(root), previewResponse(root.toString()));
+    }
+
     private String storeBase64Image(String base64Payload, String extension) {
         String trimmed = StrUtil.trim(base64Payload);
         String actualExtension = extension;
@@ -381,6 +610,40 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
             return baseUrl + "/images/generations";
         }
         return baseUrl + (appendV1 ? "/v1/images/generations" : "/images/generations");
+    }
+
+    private String resolveAsyncTaskUrl(ApiConfig apiConfig, JSONObject modelConfig, String taskId) {
+        String configuredPath = getString(modelConfig, "asyncTaskStatusPath", "asyncTaskPath", "taskStatusPath");
+        if (StrUtil.isNotBlank(configuredPath)) {
+            String path = configuredPath.trim()
+                    .replace("{task_id}", taskId)
+                    .replace("{taskId}", taskId)
+                    .replace("{id}", taskId);
+            if (StrUtil.startWithIgnoreCase(path, "http://") || StrUtil.startWithIgnoreCase(path, "https://")) {
+                return path;
+            }
+            String rootUrl = resolveApiRootUrl(apiConfig);
+            return rootUrl + (path.startsWith("/") ? path : "/" + path);
+        }
+
+        String rootUrl = resolveApiRootUrl(apiConfig);
+        boolean appendV1 = shouldAutoAppendV1Path(apiConfig);
+        if (endsWithIgnoreCase(rootUrl, "/v1")) {
+            return rootUrl + "/tasks/" + taskId;
+        }
+        return rootUrl + (appendV1 ? "/v1/tasks/" : "/tasks/") + taskId;
+    }
+
+    private String resolveApiRootUrl(ApiConfig apiConfig) {
+        String baseUrl = normalizeBaseUrl(StrUtil.blankToDefault(apiConfig != null ? apiConfig.getApiUrl() : null,
+                DEFAULT_BASE_URL));
+        if (endsWithIgnoreCase(baseUrl, "/images/generations")) {
+            return baseUrl.substring(0, baseUrl.length() - "/images/generations".length());
+        }
+        if (endsWithIgnoreCase(baseUrl, "/images/edits")) {
+            return baseUrl.substring(0, baseUrl.length() - "/images/edits".length());
+        }
+        return baseUrl;
     }
 
     private boolean shouldAutoAppendV1Path(ApiConfig apiConfig) {
@@ -503,16 +766,37 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
         };
     }
 
-    private JSONObject parseModelConfig(AiModel model) {
-        if (model == null || StrUtil.isBlank(model.getConfig())) {
+    private JSONObject resolveModelConfig(String modelCode, AiModel model) {
+        JSONObject merged = new JSONObject();
+        String actualModelCode = StrUtil.blankToDefault(modelCode, model != null ? model.getCode() : null);
+        if (modelPresetService != null && StrUtil.isNotBlank(actualModelCode)) {
+            mergeConfig(merged, parseConfig(modelPresetService.getPresetConfig(actualModelCode), actualModelCode));
+        }
+        if (model != null) {
+            mergeConfig(merged, parseConfig(model.getConfig(), model.getCode()));
+        }
+        return merged.isEmpty() ? null : merged;
+    }
+
+    private JSONObject parseConfig(String configJson, String modelCode) {
+        if (StrUtil.isBlank(configJson)) {
             return null;
         }
         try {
-            return JSONUtil.parseObj(model.getConfig());
+            return JSONUtil.parseObj(configJson);
         } catch (Exception e) {
             log.warn("解析图片模型配置失败，已忽略 OpenAI 图片附加参数: modelCode={}, message={}",
-                    model.getCode(), e.getMessage());
+                    modelCode, e.getMessage());
             return null;
+        }
+    }
+
+    private void mergeConfig(JSONObject target, JSONObject source) {
+        if (target == null || source == null || source.isEmpty()) {
+            return;
+        }
+        for (String key : source.keySet()) {
+            target.set(key, source.get(key));
         }
     }
 
@@ -529,6 +813,100 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
         return null;
     }
 
+    private Boolean getBoolean(JSONObject config, String... keys) {
+        if (config == null) {
+            return null;
+        }
+        for (String key : keys) {
+            if (!config.containsKey(key)) {
+                continue;
+            }
+            Object value = config.get(key);
+            if (value instanceof Boolean bool) {
+                return bool;
+            }
+            if (value != null) {
+                String text = value.toString().trim();
+                if ("true".equalsIgnoreCase(text) || "1".equals(text) || "yes".equalsIgnoreCase(text)) {
+                    return true;
+                }
+                if ("false".equalsIgnoreCase(text) || "0".equals(text) || "no".equalsIgnoreCase(text)) {
+                    return false;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Integer getInteger(JSONObject config, String... keys) {
+        if (config == null) {
+            return null;
+        }
+        for (String key : keys) {
+            if (!config.containsKey(key)) {
+                continue;
+            }
+            Object value = config.get(key);
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
+            if (value != null) {
+                try {
+                    return Integer.parseInt(value.toString().trim());
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Long getLong(JSONObject config, String... keys) {
+        if (config == null) {
+            return null;
+        }
+        for (String key : keys) {
+            if (!config.containsKey(key)) {
+                continue;
+            }
+            Object value = config.get(key);
+            if (value instanceof Number number) {
+                return number.longValue();
+            }
+            if (value != null) {
+                try {
+                    return Long.parseLong(value.toString().trim());
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
+    private Double getDouble(JSONObject config, String... keys) {
+        if (config == null) {
+            return null;
+        }
+        for (String key : keys) {
+            if (!config.containsKey(key)) {
+                continue;
+            }
+            Object value = config.get(key);
+            if (value instanceof Number number) {
+                return number.doubleValue();
+            }
+            if (value != null) {
+                try {
+                    return Double.parseDouble(value.toString().trim());
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
+            }
+        }
+        return null;
+    }
+
     private void appendOptionalString(com.fasterxml.jackson.databind.node.ObjectNode root, String fieldName,
                                       String value) {
         if (StrUtil.isNotBlank(value)) {
@@ -536,10 +914,256 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
         }
     }
 
+    private void appendOptionalInteger(com.fasterxml.jackson.databind.node.ObjectNode root, String fieldName,
+                                       Integer value) {
+        if (value != null) {
+            root.put(fieldName, value);
+        }
+    }
+
     private void appendOptionalFormField(MultipartBody.Builder builder, String fieldName, String value) {
         if (StrUtil.isNotBlank(value)) {
             builder.addFormDataPart(fieldName, value.trim());
         }
+    }
+
+    private boolean isAsyncMode(JSONObject modelConfig) {
+        return Boolean.TRUE.equals(getBoolean(modelConfig,
+                "asyncMode", "useAsyncMode", "asyncTaskMode", "enableAsyncTask", "asyncEnabled"));
+    }
+
+    private int[] resolveConfiguredSize(ImageTask task, JSONObject modelConfig) {
+        int width = (task.getWidth() != null && task.getWidth() > 0) ? task.getWidth() : 0;
+        int height = (task.getHeight() != null && task.getHeight() > 0) ? task.getHeight() : 0;
+
+        if (width <= 0) {
+            Integer configuredWidth = getInteger(modelConfig, "defaultWidth", "width");
+            width = configuredWidth != null ? configuredWidth : 0;
+        }
+        if (height <= 0) {
+            Integer configuredHeight = getInteger(modelConfig, "defaultHeight", "height");
+            height = configuredHeight != null ? configuredHeight : 0;
+        }
+
+        if (width <= 0 || height <= 0) {
+            int[] fallback = parseSizeText(resolveFallbackSize(modelConfig));
+            if (width <= 0) {
+                width = fallback[0];
+            }
+            if (height <= 0) {
+                height = fallback[1];
+            }
+        }
+
+        if (width <= 0) width = 1024;
+        if (height <= 0) height = 1024;
+        return new int[]{width, height};
+    }
+
+    private boolean isConfiguredSizeSupported(JSONObject modelConfig, String sizeStr) {
+        if (modelConfig == null || StrUtil.isBlank(sizeStr)) {
+            return false;
+        }
+        return containsConfiguredSize(modelConfig.get("supportedSizes"), sizeStr);
+    }
+
+    private boolean containsConfiguredSize(Object value, String sizeStr) {
+        if (value == null) {
+            return false;
+        }
+        if (value instanceof JSONObject jsonObject) {
+            for (String key : jsonObject.keySet()) {
+                if (containsConfiguredSize(jsonObject.get(key), sizeStr)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (value instanceof Map<?, ?> map) {
+            for (Object item : map.values()) {
+                if (containsConfiguredSize(item, sizeStr)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        if (value instanceof Iterable<?> iterable) {
+            for (Object item : iterable) {
+                if (containsConfiguredSize(item, sizeStr)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return sizeStr.equalsIgnoreCase(normalizeSizeText(value.toString()));
+    }
+
+    private boolean isCustomSizeEnabled(JSONObject modelConfig) {
+        return Boolean.TRUE.equals(getBoolean(modelConfig,
+                "supportCustomSize", "supportsCustomSize", "allowCustomSize", "customSizeEnabled"));
+    }
+
+    private boolean isValidConfiguredCustomSize(int width, int height, JSONObject modelConfig) {
+        if (width <= 0 || height <= 0) {
+            return false;
+        }
+
+        Integer sizeMultiple = getInteger(modelConfig, "sizeMultiple", "imageSizeMultiple", "customSizeMultiple");
+        if (sizeMultiple != null && sizeMultiple > 1
+                && (width % sizeMultiple != 0 || height % sizeMultiple != 0)) {
+            return false;
+        }
+
+        Integer maxEdge = getInteger(modelConfig, "maxEdge", "maxImageEdge", "maxDimension");
+        if (maxEdge != null && maxEdge > 0 && Math.max(width, height) > maxEdge) {
+            return false;
+        }
+
+        Integer minEdge = getInteger(modelConfig, "minEdge", "minImageEdge", "minDimension");
+        if (minEdge != null && minEdge > 0 && Math.min(width, height) < minEdge) {
+            return false;
+        }
+
+        Double maxAspectRatio = getDouble(modelConfig, "maxAspectRatio", "maxRatio");
+        if (maxAspectRatio != null && maxAspectRatio > 0) {
+            int longEdge = Math.max(width, height);
+            int shortEdge = Math.min(width, height);
+            if (shortEdge <= 0 || (double) longEdge / (double) shortEdge > maxAspectRatio) {
+                return false;
+            }
+        }
+
+        long pixels = (long) width * height;
+        Long minPixels = getLong(modelConfig, "minPixels");
+        if (minPixels != null && minPixels > 0 && pixels < minPixels) {
+            return false;
+        }
+        Long maxPixels = getLong(modelConfig, "maxPixels");
+        return maxPixels == null || maxPixels <= 0 || pixels <= maxPixels;
+    }
+
+    private String resolveFallbackSize(JSONObject modelConfig) {
+        String defaultSize = getString(modelConfig, "defaultSize");
+        if (isPixelSizeText(defaultSize)) {
+            return normalizeSizeText(defaultSize);
+        }
+
+        Integer defaultWidth = getInteger(modelConfig, "defaultWidth", "width");
+        Integer defaultHeight = getInteger(modelConfig, "defaultHeight", "height");
+        if (defaultWidth != null && defaultWidth > 0 && defaultHeight != null && defaultHeight > 0) {
+            return defaultWidth + "x" + defaultHeight;
+        }
+
+        String firstConfiguredSize = findFirstConfiguredSize(modelConfig != null ? modelConfig.get("supportedSizes") : null);
+        if (StrUtil.isNotBlank(firstConfiguredSize)) {
+            return firstConfiguredSize;
+        }
+        return "1024x1024";
+    }
+
+    private String findFirstConfiguredSize(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof JSONObject jsonObject) {
+            for (String key : jsonObject.keySet()) {
+                String found = findFirstConfiguredSize(jsonObject.get(key));
+                if (StrUtil.isNotBlank(found)) {
+                    return found;
+                }
+            }
+            return null;
+        }
+        if (value instanceof Map<?, ?> map) {
+            for (Object item : map.values()) {
+                String found = findFirstConfiguredSize(item);
+                if (StrUtil.isNotBlank(found)) {
+                    return found;
+                }
+            }
+            return null;
+        }
+        if (value instanceof Iterable<?> iterable) {
+            for (Object item : iterable) {
+                String found = findFirstConfiguredSize(item);
+                if (StrUtil.isNotBlank(found)) {
+                    return found;
+                }
+            }
+            return null;
+        }
+        String text = normalizeSizeText(value.toString());
+        return isPixelSizeText(text) ? text : null;
+    }
+
+    private int[] parseSizeText(String sizeText) {
+        String normalized = normalizeSizeText(sizeText);
+        if (!isPixelSizeText(normalized)) {
+            return new int[]{1024, 1024};
+        }
+        String[] parts = normalized.split("x", 2);
+        try {
+            return new int[]{Integer.parseInt(parts[0]), Integer.parseInt(parts[1])};
+        } catch (NumberFormatException ignored) {
+            return new int[]{1024, 1024};
+        }
+    }
+
+    private String normalizeSizeText(String sizeText) {
+        return StrUtil.blankToDefault(sizeText, "").trim().toLowerCase(Locale.ROOT).replace('*', 'x');
+    }
+
+    private boolean isPixelSizeText(String sizeText) {
+        return StrUtil.isNotBlank(sizeText) && normalizeSizeText(sizeText).matches("\\d+x\\d+");
+    }
+
+    private long resolveAsyncInitialDelayMillis(JSONObject modelConfig) {
+        return secondsToMillis(getIntegerOrDefault(modelConfig, DEFAULT_ASYNC_TASK_INITIAL_DELAY_SECONDS,
+                "asyncTaskInitialDelaySeconds", "asyncInitialDelaySeconds", "taskInitialDelaySeconds"));
+    }
+
+    private long resolveAsyncPollIntervalMillis(JSONObject modelConfig) {
+        return Math.max(100L, secondsToMillis(getIntegerOrDefault(modelConfig, DEFAULT_ASYNC_TASK_POLL_INTERVAL_SECONDS,
+                "asyncTaskPollIntervalSeconds", "asyncPollIntervalSeconds", "taskPollIntervalSeconds")));
+    }
+
+    private long resolveAsyncTimeoutMillis(JSONObject modelConfig) {
+        return secondsToMillis(getIntegerOrDefault(modelConfig, DEFAULT_ASYNC_TASK_TIMEOUT_SECONDS,
+                "asyncTaskTimeoutSeconds", "asyncTimeoutSeconds", "taskTimeoutSeconds"));
+    }
+
+    private Integer getIntegerOrDefault(JSONObject config, int defaultValue, String... keys) {
+        Integer value = getInteger(config, keys);
+        return value != null && value >= 0 ? value : defaultValue;
+    }
+
+    private long secondsToMillis(Integer seconds) {
+        return Math.max(seconds != null ? seconds : 0, 0) * 1000L;
+    }
+
+    private void sleepQuietly(long millis) {
+        if (millis <= 0) {
+            return;
+        }
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new RuntimeException("OpenAI 异步图片任务轮询被中断", e);
+        }
+    }
+
+    private String firstText(JsonNode node, String... fieldNames) {
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
+        for (String fieldName : fieldNames) {
+            String value = textValue(node, fieldName);
+            if (StrUtil.isNotBlank(value)) {
+                return value;
+            }
+        }
+        return null;
     }
 
     private String resolveExtensionFromMetadata(String metadata, String fallback) {
@@ -630,5 +1254,9 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
     }
 
     private record BinaryResource(byte[] bytes, String mimeType, String extension) {
+    }
+
+    private record AsyncTaskResult(String status, boolean failed, boolean completed, List<String> urls,
+                                   String errorMessage) {
     }
 }
