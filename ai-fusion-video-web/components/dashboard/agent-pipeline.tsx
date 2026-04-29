@@ -12,11 +12,10 @@ import {
   Ban,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Think } from "@ant-design/x";
 import { XMarkdown } from "@ant-design/x-markdown";
 import { cn } from "@/lib/utils";
 import { ToolResultDisplay } from "@/components/dashboard/agent-pipeline-results";
-import { StreamMarkdown } from "@/components/dashboard/stream-markdown";
+import { StreamThink } from "@/components/dashboard/stream-think";
 import {
   pipelineStream,
   cancelPipeline,
@@ -538,15 +537,11 @@ export function AgentPipeline({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                 >
-                  <Think
-                    style={{ maxHeight: 192, overflowY: "auto" }}
+                  <StreamThink
                     title={title}
-                  >
-                    <StreamMarkdown
-                      content={item.text}
-                      streaming={isActive && idx === state.timeline.length - 1}
-                    />
-                  </Think>
+                    content={item.text}
+                    streaming={isActive && idx === state.timeline.length - 1}
+                  />
                 </motion.div>
               );
             }
@@ -664,16 +659,13 @@ export function AgentPipeline({
                                       : "子Agent 思考";
                                   return (
                                     <div key={`sub-reasoning-${ci}`} className="text-xs">
-                                      <Think
-                                        style={{ maxHeight: 120, overflowY: "auto" }}
+                                      <StreamThink
                                         title={childTitle}
-                                      >
-                                        <StreamMarkdown
-                                          content={child.text}
-                                          compact
-                                          streaming={childIsStreaming}
-                                        />
-                                      </Think>
+                                        content={child.text}
+                                        compact
+                                        maxHeight={120}
+                                        streaming={childIsStreaming}
+                                      />
                                     </div>
                                   );
                                 }
