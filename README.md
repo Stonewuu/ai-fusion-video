@@ -17,7 +17,7 @@
 **技术栈**：后端基于 Java 21 + Spring Boot 3.5 + Spring AI 构建，前端使用 Next.js 16 + React 19 + TypeScript 开发。
 
 ### 交流群二维码：
-<img src="https://image.stonewu.com/file/ai-fusion-video-group-qrcode.png" alt="群聊二维码" width="500" />
+<img src="https://image.stonewu.com/file/ai-fusion-video-qrcode-group.png" alt="群聊二维码" width="520" />
 
 ---
 
