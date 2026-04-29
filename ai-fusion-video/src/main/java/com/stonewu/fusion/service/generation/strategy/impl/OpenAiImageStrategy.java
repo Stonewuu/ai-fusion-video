@@ -56,7 +56,7 @@ public class OpenAiImageStrategy implements ImageGenerationStrategy {
     private static final String DEFAULT_LOCAL_MEDIA_BASE_PATH = "./data/media";
     private static final int DEFAULT_ASYNC_TASK_INITIAL_DELAY_SECONDS = 10;
     private static final int DEFAULT_ASYNC_TASK_POLL_INTERVAL_SECONDS = 5;
-    private static final int DEFAULT_ASYNC_TASK_TIMEOUT_SECONDS = 180;
+    private static final int DEFAULT_ASYNC_TASK_TIMEOUT_SECONDS = 3600;
     private static final int RESPONSE_PREVIEW_LENGTH = 240;
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     private static final MediaType JSON_MEDIA_TYPE = MediaType.get("application/json");

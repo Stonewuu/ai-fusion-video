@@ -41,7 +41,8 @@ import java.util.Map;
 public class DashScopeImageStrategy implements ImageGenerationStrategy {
 
     private static final long POLL_INTERVAL_MILLIS = 5000L;
-    private static final int MAX_POLL_COUNT = 120;
+    private static final int DEFAULT_POLL_TIMEOUT_SECONDS = 3600;
+    private static final int MAX_POLL_COUNT = (int) ((DEFAULT_POLL_TIMEOUT_SECONDS * 1000L) / POLL_INTERVAL_MILLIS);
 
     private final ImageGenerationService imageGenerationService;
     private final AiModelService aiModelService;

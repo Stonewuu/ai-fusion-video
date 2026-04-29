@@ -43,8 +43,11 @@ public class VolcengineVideoStrategy implements VideoGenerationStrategy {
     /** 轮询间隔（秒） */
     private static final int POLL_INTERVAL_SECONDS = 10;
 
-    /** 最大轮询次数（10秒 × 600次 = 6000秒 = 100分钟） */
-    private static final int MAX_POLL_COUNT = 600;
+    /** 默认轮询超时（秒） */
+    private static final int DEFAULT_POLL_TIMEOUT_SECONDS = 3600;
+
+    /** 最大轮询次数（10秒 × 360次 = 3600秒 = 60分钟） */
+    private static final int MAX_POLL_COUNT = DEFAULT_POLL_TIMEOUT_SECONDS / POLL_INTERVAL_SECONDS;
 
     private final AiModelService aiModelService;
     private final ApiConfigService apiConfigService;
