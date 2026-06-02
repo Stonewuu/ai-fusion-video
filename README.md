@@ -190,3 +190,66 @@ AI 模型可在系统设置页面动态管理，支持以下提供商：
 <p align="center">
   <sub>Built with ❤️ by <a href="https://github.com/Stonewuu">Stonewu</a></sub>
 </p>
+
+
+## ❓ FAQ
+
+### 什么是融光？
+
+融光是一款面向内容创作者的 AI 视频创作平台。你可以在平台上编写剧本，AI 会自动将剧本拆解为分镜画面，并利用多家主流 AI 模型生成配图和视频片段。
+
+### 核心功能有哪些？
+
+| 功能 | 描述 |
+|------|------|
+| 📝 剧本管理 | 创建和编辑视频剧本，支持分集/分场景结构化管理 |
+| 🎨 AI 分镜生成 | AI 自动将剧本拆解为可视化分镜，包含画面描述、镜头语言等 |
+| 🖼️ AI 绘图 | 集成多家 AI 绘图引擎，一键生成分镜参考图 |
+| 🎥 AI 视频生成 | 基于分镜描述和参考图生成视频片段 |
+| 📦 素材管理 | 统一管理项目内的图片、视频等素材资源 |
+| 🤖 多模型支持 | 集成 OpenAI、Claude、Gemini、通义千问、DeepSeek、Ollama 等主流大模型 |
+
+### 技术栈是什么？
+
+- **后端**：Java 21 + Spring Boot 3.5 + Spring AI
+- **前端**：Next.js 16 + React 19 + TypeScript
+
+### 支持哪些 AI 模型？
+
+| 类别 | 支持模型 |
+|------|---------|
+| 国际模型 | OpenAI、Claude、Gemini |
+| 国内模型 | 通义千问、DeepSeek |
+| 本地部署 | Ollama |
+
+### 支持哪些存储后端？
+
+- 本地存储
+- 阿里云 OSS
+- 腾讯 COS
+- MinIO 等 S3 兼容存储
+
+### 如何开始使用？
+
+1. 克隆项目：`git clone https://github.com/Stonewuu/ai-fusion-video.git`
+2. 配置后端：按照 README 说明配置 Spring Boot 和 AI 模型 API
+3. 配置前端：按照 README 说明启动 Next.js 应用
+4. 开始创作：创建剧本 → AI 分镜 → AI 绘图 → AI 视频
+
+### 是免费开源的吗？
+
+是的！融光是开源项目，MIT License。你可以：
+- 自由使用和修改
+- 部署到自己的服务器
+- 集成自己选择的 AI 模型
+
+### 如何贡献代码？
+
+- 通过 GitHub Issues 报告问题或建议功能
+- 提交 PR 贡献代码改进
+- 在 README 中查看 TODO 列表了解开发计划
+
+### 哪里可以获取帮助？
+
+- **GitHub Issues**：[https://github.com/Stonewuu/ai-fusion-video/issues](https://github.com/Stonewuu/ai-fusion-video/issues)
+- **微信交流群**：扫描 README 中的二维码加入
