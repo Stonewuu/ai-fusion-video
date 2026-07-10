@@ -121,6 +121,7 @@ public class AiProviderContextFactory {
             if (url.contains("localhost") || url.contains("127.0.0.1")) return "ollama";
             if (url.contains("ai.google.dev") || url.contains("generativelanguage")) return "gemini";
             if (url.contains("googleapis.com") || url.contains("vertex")) return "vertex_ai";
+            if (url.contains("atlascloud.ai")) return "atlascloud";
             if (url.contains("openai.com")) return "openai_compatible";
             return "openai_compatible";
         }

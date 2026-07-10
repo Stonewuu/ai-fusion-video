@@ -164,6 +164,7 @@ AI 模型可在系统设置页面动态管理，支持以下提供商：
 | 提供商    | 模型示例                         |
 | --------- | -------------------------------- |
 | OpenAI    | GPT-4o, GPT-4o-mini              |
+| Atlas Cloud | qwen/qwen3.5-flash, deepseek-ai/deepseek-v4-pro |
 | Anthropic | Claude 4 Opus, Claude 4 Sonnet   |
 | Google    | Gemini 2.5 Pro, Gemini 2.5 Flash |
 | 通义千问  | Qwen-Max, Qwen-Plus              |

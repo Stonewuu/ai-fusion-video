@@ -8,6 +8,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AiProviderContextFactoryTests {
 
     @Test
+    void createForApiConfigDetectsAtlasCloudUrl() {
+        AiProviderContextFactory factory = new AiProviderContextFactory(null);
+
+        AiProviderContext context = factory.createForApiConfig(
+                ApiConfig.builder().apiUrl("https://api.atlascloud.ai/v1").build());
+
+        assertThat(context.getPlatform()).isEqualTo("atlascloud");
+    }
+
+    @Test
     void createForApiConfigNormalizesLegacyOpenAiPlatform() {
         AiProviderContextFactory factory = new AiProviderContextFactory(null);
 

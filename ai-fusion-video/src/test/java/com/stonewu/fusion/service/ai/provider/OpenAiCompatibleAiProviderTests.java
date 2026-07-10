@@ -5,11 +5,30 @@ import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.Model;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Method;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class OpenAiCompatibleAiProviderTests {
+
+    @Test
+    void supportsAtlasCloudPlatformWithDefaultV1ChatPath() throws Exception {
+        OpenAiCompatibleAiProvider provider = new OpenAiCompatibleAiProvider();
+
+        assertThat(provider.supports("atlascloud")).isTrue();
+
+        Method inferRootBaseUrl = OpenAiCompatibleAiProvider.class
+                .getDeclaredMethod("inferRootBaseUrl", String.class);
+        inferRootBaseUrl.setAccessible(true);
+        assertThat(inferRootBaseUrl.invoke(provider, "atlascloud")).isEqualTo("https://api.atlascloud.ai");
+
+        Method resolveCompletionsPath = OpenAiCompatibleAiProvider.class
+                .getDeclaredMethod("resolveCompletionsPath", AiProviderContext.class);
+        resolveCompletionsPath.setAccessible(true);
+        AiProviderContext context = AiProviderContext.builder().platform("atlascloud").build();
+        assertThat(resolveCompletionsPath.invoke(provider, context)).isEqualTo("/v1/chat/completions");
+    }
 
     @Test
     void createAgentScopeModelUsesResponsesModelWhenEnabled() {
