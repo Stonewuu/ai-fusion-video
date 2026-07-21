@@ -191,4 +191,93 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
             @Param("leaseUntil") LocalDateTime leaseUntil,
             @Param("nextSequence") long nextSequence,
             @Param("now") LocalDateTime now);
+
+    @Update("""
+            UPDATE afv_agent_run
+            SET heartbeat_at = UTC_TIMESTAMP(3),
+                lease_until = LEAST(
+                    TIMESTAMPADD(MICROSECOND, #{leaseMicros}, UTC_TIMESTAMP(3)),
+                    deadline_at)
+            WHERE run_id = #{runId}
+              AND owner_instance_id = #{ownerInstanceId}
+              AND owner_epoch = #{ownerEpoch}
+              AND status = 'RUNNING'
+              AND lease_until > UTC_TIMESTAMP(3)
+              AND deadline_at > UTC_TIMESTAMP(3)
+            """)
+    int renewOwnedLease(
+            @Param("runId") String runId,
+            @Param("ownerInstanceId") String ownerInstanceId,
+            @Param("ownerEpoch") long ownerEpoch,
+            @Param("leaseMicros") long leaseMicros);
+
+    @Select("""
+            SELECT COUNT(*)
+            FROM afv_agent_run FORCE INDEX (uk_agent_run_id)
+            WHERE run_id = #{runId}
+              AND owner_instance_id = #{ownerInstanceId}
+              AND owner_epoch = #{ownerEpoch}
+              AND status = 'RUNNING'
+              AND lease_until > UTC_TIMESTAMP(3)
+              AND deadline_at > UTC_TIMESTAMP(3)
+            """)
+    int countValidOwnedLease(
+            @Param("runId") String runId,
+            @Param("ownerInstanceId") String ownerInstanceId,
+            @Param("ownerEpoch") long ownerEpoch);
+
+    @Update("""
+            UPDATE afv_agent_run
+            SET cancel_acknowledged_at = UTC_TIMESTAMP(3),
+                lease_until = LEAST(lease_until, UTC_TIMESTAMP(3)),
+                update_time = UTC_TIMESTAMP(3)
+            WHERE run_id = #{runId}
+              AND owner_instance_id = #{ownerInstanceId}
+              AND owner_epoch = #{ownerEpoch}
+              AND status = 'CANCEL_REQUESTED'
+            """)
+    int acknowledgeOwnedCancellation(
+            @Param("runId") String runId,
+            @Param("ownerInstanceId") String ownerInstanceId,
+            @Param("ownerEpoch") long ownerEpoch);
+
+    @Update("""
+            UPDATE afv_agent_run
+            SET cancel_broadcast_at = #{now},
+                cancel_next_attempt_at = #{nextAttemptAt},
+                update_time = #{now}
+            WHERE run_id = #{runId}
+              AND status = 'CANCEL_REQUESTED'
+            """)
+    int markCancellationBroadcast(
+            @Param("runId") String runId,
+            @Param("now") LocalDateTime now,
+            @Param("nextAttemptAt") LocalDateTime nextAttemptAt);
+
+    @Select("""
+            SELECT *
+            FROM afv_agent_run FORCE INDEX (idx_agent_run_lease)
+            WHERE status IN ('RUNNING', 'CANCEL_REQUESTED')
+              AND lease_until IS NOT NULL
+              AND lease_until <= #{now}
+            ORDER BY lease_until, id
+            LIMIT #{limit}
+            """)
+    List<AgentRun> selectExpiredLeaseCandidates(
+            @Param("now") LocalDateTime now,
+            @Param("limit") int limit);
+
+    @Select("""
+            SELECT *
+            FROM afv_agent_run FORCE INDEX (idx_agent_run_cancel)
+            WHERE status = 'CANCEL_REQUESTED'
+              AND cancel_acknowledged_at IS NULL
+              AND (cancel_next_attempt_at IS NULL
+                   OR cancel_next_attempt_at <= #{now})
+            ORDER BY cancel_next_attempt_at, id
+            LIMIT #{limit}
+            """)
+    List<AgentRun> selectCancellationRetryCandidates(
+            @Param("now") LocalDateTime now,
+            @Param("limit") int limit);
 }

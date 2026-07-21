@@ -64,6 +64,22 @@ public final class OwnedExecutionRegistry {
             Function<Flux<AgentEventEnvelope>, Flux<AgentEventEnvelope>> ingressTransform,
             Function<Flux<AgentEventEnvelope>, Mono<Void>> durableConsumer,
             Function<AgentExecutionHandle.Outcome, Mono<Void>> completionAction) {
+        return registerAndLaunch(
+                execution,
+                deadline,
+                ingressTransform,
+                durableConsumer,
+                ignored -> Mono.never(),
+                completionAction);
+    }
+
+    public Mono<Void> registerAndLaunch(
+            AgentExecution execution,
+            Instant deadline,
+            Function<Flux<AgentEventEnvelope>, Flux<AgentEventEnvelope>> ingressTransform,
+            Function<Flux<AgentEventEnvelope>, Mono<Void>> durableConsumer,
+            Function<AgentExecutionHandle, Mono<Void>> controlMonitor,
+            Function<AgentExecutionHandle.Outcome, Mono<Void>> completionAction) {
         return Mono.fromRunnable(() -> {
             Objects.requireNonNull(execution, "execution must not be null");
             AtomicReference<AgentExecutionHandle> reference = new AtomicReference<>();
@@ -81,7 +97,14 @@ public final class OwnedExecutionRegistry {
                 throw new ExecutionAlreadyOwnedException(execution.runId());
             }
             try {
-                handle.launch(ingressTransform, durableConsumer, completionAction);
+                Mono<Void> monitor = Objects.requireNonNull(
+                        controlMonitor.apply(handle),
+                        "controlMonitor returned null");
+                handle.launch(
+                        ingressTransform,
+                        durableConsumer,
+                        monitor,
+                        completionAction);
             } catch (Throwable launchFailure) {
                 handle.close();
                 throw launchFailure;

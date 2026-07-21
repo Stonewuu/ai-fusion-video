@@ -19,7 +19,6 @@ import com.stonewu.fusion.service.ai.run.model.ExecutionStopReason;
 import com.stonewu.fusion.service.ai.run.model.ResumeAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
 import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -45,6 +44,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
     private final HarnessLeaseCache kernelLeaseCache;
     private final AgentKernelSnapshotBuilder snapshotBuilder;
     private final RunShutdownCancellationPort shutdownCancellation;
+    private final RunLeaseGuard leases;
+    private final AgentRunRedisSignalService signals;
     private final AgentEventEnvelopeSanitizer sanitizer;
     private final AtomicBoolean accepting = new AtomicBoolean(true);
     private final AtomicReference<Mono<Void>> shutdownSignal = new AtomicReference<>();
@@ -57,7 +58,9 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             RunTerminalCoordinator terminals,
             HarnessLeaseCache kernelLeaseCache,
             AgentKernelSnapshotBuilder snapshotBuilder,
-            ObjectProvider<RunShutdownCancellationPort> shutdownCancellationProvider,
+            RunShutdownCancellationPort shutdownCancellation,
+            RunLeaseGuard leases,
+            AgentRunRedisSignalService signals,
             AgentEventEnvelopeSanitizer sanitizer) {
         this.executionFactory = Objects.requireNonNull(
                 executionFactory, "executionFactory must not be null");
@@ -69,9 +72,10 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                 kernelLeaseCache, "kernelLeaseCache must not be null");
         this.snapshotBuilder = Objects.requireNonNull(
                 snapshotBuilder, "snapshotBuilder must not be null");
-        this.shutdownCancellation = Objects.requireNonNull(shutdownCancellationProvider,
-                        "shutdownCancellationProvider must not be null")
-                .getIfAvailable(() -> ignored -> Mono.empty());
+        this.shutdownCancellation = Objects.requireNonNull(
+                shutdownCancellation, "shutdownCancellation must not be null");
+        this.leases = Objects.requireNonNull(leases, "leases must not be null");
+        this.signals = Objects.requireNonNull(signals, "signals must not be null");
         this.sanitizer = Objects.requireNonNull(sanitizer, "sanitizer must not be null");
     }
 
@@ -151,6 +155,14 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                         events -> events.concatMap(event -> appendOwned(
                                         runId, ownerInstanceId, ownerEpoch, event), 1)
                                 .then(),
+                        ignored -> signals.cancellations(runId)
+                                .next()
+                                .flatMap(cancelledRunId ->
+                                        leases.observeCancellationSignal(
+                                                cancelledRunId,
+                                                ownerInstanceId,
+                                                ownerEpoch))
+                                .onErrorResume(failure -> Mono.empty()),
                         outcome -> completeExecution(execution, outcome)))
                 .onErrorResume(
                         OwnedExecutionRegistry.ExecutionAlreadyOwnedException.class,

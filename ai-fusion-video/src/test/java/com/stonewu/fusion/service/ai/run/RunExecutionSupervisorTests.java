@@ -29,8 +29,6 @@ import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.UserMessage;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
@@ -263,10 +261,9 @@ class RunExecutionSupervisorTests {
         when(cache.drainAndClose(any())).thenReturn(Mono.empty());
         RunShutdownCancellationPort shutdown = mock(RunShutdownCancellationPort.class);
         when(shutdown.request(anyString())).thenReturn(Mono.empty());
-        StaticListableBeanFactory beans = new StaticListableBeanFactory();
-        beans.addBean("shutdown", shutdown);
-        ObjectProvider<RunShutdownCancellationPort> shutdownProvider =
-                beans.getBeanProvider(RunShutdownCancellationPort.class);
+        RunLeaseGuard leases = mock(RunLeaseGuard.class);
+        AgentRunRedisSignalService signals = mock(AgentRunRedisSignalService.class);
+        when(signals.cancellations(anyString())).thenReturn(Flux.never());
         OwnedExecutionRegistry registry = new OwnedExecutionRegistry(
                 objectMapper, maxEvents, 1024 * 1024,
                 Schedulers.parallel(), Clock.systemUTC());
@@ -283,7 +280,9 @@ class RunExecutionSupervisorTests {
                 terminals,
                 cache,
                 new CanonicalAgentKernelSnapshotBuilder(objectMapper),
-                shutdownProvider,
+                shutdown,
+                leases,
+                signals,
                 new AgentEventEnvelopeSanitizer());
         Instant deadline = Instant.now().plus(deadlineDelay);
         AgentKernelSpec spec = spec();

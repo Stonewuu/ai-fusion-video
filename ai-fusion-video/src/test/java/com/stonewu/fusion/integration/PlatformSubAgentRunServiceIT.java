@@ -15,9 +15,9 @@ import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentCommand;
 import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRun;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentRunRedisSignalService;
-import com.stonewu.fusion.service.ai.run.DatabaseRunShutdownCancellationPort;
 import com.stonewu.fusion.service.ai.run.PlatformSubAgentRunService;
 import com.stonewu.fusion.service.ai.run.RunExecutionSupervisor;
+import com.stonewu.fusion.service.ai.run.RunShutdownCancellationPort;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
@@ -94,7 +94,7 @@ class PlatformSubAgentRunServiceIT {
     private AgentRunMapper runMapper;
 
     @Autowired
-    private DatabaseRunShutdownCancellationPort shutdownCancellation;
+    private RunShutdownCancellationPort shutdownCancellation;
 
     @MockitoBean
     private RunExecutionSupervisor supervisor;
@@ -170,9 +170,6 @@ class PlatformSubAgentRunServiceIT {
                 .isEqualTo(AgentRunStatus.CANCEL_REQUESTED.name());
         assertThat(run(parent.runId()).getStatus())
                 .isEqualTo(AgentRunStatus.RUNNING.name());
-        verify(supervisor).interruptOwned(
-                child.childRunId(), "child-node", 1L,
-                com.stonewu.fusion.service.ai.run.model.ExecutionStopReason.CANCEL_REQUESTED);
     }
 
     @Test

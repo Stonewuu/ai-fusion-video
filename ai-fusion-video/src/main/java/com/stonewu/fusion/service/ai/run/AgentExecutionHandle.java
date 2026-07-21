@@ -28,6 +28,7 @@ public final class AgentExecutionHandle implements AutoCloseable {
     private final Disposable.Swap sourceSubscription = Disposables.swap();
     private final Disposable.Swap drainSubscription = Disposables.swap();
     private final Disposable.Swap deadlineSubscription = Disposables.swap();
+    private final Disposable.Swap controlSubscription = Disposables.swap();
     private final AtomicReference<Outcome> outcome = new AtomicReference<>();
     private final AtomicBoolean launched = new AtomicBoolean();
     private final AtomicBoolean closed = new AtomicBoolean();
@@ -75,9 +76,11 @@ public final class AgentExecutionHandle implements AutoCloseable {
     void launch(
             Function<Flux<AgentEventEnvelope>, Flux<AgentEventEnvelope>> ingressTransform,
             Function<Flux<AgentEventEnvelope>, Mono<Void>> durableConsumer,
+            Mono<Void> controlMonitor,
             Function<Outcome, Mono<Void>> completionAction) {
         Objects.requireNonNull(ingressTransform, "ingressTransform must not be null");
         Objects.requireNonNull(durableConsumer, "durableConsumer must not be null");
+        Objects.requireNonNull(controlMonitor, "controlMonitor must not be null");
         Objects.requireNonNull(completionAction, "completionAction must not be null");
         if (!launched.compareAndSet(false, true)) {
             throw new IllegalStateException("Agent execution handle was already launched");
@@ -107,6 +110,9 @@ public final class AgentExecutionHandle implements AutoCloseable {
                 this::accept,
                 this::sourceFailed,
                 this::sourceCompleted));
+        controlSubscription.update(controlMonitor.subscribe(
+                ignored -> { },
+                ignored -> { }));
         scheduleDeadline();
     }
 
@@ -180,6 +186,7 @@ public final class AgentExecutionHandle implements AutoCloseable {
             return;
         }
         deadlineSubscription.dispose();
+        controlSubscription.dispose();
         sourceSubscription.dispose();
         drainSubscription.dispose();
         try {
