@@ -21,7 +21,7 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
             """)
     AgentRun selectByRunIdForUpdate(@Param("runId") String runId);
 
-    @Select("SELECT CURRENT_TIMESTAMP(3)")
+    @Select("SELECT UTC_TIMESTAMP(3)")
     LocalDateTime selectDatabaseNow();
 
     @Select("""

@@ -1,6 +1,9 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
+import com.stonewu.fusion.service.ai.run.kernel.ToolManifestSnapshot;
 
 import java.util.HashSet;
 import java.util.List;
@@ -65,6 +68,29 @@ public record AgentKernelSpec(
     @Override
     public AiModel model() {
         return copyModel(model);
+    }
+
+    public AgentKernelSnapshotPayload snapshotPayload(
+            String modelConfigId,
+            long modelConfigVersion,
+            String provider,
+            JsonNode modelOptions,
+            List<ToolManifestSnapshot> tools,
+            String applicationVersion) {
+        return new AgentKernelSnapshotPayload(
+                AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION,
+                agentDefinitionStableKey,
+                agentName,
+                description,
+                systemPrompt,
+                maxIters,
+                modelConfigId,
+                modelConfigVersion,
+                provider,
+                requireText(model.getCode(), "model.code"),
+                modelOptions,
+                tools,
+                applicationVersion);
     }
 
     private static AiModel copyModel(AiModel source) {
