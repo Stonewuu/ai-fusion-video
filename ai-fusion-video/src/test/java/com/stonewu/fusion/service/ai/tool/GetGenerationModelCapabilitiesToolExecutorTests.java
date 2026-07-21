@@ -4,8 +4,10 @@ import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.AiModelService;
+import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import org.junit.jupiter.api.Test;
 
@@ -17,10 +19,12 @@ import static org.mockito.Mockito.when;
 
 class GetGenerationModelCapabilitiesToolExecutorTests {
 
+    private final AiModelMetadataResolver metadataResolver = new AiModelMetadataResolver(mock(ApiConfigService.class));
+
     @Test
     void shouldReturnImageAndVideoCapabilitiesForCurrentDefaults() {
         AiModelService aiModelService = mock(AiModelService.class);
-        GenerationModelCapabilityService capabilityService = new GenerationModelCapabilityService(null, new ModelPresetService() {
+        GenerationModelCapabilityService capabilityService = new GenerationModelCapabilityService(metadataResolver, new ModelPresetService() {
             @Override
             public String getPresetConfig(String code) {
                 return switch (code) {
@@ -73,7 +77,7 @@ class GetGenerationModelCapabilitiesToolExecutorTests {
     @Test
     void shouldSupportSingleModelTypeQuery() {
         AiModelService aiModelService = mock(AiModelService.class);
-        GenerationModelCapabilityService capabilityService = new GenerationModelCapabilityService(null, new ModelPresetService());
+        GenerationModelCapabilityService capabilityService = new GenerationModelCapabilityService(metadataResolver, new ModelPresetService());
 
         AiModel imageModel = AiModel.builder().id(11L).name("GPT Image 1").code("gpt-image-1")
                 .config("{\"supportReferenceImages\":false,\"maxReferenceImages\":0}")
