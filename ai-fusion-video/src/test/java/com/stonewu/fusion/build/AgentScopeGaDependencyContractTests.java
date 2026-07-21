@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.CodeSource;
 import java.util.List;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -37,6 +38,7 @@ class AgentScopeGaDependencyContractTests {
     void pomDeclaresOnlyGa() throws Exception {
         String pom = Files.readString(Path.of("pom.xml"));
         assertThat(pom).containsOnlyOnce("<agentscope.version>2.0.0</agentscope.version>");
+        assertThat(pom).containsOnlyOnce("<victools.version>4.38.0</victools.version>");
         assertThat(pom).doesNotContain("agentscope-spring-boot-starter",
                 "agentscope-extensions-session-mysql", "2.0.0-RC",
                 "<artifactId>agentscope</artifactId>", "<artifactId>agentscope-core</artifactId>",
@@ -57,6 +59,35 @@ class AgentScopeGaDependencyContractTests {
             }
         }
         assertThat(agentScopeDependencies).containsExactlyInAnyOrderElementsOf(EXPECTED_AGENTSCOPE_DEPENDENCIES);
+    }
+
+    @Test
+    void pomImportsOfficialVictoolsBomAndRuntimeComponentsShareItsVersion() throws Exception {
+        NodeList dependencies = DocumentBuilderFactory.newInstance()
+                .newDocumentBuilder()
+                .parse(Path.of("pom.xml").toFile())
+                .getElementsByTagName("dependency");
+        List<Element> victoolsBomImports = java.util.stream.IntStream.range(0, dependencies.getLength())
+                .mapToObj(dependencies::item)
+                .filter(Element.class::isInstance)
+                .map(Element.class::cast)
+                .filter(dependency -> "com.github.victools".equals(directChildText(dependency, "groupId")))
+                .filter(dependency -> "jsonschema-generator-bom".equals(directChildText(dependency, "artifactId")))
+                .toList();
+
+        assertThat(victoolsBomImports).singleElement().satisfies(bom -> {
+            assertThat(directChildText(bom, "version")).isEqualTo("${victools.version}");
+            assertThat(directChildText(bom, "type")).isEqualTo("pom");
+            assertThat(directChildText(bom, "scope")).isEqualTo("import");
+        });
+        for (Class<?> component : List.of(
+                com.github.victools.jsonschema.generator.SchemaGenerator.class,
+                com.github.victools.jsonschema.module.jackson.JacksonModule.class,
+                com.github.victools.jsonschema.module.swagger2.Swagger2Module.class)) {
+            CodeSource codeSource = component.getProtectionDomain().getCodeSource();
+            assertThat(codeSource).as(component.getName()).isNotNull();
+            assertThat(codeSource.getLocation().toString()).as(component.getName()).contains("4.38.0");
+        }
     }
 
     private String directChildText(Element parent, String tagName) {

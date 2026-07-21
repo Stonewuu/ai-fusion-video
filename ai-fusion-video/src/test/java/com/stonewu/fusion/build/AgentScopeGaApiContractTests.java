@@ -75,12 +75,20 @@ class AgentScopeGaApiContractTests {
                 .verifyComplete();
         assertThat(model.getModelName()).isEqualTo("echo");
 
-        assertThat(HarnessAgent.builder()
+        try (HarnessAgent harness = HarnessAgent.builder()
                 .name("test")
                 .model(model)
                 .stateStore(new InMemoryAgentStateStore())
-                .disableSessionPersistence())
-                .isNotNull();
+                .disableSessionPersistence()
+                .disableFilesystemTools()
+                .disableShellTool()
+                .disableMemoryTools()
+                .disableMemoryHooks()
+                .disableSubagents()
+                .build()) {
+            assertThat(harness.getName()).isEqualTo("test");
+            assertThat(harness.getModel()).isSameAs(model);
+        }
     }
 
     @Test
