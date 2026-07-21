@@ -57,6 +57,22 @@ class AgentScopeRuntimeContextFactoryTests {
     }
 
     @Test
+    void usesThePersistedRunSessionInsteadOfRecomputingIt() {
+        AgentScopeRuntimeContextRequest request = new AgentScopeRuntimeContextRequest(
+                new AuthenticatedUserContext(42L),
+                new AgentConversationContext(
+                        "conversation-7", "assistant-v3", "afv-child:stable-session"),
+                new AgentRunContext("run-9", "node-a", 3L, DEADLINE),
+                null,
+                new PipelineRequestContext("request-11", PipelineRequestContext.Kind.PIPELINE),
+                null,
+                CancellationContext.noop());
+
+        assertThat(factory.create(request).getSessionId())
+                .isEqualTo("afv-child:stable-session");
+    }
+
+    @Test
     void normalizesIdentifiersAndRejectsAmbiguousSessionComponents() {
         AgentScopeRuntimeContextRequest normalized = new AgentScopeRuntimeContextRequest(
                 new AuthenticatedUserContext(42L),

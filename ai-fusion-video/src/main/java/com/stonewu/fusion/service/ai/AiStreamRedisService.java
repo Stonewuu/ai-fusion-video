@@ -47,6 +47,7 @@ public class AiStreamRedisService {
     private static final String STATUS_KEY_PREFIX = "fv:ai:stream:status:";
     private static final String REPLAY_KEY_PREFIX = "fv:ai:stream:replay:";
     private static final String RUN_WAKEUP_CHANNEL_PREFIX = "fv:ai:run:wakeup:";
+    private static final String RUN_CANCEL_CHANNEL_PREFIX = "fv:ai:run:cancel:";
 
     /** 状态过期时间：1小时 */
     private static final Duration STATUS_TTL = Duration.ofHours(1);
@@ -124,6 +125,21 @@ public class AiStreamRedisService {
 
     public static String runWakeupChannel(String runId) {
         return RUN_WAKEUP_CHANNEL_PREFIX + runId;
+    }
+
+    public Mono<Long> publishRunCancel(String runId) {
+        return reactiveStringRedisTemplate.convertAndSend(
+                runCancelChannel(runId), runId);
+    }
+
+    public Mono<Flux<String>> runCancelPayloadsWhenSubscribed(String runId) {
+        return reactiveStringRedisTemplate
+                .listenToChannelLater(runCancelChannel(runId))
+                .map(messages -> Flux.from(messages).map(message -> message.getMessage()));
+    }
+
+    public static String runCancelChannel(String runId) {
+        return RUN_CANCEL_CHANNEL_PREFIX + runId;
     }
 
     // ===== 读取端（SSE 连接调用） =====

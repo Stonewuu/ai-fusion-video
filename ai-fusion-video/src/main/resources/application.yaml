@@ -60,3 +60,10 @@ fusion:
         capacity-wait: 5s
       state:
         key-prefix: "afv:agentscope:v2:"
+      ingress:
+        max-events: 4096
+        max-bytes: 8388608
+        coalesce-delay: 50ms
+        coalesce-max-chars: 1024
+      execution:
+        owner-lease: 30s

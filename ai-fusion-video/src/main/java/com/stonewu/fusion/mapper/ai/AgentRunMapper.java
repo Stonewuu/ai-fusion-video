@@ -21,6 +21,14 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
             """)
     AgentRun selectByRunIdForUpdate(@Param("runId") String runId);
 
+    @Select("""
+            SELECT *
+            FROM afv_agent_run FORCE INDEX (uk_agent_run_id)
+            WHERE run_id = #{runId}
+            LIMIT 1
+            """)
+    AgentRun selectByRunId(@Param("runId") String runId);
+
     @Select("SELECT UTC_TIMESTAMP(3)")
     LocalDateTime selectDatabaseNow();
 

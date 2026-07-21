@@ -10,6 +10,10 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -24,7 +28,10 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.regex.Pattern;
 
+@Component
 public final class CanonicalAgentKernelSnapshotBuilder implements AgentKernelSnapshotBuilder {
+
+    private static final String APPLICATION_VERSION = "ai-fusion-video-p1";
 
     private static final Set<String> SECRET_FIELD_NAMES = Set.of(
             "authorization",
@@ -59,6 +66,7 @@ public final class CanonicalAgentKernelSnapshotBuilder implements AgentKernelSna
         this(new ObjectMapper());
     }
 
+    @Autowired
     public CanonicalAgentKernelSnapshotBuilder(ObjectMapper objectMapper) {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null")
                 .copy();
@@ -110,6 +118,70 @@ public final class CanonicalAgentKernelSnapshotBuilder implements AgentKernelSna
         } catch (JsonProcessingException | IllegalArgumentException invalidPayload) {
             throw unavailable("Kernel snapshot payload is unavailable");
         }
+    }
+
+    @Override
+    public AgentKernelSnapshot build(AgentKernelSpec spec) {
+        AgentKernelSpec safeSpec = Objects.requireNonNull(spec, "spec must not be null");
+        AiModel model = safeSpec.model();
+        List<ToolManifestSnapshot> tools = safeSpec.toolManifest().stream()
+                .map(tool -> new ToolManifestSnapshot(
+                        tool.toolName(),
+                        tool.schemaSha256(),
+                        tool.readOnly(),
+                        tool.concurrencySafe(),
+                        safeSpec.toolWhitelistVersion()))
+                .toList();
+        return build(safeSpec.snapshotPayload(
+                requireModelId(model),
+                modelConfigVersion(safeSpec.key().modelConfigFingerprint()),
+                provider(model),
+                parseModelOptions(model.getConfig()),
+                tools,
+                APPLICATION_VERSION));
+    }
+
+    public static long modelConfigVersion(String modelConfigFingerprint) {
+        String fingerprint = Objects.requireNonNull(
+                modelConfigFingerprint, "modelConfigFingerprint must not be null");
+        if (!fingerprint.matches("[0-9a-fA-F]{64}")) {
+            throw new IllegalArgumentException("modelConfigFingerprint must be SHA-256 hex");
+        }
+        long value = Long.parseUnsignedLong(fingerprint.substring(0, 15), 16);
+        return value == 0L ? 1L : value;
+    }
+
+    private JsonNode parseModelOptions(String config) {
+        if (config == null || config.isBlank()) {
+            return objectMapper.createObjectNode();
+        }
+        try {
+            JsonNode parsed = objectMapper.readTree(config);
+            if (parsed == null || !parsed.isObject()) {
+                throw new IllegalArgumentException("model config must be a JSON object");
+            }
+            return parsed;
+        } catch (JsonProcessingException invalid) {
+            throw new IllegalArgumentException("model config is invalid JSON", invalid);
+        }
+    }
+
+    private String requireModelId(AiModel model) {
+        if (model.getId() == null || model.getId() <= 0) {
+            throw new IllegalArgumentException("model.id must be positive");
+        }
+        return String.valueOf(model.getId());
+    }
+
+    private String provider(AiModel model) {
+        String provider = model.getModelProtocol();
+        if (provider == null || provider.isBlank()) {
+            provider = model.getModelFamily();
+        }
+        if (provider == null || provider.isBlank()) {
+            throw new IllegalArgumentException("model provider must not be blank");
+        }
+        return provider.trim();
     }
 
     private JsonNode normalizeNode(JsonNode node) {

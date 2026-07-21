@@ -30,6 +30,18 @@ public class AgentRunRedisSignalService {
         return wakeupsWhenSubscribed(runId).flatMapMany(messages -> messages);
     }
 
+    public Mono<Void> publishCancel(String runId) {
+        String safeRunId = requireRunId(runId);
+        return redisService.publishRunCancel(safeRunId).then();
+    }
+
+    public Flux<String> cancellations(String runId) {
+        String safeRunId = requireRunId(runId);
+        return redisService.runCancelPayloadsWhenSubscribed(safeRunId)
+                .flatMapMany(messages -> messages)
+                .filter(safeRunId::equals);
+    }
+
     /** Exposed so replay/live bridges can avoid a subscribe-versus-publish race. */
     public Mono<Flux<Long>> wakeupsWhenSubscribed(String runId) {
         String safeRunId = requireRunId(runId);

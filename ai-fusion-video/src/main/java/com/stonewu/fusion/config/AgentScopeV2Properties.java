@@ -10,6 +10,8 @@ public class AgentScopeV2Properties {
 
     private Cache cache = new Cache();
     private State state = new State();
+    private Ingress ingress = new Ingress();
+    private Execution execution = new Execution();
 
     public Cache getCache() {
         return cache;
@@ -25,6 +27,22 @@ public class AgentScopeV2Properties {
 
     public void setState(State state) {
         this.state = Objects.requireNonNull(state, "state must not be null");
+    }
+
+    public Ingress getIngress() {
+        return ingress;
+    }
+
+    public void setIngress(Ingress ingress) {
+        this.ingress = Objects.requireNonNull(ingress, "ingress must not be null");
+    }
+
+    public Execution getExecution() {
+        return execution;
+    }
+
+    public void setExecution(Execution execution) {
+        this.execution = Objects.requireNonNull(execution, "execution must not be null");
     }
 
     public static final class Cache {
@@ -81,6 +99,77 @@ public class AgentScopeV2Properties {
                 throw new IllegalArgumentException("keyPrefix must not be blank");
             }
             this.keyPrefix = keyPrefix.trim();
+        }
+    }
+
+    public static final class Ingress {
+        private int maxEvents = 4096;
+        private long maxBytes = 8L * 1024L * 1024L;
+        private Duration coalesceDelay = Duration.ofMillis(50);
+        private int coalesceMaxChars = 1024;
+
+        public int getMaxEvents() {
+            return maxEvents;
+        }
+
+        public void setMaxEvents(int maxEvents) {
+            if (maxEvents <= 0) {
+                throw new IllegalArgumentException("maxEvents must be greater than zero");
+            }
+            this.maxEvents = maxEvents;
+        }
+
+        public long getMaxBytes() {
+            return maxBytes;
+        }
+
+        public void setMaxBytes(long maxBytes) {
+            if (maxBytes <= 0) {
+                throw new IllegalArgumentException("maxBytes must be greater than zero");
+            }
+            this.maxBytes = maxBytes;
+        }
+
+        public Duration getCoalesceDelay() {
+            return coalesceDelay;
+        }
+
+        public void setCoalesceDelay(Duration coalesceDelay) {
+            this.coalesceDelay = requirePositive(coalesceDelay, "coalesceDelay");
+        }
+
+        public int getCoalesceMaxChars() {
+            return coalesceMaxChars;
+        }
+
+        public void setCoalesceMaxChars(int coalesceMaxChars) {
+            if (coalesceMaxChars <= 0) {
+                throw new IllegalArgumentException("coalesceMaxChars must be greater than zero");
+            }
+            this.coalesceMaxChars = coalesceMaxChars;
+        }
+    }
+
+    public static final class Execution {
+        private String instanceId;
+        private Duration ownerLease = Duration.ofSeconds(30);
+
+        public String getInstanceId() {
+            return instanceId;
+        }
+
+        public void setInstanceId(String instanceId) {
+            this.instanceId = instanceId == null || instanceId.isBlank()
+                    ? null
+                    : instanceId.trim();
+        }
+
+        public Duration getOwnerLease() {
+            return ownerLease;
+        }
+
+        public void setOwnerLease(Duration ownerLease) {
+            this.ownerLease = requirePositive(ownerLease, "ownerLease");
         }
     }
 

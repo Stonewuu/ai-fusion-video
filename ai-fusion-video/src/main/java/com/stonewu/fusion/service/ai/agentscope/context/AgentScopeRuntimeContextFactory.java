@@ -33,6 +33,9 @@ public final class AgentScopeRuntimeContextFactory {
     }
 
     private String sessionId(AgentConversationContext conversation) {
+        if (conversation.agentStateSessionId() != null) {
+            return conversation.agentStateSessionId();
+        }
         return SESSION_PREFIX + conversation.conversationId() + ':' + conversation.agentDefinitionStableKey();
     }
 }
