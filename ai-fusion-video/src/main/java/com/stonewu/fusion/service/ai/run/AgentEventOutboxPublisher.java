@@ -8,6 +8,7 @@ import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -40,6 +41,13 @@ public class AgentEventOutboxPublisher {
     private final AgentRunRedisSignalService signals;
     private final AgentEventEnvelopeSanitizer sanitizer;
     private final AgentRuntimeSchedulers schedulers;
+    private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+
+    @Autowired
+    void setMetrics(AgentRuntimeMetrics metrics) {
+        this.metrics = java.util.Objects.requireNonNull(
+                metrics, "metrics must not be null");
+    }
 
     public Mono<Void> publishBatch(String owner, int limit) {
         String claimToken = claimToken(owner);
@@ -48,7 +56,7 @@ public class AgentEventOutboxPublisher {
                 .subscribeOn(schedulers.journal())
                 .flatMapMany(Flux::fromIterable)
                 .concatMap(event -> publishOne(claimToken, event))
-                .then();
+                .then(refreshBacklog());
     }
 
     private Mono<Void> publishOne(String claimToken, AgentEvent event) {
@@ -120,6 +128,7 @@ public class AgentEventOutboxPublisher {
             AgentEvent event,
             String claimToken,
             Throwable failure) {
+        metrics.outboxRetry();
         return Mono.fromCallable(() -> {
                     LocalDateTime databaseNow = runMapper.selectDatabaseNow();
                     LocalDateTime nextAttempt = databaseNow.plusNanos(
@@ -133,6 +142,13 @@ public class AgentEventOutboxPublisher {
                             sanitizeFailure(failure)) == 1;
                 })
                 .subscribeOn(schedulers.journal());
+    }
+
+    private Mono<Void> refreshBacklog() {
+        return Mono.fromCallable(eventMapper::countOutstandingPublish)
+                .subscribeOn(schedulers.journal())
+                .doOnNext(metrics::outboxBacklog)
+                .then();
     }
 
     private long retryDelayMillis(long eventId, int attempts) {

@@ -65,7 +65,7 @@ class AgentOutboxMultiInstanceIT {
 
     @Container
     private static final GenericContainer<?> REDIS = new GenericContainer<>(
-            DockerImageName.parse("redis:7.4-alpine"))
+            DockerImageName.parse("redis:7.4.5-alpine"))
             .withExposedPorts(REDIS_PORT);
 
     @DynamicPropertySource

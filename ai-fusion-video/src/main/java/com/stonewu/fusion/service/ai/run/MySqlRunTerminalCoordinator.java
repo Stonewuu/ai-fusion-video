@@ -17,6 +17,7 @@ import com.stonewu.fusion.service.ai.run.model.CommittedAgentEvent;
 import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
 import com.stonewu.fusion.service.ai.run.model.SystemTerminalActor;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
@@ -36,6 +37,13 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
     private final AgentRunMapper runMapper;
     private final StateStoreFailureGuard stateStoreFailureGuard;
     private final AgentRuntimeSchedulers schedulers;
+    private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+
+    @Autowired
+    void setMetrics(AgentRuntimeMetrics metrics) {
+        this.metrics = java.util.Objects.requireNonNull(
+                metrics, "metrics must not be null");
+    }
 
     @Override
     public Mono<Optional<CommittedAgentEvent>> terminateOwned(
@@ -44,7 +52,8 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
             long ownerEpoch) {
         return Mono.fromCallable(() -> repository.terminateOwnedTx(
                         failClosedCompletion(request), ownerInstanceId, ownerEpoch))
-                .subscribeOn(schedulers.journal());
+                .subscribeOn(schedulers.journal())
+                .doOnNext(this::recordTerminal);
     }
 
     @Override
@@ -52,7 +61,18 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
             RunTerminalRequest request,
             SystemTerminalActor actor) {
         return Mono.fromCallable(() -> repository.terminateSystemTx(request, actor))
-                .subscribeOn(schedulers.journal());
+                .subscribeOn(schedulers.journal())
+                .doOnNext(this::recordTerminal);
+    }
+
+    private void recordTerminal(Optional<CommittedAgentEvent> committed) {
+        committed.ifPresent(event -> metrics.terminal(switch (event.outputType()) {
+            case "DONE" -> AgentRunStatus.COMPLETED;
+            case "ERROR" -> AgentRunStatus.FAILED;
+            case "CANCELLED" -> AgentRunStatus.CANCELLED;
+            default -> throw new IllegalStateException(
+                    "Unknown Agent terminal output type: " + event.outputType());
+        }));
     }
 
     private RunTerminalRequest failClosedCompletion(RunTerminalRequest request) {

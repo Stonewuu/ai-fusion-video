@@ -6,6 +6,7 @@ import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.run.model.CommittedAgentEvent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -27,6 +28,12 @@ public class AgentRunReplayService {
     private final AgentEventRepository repository;
     private final AgentRunRedisSignalService signals;
     private final AgentRuntimeSchedulers schedulers;
+    private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+
+    @Autowired
+    void setMetrics(AgentRuntimeMetrics metrics) {
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    }
 
     public AgentRunReplayService(
             AgentEventRepository repository,
@@ -52,6 +59,8 @@ public class AgentRunReplayService {
             AtomicLong deliveredTerminal = new AtomicLong(
                     afterSequence == 0 ? 0 : afterSequence);
             ReplayWakeGate gate = new ReplayWakeGate();
+            java.util.concurrent.atomic.AtomicBoolean firstSnapshot =
+                    new java.util.concurrent.atomic.AtomicBoolean(true);
             return signals.wakeupsWhenSubscribed(safeRunId)
                     .onErrorResume(failure -> {
                         log.warn(
@@ -67,7 +76,8 @@ public class AgentRunReplayService {
                                     safeRunId,
                                     cursor,
                                     deliveredTerminal,
-                                    gate),
+                                    gate,
+                                    firstSnapshot),
                             Disposable::dispose));
         });
     }
@@ -90,9 +100,14 @@ public class AgentRunReplayService {
             String runId,
             AtomicLong cursor,
             AtomicLong deliveredTerminal,
-            ReplayWakeGate gate) {
+            ReplayWakeGate gate,
+            java.util.concurrent.atomic.AtomicBoolean firstSnapshot) {
         return loadSnapshot(runId)
                 .flatMapMany(snapshot -> {
+                    if (firstSnapshot.getAndSet(false)
+                            && snapshot.terminalSequence() != null) {
+                        metrics.replayTerminalRecovered();
+                    }
                     validateCursor(runId, cursor.get(), snapshot.latestSequence());
                     acknowledgeCursorTerminal(
                             cursor.get(), deliveredTerminal, snapshot);
@@ -108,7 +123,8 @@ public class AgentRunReplayService {
                             cursor,
                             deliveredTerminal,
                             gate,
-                            snapshot)));
+                            snapshot,
+                            firstSnapshot)));
                 });
     }
 
@@ -128,6 +144,7 @@ public class AgentRunReplayService {
                 .concatMapIterable(ReplayPage::events)
                 .doOnNext(event -> advanceCursor(cursor, event))
                 .filter(CommittedAgentEvent::publishRequired)
+                .doOnNext(ignored -> metrics.replayDelivered())
                 .doOnNext(event -> {
                     Long terminalSequence = snapshot.terminalSequence();
                     if (terminalSequence != null
@@ -142,21 +159,24 @@ public class AgentRunReplayService {
             AtomicLong cursor,
             AtomicLong deliveredTerminal,
             ReplayWakeGate gate,
-            ReplaySnapshot drainedSnapshot) {
+            ReplaySnapshot drainedSnapshot,
+            java.util.concurrent.atomic.AtomicBoolean firstSnapshot) {
         Long terminalSequence = drainedSnapshot.terminalSequence();
         if (terminalSequence != null
                 && deliveredTerminal.get() >= terminalSequence) {
             return confirmTerminalTailEmpty(
-                    runId, cursor, deliveredTerminal, gate);
+                    runId, cursor, deliveredTerminal, gate, firstSnapshot);
         }
-        return awaitNextCycle(runId, cursor, deliveredTerminal, gate);
+        return awaitNextCycle(
+                runId, cursor, deliveredTerminal, gate, firstSnapshot);
     }
 
     private Flux<CommittedAgentEvent> confirmTerminalTailEmpty(
             String runId,
             AtomicLong cursor,
             AtomicLong deliveredTerminal,
-            ReplayWakeGate gate) {
+            ReplayWakeGate gate,
+            java.util.concurrent.atomic.AtomicBoolean firstSnapshot) {
         return loadSnapshot(runId)
                 .flatMapMany(confirmed -> {
                     acknowledgeCursorTerminal(
@@ -168,7 +188,7 @@ public class AgentRunReplayService {
                         return Flux.empty();
                     }
                     return replayCycle(
-                            runId, cursor, deliveredTerminal, gate);
+                            runId, cursor, deliveredTerminal, gate, firstSnapshot);
                 });
     }
 
@@ -176,10 +196,16 @@ public class AgentRunReplayService {
             String runId,
             AtomicLong cursor,
             AtomicLong deliveredTerminal,
-            ReplayWakeGate gate) {
+            ReplayWakeGate gate,
+            java.util.concurrent.atomic.AtomicBoolean firstSnapshot) {
         return gate.awaitDirtyOrPoll(POLL_INTERVAL)
-                .thenMany(Flux.defer(() -> replayCycle(
-                        runId, cursor, deliveredTerminal, gate)));
+                .flatMapMany(sequenceHint -> {
+                    if (sequenceHint > 0 && sequenceHint <= cursor.get()) {
+                        metrics.replayDuplicateSuppressed();
+                    }
+                    return Flux.defer(() -> replayCycle(
+                            runId, cursor, deliveredTerminal, gate, firstSnapshot));
+                });
     }
 
     private Mono<ReplaySnapshot> loadSnapshot(String runId) {

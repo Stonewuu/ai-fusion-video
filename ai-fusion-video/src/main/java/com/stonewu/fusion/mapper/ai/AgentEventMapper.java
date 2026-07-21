@@ -113,6 +113,14 @@ public interface AgentEventMapper extends BaseMapper<AgentEvent> {
             @Param("lastPublishError") String lastPublishError);
 
     @Select("""
+            SELECT COUNT(*)
+            FROM afv_agent_event FORCE INDEX (idx_agent_event_publish)
+            WHERE publish_required = 1
+              AND publish_status <> 'PUBLISHED'
+            """)
+    long countOutstandingPublish();
+
+    @Select("""
             SELECT *
             FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
             WHERE run_id = #{runId}

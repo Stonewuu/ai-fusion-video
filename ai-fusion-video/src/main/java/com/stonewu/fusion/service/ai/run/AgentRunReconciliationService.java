@@ -14,6 +14,7 @@ import com.stonewu.fusion.service.ai.run.model.ExecutionStopReason;
 import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
 import com.stonewu.fusion.service.ai.run.model.SystemTerminalActor;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -35,6 +36,12 @@ public final class AgentRunReconciliationService {
     private final OwnedExecutionRegistry executions;
     private final AgentEventEnvelopeSanitizer sanitizer;
     private final AgentRuntimeSchedulers schedulers;
+    private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+
+    @Autowired
+    void setMetrics(AgentRuntimeMetrics metrics) {
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    }
 
     public AgentRunReconciliationService(
             AgentRunRepository runs,
@@ -78,14 +85,19 @@ public final class AgentRunReconciliationService {
             return Mono.empty();
         }
         return terminals.terminateSystem(request, SystemTerminalActor.OWNER_RECONCILER)
-                .flatMap(committed -> committed.isPresent() && hasOwner(run)
+                .flatMap(committed -> {
+                    if (committed.isPresent() && status == AgentRunStatus.RUNNING) {
+                        metrics.ownerLost();
+                    }
+                    return committed.isPresent() && hasOwner(run)
                         ? executions.interruptOwned(
                                         run.getRunId(),
                                         run.getOwnerInstanceId(),
                                         run.getOwnerEpoch(),
                                         stopReason)
                                 .then()
-                        : Mono.empty());
+                        : Mono.empty();
+                });
     }
 
     private RunTerminalRequest ownerLostRequest(AgentRun run) {

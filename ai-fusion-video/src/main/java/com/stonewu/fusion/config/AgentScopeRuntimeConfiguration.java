@@ -7,6 +7,7 @@ import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeStateStoreFactor
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import com.stonewu.fusion.service.ai.agentscope.state.InMemoryStateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
+import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
 import io.agentscope.core.state.AgentStateStore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -20,9 +21,18 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 @EnableConfigurationProperties({AgentScopeRuntimeProperties.class, AgentScopeV2Properties.class})
 public class AgentScopeRuntimeConfiguration {
 
+    @Bean
+    @ConditionalOnMissingBean(AgentRuntimeMetrics.class)
+    public AgentRuntimeMetrics agentRuntimeMetrics(
+            ObjectProvider<io.micrometer.core.instrument.MeterRegistry> registries) {
+        return new AgentRuntimeMetrics(registries);
+    }
+
     @Bean(destroyMethod = "close")
-    public AgentRuntimeSchedulers agentRuntimeSchedulers(AgentScopeRuntimeProperties properties) {
-        return new AgentRuntimeSchedulers(properties);
+    public AgentRuntimeSchedulers agentRuntimeSchedulers(
+            AgentScopeRuntimeProperties properties,
+            AgentRuntimeMetrics metrics) {
+        return new AgentRuntimeSchedulers(properties, metrics);
     }
 
     @Bean
@@ -38,8 +48,9 @@ public class AgentScopeRuntimeConfiguration {
 
     @Bean
     public AgentScopeStateStoreFactory agentScopeStateStoreFactory(
-            StateStoreFailureGuard failures) {
-        return new AgentScopeStateStoreFactory(failures);
+            StateStoreFailureGuard failures,
+            AgentRuntimeMetrics metrics) {
+        return new AgentScopeStateStoreFactory(failures, metrics);
     }
 
     @Bean(destroyMethod = "close")

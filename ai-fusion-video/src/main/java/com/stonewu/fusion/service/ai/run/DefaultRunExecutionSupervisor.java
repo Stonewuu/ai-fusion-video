@@ -20,6 +20,7 @@ import com.stonewu.fusion.service.ai.run.model.ResumeAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
 import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -49,6 +50,12 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
     private final AgentEventEnvelopeSanitizer sanitizer;
     private final AtomicBoolean accepting = new AtomicBoolean(true);
     private final AtomicReference<Mono<Void>> shutdownSignal = new AtomicReference<>();
+    private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+
+    @Autowired
+    void setMetrics(AgentRuntimeMetrics metrics) {
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    }
 
     public DefaultRunExecutionSupervisor(
             AgentExecutionFactory executionFactory,
@@ -192,6 +199,15 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
     private Mono<Void> completeExecution(
             AgentExecution execution,
             AgentExecutionHandle.Outcome outcome) {
+        metrics.providerClosed();
+        AgentRunStatus providerStatus = switch (outcome.kind()) {
+            case COMPLETED -> AgentRunStatus.COMPLETED;
+            case INTERRUPTED -> outcome.stopReason() == ExecutionStopReason.CANCEL_REQUESTED
+                    ? AgentRunStatus.CANCELLED
+                    : AgentRunStatus.FAILED;
+            case OVERFLOW, SOURCE_FAILURE, JOURNAL_FAILURE -> AgentRunStatus.FAILED;
+        };
+        metrics.providerTerminal(providerStatus);
         return switch (outcome.kind()) {
             case COMPLETED -> terminalCompleted(execution);
             case OVERFLOW -> terminalFailure(

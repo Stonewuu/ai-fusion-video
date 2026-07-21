@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.agentscope.kernel;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
+import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -52,6 +53,12 @@ public final class HarnessLeaseCache {
     private final AtomicReference<Sinks.Empty<Void>> zeroLeaseWaiter = new AtomicReference<>();
     private final AtomicReference<Mono<Void>> drainSignal = new AtomicReference<>();
     private final Queue<Throwable> drainCloseFailures = new ConcurrentLinkedQueue<>();
+    private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+
+    @Autowired
+    void setMetrics(AgentRuntimeMetrics metrics) {
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    }
 
     @Autowired
     public HarnessLeaseCache(
@@ -152,6 +159,7 @@ public final class HarnessLeaseCache {
                     long elapsed = nowNanos() - startedNanos;
                     long remaining = capacityWaitNanos - elapsed;
                     if (remaining <= 0L) {
+                        metrics.harnessCapacityRejected();
                         return Mono.error(new BusinessException(
                                 503, "HARNESS_CAPACITY_EXHAUSTED"));
                     }
@@ -258,6 +266,7 @@ public final class HarnessLeaseCache {
             }
             HarnessLease existing = acquireExisting(spec.key());
             if (existing != null) {
+                metrics.harnessCacheLookup(true);
                 return existing;
             }
 
@@ -269,6 +278,7 @@ public final class HarnessLeaseCache {
                     }
                     existing = acquireExisting(spec.key());
                     if (existing != null) {
+                        metrics.harnessCacheLookup(true);
                         return existing;
                     }
                     evictExpiredIdleEntries();
@@ -286,6 +296,7 @@ public final class HarnessLeaseCache {
                         if (lease == null) {
                             throw new IllegalStateException("New Harness cache entry rejected its first lease");
                         }
+                        metrics.harnessCacheLookup(false);
                         return lease;
                     } catch (Throwable failure) {
                         if (created == null) {
@@ -340,6 +351,7 @@ public final class HarnessLeaseCache {
         }
         entries.remove(entry.key, entry);
         entry.closeOnce();
+        metrics.harnessEvicted();
         return true;
     }
 
@@ -431,6 +443,7 @@ public final class HarnessLeaseCache {
 
     private void leaseAcquired() {
         activeLeases.incrementAndGet();
+        metrics.harnessLeaseAcquired();
     }
 
     private void leaseReleased(Entry entry, boolean idle) {
@@ -444,6 +457,7 @@ public final class HarnessLeaseCache {
             }
         }
         int count = activeLeases.decrementAndGet();
+        metrics.harnessLeaseReleased();
         if (count < 0) {
             throw new IllegalStateException("Harness active lease count became negative");
         }

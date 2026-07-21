@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope.runtime;
 
 import com.stonewu.fusion.config.AgentScopeRuntimeProperties;
+import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
 import reactor.core.scheduler.Scheduler;
 import reactor.core.scheduler.Schedulers;
 
@@ -33,9 +34,17 @@ public final class AgentRuntimeSchedulers implements AutoCloseable {
     private final OwnedScheduler modelBlocking;
     private final OwnedScheduler toolBlocking;
     private final AtomicBoolean closed = new AtomicBoolean();
+    private final AgentRuntimeMetrics metrics;
 
     public AgentRuntimeSchedulers(AgentScopeRuntimeProperties properties) {
+        this(properties, AgentRuntimeMetrics.noop());
+    }
+
+    public AgentRuntimeSchedulers(
+            AgentScopeRuntimeProperties properties,
+            AgentRuntimeMetrics metrics) {
         Objects.requireNonNull(properties, "properties must not be null");
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
         state = fixedScheduler(
                 "agent-state", properties.getStateThreads(), STATE_QUEUE_CAPACITY, STATE_OVERLOAD_CODE);
         journal = fixedScheduler(
@@ -87,6 +96,11 @@ public final class AgentRuntimeSchedulers implements AutoCloseable {
                 new ArrayBlockingQueue<>(queueCapacity),
                 namedThreadFactory(name),
                 (task, rejectedExecutor) -> {
+                    if (TOOL_OVERLOAD_CODE.equals(overloadCode)) {
+                        metrics.toolSchedulerViolation();
+                    } else if (STATE_OVERLOAD_CODE.equals(overloadCode)) {
+                        metrics.stateBulkheadRejected();
+                    }
                     throw new SchedulerOverloadedException(overloadCode, name, rejectedExecutor.isShutdown());
                 });
         executor.prestartAllCoreThreads();

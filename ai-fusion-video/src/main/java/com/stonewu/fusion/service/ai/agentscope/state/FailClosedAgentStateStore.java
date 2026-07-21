@@ -2,7 +2,9 @@ package com.stonewu.fusion.service.ai.agentscope.state;
 
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.state.State;
+import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -13,10 +15,19 @@ public final class FailClosedAgentStateStore implements AgentStateStore {
 
     private final AgentStateStore delegate;
     private final StateStoreFailureGuard failures;
+    private final AgentRuntimeMetrics metrics;
 
     public FailClosedAgentStateStore(AgentStateStore delegate, StateStoreFailureGuard failures) {
+        this(delegate, failures, AgentRuntimeMetrics.noop());
+    }
+
+    public FailClosedAgentStateStore(
+            AgentStateStore delegate,
+            StateStoreFailureGuard failures,
+            AgentRuntimeMetrics metrics) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.failures = Objects.requireNonNull(failures, "failures must not be null");
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
     }
 
     @Override
@@ -92,11 +103,19 @@ public final class FailClosedAgentStateStore implements AgentStateStore {
     }
 
     private <T> T guarded(StateStoreSlot slot, String operation, Supplier<T> action) {
+        long started = System.nanoTime();
         try {
-            return action.get();
+            T result = action.get();
+            metrics.stateOperation(elapsed(started), true);
+            return result;
         } catch (RuntimeException failure) {
+            metrics.stateOperation(elapsed(started), false);
             throw failures.record(slot, operation, failure);
         }
+    }
+
+    private Duration elapsed(long started) {
+        return Duration.ofNanos(Math.max(0, System.nanoTime() - started));
     }
 
     private boolean isFrameworkAnonymousGet(String userId, String sessionId, String key) {

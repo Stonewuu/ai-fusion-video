@@ -20,6 +20,7 @@ import com.stonewu.fusion.service.ai.run.model.ResumeExternalCommand;
 import com.stonewu.fusion.service.ai.run.model.ResumedAgentRun;
 import com.stonewu.fusion.service.ai.run.model.WaitingCheckpoint;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
@@ -50,6 +51,12 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
     private final AgentEventEnvelopeSanitizer sanitizer;
     private final TransactionTemplate transactions;
     private final AgentRuntimeSchedulers schedulers;
+    private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+
+    @Autowired
+    void setMetrics(AgentRuntimeMetrics metrics) {
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    }
 
     public DurableAgentWaitingStateService(
             AgentRunMapper runMapper,
@@ -91,7 +98,10 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         WaitingCheckpoint safeCheckpoint = Objects.requireNonNull(
                 checkpoint, "checkpoint must not be null");
         return transactional(() -> enterWaitingConfirmationTx(
-                safeRunId, expectedOwnerEpoch, safeCheckpoint));
+                safeRunId, expectedOwnerEpoch, safeCheckpoint))
+                .doOnNext(entered -> {
+                    if (entered) metrics.waitingEntered();
+                });
     }
 
     @Override
@@ -108,7 +118,10 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 pending, "pending must not be null");
         validateExternal(safePending);
         return transactional(() -> enterWaitingExternalTx(
-                safeRunId, expectedOwnerEpoch, safeCheckpoint, safePending));
+                safeRunId, expectedOwnerEpoch, safeCheckpoint, safePending))
+                .doOnNext(entered -> {
+                    if (entered) metrics.waitingEntered();
+                });
     }
 
     @Override
@@ -138,7 +151,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         requireText(safeCommand.runId(), 64, "runId");
         requireText(safeCommand.replyId(), 128, "replyId");
         requireText(safeCommand.newOwnerInstanceId(), 128, "newOwnerInstanceId");
-        return transactional(() -> resumeConfirmationTx(safeCommand));
+        return transactional(() -> resumeConfirmationTx(safeCommand))
+                .doOnNext(ignored -> metrics.waitingResumed());
     }
 
     @Override
@@ -150,7 +164,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         requireText(safeCommand.toolCallId(), 128, "toolCallId");
         requireText(safeCommand.newOwnerInstanceId(), 128, "newOwnerInstanceId");
         parseObject(safeCommand.resultPayloadJson(), "resultPayloadJson");
-        return transactional(() -> resumeExternalTx(safeCommand));
+        return transactional(() -> resumeExternalTx(safeCommand))
+                .doOnNext(ignored -> metrics.waitingResumed());
     }
 
     private void recordConfirmationCandidateTx(

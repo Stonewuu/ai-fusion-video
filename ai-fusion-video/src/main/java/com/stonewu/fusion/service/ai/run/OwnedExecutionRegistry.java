@@ -33,6 +33,12 @@ public final class OwnedExecutionRegistry {
     private final long maxBytes;
     private final Scheduler deadlineScheduler;
     private final Clock clock;
+    private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+
+    @Autowired
+    void setMetrics(AgentRuntimeMetrics metrics) {
+        this.metrics = Objects.requireNonNull(metrics, "metrics must not be null");
+    }
 
     @Autowired
     public OwnedExecutionRegistry(ObjectMapper objectMapper, AgentScopeV2Properties properties) {
@@ -96,6 +102,7 @@ public final class OwnedExecutionRegistry {
                 handle.close();
                 throw new ExecutionAlreadyOwnedException(execution.runId());
             }
+            metrics.executionStarted();
             try {
                 Mono<Void> monitor = Objects.requireNonNull(
                         controlMonitor.apply(handle),
@@ -104,7 +111,12 @@ public final class OwnedExecutionRegistry {
                         ingressTransform,
                         durableConsumer,
                         monitor,
-                        completionAction);
+                        outcome -> {
+                            if (outcome.kind() == AgentExecutionHandle.OutcomeKind.OVERFLOW) {
+                                metrics.eventBackpressureRejected();
+                            }
+                            return completionAction.apply(outcome);
+                        });
             } catch (Throwable launchFailure) {
                 handle.close();
                 throw launchFailure;
@@ -158,8 +170,11 @@ public final class OwnedExecutionRegistry {
     }
 
     private void remove(String runId, AgentExecutionHandle expected) {
-        if (expected != null && handles.remove(runId, expected) && handles.isEmpty()) {
-            signalEmpty();
+        if (expected != null && handles.remove(runId, expected)) {
+            metrics.executionStopped();
+            if (handles.isEmpty()) {
+                signalEmpty();
+            }
         }
     }
 

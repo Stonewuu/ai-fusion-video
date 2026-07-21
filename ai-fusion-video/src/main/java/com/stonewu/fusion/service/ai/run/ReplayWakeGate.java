@@ -63,8 +63,8 @@ final class ReplayWakeGate {
 
             return Mono.firstWithSignal(
                             installed.asMono(),
-                            Mono.delay(safeInterval))
-                    .map(ignored -> consumeAfterWake())
+                            Mono.delay(safeInterval).thenReturn(0L))
+                    .map(this::consumeAfterWake)
                     .doFinally(ignored -> waiter.compareAndSet(installed, null));
         });
     }
@@ -73,8 +73,8 @@ final class ReplayWakeGate {
         return dirty.getAndSet(false) ? highestHint.get() : null;
     }
 
-    private long consumeAfterWake() {
+    private long consumeAfterWake(long sequenceHint) {
         dirty.set(false);
-        return highestHint.get();
+        return sequenceHint;
     }
 }
