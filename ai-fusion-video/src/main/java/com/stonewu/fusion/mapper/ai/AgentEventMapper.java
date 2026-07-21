@@ -179,4 +179,43 @@ public interface AgentEventMapper extends BaseMapper<AgentEvent> {
             @Param("runId") String runId,
             @Param("toolCallId") String toolCallId,
             @Param("throughSequence") long throughSequence);
+
+    @Select("""
+            SELECT *
+            FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+            WHERE run_id = #{runId}
+              AND reply_id = #{replyId}
+              AND raw_event_type = 'REQUIRE_USER_CONFIRM'
+              AND source = 'platform/waiting-candidate'
+            ORDER BY sequence_no DESC
+            LIMIT 1
+            """)
+    AgentEvent selectConfirmationCandidate(
+            @Param("runId") String runId,
+            @Param("replyId") String replyId);
+
+    @Select("""
+            SELECT *
+            FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+            WHERE run_id = #{runId}
+              AND raw_event_type = 'REQUIRE_USER_CONFIRM'
+              AND source = 'platform/waiting-candidate'
+            ORDER BY sequence_no DESC
+            LIMIT 1
+            """)
+    AgentEvent selectLatestConfirmationCandidate(@Param("runId") String runId);
+
+    @Select("""
+            SELECT *
+            FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+            WHERE run_id = #{runId}
+              AND tool_call_id = #{toolCallId}
+              AND raw_event_type = 'PLATFORM_REQUIRE_EXTERNAL_EXECUTION'
+              AND source = 'platform/waiting'
+            ORDER BY sequence_no DESC
+            LIMIT 1
+            """)
+    AgentEvent selectPendingExternalExecution(
+            @Param("runId") String runId,
+            @Param("toolCallId") String toolCallId);
 }
