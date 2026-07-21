@@ -9,7 +9,6 @@ import com.stonewu.fusion.controller.ai.vo.AiModelConnectivityRespVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
-import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -36,7 +35,6 @@ public class AiModelService {
     private final ModelPresetService modelPresetService;
     private final AiModelMetadataResolver aiModelMetadataResolver;
     private final ChatModelFactory chatModelFactory;
-    private final AgentScopeModelFactory agentScopeModelFactory;
 
     @Transactional
     public Long createAiModel(AiModel aiModel) {
@@ -100,14 +98,12 @@ public class AiModelService {
             clearOtherDefaults(model.getModelType(), model.getId());
         }
         chatModelFactory.evict(id);
-        agentScopeModelFactory.evict(id);
     }
 
     @Transactional
     public void deleteAiModel(Long id) {
         aiModelMapper.softDeleteById(id);
         chatModelFactory.evict(id);
-        agentScopeModelFactory.evict(id);
     }
 
     public AiModel getById(Long id) {

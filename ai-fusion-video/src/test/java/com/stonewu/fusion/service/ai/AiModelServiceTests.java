@@ -9,7 +9,6 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
-import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
@@ -56,22 +55,18 @@ class AiModelServiceTests {
     @Mock
     private ChatModelFactory chatModelFactory;
 
-    @Mock
-    private AgentScopeModelFactory agentScopeModelFactory;
-
     private AiModelService aiModelService;
 
-        @BeforeEach
-        void setUp() {
-                aiModelService = new AiModelService(
-                                aiModelMapper,
-                                apiConfigService,
-                                modelPresetService,
-                                new AiModelMetadataResolver(apiConfigService),
-                                chatModelFactory,
-                                agentScopeModelFactory
-                );
-        }
+    @BeforeEach
+    void setUp() {
+        aiModelService = new AiModelService(
+                aiModelMapper,
+                apiConfigService,
+                modelPresetService,
+                new AiModelMetadataResolver(apiConfigService),
+                chatModelFactory
+        );
+    }
 
     @Test
     void createAiModelShouldClearOtherDefaultsWhenSavedAsDefault() {
@@ -130,7 +125,6 @@ class AiModelServiceTests {
         assertTrue(existing.getDefaultModel());
         verify(aiModelMapper).updateById(existing);
         verify(chatModelFactory).evict(202L);
-        verify(agentScopeModelFactory).evict(202L);
         verifyClearOtherDefaults(3, 202L);
     }
 

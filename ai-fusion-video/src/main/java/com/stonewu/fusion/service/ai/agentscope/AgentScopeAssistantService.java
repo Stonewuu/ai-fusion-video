@@ -19,6 +19,10 @@ import com.stonewu.fusion.service.ai.AiStreamRedisService;
 import com.stonewu.fusion.service.ai.AiToolConfigService;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelKey;
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelToolManifest;
+import com.stonewu.fusion.service.ai.agentscope.kernel.OwnedChatModel;
 import io.agentscope.core.ReActAgent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
@@ -32,6 +36,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.Disposable;
+import reactor.core.Disposables;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.SignalType;
@@ -43,8 +48,10 @@ import reactor.core.publisher.Sinks;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -132,17 +139,24 @@ public class AgentScopeAssistantService {
 
         String conversationId = StrUtil.blankToDefault(reqVO.getConversationId(), IdUtil.fastSimpleUUID());
         String messageId = IdUtil.fastSimpleUUID();
+        String streamKey = activeStreamKey(conversationId, messageId);
         String mainAgentName = "ai_assistant_agent";
 
         // 新一轮执行开始前清理上一次取消留下的 Redis 标志，避免误伤新的同会话请求。
         clearCancelFlag(conversationId);
+        AtomicReference<OwnedChatModel> ownedModelRef = new AtomicReference<>();
 
         try {
             // 1. 获取 AgentScope Model
-            ChatModelBase model = getAgentScopeModel(reqVO.getModelId());
+            AiModel selectedModel = resolveAgentScopeModel(reqVO.getModelId());
 
             // 2. 获取系统提示词
             String systemPrompt = getSystemPrompt(reqVO);
+            TransitionalToolSelection toolSelection = selectTools(reqVO);
+            OwnedChatModel ownedModel = createOwnedAgentScopeModel(
+                    reqVO, selectedModel, systemPrompt, toolSelection);
+            ownedModelRef.set(ownedModel);
+            ChatModelBase model = ownedModel.model();
 
             // 3. 构建工具执行上下文
             ToolExecutionContext toolExecContext = ToolExecutionContext.builder()
@@ -162,10 +176,15 @@ public class AgentScopeAssistantService {
             // 6. 创建 StreamingEventHook
             StreamingEventHook streamingHook = new StreamingEventHook(
                     eventSink, conversationId, messageId, mainAgentName, cancellationToken);
-                activeStreamingHooks.put(conversationId, streamingHook);
+            Disposable.Swap redisSubscriptionHandle = Disposables.swap();
+            Disposable.Swap agentCallHandle = Disposables.swap();
+            activeStreamingHooks.put(streamKey, streamingHook);
+            activeSubscriptions.put(streamKey, redisSubscriptionHandle);
+            agentCallSubscriptions.put(streamKey, agentCallHandle);
 
             // 7. 构建 Toolkit（普通工具 + 子 Agent 工具）
-            Toolkit toolkit = buildToolkit(reqVO, model, toolExecContext, streamingHook, cancellationToken);
+            Toolkit toolkit = buildSelectedToolkit(toolSelection, reqVO, model,
+                    toolExecContext, streamingHook, cancellationToken);
 
             // 7. 构建 ReActAgent
             ReActAgent.Builder agentBuilder = ReActAgent.builder()
@@ -229,7 +248,7 @@ public class AgentScopeAssistantService {
 
                 // 14. 先挂上事件订阅，再启动 Agent，避免早期 reasoning token 在无订阅者时丢失。
                 // 同时将 Redis / DB 写入切到 boundedElastic，避免阻塞 Hook 线程导致上游 chunk 堆积。
-            Disposable redisSubscription = eventSink.asFlux()
+            Flux<AiChatStreamRespVO> redisEventConsumer = eventSink.asFlux()
                     .publishOn(Schedulers.boundedElastic())
                     .takeWhile(event -> !isCancelled(conversationId))
                     .doOnNext(event -> {
@@ -292,15 +311,17 @@ public class AgentScopeAssistantService {
                         aiStreamRedisService.scheduleCleanup(conversationId);
                     })
                     .doFinally(signalType -> {
-                        activeSubscriptions.remove(conversationId);
-                    })
-                    .subscribe();
-
-            activeSubscriptions.put(conversationId, redisSubscription);
+                        activeSubscriptions.remove(streamKey);
+                    });
+            if (!redisSubscriptionHandle.isDisposed() && !isCancelled(conversationId)) {
+                redisSubscriptionHandle.update(redisEventConsumer.subscribe());
+            } else {
+                redisSubscriptionHandle.dispose();
+            }
 
                     // 15. 后台异步调用 Agent
                     // agent.call() 返回 Mono<Msg>，Hook 会在执行过程中推送事件
-                    Disposable agentDisposable = agent.call(userMsg)
+                    Mono<Msg> agentCall = agent.call(userMsg)
                         .doOnSuccess(response -> {
                         terminalStatus.compareAndSet("running", "completed");
                         // 发送 DONE 事件（不再在此保存 assistant 消息，改为在事件流中根据累积文本保存）
@@ -323,9 +344,10 @@ public class AgentScopeAssistantService {
                         eventSink.tryEmitComplete();
                         })
                         .doFinally(signalType -> {
-                        agentCallSubscriptions.remove(conversationId);
-                        activeStreamingHooks.remove(conversationId);
+                        agentCallSubscriptions.remove(streamKey);
+                        activeStreamingHooks.remove(streamKey);
                         streamingHook.clearTrackedAgents();
+                        closeOwnedModel(ownedModelRef, conversationId);
 
                         boolean wasCancelled = signalType == SignalType.CANCEL
                                 || "cancelled".equals(terminalStatus.get())
@@ -341,15 +363,27 @@ public class AgentScopeAssistantService {
                         }
                         conversationService.finish(conversationId, finalStatus);
                     })
-                        .onErrorResume(e -> Mono.empty())
-                        .subscribe();
-                    agentCallSubscriptions.put(conversationId, agentDisposable);
+                        .onErrorResume(e -> Mono.empty());
+                    if (!agentCallHandle.isDisposed() && !isCancelled(conversationId)) {
+                        agentCallHandle.update(agentCall.subscribe());
+                    } else {
+                        abandonPreparedStream(
+                                streamKey,
+                                agentCallHandle,
+                                redisSubscriptionHandle,
+                                streamingHook,
+                                ownedModelRef,
+                                conversationId);
+                    }
 
             // SSE 从 Redis Stream 读取（实时逐 token）
             return aiStreamRedisService.subscribe(conversationId);
 
         } catch (Throwable e) {
-            activeStreamingHooks.remove(conversationId);
+            activeStreamingHooks.remove(streamKey);
+            disposeActiveStreamKey(agentCallSubscriptions, streamKey);
+            disposeActiveStreamKey(activeSubscriptions, streamKey);
+            closeOwnedModelAfterFailure(ownedModelRef, e);
             log.error("[AgentScope:stream] 初始化失败", e);
             try {
                 conversationService.finish(conversationId, "failed");
@@ -378,24 +412,7 @@ public class AgentScopeAssistantService {
         stringRedisTemplate.opsForValue().set(cancelKey, "1", CANCEL_FLAG_TTL);
         log.info("[cancelStream] 已设置取消标志: {}", conversationId);
 
-        StreamingEventHook streamingHook = activeStreamingHooks.get(conversationId);
-        if (streamingHook != null) {
-            streamingHook.interruptTrackedAgents();
-        }
-
-        // 1. 取消 agent.call() 的底层执行（LLM 调用 + 工具调用）
-        Disposable agentSub = agentCallSubscriptions.remove(conversationId);
-        if (agentSub != null && !agentSub.isDisposed()) {
-            agentSub.dispose();
-            log.info("已取消后台 AgentScope Agent 调用: conversationId={}", conversationId);
-        }
-
-        // 2. 取消 Redis 事件流订阅
-        Disposable sub = activeSubscriptions.remove(conversationId);
-        if (sub != null && !sub.isDisposed()) {
-            sub.dispose();
-            log.info("已取消后台 AgentScope 流订阅: conversationId={}", conversationId);
-        }
+        cancelActiveStreams(conversationId);
 
         conversationService.finish(conversationId, "cancelled");
 
@@ -605,7 +622,67 @@ public class AgentScopeAssistantService {
 
     // ========== 私有方法 ==========
 
-    private ChatModelBase getAgentScopeModel(Long modelId) {
+    private String activeStreamKey(String conversationId, String messageId) {
+        return activeStreamPrefix(conversationId) + messageId;
+    }
+
+    private String activeStreamPrefix(String conversationId) {
+        return conversationId.length() + ":" + conversationId + ":";
+    }
+
+    private void cancelActiveStreams(String conversationId) {
+        String prefix = activeStreamPrefix(conversationId);
+        activeStreamingHooks.forEach((streamKey, hook) -> {
+            if (streamKey.startsWith(prefix) && activeStreamingHooks.remove(streamKey, hook)) {
+                hook.interruptTrackedAgents();
+            }
+        });
+        disposeActiveStreams(agentCallSubscriptions, prefix, "Agent 调用", conversationId);
+        disposeActiveStreams(activeSubscriptions, prefix, "流订阅", conversationId);
+    }
+
+    private void abandonPreparedStream(
+            String streamKey,
+            Disposable.Swap agentCallHandle,
+            Disposable.Swap redisSubscriptionHandle,
+            StreamingEventHook streamingHook,
+            AtomicReference<OwnedChatModel> ownedModelRef,
+            String conversationId) {
+        agentCallSubscriptions.remove(streamKey, agentCallHandle);
+        activeSubscriptions.remove(streamKey, redisSubscriptionHandle);
+        activeStreamingHooks.remove(streamKey, streamingHook);
+        agentCallHandle.dispose();
+        redisSubscriptionHandle.dispose();
+        streamingHook.clearTrackedAgents();
+        closeOwnedModel(ownedModelRef, conversationId);
+    }
+
+    private void disposeActiveStreamKey(
+            ConcurrentHashMap<String, Disposable> streams, String streamKey) {
+        Disposable disposable = streams.remove(streamKey);
+        if (disposable != null && !disposable.isDisposed()) {
+            disposable.dispose();
+        }
+    }
+
+    private void disposeActiveStreams(
+            ConcurrentHashMap<String, Disposable> streams,
+            String prefix,
+            String streamType,
+            String conversationId) {
+        streams.forEach((streamKey, disposable) -> {
+            if (!streamKey.startsWith(prefix) || !streams.remove(streamKey, disposable)) {
+                return;
+            }
+            if (!disposable.isDisposed()) {
+                disposable.dispose();
+                log.info("已取消后台 AgentScope {}: conversationId={}, streamKey={}",
+                        streamType, conversationId, streamKey);
+            }
+        });
+    }
+
+    private AiModel resolveAgentScopeModel(Long modelId) {
         AiModel aiModel;
         if (modelId != null) {
             aiModel = aiModelService.getById(modelId);
@@ -618,7 +695,96 @@ public class AgentScopeAssistantService {
                 throw new BusinessException("未配置默认对话模型");
             }
         }
-        return agentScopeModelFactory.getOrCreate(aiModel);
+        return aiModel;
+    }
+
+    private OwnedChatModel createOwnedAgentScopeModel(
+            AiChatReqVO reqVO,
+            AiModel selectedModel,
+            String systemPrompt,
+            TransitionalToolSelection toolSelection) {
+        String definitionKey = StrUtil.blankToDefault(reqVO.getAgentType(), "ai_assistant_agent");
+        AiAgentDefinition definition = StrUtil.isNotBlank(reqVO.getAgentType())
+                ? aiAgentService.getByType(reqVO.getAgentType())
+                : null;
+        String agentName = definition != null && StrUtil.isNotBlank(definition.getName())
+                ? definition.getName()
+                : definitionKey;
+        String description = "AgentScope kernel for " + agentName;
+        AiModel modelSnapshot = copyModel(selectedModel);
+        String modelFingerprint = agentScopeModelFactory.modelConfigFingerprint(modelSnapshot);
+        String promptVersion = AgentKernelKey.promptVersion(systemPrompt);
+        String whitelistVersion = "afv-tools-v1";
+        AgentKernelKey key = AgentKernelKey.create(
+                definitionKey,
+                modelFingerprint,
+                promptVersion,
+                toolSelection.manifest(),
+                whitelistVersion);
+        AgentKernelSpec spec = new AgentKernelSpec(
+                key,
+                modelSnapshot,
+                definitionKey,
+                agentName,
+                description,
+                systemPrompt,
+                999,
+                toolSelection.manifest(),
+                toolSelection.whitelist(),
+                whitelistVersion);
+        return agentScopeModelFactory.create(spec);
+    }
+
+    private AiModel copyModel(AiModel source) {
+        return AiModel.builder()
+                .id(source.getId())
+                .name(source.getName())
+                .code(source.getCode())
+                .modelFamily(source.getModelFamily())
+                .modelProtocol(source.getModelProtocol())
+                .modelType(source.getModelType())
+                .icon(source.getIcon())
+                .description(source.getDescription())
+                .sort(source.getSort())
+                .status(source.getStatus())
+                .config(source.getConfig())
+                .maxConcurrency(source.getMaxConcurrency())
+                .apiConfigId(source.getApiConfigId())
+                .defaultModel(source.getDefaultModel())
+                .supportVision(source.getSupportVision())
+                .supportReasoning(source.getSupportReasoning())
+                .contextWindow(source.getContextWindow())
+                .deletedId(source.getDeletedId())
+                .build();
+    }
+
+    private void closeOwnedModel(
+            AtomicReference<OwnedChatModel> ownedModelRef, String conversationId) {
+        OwnedChatModel ownedModel = ownedModelRef.getAndSet(null);
+        if (ownedModel == null) {
+            return;
+        }
+        try {
+            ownedModel.close();
+        } catch (Throwable closeFailure) {
+            log.error("[AgentScope:stream] Failed to close owned model: conversationId={}",
+                    conversationId, closeFailure);
+        }
+    }
+
+    private void closeOwnedModelAfterFailure(
+            AtomicReference<OwnedChatModel> ownedModelRef, Throwable primaryFailure) {
+        OwnedChatModel ownedModel = ownedModelRef.getAndSet(null);
+        if (ownedModel == null) {
+            return;
+        }
+        try {
+            ownedModel.close();
+        } catch (Throwable closeFailure) {
+            if (closeFailure != primaryFailure) {
+                primaryFailure.addSuppressed(closeFailure);
+            }
+        }
     }
 
     private String getSystemPrompt(AiChatReqVO reqVO) {
@@ -651,27 +817,17 @@ public class AgentScopeAssistantService {
     /**
      * 构建 Toolkit（含普通工具和子 Agent 工具）
      */
-    private Toolkit buildToolkit(AiChatReqVO reqVO, ChatModelBase model,
-            ToolExecutionContext toolExecContext,
-            StreamingEventHook streamingHook,
-            AgentCancellationToken cancellationToken) {
+    private TransitionalToolSelection selectTools(AiChatReqVO reqVO) {
         String agentType = reqVO.getAgentType();
-
-        // 检查是否启用工具
         if (StrUtil.isNotBlank(agentType)) {
-            AiAgentDefinition agentDef = aiAgentService.getByType(agentType);
-            if (agentDef != null && !Integer.valueOf(1).equals(agentDef.getEnableTools())) {
-                return null;
+            AiAgentDefinition agentDefinition = aiAgentService.getByType(agentType);
+            if (agentDefinition != null && !Integer.valueOf(1).equals(agentDefinition.getEnableTools())) {
+                return TransitionalToolSelection.empty();
             }
         }
 
-        // 获取工具列表
-        List<ToolExecutor> enabledTools = aiToolConfigService.getEnabledToolsByAgent(agentType);
-        List<AiAgentDefinition.SubAgentToolDef> subAgentTools = aiToolConfigService.getSubAgentTools(agentType);
-
-        // 与前端 enabledTools 取交集
         List<ToolExecutor> filteredTools = new ArrayList<>();
-        for (ToolExecutor tool : enabledTools) {
+        for (ToolExecutor tool : aiToolConfigService.getEnabledToolsByAgent(agentType)) {
             if (CollUtil.isNotEmpty(reqVO.getEnabledTools())
                     && !reqVO.getEnabledTools().contains(tool.getToolName())) {
                 continue;
@@ -680,42 +836,92 @@ public class AgentScopeAssistantService {
         }
 
         List<AiAgentDefinition.SubAgentToolDef> filteredSubAgents = new ArrayList<>();
-        for (AiAgentDefinition.SubAgentToolDef subTool : subAgentTools) {
+        for (AiAgentDefinition.SubAgentToolDef subAgent
+                : aiToolConfigService.getSubAgentTools(agentType)) {
             if (CollUtil.isNotEmpty(reqVO.getEnabledTools())
-                    && !reqVO.getEnabledTools().contains(subTool.getToolName())) {
+                    && !reqVO.getEnabledTools().contains(subAgent.getToolName())) {
                 continue;
             }
-            filteredSubAgents.add(subTool);
+            filteredSubAgents.add(subAgent);
         }
 
-        if (filteredTools.isEmpty() && filteredSubAgents.isEmpty()) {
+        List<AgentKernelToolManifest> manifest = new ArrayList<>();
+        Set<String> whitelist = new LinkedHashSet<>();
+        for (ToolExecutor tool : filteredTools) {
+            addToolManifest(manifest, whitelist, tool.getToolName(), tool.getParametersSchema());
+        }
+        for (AiAgentDefinition.SubAgentToolDef subAgent : filteredSubAgents) {
+            addToolManifest(manifest, whitelist, subAgent.getToolName(), subAgent.getParametersSchema());
+        }
+        return new TransitionalToolSelection(
+                filteredTools, filteredSubAgents, manifest, whitelist);
+    }
+
+    private void addToolManifest(
+            List<AgentKernelToolManifest> manifest,
+            Set<String> whitelist,
+            String toolName,
+            String parametersSchema) {
+        if (!whitelist.add(toolName)) {
+            throw new IllegalArgumentException("Duplicate AgentScope tool name: " + toolName);
+        }
+        String schema = StrUtil.isNotBlank(parametersSchema)
+                ? parametersSchema
+                : "{\"type\":\"object\",\"properties\":{}}";
+        manifest.add(new AgentKernelToolManifest(
+                toolName,
+                AgentKernelToolManifest.schemaSha256(schema),
+                false,
+                false));
+    }
+
+    private Toolkit buildSelectedToolkit(
+            TransitionalToolSelection selection,
+            AiChatReqVO reqVO,
+            ChatModelBase model,
+            ToolExecutionContext toolExecContext,
+            StreamingEventHook streamingHook,
+            AgentCancellationToken cancellationToken) {
+        if (selection.tools().isEmpty() && selection.subAgents().isEmpty()) {
             return null;
         }
 
-        // 创建 Toolkit（启用并行执行）
         Toolkit toolkit = new Toolkit(ToolkitConfig.builder()
-                .parallel(true) // 并行执行多工具
+                .parallel(true)
                 .executionConfig(ExecutionConfig.builder()
                         .timeout(Duration.ofMinutes(20))
                         .build())
                 .build());
-
-        // 注册普通工具（通过 AgentScopeToolAdapter 适配）
-        for (ToolExecutor tool : filteredTools) {
-            AgentScopeToolAdapter adapter = new AgentScopeToolAdapter(tool, toolExecContext, cancellationToken);
-            toolkit.registerAgentTool(adapter);
+        for (ToolExecutor tool : selection.tools()) {
+            toolkit.registerAgentTool(
+                    new AgentScopeToolAdapter(tool, toolExecContext, cancellationToken));
         }
-
-        // 注册子 Agent 工具
-        for (AiAgentDefinition.SubAgentToolDef subAgentToolDef : filteredSubAgents) {
-            registerSubAgentTool(toolkit, subAgentToolDef, model, reqVO, toolExecContext, streamingHook, cancellationToken);
+        for (AiAgentDefinition.SubAgentToolDef subAgent : selection.subAgents()) {
+            registerSubAgentTool(
+                    toolkit, subAgent, model, reqVO, toolExecContext, streamingHook, cancellationToken);
         }
-
-        log.info("AgentScope Toolkit 构建完成: 普通工具={}, 子Agent工具={}, 总计={}",
-                filteredTools.size(), filteredSubAgents.size(),
-                filteredTools.size() + filteredSubAgents.size());
-
+        log.info("AgentScope Toolkit ready: tools={}, subAgents={}, total={}",
+                selection.tools().size(),
+                selection.subAgents().size(),
+                selection.tools().size() + selection.subAgents().size());
         return toolkit;
+    }
+
+    private record TransitionalToolSelection(
+            List<ToolExecutor> tools,
+            List<AiAgentDefinition.SubAgentToolDef> subAgents,
+            List<AgentKernelToolManifest> manifest,
+            Set<String> whitelist) {
+        private TransitionalToolSelection {
+            tools = List.copyOf(tools);
+            subAgents = List.copyOf(subAgents);
+            manifest = List.copyOf(manifest);
+            whitelist = Set.copyOf(whitelist);
+        }
+
+        private static TransitionalToolSelection empty() {
+            return new TransitionalToolSelection(List.of(), List.of(), List.of(), Set.of());
+        }
     }
 
     /**

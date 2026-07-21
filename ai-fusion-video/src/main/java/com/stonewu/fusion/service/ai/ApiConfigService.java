@@ -7,7 +7,6 @@ import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.mapper.ai.ApiConfigMapper;
-import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -22,7 +21,6 @@ public class ApiConfigService {
 
     private final ApiConfigMapper apiConfigMapper;
     private final ObjectProvider<ChatModelFactory> chatModelFactoryProvider;
-    private final ObjectProvider<AgentScopeModelFactory> agentScopeModelFactoryProvider;
 
     @Transactional
     public Long createApiConfig(ApiConfig apiConfig) {
@@ -185,10 +183,6 @@ public class ApiConfigService {
         ChatModelFactory chatModelFactory = chatModelFactoryProvider.getIfAvailable();
         if (chatModelFactory != null) {
             chatModelFactory.evictAll();
-        }
-        AgentScopeModelFactory agentScopeModelFactory = agentScopeModelFactoryProvider.getIfAvailable();
-        if (agentScopeModelFactory != null) {
-            agentScopeModelFactory.evictAll();
         }
     }
 }

@@ -1,11 +1,14 @@
 package com.stonewu.fusion.config;
 
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelToolkitResources;
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelToolRegistry;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeStateStoreFactory;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import com.stonewu.fusion.service.ai.agentscope.state.InMemoryStateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import io.agentscope.core.state.AgentStateStore;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,6 +28,12 @@ public class AgentScopeRuntimeConfiguration {
     @Bean
     public StateStoreFailureGuard stateStoreFailureGuard() {
         return new InMemoryStateStoreFailureGuard();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(AgentKernelToolRegistry.class)
+    public AgentKernelToolRegistry agentKernelToolRegistry() {
+        return (spec, toolkit) -> AgentKernelToolkitResources.none();
     }
 
     @Bean
