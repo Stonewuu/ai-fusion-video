@@ -42,6 +42,9 @@
 		<dashscope-sdk-java.version>2.22.16</dashscope-sdk-java.version>
 		<agentscope.version>2.0.0</agentscope.version>
 		<victools.version>4.38.0</victools.version>
+		<testcontainers.version>1.21.3</testcontainers.version>
+		<awaitility.version>4.3.0</awaitility.version>
+		<maven-failsafe.version>3.5.4</maven-failsafe.version>
 	</properties>
 	<dependencyManagement>
 		<dependencies>
@@ -131,6 +134,24 @@
 		<dependency>
 			<groupId>org.springframework.security</groupId>
 			<artifactId>spring-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>${testcontainers.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>mysql</artifactId>
+			<version>${testcontainers.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
+			<version>${awaitility.version}</version>
 			<scope>test</scope>
 		</dependency>
 
@@ -334,4 +355,47 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<profile>
+			<id>agentscope-integration</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-failsafe-plugin</artifactId>
+						<version>${maven-failsafe.version}</version>
+						<executions>
+							<execution>
+								<goals>
+									<goal>integration-test</goal>
+									<goal>verify</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<includes>
+								<include>**/AgentPersistenceMigrationIT.java</include>
+								<include>**/AgentMessageAllocatorIT.java</include>
+								<include>**/AgentRunStartIT.java</include>
+								<include>**/AgentJournalTerminalIT.java</include>
+								<include>**/AgentModelCallUsageIT.java</include>
+								<include>**/AgentOutboxMultiInstanceIT.java</include>
+								<include>**/AgentProjectionRecoveryIT.java</include>
+								<include>**/PlatformSubAgentRunServiceIT.java</include>
+								<include>**/AgentWaitingStateIT.java</include>
+								<include>**/AgentFencingCancellationIT.java</include>
+								<include>**/AgentOwnedJournalTakeoverIT.java</include>
+								<include>**/AgentReplayLiveIT.java</include>
+								<include>**/AgentIntegrationProfileSentinelIT.java</include>
+								<include>**/AgentDurableRuntimeMultiInstanceIT.java</include>
+							</includes>
+							<failIfNoTests>true</failIfNoTests>
+							<failIfNoSpecifiedTests>true</failIfNoSpecifiedTests>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>
