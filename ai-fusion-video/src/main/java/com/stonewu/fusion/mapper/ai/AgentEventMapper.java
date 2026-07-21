@@ -128,6 +128,21 @@ public interface AgentEventMapper extends BaseMapper<AgentEvent> {
             @Param("limit") int limit);
 
     @Select("""
+            SELECT *
+            FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+            WHERE run_id = #{runId}
+              AND sequence_no > #{afterSequence}
+              AND sequence_no <= #{throughSequence}
+            ORDER BY sequence_no
+            LIMIT #{limit}
+            """)
+    List<AgentEvent> selectReplayRange(
+            @Param("runId") String runId,
+            @Param("afterSequence") long afterSequence,
+            @Param("throughSequence") long throughSequence,
+            @Param("limit") int limit);
+
+    @Select("""
             SELECT COALESCE(MAX(sequence_no), 0)
             FROM afv_agent_event FORCE INDEX (idx_agent_event_projection)
             WHERE run_id = #{runId}

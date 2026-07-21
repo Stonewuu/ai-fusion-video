@@ -1,6 +1,8 @@
 package com.stonewu.fusion.repository.ai;
 
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.entity.ai.AgentEvent;
 import com.stonewu.fusion.entity.ai.AgentRun;
@@ -22,6 +24,8 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -94,6 +98,59 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
             return Optional.empty();
         }
         return Optional.of(insertTerminal(run, request, databaseNow));
+    }
+
+    @Override
+    public ReplaySnapshot loadReplaySnapshot(String runId) {
+        String safeRunId = requireRunId(runId);
+        AgentRun run = runMapper.selectByRunId(safeRunId);
+        if (run == null) {
+            throw new IllegalArgumentException("Agent run does not exist: " + safeRunId);
+        }
+        Long nextSequence = run.getNextSequence();
+        if (nextSequence == null || nextSequence < 1) {
+            throw new IllegalStateException(
+                    "Agent run has an invalid next sequence: " + safeRunId);
+        }
+        return new ReplaySnapshot(nextSequence - 1, run.getTerminalSequence());
+    }
+
+    @Override
+    public List<CommittedAgentEvent> loadReplayPage(
+            String runId,
+            long afterSequence,
+            long throughSequence,
+            int limit) {
+        String safeRunId = requireRunId(runId);
+        if (afterSequence < 0) {
+            throw new IllegalArgumentException("afterSequence must not be negative");
+        }
+        if (throughSequence < afterSequence) {
+            throw new IllegalArgumentException(
+                    "throughSequence must not precede afterSequence");
+        }
+        if (limit <= 0 || limit > 1000) {
+            throw new IllegalArgumentException("limit must be between 1 and 1000");
+        }
+        if (throughSequence == afterSequence) {
+            return List.of();
+        }
+
+        List<AgentEvent> rows = eventMapper.selectReplayRange(
+                safeRunId, afterSequence, throughSequence, limit);
+        if (rows.isEmpty()) {
+            throw replayGap(safeRunId, afterSequence + 1, null);
+        }
+        List<CommittedAgentEvent> committed = new ArrayList<>(rows.size());
+        long expected = afterSequence + 1;
+        for (AgentEvent row : rows) {
+            if (!Objects.equals(row.getSequenceNo(), expected)) {
+                throw replayGap(safeRunId, expected, row.getSequenceNo());
+            }
+            committed.add(toCommitted(row));
+            expected++;
+        }
+        return List.copyOf(committed);
     }
 
     private boolean isCurrentOwner(
@@ -200,6 +257,7 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
                 .publishRequired(publishRequired)
                 .publishStatus(publishRequired ? "PENDING" : "NOT_REQUIRED")
                 .nextPublishAttemptAt(publishRequired ? databaseNow : null)
+                .createTime(databaseNow)
                 .build();
         if (eventMapper.insert(row) != 1) {
             throw new IllegalStateException(
@@ -243,6 +301,71 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
                 databaseNow.toInstant(ZoneOffset.UTC));
     }
 
+    private CommittedAgentEvent toCommitted(AgentEvent row) {
+        AgentEventEnvelope envelope = new AgentEventEnvelope(
+                row.getRawEventId(),
+                row.getRawEventType(),
+                row.getSource(),
+                row.getReplyId(),
+                row.getBlockId(),
+                row.getToolCallId(),
+                row.getParentToolCallId(),
+                row.getAgentName(),
+                row.getOutputType(),
+                replayPayload(row),
+                requireDatabaseInstant(row.getEventCreatedAt(), "eventCreatedAt", row));
+        return new CommittedAgentEvent(
+                requirePositive(row.getId(), "id", row),
+                row.getRunId(),
+                requirePositive(row.getSequenceNo(), "sequenceNo", row),
+                envelope,
+                requireDatabaseInstant(row.getCreateTime(), "createTime", row));
+    }
+
+    private JsonNode replayPayload(AgentEvent row) {
+        if (row.getPayloadJson() == null) {
+            throw new IllegalStateException(
+                    "Agent event payload is missing: eventId=" + row.getId());
+        }
+        try {
+            JsonNode payload = objectMapper.readTree(row.getPayloadJson());
+            if (payload == null) {
+                throw new IllegalStateException(
+                        "Agent event payload is empty: eventId=" + row.getId());
+            }
+            return payload;
+        } catch (JsonProcessingException invalidPayload) {
+            throw new IllegalStateException(
+                    "Agent event payload is invalid: eventId=" + row.getId(),
+                    invalidPayload);
+        }
+    }
+
+    private Instant requireDatabaseInstant(
+            LocalDateTime value, String field, AgentEvent row) {
+        if (value == null) {
+            throw new IllegalStateException(
+                    "Agent event " + field + " is missing: eventId=" + row.getId());
+        }
+        return value.toInstant(ZoneOffset.UTC);
+    }
+
+    private long requirePositive(Long value, String field, AgentEvent row) {
+        if (value == null || value <= 0) {
+            throw new IllegalStateException(
+                    "Agent event " + field + " is invalid: eventId=" + row.getId());
+        }
+        return value;
+    }
+
+    private IllegalStateException replayGap(
+            String runId, long expected, Long actual) {
+        return new IllegalStateException(
+                "Committed Agent event sequence gap: runId=" + runId
+                        + ", expected=" + expected
+                        + (actual == null ? "" : ", actual=" + actual));
+    }
+
     private long requireNextSequence(AgentRun run) {
         Long sequence = run.getNextSequence();
         if (sequence == null || sequence < 1) {
@@ -262,15 +385,20 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
 
     private void requireOwnerArguments(
             String runId, String ownerInstanceId, long ownerEpoch) {
-        if (runId == null || runId.isBlank()) {
-            throw new IllegalArgumentException("runId must not be blank");
-        }
+        requireRunId(runId);
         if (ownerInstanceId == null || ownerInstanceId.isBlank()) {
             throw new IllegalArgumentException("ownerInstanceId must not be blank");
         }
         if (ownerEpoch <= 0) {
             throw new IllegalArgumentException("ownerEpoch must be positive");
         }
+    }
+
+    private String requireRunId(String runId) {
+        if (runId == null || runId.isBlank()) {
+            throw new IllegalArgumentException("runId must not be blank");
+        }
+        return runId;
     }
 
     private AgentEventEnvelope sanitize(AgentEventEnvelope envelope) {
