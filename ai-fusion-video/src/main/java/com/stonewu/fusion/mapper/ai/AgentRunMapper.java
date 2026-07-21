@@ -30,6 +30,58 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
             """)
     AgentRun selectByRunId(@Param("runId") String runId);
 
+    @Select("""
+            SELECT r.*
+            FROM afv_agent_run r FORCE INDEX (uk_agent_run_id)
+            INNER JOIN afv_agent_conversation c
+              ON c.conversation_id = r.conversation_id
+             AND c.deleted = 0
+            WHERE r.run_id = #{runId}
+              AND r.user_id = #{userId}
+              AND c.user_id = #{userId}
+            LIMIT 1
+            """)
+    AgentRun selectAuthorizedByRunId(
+            @Param("runId") String runId,
+            @Param("userId") long userId);
+
+    @Select("""
+            SELECT r.*
+            FROM afv_agent_run r FORCE INDEX (idx_agent_run_conversation_status)
+            INNER JOIN afv_agent_conversation c
+              ON c.conversation_id = r.conversation_id
+             AND c.deleted = 0
+            WHERE r.conversation_id = #{conversationId}
+              AND r.parent_run_id IS NULL
+              AND r.user_id = #{userId}
+              AND c.user_id = #{userId}
+            ORDER BY
+              CASE WHEN r.status IN (
+                'RUNNING', 'WAITING_CONFIRMATION', 'WAITING_EXTERNAL',
+                'CANCEL_REQUESTED') THEN 0 ELSE 1 END,
+              r.id DESC
+            LIMIT 1
+            """)
+    AgentRun selectAuthorizedPreferredRootByConversation(
+            @Param("conversationId") String conversationId,
+            @Param("userId") long userId);
+
+    @Select("""
+            SELECT r.*
+            FROM afv_agent_run r FORCE INDEX (idx_agent_run_user_status)
+            INNER JOIN afv_agent_conversation c
+              ON c.conversation_id = r.conversation_id
+             AND c.deleted = 0
+            WHERE r.user_id = #{userId}
+              AND c.user_id = #{userId}
+              AND r.parent_run_id IS NULL
+              AND r.status IN (
+                'RUNNING', 'WAITING_CONFIRMATION', 'WAITING_EXTERNAL',
+                'CANCEL_REQUESTED')
+            ORDER BY r.update_time DESC, r.id DESC
+            """)
+    List<AgentRun> selectAuthorizedRunningRoots(@Param("userId") long userId);
+
     @Select("SELECT UTC_TIMESTAMP(3)")
     LocalDateTime selectDatabaseNow();
 

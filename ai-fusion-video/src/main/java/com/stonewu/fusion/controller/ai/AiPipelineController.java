@@ -3,26 +3,34 @@ package com.stonewu.fusion.controller.ai;
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
-import com.stonewu.fusion.entity.ai.AgentConversation;
-import com.stonewu.fusion.service.ai.AgentConversationService;
+import com.stonewu.fusion.controller.ai.vo.PipelineRunStatusRespVO;
+import com.stonewu.fusion.controller.ai.vo.RunningPipelineRunRespVO;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeAssistantService;
+import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
+import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
+import com.stonewu.fusion.service.ai.run.CancellationCoordinator;
+import com.stonewu.fusion.service.ai.run.PipelineCursorParser;
+import com.stonewu.fusion.service.ai.run.model.RunCursor;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.http.codec.ServerSentEvent;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
 import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 
-/**
- * AI Pipeline Controller（单次自动执行的工作流）
- * <p>
- * 与 AiAssistantController（多轮对话）分离，
- * 便于后续独立调整 pipeline 的参数、限流、鉴权等逻辑。
- */
+/** Durable, user-authorized pipeline HTTP and SSE API. */
 @Tag(name = "AI Pipeline")
 @RestController
 @RequestMapping("/api/ai/pipeline")
@@ -30,38 +38,90 @@ import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 public class AiPipelineController {
 
     private final AgentScopeAssistantService aiAssistantService;
-    private final AgentConversationService conversationService;
+    private final AgentRunQueryService runQueries;
+    private final AgentRunReplayService replayService;
+    private final PipelineCursorParser cursorParser;
+    private final CancellationCoordinator cancellations;
 
     @Operation(summary = "启动 Pipeline（SSE 流式）")
     @PostMapping(value = "/run", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<AiChatStreamRespVO> run(@RequestBody AiChatReqVO reqVO) {
-        Long userId = requireCurrentUserId();
-        return aiAssistantService.stream(reqVO, userId);
+    public Flux<ServerSentEvent<AiChatStreamRespVO>> run(
+            @RequestBody AiChatReqVO request) {
+        long currentUserId = requireCurrentUserId();
+        return runQueries.authorizeConversationForStart(
+                        request.getConversationId(), currentUserId)
+                .thenMany(Flux.defer(() -> aiAssistantService.stream(
+                        request, currentUserId)))
+                .map(this::toSse);
     }
 
     @Operation(summary = "取消 Pipeline")
     @PostMapping("/cancel")
-    public CommonResult<Boolean> cancel(@RequestParam String conversationId) {
-        aiAssistantService.cancelStream(conversationId);
-        return CommonResult.success(true);
+    public Mono<CommonResult<Boolean>> cancel(
+            @RequestParam(required = false) String runId,
+            @RequestParam(required = false) String conversationId) {
+        long currentUserId = requireCurrentUserId();
+        return runQueries.resolveAuthorizedTarget(
+                        runId, conversationId, currentUserId)
+                .flatMap(run -> cancellations.cancel(
+                        run.getRunId(), currentUserId))
+                .thenReturn(CommonResult.success(true));
     }
 
-    @Operation(summary = "重连 Pipeline（页面刷新后恢复 SSE）")
+    @Operation(summary = "重连 Pipeline")
     @GetMapping(value = "/reconnect", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public Flux<AiChatStreamRespVO> reconnect(@RequestParam String conversationId) {
-        return aiAssistantService.reconnectStream(conversationId);
+    public Flux<ServerSentEvent<AiChatStreamRespVO>> reconnect(
+            @RequestParam(required = false) String runId,
+            @RequestParam(required = false) String conversationId,
+            @RequestParam(required = false) Long afterSequence,
+            @RequestHeader(name = "Last-Event-ID", required = false)
+            String lastEventId) {
+        long currentUserId = requireCurrentUserId();
+        return runQueries.resolveAuthorizedTarget(
+                        runId, conversationId, currentUserId)
+                .flatMapMany(run -> {
+                    RunCursor cursor = cursorParser.parse(
+                            run.getRunId(), afterSequence, lastEventId);
+                    return replayService.replayThenLive(
+                                    cursor.runId(), cursor.afterSequence())
+                            .concatMap(event -> runQueries.project(run, event))
+                            .map(this::toSse);
+                });
     }
 
-    @Operation(summary = "查询 Pipeline 流状态")
+    @Operation(summary = "查询 Pipeline 运行状态")
     @GetMapping("/status")
-    public CommonResult<String> getStatus(@RequestParam String conversationId) {
-        return CommonResult.success(aiAssistantService.getStreamStatus(conversationId));
+    public Mono<CommonResult<PipelineRunStatusRespVO>> getStatus(
+            @RequestParam(required = false) String runId,
+            @RequestParam(required = false) String conversationId) {
+        long currentUserId = requireCurrentUserId();
+        return runQueries.status(runId, conversationId, currentUserId)
+                .map(CommonResult::success);
     }
 
     @Operation(summary = "查询运行中的 Pipeline 列表")
     @GetMapping("/running")
-    public CommonResult<List<AgentConversation>> listRunning() {
-        Long userId = requireCurrentUserId();
-        return CommonResult.success(conversationService.listRunning(userId));
+    public Mono<CommonResult<List<RunningPipelineRunRespVO>>> listRunning() {
+        long currentUserId = requireCurrentUserId();
+        return runQueries.listRunning(currentUserId)
+                .map(CommonResult::success);
+    }
+
+    private ServerSentEvent<AiChatStreamRespVO> toSse(
+            AiChatStreamRespVO event) {
+        ServerSentEvent.Builder<AiChatStreamRespVO> builder =
+                ServerSentEvent.<AiChatStreamRespVO>builder(event)
+                        .event("pipeline-event");
+        if (event.getRunId() == null && event.getSequence() == null) {
+            return builder.build();
+        }
+        if (event.getRunId() == null || event.getRunId().isBlank()
+                || event.getSequence() == null || event.getSequence() <= 0) {
+            throw new IllegalStateException(
+                    "Pipeline SSE event has incomplete durable identity");
+        } else {
+            builder.id(event.getRunId() + ':' + event.getSequence());
+        }
+        return builder.build();
     }
 }

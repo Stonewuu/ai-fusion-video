@@ -3,6 +3,7 @@ package com.stonewu.fusion.controller.ai.vo;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -11,6 +12,15 @@ import java.util.List;
 @Data
 @Accessors(chain = true)
 public class AiChatStreamRespVO {
+
+    /** Durable wire schema version. */
+    private Integer schemaVersion;
+
+    /** Authoritative Agent run ID. */
+    private String runId;
+
+    /** Monotonic sequence within runId. */
+    private Long sequence;
 
     /** 消息 ID */
     private String messageId;
@@ -60,11 +70,46 @@ public class AiChatStreamRespVO {
     /** 错误信息 */
     private String error;
 
+    /** Sanitized AgentScope event source. */
+    private String source;
+
+    /** AgentScope reply identity when present. */
+    private String replyId;
+
+    /** AgentScope block identity when present. */
+    private String blockId;
+
+    /** Stable raw event identity. */
+    private String rawEventId;
+
+    /** Exhaustively mapped raw event discriminator. */
+    private String rawEventType;
+
+    /** Original event creation time. */
+    private Instant createdAt;
+
+    /** Platform control discriminator, currently USER_CONFIRM_REQUIRED. */
+    private String controlType;
+
+    /** Server-persisted tool set for an actionable confirmation. */
+    private List<PendingToolCallVO> pendingToolCalls;
+
+    /** Server-authoritative action expiry. */
+    private Instant expiresAt;
+
     @Data
     @Accessors(chain = true)
     public static class ToolCallVO {
         private String id;
         private String name;
         private String arguments;
+    }
+
+    @Data
+    @Accessors(chain = true)
+    public static class PendingToolCallVO {
+        private String toolCallId;
+        private String toolName;
+        private String argumentsPreview;
     }
 }

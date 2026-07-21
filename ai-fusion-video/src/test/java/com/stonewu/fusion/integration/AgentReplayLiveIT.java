@@ -2,6 +2,8 @@ package com.stonewu.fusion.integration;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.controller.ai.vo.PipelineRunStatusRespVO;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.enums.ai.AgentTerminalOutputType;
 import com.stonewu.fusion.service.ai.AgentConversationService;
@@ -10,6 +12,7 @@ import com.stonewu.fusion.service.ai.run.AgentEventJournal;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentRunRedisSignalService;
 import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
+import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
 import com.stonewu.fusion.service.ai.run.RunTerminalCoordinator;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
@@ -44,6 +47,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers(disabledWithoutDocker = false)
@@ -77,6 +81,9 @@ class AgentReplayLiveIT {
 
     @Autowired
     private AgentRunReplayService replayService;
+
+    @Autowired
+    private AgentRunQueryService queryService;
 
     @Autowired
     private AgentRunRedisSignalService signals;
@@ -204,6 +211,48 @@ class AgentReplayLiveIT {
                 .extracting(CommittedAgentEvent::sequence)
                 .containsExactly(1L, 2L);
         assertThat(events.getLast().outputType()).isEqualTo("DONE");
+    }
+
+    @Test
+    void queryApiUsesJoinedOwnershipAndAuthoritativeRunSnapshots() {
+        StartedAgentRun run = startRoot("query-api");
+        append(run, contentEvent(1));
+
+        assertThat(await(queryService.requireAuthorizedRun(run.runId(), 42L))
+                .getConversationId()).isEqualTo(run.conversationId());
+        assertThatThrownBy(() -> await(queryService.requireAuthorizedRun(
+                run.runId(), 99L)))
+                .isInstanceOf(BusinessException.class)
+                .satisfies(failure -> assertThat(
+                        ((BusinessException) failure).getCode()).isEqualTo(404));
+
+        PipelineRunStatusRespVO running = await(queryService.status(
+                run.runId(), null, 42L));
+        assertThat(running.status()).isEqualTo("RUNNING");
+        assertThat(running.lastSequence()).isEqualTo(1L);
+        assertThat(running.terminalEvent()).isNull();
+        assertThat(await(queryService.listRunning(42L)))
+                .singleElement()
+                .satisfies(snapshot -> {
+                    assertThat(snapshot.runId()).isEqualTo(run.runId());
+                    assertThat(snapshot.conversationId())
+                            .isEqualTo(run.conversationId());
+                    assertThat(snapshot.lastSequence()).isEqualTo(1L);
+                });
+
+        CommittedAgentEvent terminal = await(terminals.terminateOwned(
+                completed(run), run.ownerInstanceId(), run.ownerEpoch()))
+                .orElseThrow();
+        PipelineRunStatusRespVO completed = await(queryService.status(
+                run.runId(), null, 42L));
+        assertThat(completed.status()).isEqualTo("COMPLETED");
+        assertThat(completed.lastSequence()).isEqualTo(terminal.sequence());
+        assertThat(completed.terminalEvent()).isNotNull();
+        assertThat(completed.terminalEvent().getRunId()).isEqualTo(run.runId());
+        assertThat(completed.terminalEvent().getSequence())
+                .isEqualTo(terminal.sequence());
+        assertThat(completed.terminalEvent().getOutputType()).isEqualTo("DONE");
+        assertThat(await(queryService.listRunning(42L))).isEmpty();
     }
 
     private CommittedAgentEvent append(
