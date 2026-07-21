@@ -23,11 +23,9 @@ import io.agentscope.core.ReActAgent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.model.ExecutionConfig;
-import io.agentscope.core.model.Model;
-import io.agentscope.core.session.mysql.MysqlSession;
+import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.ToolkitConfig;
-import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -73,17 +71,6 @@ public class AgentScopeAssistantService {
     private final AgentScopeModelFactory agentScopeModelFactory;
     private final StringRedisTemplate stringRedisTemplate;
     private final AiStreamRedisService aiStreamRedisService;
-    private final javax.sql.DataSource dataSource;
-
-    /** AgentScope MySQL Session（子 Agent 会话持久化） */
-    private MysqlSession mysqlSession;
-
-    @PostConstruct
-    public void init() {
-        this.mysqlSession = new MysqlSession(dataSource, true);
-        log.info("AgentScope MysqlSession 初始化完成（createIfNotExist=true）");
-    }
-
     @PreDestroy
     public void shutdownActiveAgentScopeStreams() {
         int hookCount = activeStreamingHooks.size();
@@ -152,7 +139,7 @@ public class AgentScopeAssistantService {
 
         try {
             // 1. 获取 AgentScope Model
-            Model model = getAgentScopeModel(reqVO.getModelId());
+            ChatModelBase model = getAgentScopeModel(reqVO.getModelId());
 
             // 2. 获取系统提示词
             String systemPrompt = getSystemPrompt(reqVO);
@@ -618,7 +605,7 @@ public class AgentScopeAssistantService {
 
     // ========== 私有方法 ==========
 
-    private Model getAgentScopeModel(Long modelId) {
+    private ChatModelBase getAgentScopeModel(Long modelId) {
         AiModel aiModel;
         if (modelId != null) {
             aiModel = aiModelService.getById(modelId);
@@ -664,7 +651,7 @@ public class AgentScopeAssistantService {
     /**
      * 构建 Toolkit（含普通工具和子 Agent 工具）
      */
-    private Toolkit buildToolkit(AiChatReqVO reqVO, Model model,
+    private Toolkit buildToolkit(AiChatReqVO reqVO, ChatModelBase model,
             ToolExecutionContext toolExecContext,
             StreamingEventHook streamingHook,
             AgentCancellationToken cancellationToken) {
@@ -736,7 +723,7 @@ public class AgentScopeAssistantService {
      */
     private void registerSubAgentTool(Toolkit toolkit,
             AiAgentDefinition.SubAgentToolDef subAgentToolDef,
-            Model model,
+            ChatModelBase model,
             AiChatReqVO reqVO,
             ToolExecutionContext toolExecContext,
             StreamingEventHook streamingHook,

@@ -5,7 +5,7 @@ import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.ai.model.RemoteModelMetadata;
-import io.agentscope.core.model.Model;
+import io.agentscope.core.model.ChatModelBase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Service;
@@ -28,7 +28,7 @@ public class AiProviderService {
         return providerRegistry.getProvider(context).createChatModel(context);
     }
 
-    public Model createAgentScopeModel(AiModel model) {
+    public ChatModelBase createAgentScopeModel(AiModel model) {
         AiProviderContext context = contextFactory.createForModel(model);
         return providerRegistry.getProvider(context).createAgentScopeModel(context);
     }

@@ -1,7 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope;
 
 import com.stonewu.fusion.entity.ai.AiModel;
-import io.agentscope.core.model.Model;
+import io.agentscope.core.model.ChatModelBase;
 import com.stonewu.fusion.service.ai.provider.AiProviderService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -24,12 +24,12 @@ public class AgentScopeModelFactory {
     private final AiProviderService aiProviderService;
 
     /** 缓存已创建的 AgentScope Model 实例（按 AiModel.id 缓存） */
-    private final Map<Long, Model> modelCache = new ConcurrentHashMap<>();
+    private final Map<Long, ChatModelBase> modelCache = new ConcurrentHashMap<>();
 
     /**
      * 根据 AiModel 配置创建或返回缓存的 AgentScope Model
      */
-    public Model getOrCreate(AiModel model) {
+    public ChatModelBase getOrCreate(AiModel model) {
         return modelCache.computeIfAbsent(model.getId(), id -> createModel(model));
     }
 
@@ -41,7 +41,7 @@ public class AgentScopeModelFactory {
         modelCache.clear();
     }
 
-    private Model createModel(AiModel model) {
+    private ChatModelBase createModel(AiModel model) {
         return aiProviderService.createAgentScopeModel(model);
     }
 }

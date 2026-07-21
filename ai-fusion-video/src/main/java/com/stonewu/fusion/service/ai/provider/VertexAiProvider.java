@@ -14,8 +14,10 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
-import io.agentscope.core.model.Model;
+import io.agentscope.core.model.transport.ProxyConfig;
+import io.agentscope.extensions.model.gemini.GeminiChatModel;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatModel;
 import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatOptions;
@@ -83,7 +85,7 @@ public class VertexAiProvider extends AbstractAiProvider {
     }
 
     @Override
-    public Model createAgentScopeModel(AiProviderContext context) {
+    public ChatModelBase createAgentScopeModel(AiProviderContext context) {
         String projectId = getProjectId(context);
         if (StrUtil.isBlank(projectId)) {
             throw new BusinessException("Vertex AI 模型缺少 projectId 配置");
@@ -91,7 +93,24 @@ public class VertexAiProvider extends AbstractAiProvider {
 
         GoogleCredentials credentials = loadGoogleCredentials(context);
         GenerateOptions defaultOptions = buildGeminiGenerateOptions(context);
-        return VertexAgentScopeProxySupport.create(context, projectId, getLocation(context), credentials, defaultOptions);
+        GeminiChatModel.Builder builder = GeminiChatModel.builder()
+                .modelName(context.getModelName())
+                .formatter(GeminiAiProvider.agentScopeFormatter())
+                .project(projectId)
+                .location(getLocation(context))
+                .vertexAI(true)
+                .streamEnabled(true);
+        if (credentials != null) {
+            builder.credentials(credentials);
+        }
+        if (defaultOptions != null) {
+            builder.defaultOptions(defaultOptions);
+        }
+        ProxyConfig proxy = AiProxySupport.agentScopeProxyConfig(context.getApiConfig());
+        if (proxy != null) {
+            builder.proxy(proxy);
+        }
+        return builder.build();
     }
 
     @Override

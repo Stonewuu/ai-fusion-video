@@ -7,8 +7,10 @@ import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.enums.ai.AiModelTypeEnum;
 import com.stonewu.fusion.service.ai.dashscope.DashScopeGenerationSupport;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
-import io.agentscope.core.model.DashScopeChatModel.Builder;
-import io.agentscope.core.model.Model;
+import io.agentscope.core.model.ChatModelBase;
+import io.agentscope.core.model.GenerateOptions;
+import io.agentscope.core.model.transport.HttpTransport;
+import io.agentscope.extensions.model.dashscope.DashScopeChatModel.Builder;
 import org.springframework.ai.chat.model.ChatModel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -61,17 +63,20 @@ public class DashScopeAiProvider extends AbstractAiProvider {
     }
 
     @Override
-    public Model createAgentScopeModel(AiProviderContext context) {
-        Builder builder = io.agentscope.core.model.DashScopeChatModel.builder()
+    public ChatModelBase createAgentScopeModel(AiProviderContext context) {
+        GenerateOptions defaultOptions = buildGeminiGenerateOptions(context);
+        Builder builder = io.agentscope.extensions.model.dashscope.DashScopeChatModel.builder()
                 .apiKey(context.getApiKey())
                 .modelName(context.getModelName())
                 .baseUrl(DashScopeGenerationSupport.resolveRootBaseUrl(context.getBaseUrl()))
                 .stream(true);
+        if (defaultOptions != null) {
+            builder.defaultOptions(defaultOptions);
+        }
         if (isReasoningEnabled(context)) {
             builder.enableThinking(true);
         }
-        io.agentscope.core.model.transport.HttpTransport proxyTransport =
-                AiProxySupport.agentScopeHttpTransport(context.getApiConfig());
+        HttpTransport proxyTransport = AiProxySupport.agentScopeHttpTransport(context.getApiConfig());
         if (proxyTransport != null) {
             builder.httpTransport(proxyTransport);
         }

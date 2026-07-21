@@ -26,13 +26,14 @@ import io.agentscope.core.message.ThinkingBlock;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.model.ChatResponse;
+import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.ChatUsage;
 import io.agentscope.core.model.GenerateOptions;
-import io.agentscope.core.model.Model;
 import io.agentscope.core.model.ToolSchema;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -45,7 +46,7 @@ import java.util.Optional;
 
 @RequiredArgsConstructor
 @Slf4j
-public class OpenAiResponsesAgentScopeModel implements Model {
+public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
 
     private static final String DEFAULT_BASE_URL = "https://api.openai.com";
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
@@ -59,8 +60,9 @@ public class OpenAiResponsesAgentScopeModel implements Model {
     private final GenerateOptions defaultGenerateOptions;
 
     @Override
-    public Flux<ChatResponse> stream(List<Msg> messages, List<ToolSchema> tools, GenerateOptions runtimeOptions) {
-        return Flux.create(sink -> {
+    protected Flux<ChatResponse> doStream(List<Msg> messages, List<ToolSchema> tools,
+                                          GenerateOptions runtimeOptions) {
+        return Flux.<ChatResponse>create(sink -> {
             GenerateOptions effectiveOptions = mergeOptions(runtimeOptions);
             ResponseCreateParams params = buildRequestParams(messages, tools, effectiveOptions);
             Map<String, ResponseFunctionToolCall> functionCallsByItemId = new HashMap<>();
@@ -133,7 +135,7 @@ public class OpenAiResponsesAgentScopeModel implements Model {
             } finally {
                 client.close();
             }
-        });
+        }).subscribeOn(Schedulers.boundedElastic());
     }
 
     @Override

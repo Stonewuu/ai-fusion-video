@@ -1,12 +1,16 @@
 package com.stonewu.fusion.service.ai.provider;
 
 import com.stonewu.fusion.entity.ai.ApiConfig;
-import io.agentscope.core.model.AnthropicChatModel;
-import io.agentscope.core.model.Model;
+import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import io.agentscope.core.model.ChatModelBase;
+import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.transport.ProxyConfig;
+import io.agentscope.extensions.model.anthropic.AnthropicChatModel;
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
+import java.lang.reflect.Field;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,14 +32,14 @@ class AnthropicAiProviderTests {
                         .build())
                 .build();
 
-        Model model = provider.createAgentScopeModel(context);
+        ChatModelBase model = provider.createAgentScopeModel(context);
 
         assertThat(model).isInstanceOf(AnthropicChatModel.class);
         assertThat(model.getModelName()).isEqualTo("claude-sonnet-4-5-20250929");
     }
 
     @Test
-    void createAgentScopeModelSupportsProxyEnabledAnthropicModels() {
+    void createAgentScopeModelUsesOfficialOptionsAndAuthenticatedProxy() throws Exception {
         AnthropicAiProvider provider = new AnthropicAiProvider();
 
         AiProviderContext context = AiProviderContext.builder()
@@ -50,18 +54,53 @@ class AnthropicAiProviderTests {
                         .proxyType("http")
                         .proxyHost("127.0.0.1")
                         .proxyPort(7890)
+                        .proxyUsername("proxy-user")
+                        .proxyPassword("proxy-pass")
                         .build())
                 .build();
 
-        Model model = provider.createAgentScopeModel(context);
-        boolean officialProxySupported = Arrays.stream(AnthropicChatModel.Builder.class.getMethods())
-                .anyMatch(method -> method.getName().equals("proxy")
-                        && method.getParameterCount() == 1
-                        && method.getParameterTypes()[0] == ProxyConfig.class);
+        ChatModelBase model = provider.createAgentScopeModel(context);
 
-        assertThat(model).isInstanceOf(officialProxySupported
-                ? AnthropicChatModel.class
-                : ProxyAwareAnthropicChatModel.class);
+        assertThat(model).isInstanceOf(AnthropicChatModel.class);
         assertThat(model.getModelName()).isEqualTo("claude-sonnet-4-5-20250929");
+        GenerateOptions options = (GenerateOptions) readField(model, "defaultOptions");
+        assertThat(options.getThinkingBudget()).isEqualTo(2048);
+
+        Object client = readField(model, "client");
+        Object clientOptions = readField(client, "clientOptions");
+        Object httpClient = clientOptions.getClass().getMethod("httpClient").invoke(clientOptions);
+        while (!"com.anthropic.client.okhttp.OkHttpClient".equals(httpClient.getClass().getName())) {
+            httpClient = readField(httpClient, "httpClient");
+        }
+        okhttp3.OkHttpClient okHttpClient = (okhttp3.OkHttpClient) readField(httpClient, "okHttpClient");
+        Proxy proxy = okHttpClient.proxy();
+        assertThat(proxy).isNotNull();
+        InetSocketAddress address = (InetSocketAddress) proxy.address();
+        assertThat(address.getHostString()).isEqualTo("127.0.0.1");
+        assertThat(address.getPort()).isEqualTo(7890);
+
+        ProxyConfig proxyConfig = AiProxySupport.agentScopeProxyConfig(context.getApiConfig());
+        assertThat(proxyConfig.hasAuthentication()).isTrue();
+        assertThat(proxyConfig.getUsername()).isEqualTo("proxy-user");
+        assertThat(proxyConfig.getPassword()).isEqualTo("proxy-pass");
+    }
+
+    private Object readField(Object target, String fieldName) throws ReflectiveOperationException {
+        Field field = findField(target.getClass(), fieldName);
+        return field.get(target);
+    }
+
+    private Field findField(Class<?> type, String fieldName) throws NoSuchFieldException {
+        Class<?> current = type;
+        while (current != null) {
+            try {
+                Field field = current.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                return field;
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(fieldName);
     }
 }

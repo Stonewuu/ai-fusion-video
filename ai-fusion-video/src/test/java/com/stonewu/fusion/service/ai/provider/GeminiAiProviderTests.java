@@ -1,32 +1,107 @@
 package com.stonewu.fusion.service.ai.provider;
 
+import com.google.genai.types.Content;
+import com.google.genai.types.FunctionResponse;
+import com.google.genai.types.Part;
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.entity.ai.ApiConfig;
+import io.agentscope.core.formatter.Formatter;
+import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.MsgRole;
+import io.agentscope.core.message.ToolResultBlock;
+import io.agentscope.core.message.ToolUseBlock;
+import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
-import io.agentscope.core.model.GeminiChatModel;
-import io.agentscope.core.model.Model;
+import io.agentscope.extensions.model.gemini.GeminiChatModel;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.net.InetSocketAddress;
+import java.net.Proxy;
+import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class GeminiAiProviderTests {
 
     @Test
-    void createAgentScopeModelShouldEnableDynamicThinkingWhenReasoningEnabled() throws Exception {
+    void createAgentScopeModelUsesOfficialOptionsProxyAndToolResultOrdering() throws Exception {
         GeminiAiProvider provider = new GeminiAiProvider();
         AiProviderContext context = AiProviderContext.builder()
                 .platform("gemini")
                 .apiKey("test-key")
                 .modelName("gemini-2.5-flash")
                 .model(AiModel.builder().supportReasoning(true).build())
+                .config(Map.of("temperature", 0.3))
+                .apiConfig(ApiConfig.builder()
+                        .proxyType("http")
+                        .proxyHost("127.0.0.1")
+                        .proxyPort(7890)
+                        .build())
                 .build();
 
-        Model model = provider.createAgentScopeModel(context);
+        ChatModelBase model = provider.createAgentScopeModel(context);
 
         assertThat(model).isInstanceOf(GeminiChatModel.class);
-        assertThat(extractDefaultOptions((GeminiChatModel) model).getThinkingBudget()).isEqualTo(-1);
-        ((GeminiChatModel) model).close();
+        GeminiChatModel geminiModel = (GeminiChatModel) model;
+        try {
+            GenerateOptions options = extractDefaultOptions(geminiModel);
+            assertThat(options.getThinkingBudget()).isEqualTo(-1);
+            assertThat(options.getTemperature()).isEqualTo(0.3);
+
+            OkHttpClientProbe proxyProbe = extractHttpClient(geminiModel);
+            assertThat(proxyProbe.address().getHostString()).isEqualTo("127.0.0.1");
+            assertThat(proxyProbe.address().getPort()).isEqualTo(7890);
+
+            assertToolResultsFollowToolCallOrder(geminiModel);
+        } finally {
+            geminiModel.close();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private void assertToolResultsFollowToolCallOrder(GeminiChatModel model) throws Exception {
+        Formatter<Content, ?, ?> formatter = (Formatter<Content, ?, ?>) findField(
+                GeminiChatModel.class, "formatter").get(model);
+        Msg assistantToolCall = Msg.builder()
+                .role(MsgRole.ASSISTANT)
+                .content(
+                        ToolUseBlock.builder().id("call-1").name("get_project")
+                                .input(Map.of("projectId", 2)).build(),
+                        ToolUseBlock.builder().id("call-2").name("get_storyboard")
+                                .input(Map.of("storyboardId", 11)).build())
+                .build();
+        Msg secondToolResult = Msg.builder()
+                .role(MsgRole.TOOL)
+                .content(ToolResultBlock.text("storyboard-ok").withIdAndName("call-2", "get_storyboard"))
+                .build();
+        Msg firstToolResult = Msg.builder()
+                .role(MsgRole.TOOL)
+                .content(ToolResultBlock.text("project-ok").withIdAndName("call-1", "get_project"))
+                .build();
+
+        List<Content> contents = formatter.format(List.of(assistantToolCall, secondToolResult, firstToolResult));
+        List<Part> responseParts = contents.get(1).parts().orElseThrow();
+        assertFunctionResponse(responseParts.get(0), "call-1", "get_project", "project-ok");
+        assertFunctionResponse(responseParts.get(1), "call-2", "get_storyboard", "storyboard-ok");
+    }
+
+    private void assertFunctionResponse(Part part, String id, String name, String output) {
+        FunctionResponse response = part.functionResponse().orElseThrow();
+        assertThat(response.id()).contains(id);
+        assertThat(response.name()).contains(name);
+        assertThat(response.response().orElseThrow().get("output")).isEqualTo(output);
+    }
+
+    private OkHttpClientProbe extractHttpClient(GeminiChatModel model) throws Exception {
+        Object client = findField(GeminiChatModel.class, "client").get(model);
+        Object apiClient = findField(client.getClass(), "apiClient").get(client);
+        okhttp3.OkHttpClient httpClient = (okhttp3.OkHttpClient) findField(
+                apiClient.getClass(), "httpClient").get(apiClient);
+        Proxy proxy = httpClient.proxy();
+        assertThat(proxy).isNotNull();
+        return new OkHttpClientProbe((InetSocketAddress) proxy.address());
     }
 
     private GenerateOptions extractDefaultOptions(GeminiChatModel model) throws Exception {
@@ -46,5 +121,8 @@ class GeminiAiProviderTests {
             }
         }
         throw new NoSuchFieldException(fieldName);
+    }
+
+    private record OkHttpClientProbe(InetSocketAddress address) {
     }
 }

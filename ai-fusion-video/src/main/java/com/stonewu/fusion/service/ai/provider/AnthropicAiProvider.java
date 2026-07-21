@@ -3,9 +3,10 @@ package com.stonewu.fusion.service.ai.provider;
 import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
-import io.agentscope.core.model.AnthropicChatModel;
+import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
-import io.agentscope.core.model.Model;
+import io.agentscope.core.model.transport.ProxyConfig;
+import io.agentscope.extensions.model.anthropic.AnthropicChatModel;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.model.ChatModel;
@@ -55,11 +56,23 @@ public class AnthropicAiProvider extends AbstractAiProvider {
     }
 
     @Override
-    public Model createAgentScopeModel(AiProviderContext context) {
+    public ChatModelBase createAgentScopeModel(AiProviderContext context) {
         requireApiKey(context.getApiKey(), "Anthropic");
         GenerateOptions defaultOptions = buildReasoningOptions(context);
         String rootBaseUrl = resolveRootBaseUrl(context.getBaseUrl());
-        return AnthropicAgentScopeProxySupport.create(context, defaultOptions, rootBaseUrl);
+        AnthropicChatModel.Builder builder = AnthropicChatModel.builder()
+                .apiKey(context.getApiKey())
+                .modelName(context.getModelName())
+                .stream(true)
+                .baseUrl(rootBaseUrl);
+        if (defaultOptions != null) {
+            builder.defaultOptions(defaultOptions);
+        }
+        ProxyConfig proxy = AiProxySupport.agentScopeProxyConfig(context.getApiConfig());
+        if (proxy != null) {
+            builder.proxy(proxy);
+        }
+        return builder.build();
     }
 
     @Override

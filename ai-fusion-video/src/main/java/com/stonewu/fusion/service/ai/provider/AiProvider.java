@@ -1,7 +1,7 @@
 package com.stonewu.fusion.service.ai.provider;
 
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
-import io.agentscope.core.model.Model;
+import io.agentscope.core.model.ChatModelBase;
 import org.springframework.ai.chat.model.ChatModel;
 
 import java.util.List;
@@ -29,7 +29,7 @@ public interface AiProvider {
     /**
      * 创建 AgentScope Model
      */
-    Model createAgentScopeModel(AiProviderContext context);
+    ChatModelBase createAgentScopeModel(AiProviderContext context);
 
     /**
      * 获取远程可用模型列表
