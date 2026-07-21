@@ -28,6 +28,12 @@ public class AgentMessage extends BaseEntity {
     /** 所属对话ID（UUID），关联 AgentConversation.conversationId */
     private String conversationId;
 
+    /** 产生该消息的运行 ID */
+    private String runId;
+
+    /** 事件投影幂等键 */
+    private String projectionKey;
+
     /** 消息角色：user-用户 assistant-AI system-系统 tool-工具 */
     private String role;
 
@@ -56,5 +62,5 @@ public class AgentMessage extends BaseEntity {
     private Long reasoningDurationMs;
 
     /** 消息在对话中的排列顺序 */
-    private Integer messageOrder;
+    private Long messageOrder;
 }

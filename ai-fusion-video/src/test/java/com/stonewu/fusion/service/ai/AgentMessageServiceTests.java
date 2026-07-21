@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.ai;
 
 import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.mapper.ai.AgentMessageMapper;
+import com.stonewu.fusion.service.ai.run.AgentMessageAllocator;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -17,13 +18,20 @@ class AgentMessageServiceTests {
     @Test
     void saveAssistantMessage_shouldPersistReasoningOnlyMessage() {
         AgentMessageMapper mapper = mock(AgentMessageMapper.class);
-        when(mapper.findMaxMessageOrder("conv-1")).thenReturn(3);
-        AgentMessageService service = new AgentMessageService(mapper);
+        AgentMessageAllocator allocator = mock(AgentMessageAllocator.class);
+        when(allocator.append(org.mockito.ArgumentMatchers.eq("conv-1"),
+                any(AgentMessage.class))).thenAnswer(invocation -> {
+                    AgentMessage message = invocation.getArgument(1);
+                    message.setConversationId("conv-1");
+                    message.setMessageOrder(4L);
+                    return 4L;
+                });
+        AgentMessageService service = new AgentMessageService(mapper, allocator);
 
         AgentMessage saved = service.saveAssistantMessage("conv-1", "", "先分析工具参数", 1200L);
 
         ArgumentCaptor<AgentMessage> captor = ArgumentCaptor.forClass(AgentMessage.class);
-        verify(mapper).insert(captor.capture());
+        verify(allocator).append(org.mockito.ArgumentMatchers.eq("conv-1"), captor.capture());
         AgentMessage inserted = captor.getValue();
 
         assertThat(saved).isNotNull();
@@ -32,18 +40,20 @@ class AgentMessageServiceTests {
         assertThat(inserted.getContent()).isNull();
         assertThat(inserted.getReasoningContent()).isEqualTo("先分析工具参数");
         assertThat(inserted.getReasoningDurationMs()).isEqualTo(1200L);
-        assertThat(inserted.getMessageOrder()).isEqualTo(4);
+        assertThat(inserted.getMessageOrder()).isEqualTo(4L);
     }
 
     @Test
     void saveAssistantMessage_shouldSkipCompletelyEmptyMessage() {
         AgentMessageMapper mapper = mock(AgentMessageMapper.class);
-        AgentMessageService service = new AgentMessageService(mapper);
+        AgentMessageAllocator allocator = mock(AgentMessageAllocator.class);
+        AgentMessageService service = new AgentMessageService(mapper, allocator);
 
         AgentMessage saved = service.saveAssistantMessage("conv-1", "", "", null);
 
         assertThat(saved).isNull();
-        verify(mapper, never()).findMaxMessageOrder("conv-1");
         verify(mapper, never()).insert(any(AgentMessage.class));
+        verify(allocator, never()).append(org.mockito.ArgumentMatchers.anyString(),
+                any(AgentMessage.class));
     }
 }

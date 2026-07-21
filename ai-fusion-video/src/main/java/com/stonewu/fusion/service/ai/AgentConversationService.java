@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.entity.ai.AgentConversation;
@@ -35,10 +36,21 @@ public class AgentConversationService {
         AgentConversation existing = conversationMapper.selectOne(
                 new LambdaQueryWrapper<AgentConversation>().eq(AgentConversation::getConversationId, conversationId));
         if (existing != null) {
-            if (title != null) existing.setTitle(title);
-            existing.setLastMessageTime(LocalDateTime.now());
-            existing.setMessageCount(existing.getMessageCount() + 1);
-            conversationMapper.updateById(existing);
+            LocalDateTime updatedAt = LocalDateTime.now();
+            LambdaUpdateWrapper<AgentConversation> metadataUpdate =
+                    new LambdaUpdateWrapper<AgentConversation>()
+                            .eq(AgentConversation::getConversationId, conversationId)
+                            .eq(AgentConversation::getDeleted, false)
+                            .set(title != null, AgentConversation::getTitle, title)
+                            .set(AgentConversation::getUpdateTime, updatedAt);
+            if (conversationMapper.update(null, metadataUpdate) != 1) {
+                throw new IllegalStateException("Agent conversation metadata update failed: "
+                        + conversationId);
+            }
+            if (title != null) {
+                existing.setTitle(title);
+            }
+            existing.setUpdateTime(updatedAt);
             return existing;
         }
 
@@ -52,8 +64,8 @@ public class AgentConversationService {
                 .category(category)
                 .title(title != null ? title : "新对话")
                 .status("running")
-                .messageCount(1)
-                .lastMessageTime(LocalDateTime.now())
+                .messageCount(0)
+                .nextMessageOrder(1L)
                 .build();
         conversationMapper.insert(conv);
         return conv;
@@ -61,13 +73,11 @@ public class AgentConversationService {
 
     @Transactional
     public void finish(String conversationId, String status) {
-        AgentConversation conv = conversationMapper.selectOne(
-                new LambdaQueryWrapper<AgentConversation>().eq(AgentConversation::getConversationId, conversationId));
-        if (conv != null) {
-            conv.setStatus(status);
-            conv.setLastMessageTime(LocalDateTime.now());
-            conversationMapper.updateById(conv);
-        }
+        conversationMapper.update(null, new LambdaUpdateWrapper<AgentConversation>()
+                .eq(AgentConversation::getConversationId, conversationId)
+                .eq(AgentConversation::getDeleted, false)
+                .set(AgentConversation::getStatus, status)
+                .set(AgentConversation::getUpdateTime, LocalDateTime.now()));
     }
 
     public AgentConversation getByConversationId(String conversationId) {

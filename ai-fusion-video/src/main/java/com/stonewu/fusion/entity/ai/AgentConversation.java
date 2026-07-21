@@ -56,6 +56,10 @@ public class AgentConversation extends BaseEntity {
     @Builder.Default
     private Integer messageCount = 0;
 
+    /** 下一条消息的全历史唯一顺序号 */
+    @Builder.Default
+    private Long nextMessageOrder = 1L;
+
     /** 最后消息时间 */
     private LocalDateTime lastMessageTime;
 
