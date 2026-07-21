@@ -19,6 +19,8 @@ spring:
       port: 46379
       password: 123456
       database: 0
+      connect-timeout: 2s
+      timeout: 3s
 
   # Spring AI - DashScope
   ai:

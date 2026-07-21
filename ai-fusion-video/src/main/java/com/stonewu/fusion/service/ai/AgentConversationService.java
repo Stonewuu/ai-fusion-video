@@ -5,10 +5,13 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.mapper.ai.AgentConversationMapper;
+import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
+import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -22,6 +25,8 @@ import java.util.List;
 public class AgentConversationService {
 
     private final AgentConversationMapper conversationMapper;
+    private final AgentStatePreflight statePreflight;
+    private final AgentRuntimeSchedulers schedulers;
 
     @Transactional
     public AgentConversation createOrUpdate(String conversationId, Long userId, Long projectId,
@@ -101,7 +106,20 @@ public class AgentConversationService {
                 .orderByDesc(AgentConversation::getUpdateTime));
     }
 
-    public void delete(Long id) {
-        conversationMapper.deleteById(id);
+    public Mono<Void> deleteConversation(long id, long currentUserId) {
+        return Mono.fromCallable(() -> conversationMapper.selectOne(ownedConversation(id, currentUserId)))
+                .subscribeOn(schedulers.journal())
+                .flatMap(conversation -> statePreflight.deleteConversationSessions(
+                                String.valueOf(currentUserId), conversation.getConversationId())
+                        .then(Mono.fromRunnable(() -> conversationMapper.delete(
+                                        ownedConversation(id, currentUserId)))
+                                .subscribeOn(schedulers.journal())))
+                .then();
+    }
+
+    private LambdaQueryWrapper<AgentConversation> ownedConversation(long id, long userId) {
+        return new LambdaQueryWrapper<AgentConversation>()
+                .eq(AgentConversation::getId, id)
+                .eq(AgentConversation::getUserId, userId);
     }
 }

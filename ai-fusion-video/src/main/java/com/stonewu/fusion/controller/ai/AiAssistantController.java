@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import reactor.core.publisher.Mono;
 
 import java.util.List;
 
@@ -57,9 +58,10 @@ public class AiAssistantController {
 
     @Operation(summary = "删除对话")
     @DeleteMapping("/conversations/{id}")
-    public CommonResult<Boolean> deleteConversation(@PathVariable Long id) {
-        conversationService.delete(id);
-        return CommonResult.success(true);
+    public Mono<CommonResult<Boolean>> deleteConversation(@PathVariable Long id) {
+        long currentUserId = requireCurrentUserId();
+        return conversationService.deleteConversation(id, currentUserId)
+                .thenReturn(CommonResult.success(true));
     }
 }
 
