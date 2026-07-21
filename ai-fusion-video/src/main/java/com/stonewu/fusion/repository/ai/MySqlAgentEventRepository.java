@@ -4,9 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.entity.ai.AgentEvent;
 import com.stonewu.fusion.entity.ai.AgentRun;
+import com.stonewu.fusion.enums.ai.AgentModelCallStatus;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.enums.ai.AgentRuntimeErrorCode;
 import com.stonewu.fusion.mapper.ai.AgentEventMapper;
+import com.stonewu.fusion.mapper.ai.AgentModelCallUsageMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.service.ai.run.AgentEventEnvelopeSanitizer;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
@@ -34,6 +36,7 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
 
     private final AgentRunMapper runMapper;
     private final AgentEventMapper eventMapper;
+    private final AgentModelCallUsageMapper usageMapper;
     private final ObjectMapper objectMapper;
     private final AgentEventEnvelopeSanitizer sanitizer;
 
@@ -164,6 +167,12 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
             throw new IllegalStateException(
                     "Agent terminal update did not affect exactly one row");
         }
+        usageMapper.finishAllStartedForRun(
+                run.getRunId(),
+                request.terminalStatus() == AgentRunStatus.CANCELLED
+                        ? AgentModelCallStatus.CANCELLED.name()
+                        : AgentModelCallStatus.FAILED.name(),
+                databaseNow);
         return toCommitted(inserted, safeEnvelope, databaseNow);
     }
 

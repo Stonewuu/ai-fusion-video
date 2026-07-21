@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.stonewu.fusion.service.ai.run.model.NormalizedModelUsage;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
@@ -50,4 +51,13 @@ public class AgentModelCallUsage {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
+
+    public NormalizedModelUsage normalizedUsage() {
+        return new NormalizedModelUsage(
+                inputTokens,
+                outputTokens,
+                reasoningTokens,
+                cacheTokens,
+                usageJson);
+    }
 }
