@@ -2,7 +2,7 @@
 
 日期：2026-07-21
 
-状态：已获用户批准，待书面规格复核
+状态：书面规格已确认，进入实施计划与分阶段交付
 
 范围：P-1（P-1A 依赖与编译契约、P-1B Runtime/Harness 收敛）
 
@@ -28,7 +28,7 @@
 2. 产品运行状态与 AgentScope 会话状态分离：新增 `afv_agent_run`、`afv_agent_event` 和调用级 `afv_agent_model_call_usage`，不新增 MySQL AgentState 表。
 3. 事件协议使用显式的每运行 `sequence_no`，并建立 `UNIQUE(run_id, sequence_no)`；不把数据库全局自增 ID 暴露为产品序号。
 4. 数据库事件日志是回放真相，Redis 只承担实时通知和补偿发布。
-5. 同一 conversation 同时只允许一个活动 run；数据库生成列和唯一索引建立不可绕过的活动槽约束。
+5. 同一 conversation 同时只允许一个活动 root run；平台 child run 共享父 conversation，但由父 run/tool-call 唯一身份约束，不能占用或绕过 root 活动槽。
 6. 现有平台子 Agent 继续作为业务工具；AgentScope 原生 `taskId` 不替代平台 `childRunId`，P-1 默认不启用原生 subagent。
 7. Web/Reactor 链路直接消费 `Flux<AgentEvent>`，不调用 `.block()`、`.toIterable()`、`Thread.sleep()`，也不使用 ThreadLocal。
 8. `REQUIRE_USER_CONFIRM` 和 `REQUIRE_EXTERNAL_EXECUTION` 采用可恢复等待状态，不只记录日志；确认/外部结果可以在另一节点恢复同一 StateStore session。
@@ -445,7 +445,7 @@ agentName = null
 4. 事务提交后释放 Harness lease；RedisAgentStateStore session 保留；只有此时才通过 `TOOL_CALL` 和可选 `controlType=USER_CONFIRM_REQUIRED`、`pendingToolCalls`、`expiresAt` 向前端展示确认操作；
 5. 若进程在 candidate 与状态保存确认之间崩溃，不发布可操作确认事件；lease 对账将 run 收敛为 OWNER_LOST，而不是让用户恢复一个未持久化状态；
 6. 用户提交的请求只包含 replyId、toolCallId 和批准/拒绝决定，服务端从已持久化 pending event 重建原始 ToolUseBlock，不信任客户端回传工具名、input 或 schema；
-7. 确认事务把 WAITING_CONFIRMATION CAS 回 RUNNING，领取节点写入自己的 owner instance、递增 owner epoch、建立新 lease，并写 USER_CONFIRM_RESULT 事件；提交后用相同 userId/sessionId 和带 `Msg.METADATA_CONFIRM_RESULTS` 的 UserMessage 重新调用 `streamEvents`，因此恢复执行可以由另一节点领取。
+7. 确认事务把 WAITING_CONFIRMATION CAS 回 RUNNING，领取节点写入自己的 owner instance、递增 owner epoch、建立新 lease，并写 raw audit `USER_CONFIRM_RESULT`；成功响应返回权威 `(runId,status,acceptedReplyId)`，发起页只清除匹配 replyId 的卡片。refresh/reconnect 在应用历史 actionable projection 前先读取 status/running 快照，当前状态不是 WAITING_CONFIRMATION 时不得恢复旧卡片；其他页面提交已处理 reply 时收到 HTTP 409。提交后用相同 userId/sessionId 和带 `Msg.METADATA_CONFIRM_RESULTS` 的 UserMessage 重新调用 `streamEvents`，因此恢复执行可以由另一节点领取。
 
 当前 GA 外部工具路径不保证直接发出 `REQUIRE_EXTERNAL_EXECUTION/EXTERNAL_EXECUTION_RESULT`：外部工具会返回 suspended ToolResult，最终 `AgentResult.Msg.generateReason=TOOL_SUSPENDED`。因此 P-1 从已成功保存状态的暂停 AgentResult 合成 `PLATFORM_REQUIRE_EXTERNAL_EXECUTION` 并进入 WAITING_EXTERNAL；上游枚举事件若未来出现仍由全枚举 mapper 保存。外部结果只能由受认证的内部执行器提交，服务端按 replyId/toolCallId 校验 pending event 后构造匹配的 `ToolResultBlock` 恢复消息，并写平台合成 result audit。P-1 不开放任意用户提交外部工具结果。
 
@@ -470,6 +470,9 @@ V1.0.6.1.5__agent_run_and_event.sql
 | `id` | bigint PK auto_increment | 内部主键 |
 | `run_id` | varchar(64) not null unique | 对外稳定运行 ID，复用当前每次调用生成的 messageId |
 | `conversation_id` | varchar(64) not null | 关联现有多轮会话 |
+| `parent_run_id` | varchar(64) null | 平台 child run 的父 run；root 为 NULL |
+| `parent_tool_call_id` | varchar(128) null | 创建 child 的稳定平台工具调用 ID |
+| `agent_name` | varchar(128) null | child 业务 Agent 名称；root 可为空 |
 | `user_id` | bigint not null | 授权与审计快照 |
 | `project_id` | bigint null | 项目上下文快照 |
 | `agent_type` | varchar(64) null | Agent 定义审计 |
@@ -488,6 +491,7 @@ V1.0.6.1.5__agent_run_and_event.sql
 | `cancel_next_attempt_at` | datetime(3) null | 丢通知补偿扫描 |
 | `waiting_reply_id` | varchar(128) null | 当前等待确认/外部执行的 reply |
 | `wait_expires_at` | datetime(3) null | 等待超时 |
+| `deadline_at` | datetime(3) not null | 本次 run 的绝对截止时间；跨节点恢复不可延长 |
 | `started_at` | datetime(3) not null | 开始时间 |
 | `heartbeat_at` | datetime(3) null | owner 心跳 |
 | `finished_at` | datetime(3) null | 结束时间 |
@@ -502,14 +506,18 @@ V1.0.6.1.5__agent_run_and_event.sql
 关键约束与索引：
 
 - `UNIQUE(run_id)`；
-- 增加生成列 `active_conversation_id`：状态为 RUNNING/WAITING_CONFIRMATION/WAITING_EXTERNAL/CANCEL_REQUESTED 时取 `conversation_id`，终态时为 NULL；
-- `UNIQUE(active_conversation_id)`，利用 MySQL 允许多个 NULL，保证每个 conversation 最多一个活动 run，避免应用漏写手工 active flag；
+- 增加生成列 `active_conversation_id`：仅当 `parent_run_id IS NULL` 且状态为 RUNNING/WAITING_CONFIRMATION/WAITING_EXTERNAL/CANCEL_REQUESTED 时取 `conversation_id`，child 或终态为 NULL；
+- `UNIQUE(active_conversation_id)`，利用 MySQL 允许多个 NULL，保证每个 conversation 最多一个活动 root run，避免应用漏写手工 active flag；
+- `UNIQUE(parent_run_id, parent_tool_call_id)`；平台工具重试命中相同父 run/tool call 时读取并校验既有 child，agent/config 不一致则 fail closed，不能创建第二个 child；
+- `(parent_run_id, status, id)` 用于父取消扫描；
 - `CHECK` 限制 status 枚举；部署前校验 MySQL `>=8.0.16`，低于该版本拒绝执行 Migration，不能假设 CHECK 会生效；
 - `(conversation_id, status, id)`；
 - `(user_id, status, update_time)`；
 - `(status, lease_until)` 用于失联 run 对账。
 
 snapshot 不保存 API key、代理密码或其他秘密，只保存不可变配置 ID/版本、模型参数、Prompt hash/内容、工具名/schema/readOnly/concurrencySafe manifest 及代码版本。WAITING 状态恢复时必须用该 snapshot/fingerprint 重建原 Kernel；如果原模型/Agent 版本或兼容工具实现已经不可获得，则 fail closed 为 `RUN_CONFIG_UNAVAILABLE`，不能拿最新配置执行旧 pending ToolUse。
+
+child 与父 run 共享授权 conversation，但使用独立 `childRunId`、RuntimeContext 和 AgentState session。创建 child 的事务必须先锁定父 run 行、用数据库状态重新确认父仍为活动态，再插入 child；父取消与 child 创建不能跨两个未协调事务。父已进入 `CANCEL_REQUESTED` 或终态后，不得出现新的活动 child。child 的 `deadline_at` 必须小于等于父 deadline；WAITING expiry 也必须 clamp 到该持久化绝对 deadline。恢复节点只从 run 快照重建 deadline，不能按“当前时间 + 默认超时”延长。
 
 ### 10.2 `afv_agent_event`
 
@@ -583,7 +591,7 @@ Migration 先检测历史重复 `message_order`，按 `(message_order, id)` 稳�
 | `next_settlement_attempt_at` | datetime(3) null | 退避调度 |
 | `started_at/finished_at/create_time/update_time` | datetime(3) | 审计时间 |
 
-建立 `UNIQUE(run_id, model_call_id)`。每次 Provider 请求发出前先写 STARTED；流完成/失败/取消时条件更新同一行。结算以 `(runId, modelCallId)` 作为下游幂等键，或在所有调用账本完结后聚合并以 runId 结算；无论选择哪条路径，都从持久账本计算，不能只依赖进程内 token 累加。run 的 `usage_settled` 仅表示其全部 model-call 行均已 SETTLED。
+建立 `UNIQUE(run_id, model_call_id)`。每次 Provider 请求发出前先写 STARTED；流完成/失败/取消时条件更新同一行。结算以 `(runId, modelCallId)` 作为下游幂等键，或在所有调用账本完结后聚合并以 runId 结算；无论选择哪条路径，都从持久账本计算，不能只依赖进程内 token 累加。run 的 `usage_settled` 仅表示其全部 model-call 行均已 SETTLED，而且只能在锁定 run、确认 run 已为终态并以 `NOT EXISTS` 再查未结算调用后置 1；RUNNING 期间即使暂时只有一个已结算调用也不得提前置 1。
 
 ### 10.5 不新增 AgentState 表
 
@@ -627,7 +635,7 @@ event 表本身是 outbox：
 - Redis 重复投递允许发生，客户端用 `(runId, sequence)` 去重；
 - Redis 裁剪、重启或发布失败不影响数据库重连。
 
-只有存在 legacy projection、即 `output_type IS NOT NULL` 的事件进入现有 Redis/SSE 通道，并写为 `publish_required=1/publish_status=PENDING`。raw-only 生命周期事件写为 `publish_required=0/publish_status=NOT_REQUIRED`，仍占用 sequence，因此前端必须允许合法 sequence gap；它们不会被补偿器扫描。旧 reconnect 查询同样只投影 `output_type IS NOT NULL` 的事件。
+只有存在 legacy projection、即 `output_type IS NOT NULL` 的事件进入现有 Redis/SSE 通道，并写为 `publish_required=1/publish_status=PENDING`。`PLATFORM_USER_CONFIRM_REQUIRED` 必须设置兼容 `outputType=TOOL_CALL` 与独立 `controlType=USER_CONFIRM_REQUIRED`，让新前端在 legacy reducer 前消费。raw-only 生命周期事件写为 `publish_required=0/publish_status=NOT_REQUIRED`，仍占用 sequence，因此前端必须允许合法 sequence gap；它们不会被补偿器扫描。旧 reconnect 查询同样只投影 `output_type IS NOT NULL` 的事件。
 
 消息投影器按 sequence 消费 committed event，用 `projection_key` 实现幂等写入，并条件推进 `projected_through_sequence`。终态投影成功后设置 `projection_completed_at`；异常不能吞掉，由独立补偿器从游标继续。
 
@@ -699,6 +707,8 @@ Redis 只作为“数据库可能有新事件”的 wake-up，不能直接把其
 - run 的首个事件和后续事件携带 `runId`；
 - cancel 增加可选 `runId`，旧 conversationId 解析为唯一活动 run；
 - confirm 接收 `runId/replyId/decisions[{toolCallId, confirmed}]`，不接收或信任工具 input；
+- confirm 成功返回 `CommonResult<ConfirmPipelineRunRespVO>`，其数据固定为 `(runId,status,acceptedReplyId)`；前端只能用该权威响应标记请求已受理，实际工具结果/终态仍由 journal 回放驱动；
+- 确认已过期或同一 reply 已处理时返回 HTTP 409 和 `AgentApiErrorRespVO(errorCode,message,traceId)`，machine-readable errorCode 分别为 `CONFIRMATION_EXPIRED`、`CONFIRMATION_ALREADY_RESOLVED`；不能把 HTTP 状态压平为普通字符串错误；
 - external-result 使用内部认证并校验 pending reply/tool identity；
 - reconnect 增加可选 `runId`、`afterSequence`，同时支持 `Last-Event-ID`；
 - status/running 增加可选 `runId`、`lastSequence`；
@@ -816,6 +826,9 @@ protected Flux<ChatResponse> doStream(
 - 保留 asset_image_gen、storyboard_frame_gen、storyboard_video_gen 等业务 Agent；
 - 继续以平台工具形式暴露；
 - parentToolCallId、agentName、childRunId 和父子取消关系稳定；
+- `(parentRunId,parentToolCallId)` 幂等返回同一 childRunId；相同身份但 agent/config 不一致时 fail closed；
+- child 启动在锁定父 run 的同一事务内重验父活动状态并插入，避免与父取消竞态产生漏扫 child；
+- child deadline 不得晚于父 run 的持久化 `deadline_at`；跨节点恢复和 WAITING 都不能延长绝对截止时间；
 - 子 Agent 使用独立 RuntimeContext/StateStore session key；
 - 项目、资产、子资产和分镜上下文从 RuntimeContext 或显式工具参数获取；
 - 原生 subagent 的 taskId 不写入 childRunId。
@@ -867,6 +880,7 @@ protected Flux<ChatResponse> doStream(
 - `HARNESS_CAPACITY_EXHAUSTED`
 - `RUN_CONFIG_UNAVAILABLE`
 - `CONFIRMATION_EXPIRED`
+- `CONFIRMATION_ALREADY_RESOLVED`
 - `EXTERNAL_EXECUTION_EXPIRED`
 - `SSE_CURSOR_INVALID`
 - `OWNER_LOST`
