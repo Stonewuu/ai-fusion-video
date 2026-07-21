@@ -2,6 +2,7 @@ package com.stonewu.fusion.build;
 
 import io.agentscope.core.agent.Agent;
 import io.agentscope.core.agent.RuntimeContext;
+import io.agentscope.core.message.AssistantMessage;
 import io.agentscope.core.message.AudioBlock;
 import io.agentscope.core.message.Base64Source;
 import io.agentscope.core.message.ImageBlock;
@@ -11,6 +12,7 @@ import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.message.URLSource;
+import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.message.VideoBlock;
 import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.ChatResponse;
@@ -121,6 +123,31 @@ class AgentScopeGaApiContractTests {
         assertThat(((Base64Source) audio.getSource()).getMediaType()).isEqualTo("audio/wav");
         assertThat(video.getFps()).isEqualTo(24.0F);
         assertThat(((URLSource) video.getSource()).getMimeType()).isEqualTo("video/mp4");
+    }
+
+    @Test
+    void typedUserAndAssistantMessagesPreserveRolesAndContent() {
+        UserMessage userFromBuilder = UserMessage.builder()
+                .name("user-builder")
+                .textContent("builder question")
+                .build();
+        UserMessage userFromConstructor = new UserMessage(
+                "user-constructor", TextBlock.builder().text("constructor question").build());
+        AssistantMessage assistantFromBuilder = AssistantMessage.builder()
+                .name("assistant-builder")
+                .textContent("builder answer")
+                .build();
+        AssistantMessage assistantFromConstructor = new AssistantMessage(
+                "assistant-constructor", TextBlock.builder().text("constructor answer").build());
+
+        assertThat(userFromBuilder.getRole()).isEqualTo(MsgRole.USER);
+        assertThat(userFromConstructor.getRole()).isEqualTo(MsgRole.USER);
+        assertThat(assistantFromBuilder.getRole()).isEqualTo(MsgRole.ASSISTANT);
+        assertThat(assistantFromConstructor.getRole()).isEqualTo(MsgRole.ASSISTANT);
+        assertThat(userFromBuilder.getTextContent()).isEqualTo("builder question");
+        assertThat(userFromConstructor.getTextContent()).isEqualTo("constructor question");
+        assertThat(assistantFromBuilder.getTextContent()).isEqualTo("builder answer");
+        assertThat(assistantFromConstructor.getTextContent()).isEqualTo("constructor answer");
     }
 
     @Test

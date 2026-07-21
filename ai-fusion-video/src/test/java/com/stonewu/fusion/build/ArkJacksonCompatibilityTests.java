@@ -25,6 +25,9 @@ class ArkJacksonCompatibilityTests {
         assertThat(json.path("model").asText()).isEqualTo("seedream-test");
         assertThat(json.path("prompt").asText()).isEqualTo("test");
         assertThat(json.path("size").asText()).isEqualTo("1024x1024");
-        assertThat(json.path("watermark").asBoolean()).isFalse();
+        JsonNode watermark = json.get("watermark");
+        assertThat(watermark).isNotNull();
+        assertThat(watermark.isBoolean()).isTrue();
+        assertThat(watermark.booleanValue()).isFalse();
     }
 }
