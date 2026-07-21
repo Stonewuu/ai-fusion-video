@@ -33,12 +33,18 @@ public final class FailClosedAgentStateStore implements AgentStateStore {
     @Override
     public <T extends State> Optional<T> get(
             String userId, String sessionId, String key, Class<T> stateType) {
+        if (isFrameworkAnonymousGet(userId, sessionId, key)) {
+            return Optional.empty();
+        }
         return guarded(userId, sessionId, "get", () -> delegate.get(userId, sessionId, key, stateType));
     }
 
     @Override
     public <T extends State> List<T> getList(
             String userId, String sessionId, String key, Class<T> stateType) {
+        if (isFrameworkAnonymousListGet(userId, sessionId, key)) {
+            return List.of();
+        }
         return guarded(
                 userId, sessionId, "getList", () -> delegate.getList(userId, sessionId, key, stateType));
     }
@@ -91,5 +97,18 @@ public final class FailClosedAgentStateStore implements AgentStateStore {
         } catch (RuntimeException failure) {
             throw failures.record(slot, operation, failure);
         }
+    }
+
+    private boolean isFrameworkAnonymousGet(String userId, String sessionId, String key) {
+        return isFrameworkFallbackSlot(userId, sessionId)
+                && ("agent_state".equals(key) || "toolkit_activeGroups".equals(key));
+    }
+
+    private boolean isFrameworkAnonymousListGet(String userId, String sessionId, String key) {
+        return isFrameworkFallbackSlot(userId, sessionId) && "memory_messages".equals(key);
+    }
+
+    private boolean isFrameworkFallbackSlot(String userId, String sessionId) {
+        return userId == null && sessionId != null && !sessionId.isBlank();
     }
 }

@@ -9,9 +9,11 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -96,6 +98,24 @@ class FailClosedAgentStateStoreTests {
         assertThat(failure).isInstanceOf(StateStoreFailure.class);
         assertThat(store.exists("42", "session-b")).isTrue();
         assertThat(guard.failure(new StateStoreSlot("42", "session-b"))).isEmpty();
+    }
+
+    @Test
+    void treatsFrameworkAnonymousFallbackReadsAsAbsentWithoutPersistingAnAnonymousSlot() {
+        assertThat(store.get(null, "agent-name", "agent_state", TestState.class)).isEmpty();
+        assertThat(store.get(null, "agent-name", "toolkit_activeGroups", TestState.class)).isEmpty();
+        assertThat(store.getList(null, "agent-name", "memory_messages", TestState.class)).isEmpty();
+        assertThatThrownBy(() -> store.exists(null, "agent-name"))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> store.get(null, "agent-name", "other", TestState.class))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> store.get(" ", "agent-name", "agent_state", TestState.class))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        verify(delegate, never()).get(null, "agent-name", "agent_state", TestState.class);
+        verify(delegate, never()).get(null, "agent-name", "toolkit_activeGroups", TestState.class);
+        verify(delegate, never()).getList(null, "agent-name", "memory_messages", TestState.class);
+        verify(delegate, never()).exists(null, "agent-name");
     }
 
     private record TestState(String value) implements State {

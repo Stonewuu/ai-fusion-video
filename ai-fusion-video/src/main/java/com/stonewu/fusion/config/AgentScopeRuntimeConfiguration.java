@@ -10,14 +10,14 @@ import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import io.agentscope.core.state.AgentStateStore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(AgentScopeRuntimeProperties.class)
+@EnableConfigurationProperties({AgentScopeRuntimeProperties.class, AgentScopeV2Properties.class})
 public class AgentScopeRuntimeConfiguration {
 
     @Bean(destroyMethod = "close")
@@ -44,20 +44,22 @@ public class AgentScopeRuntimeConfiguration {
 
     @Bean(destroyMethod = "close")
     @Primary
-    @Profile({"local", "test"})
-    public AgentStateStore localAgentScopeStateStore(
-            AgentScopeStateStoreFactory factory) {
-        return factory.createInMemory();
-    }
-
-    @Bean(destroyMethod = "close")
-    @Primary
-    @Profile("!local & !test")
-    public AgentStateStore redisAgentScopeStateStore(
+    public AgentStateStore agentScopeStateStore(
             AgentScopeStateStoreFactory factory,
-            StringRedisTemplate redisTemplate,
-            AgentScopeRuntimeProperties properties) {
-        return factory.createRedis(redisTemplate, properties.getStateThreads());
+            ObjectProvider<StringRedisTemplate> redisTemplateProvider,
+            AgentScopeRuntimeProperties runtimeProperties,
+            AgentScopeV2Properties v2Properties) {
+        AgentScopeV2Properties.State state = v2Properties.getState();
+        if (state.getMode() == AgentScopeV2Properties.Mode.IN_MEMORY) {
+            return factory.createInMemory();
+        }
+        StringRedisTemplate redisTemplate = redisTemplateProvider.getIfAvailable();
+        if (redisTemplate == null) {
+            throw new IllegalStateException(
+                    "StringRedisTemplate is required when fusion.agentscope.v2.state.mode=redis");
+        }
+        return factory.createRedis(
+                redisTemplate, runtimeProperties.getStateThreads(), state.getKeyPrefix());
     }
 
     @Bean

@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.ai.agentscope.kernel;
 
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreGuardedChatModel;
+import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeShutdownRecoveryBridge;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.harness.agent.HarnessAgent;
@@ -19,6 +20,7 @@ public final class AgentScopeHarnessFactory {
     private final AgentKernelToolRegistry toolRegistry;
     private final AgentStateStore stateStore;
     private final StateStoreFailureGuard failures;
+    private final AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge;
 
     public AgentKernelResource create(AgentKernelSpec spec) {
         Objects.requireNonNull(spec, "spec must not be null");
@@ -43,6 +45,8 @@ public final class AgentScopeHarnessFactory {
                     .model(new StateStoreGuardedChatModel(ownedModel.model(), failures))
                     .stateStore(stateStore)
                     .toolkit(toolkit)
+                    .hook(shutdownRecoveryBridge)
+                    .middleware(shutdownRecoveryBridge)
                     .maxIters(spec.maxIters())
                     .disableFilesystemTools()
                     .disableShellTool()

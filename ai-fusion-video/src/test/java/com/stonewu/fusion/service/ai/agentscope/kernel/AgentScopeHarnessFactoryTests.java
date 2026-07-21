@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeShutdownRecoveryBridge;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.model.ChatModelBase;
@@ -102,7 +103,11 @@ class AgentScopeHarnessFactoryTests {
         AgentStateStore store = mock(AgentStateStore.class);
         StateStoreFailureGuard failures = mock(StateStoreFailureGuard.class);
         AgentScopeHarnessFactory factory = new AgentScopeHarnessFactory(
-                ignored -> OwnedChatModel.owned(delegate), registry, store, failures);
+                ignored -> OwnedChatModel.owned(delegate),
+                registry,
+                store,
+                failures,
+                recoveryBridge());
 
         AgentKernelToolManifest testTool = manifest("test_tool", "{}");
         String whitelistVersion = AgentKernelKey.whitelistVersion("tools-v1", Set.of("test_tool"));
@@ -135,7 +140,8 @@ class AgentScopeHarnessFactoryTests {
                 ignored -> OwnedChatModel.owned(delegate),
                 registry,
                 mock(AgentStateStore.class),
-                mock(StateStoreFailureGuard.class));
+                mock(StateStoreFailureGuard.class),
+                recoveryBridge());
         AgentKernelKey key = AgentKernelKey.create(
                 "writer", "model-a", "prompt-v1", List.of(), "afv-tools-v1");
 
@@ -175,6 +181,10 @@ class AgentScopeHarnessFactoryTests {
     private static AgentKernelToolManifest manifest(String name, String schema) {
         return new AgentKernelToolManifest(
                 name, AgentKernelToolManifest.schemaSha256(schema), false, false);
+    }
+
+    private static AgentScopeShutdownRecoveryBridge recoveryBridge() {
+        return mock(AgentScopeShutdownRecoveryBridge.class);
     }
 
     private static final class TestTool extends ToolBase {

@@ -1,10 +1,10 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
@@ -57,14 +57,13 @@ public final class HarnessLeaseCache {
     public HarnessLeaseCache(
             AgentScopeHarnessFactory factory,
             AgentRuntimeSchedulers schedulers,
-            @Value("${fusion.agentscope.v2.cache.maximum-size:64}") int maximumSize,
-            @Value("${fusion.agentscope.v2.cache.expire-after-access:30m}") Duration expireAfterAccess,
-            @Value("${fusion.agentscope.v2.cache.capacity-wait:5s}") Duration capacityWait) {
+            AgentScopeV2Properties properties) {
         this(factory,
                 Objects.requireNonNull(schedulers, "schedulers must not be null").modelBlocking(),
-                maximumSize,
-                expireAfterAccess,
-                capacityWait,
+                Objects.requireNonNull(properties, "properties must not be null")
+                        .getCache().getMaximumSize(),
+                properties.getCache().getExpireAfterAccess(),
+                properties.getCache().getCapacityWait(),
                 DEFAULT_POLL_INTERVAL,
                 System::nanoTime);
     }

@@ -14,7 +14,7 @@ spring:
       password: ${REDIS_PASSWORD:123456}
       database: 0
       connect-timeout: ${REDIS_CONNECT_TIMEOUT:2s}
-      timeout: ${REDIS_COMMAND_TIMEOUT:3s}
+      timeout: ${REDIS_COMMAND_TIMEOUT:2s}
 
   # Spring AI - DashScope
   ai:
@@ -25,3 +25,9 @@ spring:
 logging:
   level:
     com.stonewu.fusion: INFO
+
+fusion:
+  agentscope:
+    v2:
+      state:
+        mode: redis

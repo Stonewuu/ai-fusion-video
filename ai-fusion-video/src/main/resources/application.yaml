@@ -50,3 +50,13 @@ video:
   compose:
     ffmpeg-path: ${VIDEO_COMPOSE_FFMPEG_PATH:ffmpeg}
     ffprobe-path: ${VIDEO_COMPOSE_FFPROBE_PATH:ffprobe}
+
+fusion:
+  agentscope:
+    v2:
+      cache:
+        maximum-size: 64
+        expire-after-access: 30m
+        capacity-wait: 5s
+      state:
+        key-prefix: "afv:agentscope:v2:"

@@ -21,14 +21,16 @@ import java.util.Objects;
 public final class DefaultAgentScopeHarnessInvoker implements AgentScopeHarnessInvoker {
     private final HarnessLeaseCache cache;
     private final AgentStatePreflight preflight;
+    private final AgentSessionSerialGate sessionGate;
     private final Scheduler modelScheduler;
 
     @Autowired
     public DefaultAgentScopeHarnessInvoker(
             HarnessLeaseCache cache,
             AgentStatePreflight preflight,
+            AgentSessionSerialGate sessionGate,
             AgentRuntimeSchedulers schedulers) {
-        this(cache, preflight,
+        this(cache, preflight, sessionGate,
                 Objects.requireNonNull(schedulers, "schedulers must not be null").modelBlocking());
     }
 
@@ -36,8 +38,17 @@ public final class DefaultAgentScopeHarnessInvoker implements AgentScopeHarnessI
             HarnessLeaseCache cache,
             AgentStatePreflight preflight,
             Scheduler modelScheduler) {
+        this(cache, preflight, new AgentSessionSerialGate(), modelScheduler);
+    }
+
+    DefaultAgentScopeHarnessInvoker(
+            HarnessLeaseCache cache,
+            AgentStatePreflight preflight,
+            AgentSessionSerialGate sessionGate,
+            Scheduler modelScheduler) {
         this.cache = Objects.requireNonNull(cache, "cache must not be null");
         this.preflight = Objects.requireNonNull(preflight, "preflight must not be null");
+        this.sessionGate = Objects.requireNonNull(sessionGate, "sessionGate must not be null");
         this.modelScheduler = Objects.requireNonNull(modelScheduler, "modelScheduler must not be null");
     }
 
@@ -46,14 +57,15 @@ public final class DefaultAgentScopeHarnessInvoker implements AgentScopeHarnessI
             AgentKernelSpec spec, List<Msg> messages, RuntimeContext context) {
         List<Msg> safeMessages = List.copyOf(Objects.requireNonNull(messages, "messages must not be null"));
         Objects.requireNonNull(context, "context must not be null");
-        return Mono.usingWhen(
-                cache.acquire(Objects.requireNonNull(spec, "spec must not be null")),
+        AgentKernelSpec safeSpec = Objects.requireNonNull(spec, "spec must not be null");
+        return sessionGate.mono(context, () -> Mono.usingWhen(
+                cache.acquire(safeSpec),
                 lease -> Mono.defer(() -> preflight.check(context))
                         .then(Mono.defer(() ->
                                 lease.resource().agent().call(safeMessages, context))),
                 this::cleanup,
                 (lease, failure) -> cleanup(lease),
-                this::cleanup);
+                this::cleanup));
     }
 
     @Override
@@ -61,14 +73,15 @@ public final class DefaultAgentScopeHarnessInvoker implements AgentScopeHarnessI
             AgentKernelSpec spec, List<Msg> messages, RuntimeContext context) {
         List<Msg> safeMessages = List.copyOf(Objects.requireNonNull(messages, "messages must not be null"));
         Objects.requireNonNull(context, "context must not be null");
-        return Flux.usingWhen(
-                cache.acquire(Objects.requireNonNull(spec, "spec must not be null")),
+        AgentKernelSpec safeSpec = Objects.requireNonNull(spec, "spec must not be null");
+        return sessionGate.flux(context, () -> Flux.usingWhen(
+                cache.acquire(safeSpec),
                 lease -> Mono.defer(() -> preflight.check(context))
                         .thenMany(Flux.defer(() ->
                                 lease.resource().agent().streamEvents(safeMessages, context))),
                 this::cleanup,
                 (lease, failure) -> cleanup(lease),
-                this::cleanup);
+                this::cleanup));
     }
 
     private Mono<Void> cleanup(HarnessLease lease) {

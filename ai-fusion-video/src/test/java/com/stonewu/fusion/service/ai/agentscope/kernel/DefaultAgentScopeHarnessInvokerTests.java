@@ -7,6 +7,7 @@ import io.agentscope.core.message.Msg;
 import io.agentscope.harness.agent.HarnessAgent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
@@ -19,6 +20,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.timeout;
@@ -57,6 +59,8 @@ class DefaultAgentScopeHarnessInvokerTests {
         when(cancel.agent.call(any(List.class), any(RuntimeContext.class)))
                 .thenReturn(Mono.never());
         StepVerifier.create(cancel.invoker.call(cancel.spec, List.of(), cancel.context))
+                .then(() -> verify(cancel.agent, timeout(1000))
+                        .call(any(List.class), any(RuntimeContext.class)))
                 .thenCancel()
                 .verify();
         verify(cancel.lease, timeout(1000)).close();
@@ -140,6 +144,30 @@ class DefaultAgentScopeHarnessInvokerTests {
     }
 
     @Test
+    void queuedSameSlotCallDoesNotAcquireAHarnessLeaseOrRunPreflight() {
+        InvocationFixture fixture = fixture();
+        when(fixture.agent.call(any(List.class), any(RuntimeContext.class)))
+                .thenReturn(Mono.never());
+        clearInvocations(fixture.cache, fixture.preflight, fixture.lease, fixture.agent);
+
+        Disposable active = fixture.invoker.call(
+                        fixture.spec, List.of(), fixture.context)
+                .subscribe();
+        verify(fixture.cache, times(1)).acquire(fixture.spec);
+        verify(fixture.preflight, times(1)).check(fixture.context);
+
+        Disposable queued = fixture.invoker.call(
+                        fixture.spec, List.of(), fixture.context)
+                .subscribe();
+        verify(fixture.cache, times(1)).acquire(fixture.spec);
+        verify(fixture.preflight, times(1)).check(fixture.context);
+
+        queued.dispose();
+        active.dispose();
+        verify(fixture.lease, timeout(1000).times(1)).close();
+    }
+
+    @Test
     void cleanupRunsOnTheModelBlockingScheduler() {
         InvocationFixture fixture = fixture();
         Msg response = mock(Msg.class);
@@ -186,6 +214,8 @@ class DefaultAgentScopeHarnessInvokerTests {
         HarnessAgent agent = mock(HarnessAgent.class);
         AgentKernelSpec spec = mock(AgentKernelSpec.class);
         RuntimeContext context = mock(RuntimeContext.class);
+        when(context.getUserId()).thenReturn("42");
+        when(context.getSessionId()).thenReturn("conversation-7");
         when(cache.acquire(spec)).thenReturn(Mono.just(lease));
         when(preflight.check(context)).thenReturn(Mono.empty());
         when(lease.resource()).thenReturn(resource);

@@ -9,8 +9,6 @@ import java.util.Objects;
 
 public final class AgentScopeStateStoreFactory {
 
-    public static final String REDIS_KEY_PREFIX = "afv:agentscope:v2:";
-
     private final StateStoreFailureGuard failures;
 
     public AgentScopeStateStoreFactory(StateStoreFailureGuard failures) {
@@ -22,12 +20,17 @@ public final class AgentScopeStateStoreFactory {
     }
 
     public AgentStateStore createRedis(
-            StringRedisTemplate redisTemplate, int maxConcurrentOperations) {
+            StringRedisTemplate redisTemplate,
+            int maxConcurrentOperations,
+            String keyPrefix) {
         Objects.requireNonNull(redisTemplate, "redisTemplate must not be null");
+        if (keyPrefix == null || keyPrefix.isBlank()) {
+            throw new IllegalArgumentException("keyPrefix must not be blank");
+        }
         RedisAgentStateStore delegate = RedisAgentStateStore.builder()
                 .clientAdapter(new SpringStringRedisClientAdapter(
                         redisTemplate, maxConcurrentOperations))
-                .keyPrefix(REDIS_KEY_PREFIX)
+                .keyPrefix(keyPrefix.trim())
                 .build();
         return new FailClosedAgentStateStore(delegate, failures);
     }

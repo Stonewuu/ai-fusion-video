@@ -19,10 +19,10 @@ import static org.mockito.Mockito.when;
 class AgentScopeStateStoreFactoryTests {
 
     @Test
-    void localAndTestProfilesShareOneInMemoryStorePerContextButNotAcrossContexts() {
+    void inMemoryModeSharesOneStorePerContextButNotAcrossContexts() {
         AtomicReference<InMemoryAgentStateStore> firstContextStore = new AtomicReference<>();
 
-        contextRunner("local").run(context -> {
+        contextRunner("in-memory").run(context -> {
             assertThat(context.getStartupFailure()).isNull();
             assertThat(context.getBeansOfType(AgentStateStore.class)).hasSize(1);
             AgentStateStore store = context.getBean(AgentStateStore.class);
@@ -31,17 +31,11 @@ class AgentScopeStateStoreFactoryTests {
             firstContextStore.set((InMemoryAgentStateStore) delegate(store));
         });
 
-        contextRunner("local").run(context -> {
+        contextRunner("in-memory").run(context -> {
             assertThat(context.getStartupFailure()).isNull();
             assertThat(delegate(context.getBean(AgentStateStore.class))).isNotSameAs(firstContextStore.get());
         });
 
-        contextRunner("test").run(context -> {
-            assertThat(context.getStartupFailure()).isNull();
-            assertThat(context.getBeansOfType(AgentStateStore.class)).hasSize(1);
-            assertThat(delegate(context.getBean(AgentStateStore.class)))
-                    .isInstanceOf(InMemoryAgentStateStore.class);
-        });
     }
 
     @Test
@@ -49,7 +43,8 @@ class AgentScopeStateStoreFactoryTests {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         when(redisTemplate.hasKey(anyString())).thenReturn(false);
 
-        contextRunner("docker")
+        contextRunner("redis")
+                .withPropertyValues("fusion.agentscope.v2.state.key-prefix=test:agentscope:v2:")
                 .withBean(StringRedisTemplate.class, () -> redisTemplate)
                 .run(context -> {
                     assertThat(context.getStartupFailure()).isNull();
@@ -61,7 +56,7 @@ class AgentScopeStateStoreFactoryTests {
                     assertThat(store.exists("42", "afv:v2:conversation-7:assistant-v3")).isFalse();
 
                     verify(redisTemplate).hasKey(org.mockito.ArgumentMatchers.argThat(
-                            key -> key.startsWith(AgentScopeStateStoreFactory.REDIS_KEY_PREFIX)
+                            key -> key.startsWith("test:agentscope:v2:")
                                     && key.contains("42")
                                     && key.contains("afv:v2:conversation-7:assistant-v3")));
                 });
@@ -69,16 +64,16 @@ class AgentScopeStateStoreFactoryTests {
 
     @Test
     void productionProfileFailsStartupWhenRedisDependencyIsMissing() {
-        contextRunner("docker").run(context ->
+        contextRunner("redis").run(context ->
                 assertThat(context.getStartupFailure())
                         .isNotNull()
                         .hasMessageContaining("StringRedisTemplate"));
     }
 
-    private ApplicationContextRunner contextRunner(String profile) {
+    private ApplicationContextRunner contextRunner(String stateMode) {
         return new ApplicationContextRunner()
-                .withInitializer(context -> context.getEnvironment().setActiveProfiles(profile))
                 .withPropertyValues(
+                        "fusion.agentscope.v2.state.mode=" + stateMode,
                         "app.agentscope.runtime.state-threads=1",
                         "app.agentscope.runtime.journal-threads=1",
                         "app.agentscope.runtime.model-threads=1",
