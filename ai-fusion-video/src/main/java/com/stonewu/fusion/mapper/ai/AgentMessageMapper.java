@@ -16,4 +16,12 @@ public interface AgentMessageMapper extends BaseMapper<AgentMessage> {
               AND deleted = 0
             """)
     Long selectInitialOrderByRunId(@Param("runId") String runId);
+
+    @Select("""
+            SELECT *
+            FROM afv_agent_message FORCE INDEX (uk_agent_message_projection_key)
+            WHERE projection_key = #{projectionKey}
+            LIMIT 1
+            """)
+    AgentMessage selectByProjectionKey(@Param("projectionKey") String projectionKey);
 }

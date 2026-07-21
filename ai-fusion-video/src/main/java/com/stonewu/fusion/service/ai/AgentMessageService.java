@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Objects;
 
 /**
  * Agent 消息服务
@@ -74,6 +75,21 @@ public class AgentMessageService {
                 .toolCallId(toolCallId)
                 .parentToolCallId(parentToolCallId)
                 .build();
+        messageAllocator.append(conversationId, message);
+        return message;
+    }
+
+    /** Persists an already validated event projection through the shared order allocator. */
+    public AgentMessage saveProjectedMessage(
+            String conversationId, AgentMessage projection) {
+        AgentMessage message = Objects.requireNonNull(
+                projection, "projection must not be null");
+        if (StrUtil.isBlank(message.getRunId())
+                || StrUtil.isBlank(message.getProjectionKey())
+                || StrUtil.isBlank(message.getRole())) {
+            throw new IllegalArgumentException(
+                    "Projected message requires runId, projectionKey, and role");
+        }
         messageAllocator.append(conversationId, message);
         return message;
     }

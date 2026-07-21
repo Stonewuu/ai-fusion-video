@@ -111,4 +111,72 @@ public interface AgentEventMapper extends BaseMapper<AgentEvent> {
             @Param("claimOwner") String claimOwner,
             @Param("nextAttemptAt") LocalDateTime nextAttemptAt,
             @Param("lastPublishError") String lastPublishError);
+
+    @Select("""
+            SELECT *
+            FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+            WHERE run_id = #{runId}
+              AND sequence_no > #{afterSequence}
+              AND sequence_no <= #{throughSequence}
+            ORDER BY sequence_no
+            LIMIT #{limit}
+            """)
+    List<AgentEvent> selectProjectionRange(
+            @Param("runId") String runId,
+            @Param("afterSequence") long afterSequence,
+            @Param("throughSequence") long throughSequence,
+            @Param("limit") int limit);
+
+    @Select("""
+            SELECT COALESCE(MAX(sequence_no), 0)
+            FROM afv_agent_event FORCE INDEX (idx_agent_event_projection)
+            WHERE run_id = #{runId}
+              AND sequence_no < #{beforeSequence}
+              AND output_type IS NOT NULL
+              AND output_type NOT IN ('CONTENT', 'REASONING')
+              AND (
+                    parent_tool_call_id = #{parentToolCallId}
+                 OR (parent_tool_call_id IS NULL AND #{parentToolCallId} IS NULL)
+              )
+            """)
+    long selectLastContextBoundarySequence(
+            @Param("runId") String runId,
+            @Param("beforeSequence") long beforeSequence,
+            @Param("parentToolCallId") String parentToolCallId);
+
+    @Select("""
+            SELECT *
+            FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+            WHERE run_id = #{runId}
+              AND sequence_no > #{afterSequence}
+              AND sequence_no < #{beforeSequence}
+              AND output_type IN ('CONTENT', 'REASONING')
+              AND (
+                    parent_tool_call_id = #{parentToolCallId}
+                 OR (parent_tool_call_id IS NULL AND #{parentToolCallId} IS NULL)
+              )
+            ORDER BY sequence_no
+            """)
+    List<AgentEvent> selectContextDeltas(
+            @Param("runId") String runId,
+            @Param("afterSequence") long afterSequence,
+            @Param("beforeSequence") long beforeSequence,
+            @Param("parentToolCallId") String parentToolCallId);
+
+    @Select("""
+            SELECT *
+            FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+            WHERE run_id = #{runId}
+              AND tool_call_id = #{toolCallId}
+              AND sequence_no <= #{throughSequence}
+              AND raw_event_type IN (
+                    'TOOL_CALL_DELTA',
+                    'TOOL_RESULT_TEXT_DELTA',
+                    'TOOL_RESULT_DATA_DELTA')
+            ORDER BY sequence_no
+            """)
+    List<AgentEvent> selectToolDeltas(
+            @Param("runId") String runId,
+            @Param("toolCallId") String toolCallId,
+            @Param("throughSequence") long throughSequence);
 }
