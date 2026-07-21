@@ -2,6 +2,9 @@ package com.stonewu.fusion.service.ai.provider;
 
 import com.google.genai.types.Content;
 import com.google.genai.types.FunctionResponse;
+import com.google.genai.types.FunctionCallingConfig;
+import com.google.genai.types.FunctionCallingConfigMode;
+import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.Part;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
@@ -12,6 +15,7 @@ import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
+import io.agentscope.core.model.ToolChoice;
 import io.agentscope.extensions.model.gemini.GeminiChatModel;
 import org.junit.jupiter.api.Test;
 
@@ -58,6 +62,57 @@ class GeminiAiProviderTests {
         } finally {
             geminiModel.close();
         }
+    }
+
+    @Test
+    void agentScopeFormatterDelegatesRequiredNoneAndSpecificToolChoice() {
+        Formatter<Content, ?, GenerateContentConfig.Builder> formatter = GeminiAiProvider.agentScopeFormatter();
+
+        FunctionCallingConfig required = applyToolChoice(formatter, new ToolChoice.Required());
+        assertThat(required.mode().orElseThrow().knownEnum()).isEqualTo(FunctionCallingConfigMode.Known.ANY);
+        assertThat(required.allowedFunctionNames()).isEmpty();
+
+        FunctionCallingConfig none = applyToolChoice(formatter, new ToolChoice.None());
+        assertThat(none.mode().orElseThrow().knownEnum()).isEqualTo(FunctionCallingConfigMode.Known.NONE);
+
+        FunctionCallingConfig specific = applyToolChoice(formatter, new ToolChoice.Specific("get_project"));
+        assertThat(specific.mode().orElseThrow().knownEnum()).isEqualTo(FunctionCallingConfigMode.Known.ANY);
+        assertThat(specific.allowedFunctionNames()).contains(List.of("get_project"));
+    }
+
+    @Test
+    void agentScopeFormatterOrdersMultipleResultsWithinOneToolMessageByBlock() {
+        Formatter<Content, ?, GenerateContentConfig.Builder> formatter = GeminiAiProvider.agentScopeFormatter();
+        Msg assistantToolCall = Msg.builder()
+                .role(MsgRole.ASSISTANT)
+                .content(
+                        ToolUseBlock.builder().id("call-1").name("get_project")
+                                .input(Map.of("projectId", 2)).build(),
+                        ToolUseBlock.builder().id("call-2").name("get_storyboard")
+                                .input(Map.of("storyboardId", 11)).build())
+                .build();
+        Msg combinedToolResults = Msg.builder()
+                .role(MsgRole.TOOL)
+                .content(
+                        ToolResultBlock.text("storyboard-ok").withIdAndName("call-2", "get_storyboard"),
+                        ToolResultBlock.text("extra-ok").withIdAndName("call-extra", "extra_tool"),
+                        ToolResultBlock.text("project-ok").withIdAndName("call-1", "get_project"))
+                .build();
+
+        List<Content> contents = formatter.format(List.of(assistantToolCall, combinedToolResults));
+        List<Part> responseParts = contents.get(1).parts().orElseThrow();
+        assertThat(responseParts).hasSize(3);
+        assertFunctionResponse(responseParts.get(0), "call-1", "get_project", "project-ok");
+        assertFunctionResponse(responseParts.get(1), "call-2", "get_storyboard", "storyboard-ok");
+        assertFunctionResponse(responseParts.get(2), "call-extra", "extra_tool", "extra-ok");
+    }
+
+    private FunctionCallingConfig applyToolChoice(
+            Formatter<Content, ?, GenerateContentConfig.Builder> formatter,
+            ToolChoice toolChoice) {
+        GenerateContentConfig.Builder builder = GenerateContentConfig.builder();
+        formatter.applyToolChoice(builder, toolChoice);
+        return builder.build().toolConfig().orElseThrow().functionCallingConfig().orElseThrow();
     }
 
     @SuppressWarnings("unchecked")

@@ -10,12 +10,14 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import io.agentscope.core.formatter.Formatter;
+import io.agentscope.core.message.ContentBlock;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
+import io.agentscope.core.model.ToolChoice;
 import io.agentscope.core.model.transport.ProxyConfig;
 import io.agentscope.extensions.model.gemini.GeminiChatModel;
 import io.agentscope.extensions.model.gemini.formatter.GeminiChatFormatter;
@@ -27,11 +29,10 @@ import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * Gemini Developer API 提供商。
@@ -120,8 +121,13 @@ public class GeminiAiProvider extends AbstractAiProvider {
             delegate.applyTools(builder, tools);
         }
 
+        @Override
+        public void applyToolChoice(GenerateContentConfig.Builder builder, ToolChoice toolChoice) {
+            delegate.applyToolChoice(builder, toolChoice);
+        }
+
         private List<Msg> orderParallelToolResults(List<Msg> messages) {
-            if (messages == null || messages.size() < 3) {
+            if (messages == null || messages.size() < 2) {
                 return messages;
             }
             List<Msg> ordered = new ArrayList<>(messages.size());
@@ -143,25 +149,35 @@ public class GeminiAiProvider extends AbstractAiProvider {
                     continue;
                 }
 
-                Map<String, Msg> byToolCallId = new LinkedHashMap<>();
+                List<ToolResultBlock> remainingResults = new ArrayList<>();
                 for (Msg resultMessage : resultMessages) {
-                    resultMessage.getContentBlocks(ToolResultBlock.class).stream()
-                            .findFirst()
-                            .map(ToolResultBlock::getId)
-                            .filter(StrUtil::isNotBlank)
-                            .ifPresent(id -> byToolCallId.put(id, resultMessage));
+                    remainingResults.addAll(resultMessage.getContentBlocks(ToolResultBlock.class));
                 }
-                LinkedHashSet<Msg> appended = new LinkedHashSet<>();
+                List<ToolResultBlock> orderedResults = new ArrayList<>(remainingResults.size());
                 for (ToolUseBlock toolUse : toolUses) {
-                    Msg resultMessage = byToolCallId.get(toolUse.getId());
-                    if (resultMessage != null && appended.add(resultMessage)) {
-                        ordered.add(resultMessage);
+                    for (int resultIndex = 0; resultIndex < remainingResults.size();) {
+                        ToolResultBlock result = remainingResults.get(resultIndex);
+                        if (Objects.equals(toolUse.getId(), result.getId())) {
+                            orderedResults.add(result);
+                            remainingResults.remove(resultIndex);
+                        } else {
+                            resultIndex++;
+                        }
                     }
                 }
+                orderedResults.addAll(remainingResults);
+
+                int orderedResultIndex = 0;
                 for (Msg resultMessage : resultMessages) {
-                    if (appended.add(resultMessage)) {
-                        ordered.add(resultMessage);
+                    List<ContentBlock> reorderedContent = new ArrayList<>(resultMessage.getContent().size());
+                    for (ContentBlock block : resultMessage.getContent()) {
+                        if (block instanceof ToolResultBlock) {
+                            reorderedContent.add(orderedResults.get(orderedResultIndex++));
+                        } else {
+                            reorderedContent.add(block);
+                        }
                     }
+                    ordered.add(resultMessage.withContent(reorderedContent));
                 }
                 index = resultEnd - 1;
             }

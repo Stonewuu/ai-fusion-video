@@ -39,7 +39,7 @@ class AnthropicAiProviderTests {
     }
 
     @Test
-    void createAgentScopeModelUsesOfficialOptionsAndAuthenticatedProxy() throws Exception {
+    void createAgentScopeModelUsesOfficialOptionsAndProxyAddressWhilePreservingCredentialConfig() throws Exception {
         AnthropicAiProvider provider = new AnthropicAiProvider();
 
         AiProviderContext context = AiProviderContext.builder()
@@ -79,6 +79,8 @@ class AnthropicAiProviderTests {
         assertThat(address.getHostString()).isEqualTo("127.0.0.1");
         assertThat(address.getPort()).isEqualTo(7890);
 
+        // AgentScope GA currently exposes only the proxy address on the Anthropic SDK client.
+        // These assertions cover credential preservation at our config boundary, not end-to-end auth.
         ProxyConfig proxyConfig = AiProxySupport.agentScopeProxyConfig(context.getApiConfig());
         assertThat(proxyConfig.hasAuthentication()).isTrue();
         assertThat(proxyConfig.getUsername()).isEqualTo("proxy-user");
