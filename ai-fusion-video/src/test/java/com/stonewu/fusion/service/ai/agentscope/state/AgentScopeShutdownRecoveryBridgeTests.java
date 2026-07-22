@@ -3,10 +3,8 @@ package com.stonewu.fusion.service.ai.agentscope.state;
 import com.stonewu.fusion.config.AgentScopeRuntimeProperties;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import io.agentscope.core.agent.Agent;
-import io.agentscope.core.agent.AgentBase;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEndEvent;
-import io.agentscope.core.hook.PreCallEvent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.middleware.AgentInput;
@@ -17,8 +15,8 @@ import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Flux;
 import reactor.test.StepVerifier;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -26,7 +24,6 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 
-@SuppressWarnings({"deprecation", "removal"})
 class AgentScopeShutdownRecoveryBridgeTests {
 
     private final AgentRuntimeSchedulers schedulers = schedulers();
@@ -40,14 +37,13 @@ class AgentScopeShutdownRecoveryBridgeTests {
     }
 
     @Test
-    void removesOnlyTheRetriedTailAndAcknowledgesTheMarkerOnSuccess() {
+    void acknowledgesTheNativeShutdownRetryMarkerOnSuccess() {
         Fixture fixture = fixture();
 
         StepVerifier.create(invoke(fixture, Flux.just(new AgentEndEvent("reply"))))
                 .expectNextCount(1)
                 .verifyComplete();
 
-        assertThat(fixture.preCall().getInputMessages()).containsExactly(fixture.persisted());
         assertThat(fixture.state().isShutdownInterrupted()).isFalse();
         verify(store).save(
                 fixture.runtime().getUserId(),
@@ -127,13 +123,13 @@ class AgentScopeShutdownRecoveryBridgeTests {
             Fixture fixture,
             Flux<io.agentscope.core.event.AgentEvent> result) {
         return bridge.onAgent(
-                mock(Agent.class),
-                fixture.runtime(),
-                new AgentInput(List.of(fixture.retried())),
-                ignored -> bridge.onEvent(fixture.preCall())
-                        .contextWrite(context -> context.put(
-                                AgentBase.RUNTIME_CONTEXT_KEY, fixture.runtime()))
-                        .thenMany(result));
+            mock(Agent.class),
+            fixture.runtime(),
+            new AgentInput(List.of(fixture.persisted(), fixture.retried())),
+            prepared -> bridge.onSystemPrompt(
+                            mock(Agent.class), fixture.runtime(), "system")
+                    .doOnNext(ignored -> fixture.state().setShutdownInterrupted(false))
+                    .thenMany(result));
     }
 
     private Fixture fixture() {
@@ -150,9 +146,17 @@ class AgentScopeShutdownRecoveryBridgeTests {
                 .sessionId(state.getSessionId())
                 .agentState(state)
                 .build();
-        PreCallEvent preCall = new PreCallEvent(
-                mock(Agent.class), new ArrayList<>(List.of(persisted, retried)));
-        return new Fixture(state, runtime, preCall, persisted, retried);
+        org.mockito.Mockito.when(store.get(
+                        state.getUserId(),
+                        state.getSessionId(),
+                        "agent_state",
+                        AgentState.class))
+                .thenReturn(Optional.of(state));
+        return new Fixture(
+                state,
+                runtime,
+                persisted,
+                retried);
     }
 
     private AgentRuntimeSchedulers schedulers() {
@@ -167,7 +171,6 @@ class AgentScopeShutdownRecoveryBridgeTests {
     private record Fixture(
             AgentState state,
             RuntimeContext runtime,
-            PreCallEvent preCall,
             Msg persisted,
             Msg retried) {
     }

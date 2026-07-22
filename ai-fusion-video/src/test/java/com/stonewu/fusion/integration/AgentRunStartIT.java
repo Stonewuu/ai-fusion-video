@@ -371,7 +371,7 @@ class AgentRunStartIT {
 
     private AgentKernelSnapshot snapshot(String stableKey, long modelVersion) {
         AgentKernelSnapshotPayload payload = new AgentKernelSnapshotPayload(
-                1,
+                AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION,
                 stableKey,
                 stableKey + " name",
                 "test agent",

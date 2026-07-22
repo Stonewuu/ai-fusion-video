@@ -299,7 +299,7 @@ class AgentReplayLiveIT {
     private AgentKernelSnapshot snapshot() {
         return new CanonicalAgentKernelSnapshotBuilder().build(
                 new AgentKernelSnapshotPayload(
-                        1,
+                        AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION,
                         "assistant",
                         "Assistant",
                         "Replay test agent",

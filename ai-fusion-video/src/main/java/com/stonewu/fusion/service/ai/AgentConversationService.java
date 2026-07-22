@@ -42,6 +42,7 @@ public class AgentConversationService {
                             .eq(AgentConversation::getConversationId, conversationId)
                             .eq(AgentConversation::getDeleted, false)
                             .set(title != null, AgentConversation::getTitle, title)
+                            .set(AgentConversation::getStatus, "running")
                             .set(AgentConversation::getUpdateTime, updatedAt);
             if (conversationMapper.update(null, metadataUpdate) != 1) {
                 throw new IllegalStateException("Agent conversation metadata update failed: "
@@ -50,6 +51,7 @@ public class AgentConversationService {
             if (title != null) {
                 existing.setTitle(title);
             }
+            existing.setStatus("running");
             existing.setUpdateTime(updatedAt);
             return existing;
         }

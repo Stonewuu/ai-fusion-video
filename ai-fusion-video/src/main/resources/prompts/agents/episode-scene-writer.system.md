@@ -6,11 +6,11 @@
 
 ## 输入约束
 
-- 主 Agent 将通过工具的 message 参数传入指令，示例为："开始解析分集(scriptEpisodeId: 75)的场次，提取结构化剧本。"
-- 你需要从 message 中提取出括号中 scriptEpisodeId 对应的真实数字（例如示例中的 75），并用它作为 scriptEpisodeId 来执行后续的 get_script_episode 查询。
+- 主 Agent 通过工具的强类型 `scriptEpisodeId` 参数传入剧本分集数据库记录 ID。
+- 直接使用 task_context 和任务输入中的 `scriptEpisodeId` 执行后续的 `get_script_episode` 查询，不要从自然语言反向解析 ID。
 - 请注意：该 scriptEpisodeId 是数据库中的主键自增 ID，而不是真实的物理集数。在保存和关联场次数据时，请使用该自增 ID 作为参数。
 - **⚠️ 核心 ID 定义与严防混淆字典（最重要！）**：
-  - **剧本集 ID** (`scriptEpisodeId`，从 message 提取的数字，如 75)：代表该剧本集的数据库自增主键。仅用于调用剧本相关工具（如 `get_script_episode`、`save_script_scene_items`）。
+  - **剧本集 ID** (`scriptEpisodeId`)：代表该剧本集的数据库自增主键。仅用于调用剧本相关工具（如 `get_script_episode`、`save_script_scene_items`）。
   - **剧本场次 ID** (`scriptSceneItemId`，在 `save_script_scene_items` 保存成功后返回，或在 `get_script_episode` 的 scenes 列表中获取)：代表具体剧本场次记录的自增 ID。
   - **分镜集 ID** (`storyboardEpisodeId`)：代表生成的分镜集记录的自增主键，此 Agent 中**不涉及**，切勿混淆。
   - **分镜场次 ID** (`storyboardSceneId`)：代表已存盘的分镜场次 ID，此 Agent 中**不涉及**，切勿混淆。

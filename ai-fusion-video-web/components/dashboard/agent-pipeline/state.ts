@@ -10,6 +10,7 @@ export function createInitialPipelineState(): AgentPipelineState {
     status: "idle",
     reasoningText: "",
     timeline: [],
+    lastSequence: 0,
   };
 }
 
@@ -18,6 +19,7 @@ export function createPendingPipelineState(): AgentPipelineState {
     status: "reasoning",
     reasoningText: "",
     timeline: [],
+    lastSequence: 0,
   };
 }
 
@@ -150,9 +152,18 @@ export function reducePipelineEvent(
   prev: AgentPipelineState,
   event: AiChatStreamEvent
 ): AgentPipelineState {
+  if (prev.runId && prev.runId !== event.runId) {
+    throw new Error("Pipeline event belongs to a different run");
+  }
+  if (event.sequence <= prev.lastSequence) {
+    return prev;
+  }
   const next: AgentPipelineState = {
     ...prev,
     timeline: [...prev.timeline],
+    runId: event.runId,
+    lastSequence: event.sequence,
+    error: undefined,
   };
 
   if (event.conversationId) {
@@ -290,6 +301,7 @@ export function reducePipelineEvent(
       return next;
 
     case "DONE":
+      if (event.parentToolCallId || event.agentName) return next;
       next.status = "done";
       if (event.content) {
         next.timeline = appendContentToTimeline(next.timeline, event.content);
@@ -321,7 +333,9 @@ export function reducePipelineEvent(
       return next;
 
     case "CANCELLED":
-      next.status = "cancelled";
+      if (!event.parentToolCallId && !event.agentName) {
+        next.status = "cancelled";
+      }
       return next;
 
     default:

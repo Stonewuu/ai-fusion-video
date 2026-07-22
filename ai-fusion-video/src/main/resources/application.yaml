@@ -67,3 +67,5 @@ fusion:
         coalesce-max-chars: 1024
       execution:
         owner-lease: 30s
+        run-timeout: 30m
+        max-iters: 999

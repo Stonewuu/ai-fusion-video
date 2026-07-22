@@ -8,6 +8,7 @@ import com.stonewu.fusion.enums.ai.AgentRuntimeErrorCode;
 import com.stonewu.fusion.enums.ai.AgentTerminalOutputType;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentScopeRuntimeContextRequest;
+import com.stonewu.fusion.service.ai.agentscope.context.ParentAgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.HarnessLeaseCache;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreSlot;
@@ -15,6 +16,7 @@ import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.kernel.RunConfigUnavailableException;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
+import com.stonewu.fusion.service.ai.run.model.CommittedAgentEvent;
 import com.stonewu.fusion.service.ai.run.model.ExecutionStopReason;
 import com.stonewu.fusion.service.ai.run.model.ResumeAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
@@ -24,6 +26,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
@@ -42,6 +45,7 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
     private final AgentEventChunkCoalescer chunks;
     private final AgentEventJournal journal;
     private final RunTerminalCoordinator terminals;
+    private final AgentMessageProjectionService projections;
     private final HarnessLeaseCache kernelLeaseCache;
     private final AgentKernelSnapshotBuilder snapshotBuilder;
     private final RunShutdownCancellationPort shutdownCancellation;
@@ -63,6 +67,7 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             AgentEventChunkCoalescer chunks,
             AgentEventJournal journal,
             RunTerminalCoordinator terminals,
+            AgentMessageProjectionService projections,
             HarnessLeaseCache kernelLeaseCache,
             AgentKernelSnapshotBuilder snapshotBuilder,
             RunShutdownCancellationPort shutdownCancellation,
@@ -75,6 +80,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
         this.chunks = Objects.requireNonNull(chunks, "chunks must not be null");
         this.journal = Objects.requireNonNull(journal, "journal must not be null");
         this.terminals = Objects.requireNonNull(terminals, "terminals must not be null");
+        this.projections = Objects.requireNonNull(
+                projections, "projections must not be null");
         this.kernelLeaseCache = Objects.requireNonNull(
                 kernelLeaseCache, "kernelLeaseCache must not be null");
         this.snapshotBuilder = Objects.requireNonNull(
@@ -159,8 +166,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                         execution,
                         deadline,
                         chunks::coalesce,
-                        events -> events.concatMap(event -> appendOwned(
-                                        runId, ownerInstanceId, ownerEpoch, event), 1)
+                        events -> events.concatMap(
+                                        event -> appendOwned(execution, event), 1)
                                 .then(),
                         ignored -> signals.cancellations(runId)
                                 .next()
@@ -186,14 +193,78 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
     }
 
     private Mono<Void> appendOwned(
+            AgentExecution execution,
+            AgentEventEnvelope event) {
+        return appendRequired(
+                        execution.runId(),
+                        execution.ownerInstanceId(),
+                        execution.ownerEpoch(),
+                        event,
+                        false)
+                .flatMap(committed -> mirrorToParent(execution, committed));
+    }
+
+    private Mono<CommittedAgentEvent> appendRequired(
             String runId,
             String ownerInstanceId,
             long ownerEpoch,
-            AgentEventEnvelope event) {
+            AgentEventEnvelope event,
+            boolean parentWrite) {
         return journal.appendOwned(runId, ownerInstanceId, ownerEpoch, event)
-                .flatMap(committed -> committed.isPresent()
-                        ? Mono.empty()
-                        : Mono.error(new OwnerLostException(runId)));
+                .flatMap(committed -> committed
+                        .map(Mono::just)
+                        .orElseGet(() -> Mono.error(parentWrite
+                                ? new ParentOwnerLostException(runId)
+                                : new OwnerLostException(runId))));
+    }
+
+    private Mono<Void> mirrorToParent(
+            AgentExecution execution,
+            CommittedAgentEvent childEvent) {
+        ParentAgentRunContext parent = execution.parentRun();
+        if (parent == null) {
+            return Mono.empty();
+        }
+        return appendRequired(
+                        parent.runId(),
+                        parent.ownerInstanceId(),
+                        parent.ownerEpoch(),
+                        mirroredChildEvent(parent, childEvent),
+                        true)
+                .then();
+    }
+
+    private AgentEventEnvelope mirroredChildEvent(
+            ParentAgentRunContext parent,
+            CommittedAgentEvent childEvent) {
+        AgentEventEnvelope original = childEvent.envelope();
+        JsonNode originalPayload = original.payload();
+        if (!originalPayload.isObject()) {
+            throw new IllegalStateException(
+                    "Child Agent event payload must be a JSON object: "
+                            + original.rawEventId());
+        }
+        ObjectNode payload = (ObjectNode) originalPayload;
+        payload.put("_platformMirroredChildEvent", true);
+        payload.put("childRunId", childEvent.runId());
+        payload.put("childSequence", childEvent.sequence());
+        String mirrorMaterial = childEvent.runId() + '\0' + original.rawEventId();
+        String mirroredRawEventId = "child-" + UUID.nameUUIDFromBytes(
+                        mirrorMaterial.getBytes(StandardCharsets.UTF_8))
+                .toString()
+                .replace("-", "");
+        return new AgentEventEnvelope(
+                mirroredRawEventId,
+                original.rawEventType(),
+                "main/" + parent.agentName(),
+                original.replyId(),
+                original.blockId(),
+                original.toolCallId(),
+                parent.toolCallId(),
+                parent.agentName(),
+                original.outputType(),
+                payload,
+                original.createdAt());
     }
 
     private Mono<Void> completeExecution(
@@ -282,10 +353,12 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                                 AgentRunStatus.COMPLETED,
                                 AgentTerminalOutputType.DONE,
                                 null,
-                                null),
+                                null,
+                                execution.parentToolCallId(),
+                                execution.agentName()),
                         execution.ownerInstanceId(),
                         execution.ownerEpoch())
-                .then();
+                .flatMap(this::projectTerminal);
     }
 
     private Mono<Void> terminalFailure(
@@ -298,6 +371,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                 execution.ownerEpoch(),
                 execution.userId(),
                 execution.stateSessionId(),
+                execution.parentToolCallId(),
+                execution.agentName(),
                 errorCode,
                 errorMessage);
     }
@@ -316,6 +391,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                 ownerEpoch,
                 runtimeRequest.authenticatedUser().userId(),
                 stateSessionId,
+                runtimeRequest.run().parentToolCallId(),
+                runtimeRequest.run().agentName(),
                 errorCode,
                 errorMessage);
     }
@@ -326,6 +403,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             long ownerEpoch,
             long userId,
             String stateSessionId,
+            String parentToolCallId,
+            String agentName,
             AgentRuntimeErrorCode errorCode,
             String errorMessage) {
         return terminals.terminateOwned(
@@ -336,10 +415,12 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                                 AgentRunStatus.FAILED,
                                 AgentTerminalOutputType.ERROR,
                                 errorCode,
-                                sanitizeMessage(errorMessage)),
+                                sanitizeMessage(errorMessage),
+                                parentToolCallId,
+                                agentName),
                         ownerInstanceId,
                         ownerEpoch)
-                .then();
+                .flatMap(this::projectTerminal);
     }
 
     private RunTerminalRequest terminalRequest(
@@ -349,7 +430,9 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             AgentRunStatus status,
             AgentTerminalOutputType outputType,
             AgentRuntimeErrorCode errorCode,
-            String errorMessage) {
+            String errorMessage,
+            String parentToolCallId,
+            String agentName) {
         ObjectNode payload = JsonNodeFactory.instance.objectNode()
                 .put("outputType", outputType.name())
                 .put("finished", true);
@@ -360,12 +443,12 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
         AgentEventEnvelope envelope = new AgentEventEnvelope(
                 "terminal-" + UUID.randomUUID().toString().replace("-", ""),
                 "RUN_TERMINAL",
-                "main",
+                agentName == null ? "main" : "main/" + agentName,
                 null,
                 null,
                 null,
-                null,
-                null,
+                parentToolCallId,
+                agentName,
                 outputType.name(),
                 sanitizer.sanitize(payload),
                 Instant.now());
@@ -378,6 +461,14 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                 errorCode,
                 errorMessage,
                 envelope);
+    }
+
+    private Mono<Void> projectTerminal(
+            Optional<com.stonewu.fusion.service.ai.run.model.CommittedAgentEvent> committed) {
+        return committed
+                .map(event -> projections.projectThrough(
+                        event.runId(), event.sequence()))
+                .orElseGet(Mono::empty);
     }
 
     private AgentRuntimeErrorCode classifyStartFailure(Throwable failure) {
@@ -457,6 +548,12 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
     static final class OwnerLostException extends RuntimeException {
         private OwnerLostException(String runId) {
             super("Agent run ownership was lost: " + runId);
+        }
+    }
+
+    static final class ParentOwnerLostException extends RuntimeException {
+        private ParentOwnerLostException(String runId) {
+            super("Parent Agent run ownership was lost: " + runId);
         }
     }
 }

@@ -102,11 +102,11 @@ class AgentProjectionRecoveryIT {
         append(run, "TOOL_CALL_DELTA", null, "tool-1",
                 objectPayload("delta", "\"上海\"}"));
         append(run, "TOOL_CALL_END", "TOOL_CALL", "tool-1",
-                objectPayload("toolName", "weather"));
+                objectPayload("toolCallName", "weather"));
         append(run, "TOOL_RESULT_TEXT_DELTA", null, "tool-1",
                 objectPayload("delta", "晴天"));
         append(run, "TOOL_RESULT_END", "TOOL_FINISHED", "tool-1",
-                objectPayload("toolName", "weather").put("state", "SUCCESS"));
+                objectPayload("toolCallName", "weather").put("state", "SUCCESS"));
         append(run, "TEXT_BLOCK_DELTA", "CONTENT", null,
                 objectPayload("delta", "最终答案"));
         assertThat(await(terminalCoordinator.terminateOwned(
@@ -145,6 +145,8 @@ class AgentProjectionRecoveryIT {
         AgentRun persisted = requireRun(run.runId());
         assertThat(persisted.getProjectedThroughSequence()).isEqualTo(terminalSequence);
         assertThat(persisted.getProjectionCompletedAt()).isNotNull();
+        assertThat(conversationService.getByConversationId(run.conversationId()).getStatus())
+                .isEqualTo("completed");
     }
 
     @Test
@@ -179,6 +181,55 @@ class AgentProjectionRecoveryIT {
                     assertThat(message.getProjectionKey()).isEqualTo(key);
                     assertThat(message.getContent()).isEqualTo("可恢复内容");
                 });
+        AgentRun persisted = requireRun(run.runId());
+        assertThat(persisted.getProjectedThroughSequence()).isEqualTo(terminalSequence);
+        assertThat(persisted.getProjectionCompletedAt()).isNotNull();
+    }
+
+    @Test
+    void persistsOfficialAgentScopeErrorBlockAsErrorDespiteSuccessEndState() {
+        StartedAgentRun run = startRoot("projection-tool-error");
+        append(run, "TOOL_RESULT_TEXT_DELTA", null, "tool-error",
+                objectPayload("delta", "Error: Tool execution failed: invalid input"));
+        append(run, "TOOL_RESULT_END", "TOOL_FINISHED", "tool-error",
+                objectPayload("toolName", "update_script_info").put("state", "SUCCESS"));
+        assertThat(await(terminalCoordinator.terminateOwned(
+                completedTerminal(run),
+                run.ownerInstanceId(),
+                run.ownerEpoch())))
+                .isPresent();
+        long terminalSequence = requireRun(run.runId()).getTerminalSequence();
+
+        await(projectionService.projectThrough(run.runId(), terminalSequence));
+
+        assertThat(projectedMessages(run.runId()))
+                .singleElement()
+                .satisfies(message -> {
+                    assertThat(message.getRole()).isEqualTo("tool");
+                    assertThat(message.getToolStatus()).isEqualTo("error");
+                    assertThat(message.getContent())
+                            .isEqualTo("Error: Tool execution failed: invalid input");
+                });
+    }
+
+    @Test
+    void mirroredChildEventsAdvanceTheParentCursorWithoutDuplicatingHistory() {
+        StartedAgentRun run = startRoot("projection-mirrored-child");
+        append(run, "TOOL_CALL_END", "TOOL_CALL", "child-inner-tool",
+                objectPayload("toolCallName", "child_tool")
+                        .put("_platformMirroredChildEvent", true)
+                        .put("childRunId", "child-run-1")
+                        .put("childSequence", 4));
+        assertThat(await(terminalCoordinator.terminateOwned(
+                completedTerminal(run),
+                run.ownerInstanceId(),
+                run.ownerEpoch())))
+                .isPresent();
+        long terminalSequence = requireRun(run.runId()).getTerminalSequence();
+
+        await(projectionService.projectThrough(run.runId(), terminalSequence));
+
+        assertThat(projectedMessages(run.runId())).isEmpty();
         AgentRun persisted = requireRun(run.runId());
         assertThat(persisted.getProjectedThroughSequence()).isEqualTo(terminalSequence);
         assertThat(persisted.getProjectionCompletedAt()).isNotNull();
@@ -311,7 +362,7 @@ class AgentProjectionRecoveryIT {
     private AgentKernelSnapshot snapshot() {
         return new CanonicalAgentKernelSnapshotBuilder().build(
                 new AgentKernelSnapshotPayload(
-                        1,
+                        AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION,
                         "assistant",
                         "Assistant",
                         "Projection test agent",

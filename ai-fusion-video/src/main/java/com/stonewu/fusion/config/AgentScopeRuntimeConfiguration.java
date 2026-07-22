@@ -1,7 +1,5 @@
 package com.stonewu.fusion.config;
 
-import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelToolkitResources;
-import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelToolRegistry;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeStateStoreFactory;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
@@ -38,12 +36,6 @@ public class AgentScopeRuntimeConfiguration {
     @Bean
     public StateStoreFailureGuard stateStoreFailureGuard() {
         return new InMemoryStateStoreFailureGuard();
-    }
-
-    @Bean
-    @ConditionalOnMissingBean(AgentKernelToolRegistry.class)
-    public AgentKernelToolRegistry agentKernelToolRegistry() {
-        return (spec, toolkit) -> AgentKernelToolkitResources.none();
     }
 
     @Bean

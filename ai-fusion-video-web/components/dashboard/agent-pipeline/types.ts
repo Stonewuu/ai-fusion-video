@@ -11,6 +11,8 @@ export interface AgentPipelineState {
   reasoningText: string;
   reasoningDurationMs?: number;
   timeline: TimelineItem[];
+  runId?: string;
+  lastSequence: number;
   conversationId?: string;
   error?: string;
 }

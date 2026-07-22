@@ -1,9 +1,7 @@
 package com.stonewu.fusion.service.ai.run;
 
-import com.stonewu.fusion.service.ai.agentscope.kernel.HarnessLeaseCache;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
-import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 
 import java.time.Duration;
@@ -11,7 +9,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -21,12 +18,11 @@ class AgentScopeKernelLifecycleTests {
     @Test
     void usesShutdownPortWhenAvailableAndAlwaysInvokesCallbackAsynchronously() {
         AgentRuntimeShutdownPort port = mock(AgentRuntimeShutdownPort.class);
-        HarnessLeaseCache cache = mock(HarnessLeaseCache.class);
         ObjectProvider<AgentRuntimeShutdownPort> provider = provider(port);
         Sinks.Empty<Void> completion = Sinks.empty();
         when(port.shutdown(Duration.ofSeconds(2))).thenReturn(completion.asMono());
         AgentScopeKernelLifecycle lifecycle =
-                new AgentScopeKernelLifecycle(provider, cache, Duration.ofSeconds(2));
+                new AgentScopeKernelLifecycle(provider, Duration.ofSeconds(2));
         lifecycle.start();
         AtomicInteger callbacks = new AtomicInteger();
 
@@ -35,16 +31,12 @@ class AgentScopeKernelLifecycleTests {
         completion.tryEmitEmpty();
 
         assertThat(callbacks).hasValue(1);
-        verify(cache, never()).drainAndClose(org.mockito.ArgumentMatchers.any());
     }
 
     @Test
-    void fallsBackToCacheAndInvokesCallbackOnError() {
-        HarnessLeaseCache cache = mock(HarnessLeaseCache.class);
-        when(cache.drainAndClose(Duration.ofSeconds(1)))
-                .thenReturn(Mono.error(new IllegalStateException("drain failed")));
+    void missingShutdownPortFailsClosedAndInvokesCallback() {
         AgentScopeKernelLifecycle lifecycle = new AgentScopeKernelLifecycle(
-                provider(null), cache, Duration.ofSeconds(1));
+                provider(null), Duration.ofSeconds(1));
         lifecycle.start();
         AtomicInteger callbacks = new AtomicInteger();
 
@@ -57,11 +49,10 @@ class AgentScopeKernelLifecycleTests {
     @Test
     void concurrentStopsShareOneShutdownAndEachCallbackWaitsForItsTerminalSignal() {
         AgentRuntimeShutdownPort port = mock(AgentRuntimeShutdownPort.class);
-        HarnessLeaseCache cache = mock(HarnessLeaseCache.class);
         Sinks.Empty<Void> completion = Sinks.empty();
         when(port.shutdown(Duration.ofSeconds(2))).thenReturn(completion.asMono());
         AgentScopeKernelLifecycle lifecycle = new AgentScopeKernelLifecycle(
-                provider(port), cache, Duration.ofSeconds(2));
+                provider(port), Duration.ofSeconds(2));
         lifecycle.start();
         AtomicInteger firstCallbacks = new AtomicInteger();
         AtomicInteger secondCallbacks = new AtomicInteger();
@@ -80,11 +71,10 @@ class AgentScopeKernelLifecycleTests {
     @Test
     void synchronousShutdownFailureStillCompletesEveryCallbackExactlyOnce() {
         AgentRuntimeShutdownPort port = mock(AgentRuntimeShutdownPort.class);
-        HarnessLeaseCache cache = mock(HarnessLeaseCache.class);
         when(port.shutdown(Duration.ofSeconds(1)))
                 .thenThrow(new IllegalStateException("sync shutdown failure"));
         AgentScopeKernelLifecycle lifecycle = new AgentScopeKernelLifecycle(
-                provider(port), cache, Duration.ofSeconds(1));
+                provider(port), Duration.ofSeconds(1));
         lifecycle.start();
         AtomicInteger callbacks = new AtomicInteger();
 

@@ -7,6 +7,7 @@ import com.stonewu.fusion.service.ai.run.kernel.ToolManifestSnapshot;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -17,6 +18,7 @@ public record AgentKernelSpec(
         String agentName,
         String description,
         String systemPrompt,
+        Map<String, String> promptVariables,
         int maxIters,
         List<AgentKernelToolManifest> toolManifest,
         Set<String> toolWhitelist,
@@ -29,6 +31,7 @@ public record AgentKernelSpec(
         agentName = requireText(agentName, "agentName");
         description = requireText(description, "description");
         systemPrompt = requireText(systemPrompt, "systemPrompt");
+        promptVariables = AgentPromptVariables.immutable(promptVariables);
         toolWhitelistVersion = requireText(toolWhitelistVersion, "toolWhitelistVersion");
         if (maxIters <= 0) {
             throw new IllegalArgumentException("maxIters must be greater than zero");
@@ -56,9 +59,25 @@ public record AgentKernelSpec(
         if (!key.toolManifestFingerprint().equals(AgentKernelKey.manifestFingerprint(toolManifest))) {
             throw new IllegalArgumentException("AgentKernelSpec key does not match tool manifest");
         }
-        if (!key.promptVersion().equals(AgentKernelKey.promptVersion(systemPrompt))) {
+        if (!key.promptVersion().equals(
+                AgentKernelKey.promptVersion(systemPrompt, promptVariables))) {
             throw new IllegalArgumentException("AgentKernelSpec key does not match prompt content");
         }
+    }
+
+    public AgentKernelSpec(
+            AgentKernelKey key,
+            AiModel model,
+            String agentDefinitionStableKey,
+            String agentName,
+            String description,
+            String systemPrompt,
+            int maxIters,
+            List<AgentKernelToolManifest> toolManifest,
+            Set<String> toolWhitelist,
+            String toolWhitelistVersion) {
+        this(key, model, agentDefinitionStableKey, agentName, description, systemPrompt,
+                Map.of(), maxIters, toolManifest, toolWhitelist, toolWhitelistVersion);
     }
 
     private static String requireText(String value, String field) {
@@ -83,6 +102,7 @@ public record AgentKernelSpec(
                 agentName,
                 description,
                 systemPrompt,
+                promptVariables,
                 maxIters,
                 modelConfigId,
                 modelConfigVersion,

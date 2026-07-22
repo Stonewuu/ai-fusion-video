@@ -52,7 +52,7 @@ public class AiAgentDefinition {
      * 子 Agent 工具定义
      * <p>
      * 当父 Agent 的工具列表中含有 type=agent 的工具时，
-     * 会根据此定义动态创建子 ReactAgent 并封装为 AgentTool。
+     * 会根据此定义创建独立的 HarnessAgent 平台子运行并封装为 ToolBase。
      */
     @Data
     @Builder

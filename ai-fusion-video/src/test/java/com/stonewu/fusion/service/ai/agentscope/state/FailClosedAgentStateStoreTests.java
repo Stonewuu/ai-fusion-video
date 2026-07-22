@@ -101,7 +101,7 @@ class FailClosedAgentStateStoreTests {
     }
 
     @Test
-    void treatsFrameworkAnonymousFallbackReadsAsAbsentWithoutPersistingAnAnonymousSlot() {
+    void treatsFrameworkAnonymousBootstrapReadsAsAbsentWithoutPersistingAnAnonymousSlot() {
         assertThat(store.get(null, "agent-name", "agent_state", TestState.class)).isEmpty();
         assertThat(store.get(null, "agent-name", "toolkit_activeGroups", TestState.class)).isEmpty();
         assertThat(store.getList(null, "agent-name", "memory_messages", TestState.class)).isEmpty();

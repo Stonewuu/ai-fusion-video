@@ -119,15 +119,16 @@ public final class FailClosedAgentStateStore implements AgentStateStore {
     }
 
     private boolean isFrameworkAnonymousGet(String userId, String sessionId, String key) {
-        return isFrameworkFallbackSlot(userId, sessionId)
+        return isFrameworkAnonymousBootstrapSlot(userId, sessionId)
                 && ("agent_state".equals(key) || "toolkit_activeGroups".equals(key));
     }
 
     private boolean isFrameworkAnonymousListGet(String userId, String sessionId, String key) {
-        return isFrameworkFallbackSlot(userId, sessionId) && "memory_messages".equals(key);
+        return isFrameworkAnonymousBootstrapSlot(userId, sessionId)
+                && "memory_messages".equals(key);
     }
 
-    private boolean isFrameworkFallbackSlot(String userId, String sessionId) {
+    private boolean isFrameworkAnonymousBootstrapSlot(String userId, String sessionId) {
         return userId == null && sessionId != null && !sessionId.isBlank();
     }
 }

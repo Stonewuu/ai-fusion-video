@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 
 public record AgentKernelKey(
         String agentDefinitionStableKey,
@@ -103,6 +104,18 @@ public record AgentKernelKey(
         return contentFingerprint(
                 "agent-prompt-v1",
                 requireText(systemPrompt, "systemPrompt"));
+    }
+
+    public static String promptVersion(
+            String systemPrompt, Map<String, String> promptVariables) {
+        Map<String, String> safeVariables = AgentPromptVariables.immutable(promptVariables);
+        if (safeVariables.isEmpty()) {
+            return promptVersion(systemPrompt);
+        }
+        return contentFingerprint(
+                "agent-prompt-v2",
+                requireText(systemPrompt, "systemPrompt"),
+                AgentPromptVariables.canonical(safeVariables));
     }
 
     private static void appendField(StringBuilder target, String value) {

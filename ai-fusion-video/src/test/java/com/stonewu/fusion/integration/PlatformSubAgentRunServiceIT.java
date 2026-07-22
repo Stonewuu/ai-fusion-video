@@ -6,6 +6,7 @@ import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
+import com.stonewu.fusion.enums.ai.AgentTerminalOutputType;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
@@ -17,11 +18,14 @@ import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentRunRedisSignalService;
 import com.stonewu.fusion.service.ai.run.PlatformSubAgentRunService;
 import com.stonewu.fusion.service.ai.run.RunExecutionSupervisor;
+import com.stonewu.fusion.service.ai.run.RunTerminalCoordinator;
 import com.stonewu.fusion.service.ai.run.RunShutdownCancellationPort;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.model.ChildRunIdentityConflictException;
+import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
+import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
 import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.run.model.StartAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
@@ -40,6 +44,8 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
+import com.stonewu.fusion.service.ai.agentscope.state.StateStoreSlot;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -96,6 +102,9 @@ class PlatformSubAgentRunServiceIT {
     @Autowired
     private RunShutdownCancellationPort shutdownCancellation;
 
+    @Autowired
+    private RunTerminalCoordinator terminalCoordinator;
+
     @MockitoBean
     private RunExecutionSupervisor supervisor;
 
@@ -109,6 +118,8 @@ class PlatformSubAgentRunServiceIT {
                 .thenReturn(Mono.just(true));
         when(supervisor.shutdown(any())).thenReturn(Mono.empty());
         when(signals.publishCancel(anyString())).thenReturn(Mono.empty());
+        when(signals.wakeupsWhenSubscribed(anyString()))
+                .thenReturn(Mono.just(Flux.never()));
     }
 
     @Test
@@ -173,6 +184,48 @@ class PlatformSubAgentRunServiceIT {
     }
 
     @Test
+    void awaitsTheDurableChildTerminalInsteadOfReturningRunningAsSuccess() {
+        StartedAgentRun parent = startParent();
+        PlatformSubAgentRun started = await(service.start(
+                childCommand(parent, "tool-await", "researcher")));
+        AgentRun child = run(started.childRunId());
+        assertThat(await(terminalCoordinator.terminateOwned(
+                new RunTerminalRequest(
+                        child.getRunId(),
+                        new StateStoreSlot(
+                                String.valueOf(child.getUserId()),
+                                child.getAgentStateSessionId()),
+                        Set.of(AgentRunStatus.RUNNING),
+                        AgentRunStatus.COMPLETED,
+                        AgentTerminalOutputType.DONE,
+                        null,
+                        null,
+                        new AgentEventEnvelope(
+                                unique("child-terminal"),
+                                "RUN_TERMINAL",
+                                "main/researcher",
+                                null,
+                                null,
+                                null,
+                                "tool-await",
+                                "researcher",
+                                "DONE",
+                                JsonNodeFactory.instance.objectNode()
+                                        .put("outputType", "DONE")
+                                        .put("finished", true),
+                                Instant.now())),
+                child.getOwnerInstanceId(),
+                child.getOwnerEpoch()))).isPresent();
+
+        PlatformSubAgentRun completed = await(service.awaitCompletion(started));
+
+        assertThat(completed.status()).isEqualTo(AgentRunStatus.COMPLETED);
+        assertThat(completed.childRunId()).isEqualTo(started.childRunId());
+        assertThat(completed.parentToolCallId()).isEqualTo("tool-await");
+        assertThat(completed.error()).isNull();
+    }
+
+    @Test
     void serializesParentCancellationAgainstConcurrentChildAdmission() throws Exception {
         StartedAgentRun parent = startParent();
         PlatformSubAgentCommand command = childCommand(
@@ -199,7 +252,9 @@ class PlatformSubAgentRunServiceIT {
 
         assertThat(run(parent.runId()).getStatus())
                 .isEqualTo(AgentRunStatus.CANCEL_REQUESTED.name());
-        assertThat(runMapper.selectActiveChildren(parent.runId())).isEmpty();
+        assertThat(runMapper.selectActiveChildren(parent.runId()))
+                .allSatisfy(child -> assertThat(child.getStatus())
+                        .isEqualTo(AgentRunStatus.CANCEL_REQUESTED.name()));
     }
 
     private StartedAgentRun startParent() {
@@ -211,7 +266,7 @@ class PlatformSubAgentRunServiceIT {
                 "assistant", "child test", "chat");
         AgentKernelSnapshot snapshot = new CanonicalAgentKernelSnapshotBuilder()
                 .build(new AgentKernelSnapshotPayload(
-                        1,
+                        AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION,
                         "assistant",
                         "assistant",
                         "root",

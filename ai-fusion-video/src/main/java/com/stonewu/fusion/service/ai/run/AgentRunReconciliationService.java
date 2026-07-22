@@ -34,6 +34,7 @@ public final class AgentRunReconciliationService {
     private final AgentRunRepository runs;
     private final RunTerminalCoordinator terminals;
     private final OwnedExecutionRegistry executions;
+    private final AgentMessageProjectionService projections;
     private final AgentEventEnvelopeSanitizer sanitizer;
     private final AgentRuntimeSchedulers schedulers;
     private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
@@ -47,12 +48,15 @@ public final class AgentRunReconciliationService {
             AgentRunRepository runs,
             RunTerminalCoordinator terminals,
             OwnedExecutionRegistry executions,
+            AgentMessageProjectionService projections,
             AgentEventEnvelopeSanitizer sanitizer,
             AgentRuntimeSchedulers schedulers) {
         this.runs = Objects.requireNonNull(runs, "runs must not be null");
         this.terminals = Objects.requireNonNull(terminals, "terminals must not be null");
         this.executions = Objects.requireNonNull(
                 executions, "executions must not be null");
+        this.projections = Objects.requireNonNull(
+                projections, "projections must not be null");
         this.sanitizer = Objects.requireNonNull(sanitizer, "sanitizer must not be null");
         this.schedulers = Objects.requireNonNull(
                 schedulers, "schedulers must not be null");
@@ -89,7 +93,7 @@ public final class AgentRunReconciliationService {
                     if (committed.isPresent() && status == AgentRunStatus.RUNNING) {
                         metrics.ownerLost();
                     }
-                    return committed.isPresent() && hasOwner(run)
+                    Mono<Void> interrupt = committed.isPresent() && hasOwner(run)
                         ? executions.interruptOwned(
                                         run.getRunId(),
                                         run.getOwnerInstanceId(),
@@ -97,6 +101,11 @@ public final class AgentRunReconciliationService {
                                         stopReason)
                                 .then()
                         : Mono.empty();
+                    Mono<Void> projection = committed
+                            .map(event -> projections.projectThrough(
+                                    event.runId(), event.sequence()))
+                            .orElseGet(Mono::empty);
+                    return interrupt.then(projection);
                 });
     }
 

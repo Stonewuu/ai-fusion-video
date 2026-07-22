@@ -40,19 +40,12 @@ export function useAgentPipeline({
       onError: (err) => {
         setState((prev) => ({
           ...prev,
-          status: "error",
-          error: err.message,
+          error: `Pipeline 连接中断：${err.message}`,
         }));
         onError?.(err.message);
       },
-      onComplete: () => {
-        setState((prev) => {
-          if (prev.status === "running" || prev.status === "reasoning") {
-            return { ...prev, status: "done" };
-          }
-          return prev;
-        });
-      },
+      // Terminal status is reduced exclusively from the journal event.
+      onComplete: () => undefined,
     });
 
     abortRef.current = controller;
@@ -68,6 +61,13 @@ export function useAgentPipeline({
     }
   }, [autoStart, startStream]);
 
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+    },
+    []
+  );
+
   useEffect(() => {
     if (state.status === "done") {
       onComplete?.(state.conversationId);
@@ -75,16 +75,21 @@ export function useAgentPipeline({
   }, [state.status, state.conversationId, onComplete]);
 
   const cancelStream = useCallback(async () => {
-    abortRef.current?.abort();
-    if (state.conversationId) {
-      try {
-        await cancelPipeline(state.conversationId);
-      } catch {
-        // 忽略取消错误
-      }
+    if (!state.runId) {
+      const message = "Pipeline 尚未返回 runId，无法提交取消请求";
+      setState((prev) => ({ ...prev, error: message }));
+      onError?.(message);
+      return;
     }
-    setState((prev) => ({ ...prev, status: "cancelled" }));
-  }, [state.conversationId]);
+    try {
+      await cancelPipeline({ runId: state.runId });
+      // Keep consuming until the durable CANCELLED terminal event arrives.
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setState((prev) => ({ ...prev, error: message }));
+      onError?.(message);
+    }
+  }, [state.runId, onError]);
 
   const isActive =
     state.status === "reasoning" || state.status === "running";

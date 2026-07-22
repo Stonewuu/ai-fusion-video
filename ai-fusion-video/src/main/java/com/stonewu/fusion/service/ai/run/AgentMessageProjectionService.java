@@ -4,9 +4,11 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.entity.ai.AgentEvent;
 import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.entity.ai.AgentRun;
+import com.stonewu.fusion.mapper.ai.AgentConversationMapper;
 import com.stonewu.fusion.mapper.ai.AgentEventMapper;
 import com.stonewu.fusion.mapper.ai.AgentMessageMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
@@ -15,6 +17,7 @@ import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
@@ -33,6 +36,7 @@ public class AgentMessageProjectionService {
     private static final int MAX_EVENTS_PER_TRANSACTION = 500;
 
     private final AgentRunMapper runMapper;
+    private final AgentConversationMapper conversationMapper;
     private final AgentEventMapper eventMapper;
     private final AgentMessageMapper messageMapper;
     private final AgentMessageService messageService;
@@ -47,6 +51,37 @@ public class AgentMessageProjectionService {
                     "throughSequence must not be negative"));
         }
         return projectNextChunk(safeRunId, throughSequence);
+    }
+
+    public Mono<Void> projectCommitted(String runId) {
+        String safeRunId = requireRunId(runId);
+        return Mono.fromCallable(() -> runMapper.selectByRunId(safeRunId))
+                .subscribeOn(schedulers.journal())
+                .flatMap(run -> {
+                    if (run == null) {
+                        return Mono.error(new IllegalArgumentException(
+                                "Agent run does not exist: " + safeRunId));
+                    }
+                    long lastCommitted = requireLastCommittedSequence(run);
+                    return lastCommitted == 0
+                            ? Mono.empty()
+                            : projectThrough(safeRunId, lastCommitted);
+                });
+    }
+
+    public Mono<Void> recoverTerminalBatch(int limit) {
+        if (limit <= 0) {
+            return Mono.error(new IllegalArgumentException("limit must be positive"));
+        }
+        return Mono.fromCallable(() ->
+                        runMapper.selectProjectionRecoveryCandidates(limit))
+                .subscribeOn(schedulers.journal())
+                .flatMapMany(Flux::fromIterable)
+                .flatMapDelayError(run -> projectThrough(
+                                run.getRunId(), run.getTerminalSequence()),
+                        1,
+                        1)
+                .then();
     }
 
     private Mono<Void> projectNextChunk(String runId, long throughSequence) {
@@ -107,6 +142,9 @@ public class AgentMessageProjectionService {
     }
 
     private void projectBoundary(AgentRun run, AgentEvent event) {
+        if (payload(event).path("_platformMirroredChildEvent").asBoolean(false)) {
+            return;
+        }
         String outputType = event.getOutputType();
         if (outputType == null
                 || "CONTENT".equals(outputType)
@@ -155,14 +193,14 @@ public class AgentMessageProjectionService {
                 .role("assistant")
                 .content(content.isEmpty() ? null : content.toString())
                 .reasoningContent(reasoning.isEmpty() ? null : reasoning.toString())
-                .parentToolCallId(boundary.getParentToolCallId())
+                .parentToolCallId(projectedParentToolCallId(run, boundary))
                 .build();
         persistProjection(run, boundary, "assistant", message);
     }
 
     private AgentMessage toolCallProjection(AgentRun run, AgentEvent event) {
         JsonNode payload = payload(event);
-        String toolName = firstText(payload, "toolName", "name");
+        String toolName = firstText(payload, "toolCallName", "toolName", "name");
         String arguments = collectToolDeltas(
                 run.getRunId(), event.getToolCallId(), event.getSequenceNo(), true);
         if (arguments == null) {
@@ -176,23 +214,20 @@ public class AgentMessageProjectionService {
                 .toolName(requireText(toolName, "toolName"))
                 .toolStatus("running")
                 .toolCallId(requireText(event.getToolCallId(), "toolCallId"))
-                .parentToolCallId(event.getParentToolCallId())
+                .parentToolCallId(projectedParentToolCallId(run, event))
                 .build();
     }
 
     private AgentMessage toolResultProjection(AgentRun run, AgentEvent event) {
         JsonNode payload = payload(event);
-        String toolName = firstText(payload, "toolName", "name");
+        String toolName = firstText(payload, "toolCallName", "toolName", "name");
         String result = collectToolDeltas(
                 run.getRunId(), event.getToolCallId(), event.getSequenceNo(), false);
         if (result == null) {
             result = firstText(payload, "result", "output", "delta");
         }
         String state = firstText(payload, "state", "toolStatus", "status");
-        String status = state != null
-                && ("ERROR".equalsIgnoreCase(state) || "FAILED".equalsIgnoreCase(state))
-                ? "error"
-                : "success";
+        String status = AgentScopeToolResultStatus.project(state, result);
         return AgentMessage.builder()
                 .conversationId(run.getConversationId())
                 .runId(run.getRunId())
@@ -201,8 +236,14 @@ public class AgentMessageProjectionService {
                 .toolName(requireText(toolName, "toolName"))
                 .toolStatus(status)
                 .toolCallId(requireText(event.getToolCallId(), "toolCallId"))
-                .parentToolCallId(event.getParentToolCallId())
+                .parentToolCallId(projectedParentToolCallId(run, event))
                 .build();
+    }
+
+    private String projectedParentToolCallId(AgentRun run, AgentEvent event) {
+        return event.getParentToolCallId() != null
+                ? event.getParentToolCallId()
+                : run.getParentToolCallId();
     }
 
     private String collectToolDeltas(
@@ -283,6 +324,9 @@ public class AgentMessageProjectionService {
         LocalDateTime databaseNow = runMapper.selectDatabaseNow();
         boolean complete = run.getTerminalSequence() != null
                 && projectedThrough >= run.getTerminalSequence();
+        if (complete) {
+            finishRootConversation(run, databaseNow);
+        }
         int updated = runMapper.update(null, new LambdaUpdateWrapper<AgentRun>()
                 .eq(AgentRun::getId, run.getId())
                 .eq(AgentRun::getProjectedThroughSequence,
@@ -298,12 +342,15 @@ public class AgentMessageProjectionService {
     }
 
     private void repairProjectionCompletion(AgentRun run, long cursor) {
-        if (run.getProjectionCompletedAt() != null
-                || run.getTerminalSequence() == null
+        if (run.getTerminalSequence() == null
                 || cursor < run.getTerminalSequence()) {
             return;
         }
         LocalDateTime databaseNow = runMapper.selectDatabaseNow();
+        finishRootConversation(run, databaseNow);
+        if (run.getProjectionCompletedAt() != null) {
+            return;
+        }
         if (runMapper.update(null, new LambdaUpdateWrapper<AgentRun>()
                 .eq(AgentRun::getId, run.getId())
                 .isNull(AgentRun::getProjectionCompletedAt)
@@ -311,6 +358,31 @@ public class AgentMessageProjectionService {
                 .set(AgentRun::getUpdateTime, databaseNow)) != 1) {
             throw new IllegalStateException(
                     "Agent projection completion repair did not affect exactly one row");
+        }
+    }
+
+    private void finishRootConversation(AgentRun run, LocalDateTime databaseNow) {
+        if (run.getParentRunId() != null) {
+            return;
+        }
+        String status = switch (requireText(
+                run.getTerminalOutputType(), "terminalOutputType")) {
+            case "DONE" -> "completed";
+            case "ERROR" -> "error";
+            case "CANCELLED" -> "cancelled";
+            default -> throw new IllegalStateException(
+                    "Unsupported Agent terminal output type: "
+                            + run.getTerminalOutputType());
+        };
+        if (conversationMapper.update(null,
+                new LambdaUpdateWrapper<AgentConversation>()
+                        .eq(AgentConversation::getConversationId,
+                                run.getConversationId())
+                        .eq(AgentConversation::getDeleted, false)
+                        .set(AgentConversation::getStatus, status)
+                        .set(AgentConversation::getUpdateTime, databaseNow)) != 1) {
+            throw new IllegalStateException(
+                    "Agent conversation terminal update did not affect exactly one row");
         }
     }
 

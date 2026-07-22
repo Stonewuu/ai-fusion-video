@@ -22,6 +22,7 @@ public final class AgentRunMaintenanceScheduler {
     private final RunLeaseGuard leases;
     private final AgentRunReconciliationService reconciliation;
     private final CancellationCoordinator cancellations;
+    private final AgentMessageProjectionService projections;
     private final Duration ownerLease;
     private final AtomicBoolean running = new AtomicBoolean();
 
@@ -30,6 +31,7 @@ public final class AgentRunMaintenanceScheduler {
             RunLeaseGuard leases,
             AgentRunReconciliationService reconciliation,
             CancellationCoordinator cancellations,
+            AgentMessageProjectionService projections,
             AgentScopeV2Properties properties) {
         this.executions = Objects.requireNonNull(
                 executions, "executions must not be null");
@@ -38,6 +40,8 @@ public final class AgentRunMaintenanceScheduler {
                 reconciliation, "reconciliation must not be null");
         this.cancellations = Objects.requireNonNull(
                 cancellations, "cancellations must not be null");
+        this.projections = Objects.requireNonNull(
+                projections, "projections must not be null");
         this.ownerLease = Objects.requireNonNull(
                 properties, "properties must not be null")
                 .getExecution()
@@ -65,7 +69,8 @@ public final class AgentRunMaintenanceScheduler {
     public Mono<Void> maintainOnce() {
         return heartbeatOwned()
                 .then(reconciliation.reconcileBatch(BATCH_SIZE))
-                .then(cancellations.retryBatch(BATCH_SIZE));
+                .then(cancellations.retryBatch(BATCH_SIZE))
+                .then(projections.recoverTerminalBatch(BATCH_SIZE));
     }
 
     private Mono<Void> heartbeatOwned() {

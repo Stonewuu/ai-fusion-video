@@ -322,11 +322,7 @@ public final class AgentRunQueryService {
             result = firstValue(payload, "result", "output", "delta");
         }
         String state = firstText(payload, "state", "toolStatus", "status");
-        String status = state != null
-                && ("ERROR".equalsIgnoreCase(state)
-                    || "FAILED".equalsIgnoreCase(state))
-                ? "error"
-                : "success";
+        String status = AgentScopeToolResultStatus.project(state, result);
         response.setToolCallId(toolCallId)
                 .setToolName(toolName)
                 .setToolResult(result)

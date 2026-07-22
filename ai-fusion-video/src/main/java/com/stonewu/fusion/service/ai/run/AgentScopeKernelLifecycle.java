@@ -1,6 +1,5 @@
 package com.stonewu.fusion.service.ai.run;
 
-import com.stonewu.fusion.service.ai.agentscope.kernel.HarnessLeaseCache;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
@@ -17,17 +16,14 @@ import java.util.concurrent.atomic.AtomicReference;
 @Slf4j
 public final class AgentScopeKernelLifecycle implements SmartLifecycle {
     private final ObjectProvider<AgentRuntimeShutdownPort> shutdownPorts;
-    private final HarnessLeaseCache cache;
     private final Duration drainTimeout;
     private final AtomicBoolean running = new AtomicBoolean();
     private final AtomicReference<Mono<Void>> shutdownSignal = new AtomicReference<>();
 
     public AgentScopeKernelLifecycle(
             ObjectProvider<AgentRuntimeShutdownPort> shutdownPorts,
-            HarnessLeaseCache cache,
             @Value("${fusion.agentscope.shutdown-timeout:3s}") Duration drainTimeout) {
         this.shutdownPorts = Objects.requireNonNull(shutdownPorts, "shutdownPorts must not be null");
-        this.cache = Objects.requireNonNull(cache, "cache must not be null");
         this.drainTimeout = Objects.requireNonNull(drainTimeout, "drainTimeout must not be null");
         if (drainTimeout.isZero() || drainTimeout.isNegative()) {
             throw new IllegalArgumentException("drainTimeout must be greater than zero");
@@ -62,10 +58,10 @@ public final class AgentScopeKernelLifecycle implements SmartLifecycle {
     }
 
     private Mono<Void> shutdownOperation() {
-        AgentRuntimeShutdownPort shutdownPort = shutdownPorts.getIfAvailable();
-        return Objects.requireNonNull(shutdownPort != null
-                ? shutdownPort.shutdown(drainTimeout)
-                : cache.drainAndClose(drainTimeout),
+        AgentRuntimeShutdownPort shutdownPort = Objects.requireNonNull(
+                shutdownPorts.getIfAvailable(),
+                "AgentRuntimeShutdownPort must be available");
+        return Objects.requireNonNull(shutdownPort.shutdown(drainTimeout),
                 "AgentScope shutdown publisher must not be null");
     }
 

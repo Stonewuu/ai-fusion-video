@@ -25,7 +25,12 @@ export type OutputType =
   | "CONTENT"
   | "TOOL_CALL"
   | "TOOL_FINISHED"
+  | "SUB_AGENT_STARTED"
   | "SUB_AGENT_FINISHED"
+  | "USER_CONFIRMATION_REQUIRED"
+  | "EXTERNAL_EXECUTION_REQUIRED"
+  | "USER_CONFIRM_RESULT"
+  | "EXTERNAL_EXECUTION_RESULT"
   | "DONE"
   | "ERROR"
   | "CANCELLED";
@@ -37,6 +42,10 @@ export interface ToolCallInfo {
 }
 
 export interface AiChatStreamEvent {
+  /** Durable fields are present on AgentScope v2 Pipeline events. */
+  schemaVersion?: number;
+  runId?: string;
+  sequence?: number;
   messageId?: string;
   conversationId?: string;
   outputType: OutputType;
@@ -55,6 +64,19 @@ export interface AiChatStreamEvent {
   parentToolCallId?: string;
   /** 事件来源 Agent 名称（null 表示主 Agent） */
   agentName?: string;
+  source?: string;
+  replyId?: string;
+  blockId?: string;
+  rawEventId?: string;
+  rawEventType?: string;
+  createdAt?: string;
+  controlType?: string;
+  pendingToolCalls?: Array<{
+    toolCallId: string;
+    toolName: string;
+    argumentsPreview: string;
+  }>;
+  expiresAt?: string;
 }
 
 // ========== SSE 回调 ==========

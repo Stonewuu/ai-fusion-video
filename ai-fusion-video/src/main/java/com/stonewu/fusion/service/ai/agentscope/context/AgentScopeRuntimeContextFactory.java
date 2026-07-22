@@ -26,6 +26,9 @@ public final class AgentScopeRuntimeContextFactory {
         if (safeRequest.project() != null) {
             builder.put(ProjectContext.class, safeRequest.project());
         }
+        if (safeRequest.parentRun() != null) {
+            builder.put(ParentAgentRunContext.class, safeRequest.parentRun());
+        }
         if (safeRequest.toolExecution() != null) {
             builder.put(ToolExecutionContext.class, safeRequest.toolExecution());
         }

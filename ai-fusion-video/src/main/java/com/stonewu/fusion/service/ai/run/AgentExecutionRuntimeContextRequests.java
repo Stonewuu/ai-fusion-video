@@ -8,6 +8,7 @@ import com.stonewu.fusion.service.ai.agentscope.context.AgentScopeRuntimeContext
 import com.stonewu.fusion.service.ai.agentscope.context.AuthenticatedUserContext;
 import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
 import com.stonewu.fusion.service.ai.agentscope.context.PipelineRequestContext;
+import com.stonewu.fusion.service.ai.agentscope.context.ParentAgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
@@ -37,15 +38,39 @@ public final class AgentExecutionRuntimeContextRequests {
     public Mono<AgentScopeRuntimeContextRequest> forChild(
             StartedAgentRun started,
             String agentDefinitionStableKey,
-            ProjectContext projectContext) {
+            ProjectContext projectContext,
+            ParentAgentRunContext parentRun) {
         Objects.requireNonNull(started, "started must not be null");
+        Objects.requireNonNull(parentRun, "parentRun must not be null");
         return load(started.runId()).map(run -> create(
                 run,
                 agentDefinitionStableKey,
                 started.ownerInstanceId(),
                 started.ownerEpoch(),
                 started.deadline(),
-                projectContext));
+                projectContext,
+                parentRun));
+    }
+
+    public Mono<AgentScopeRuntimeContextRequest> forRoot(
+            StartedAgentRun started,
+            String agentDefinitionStableKey,
+            ProjectContext projectContext) {
+        Objects.requireNonNull(started, "started must not be null");
+        return load(started.runId()).map(run -> {
+            if (run.getParentRunId() != null || run.getParentToolCallId() != null) {
+                throw new IllegalArgumentException(
+                        "Root RuntimeContext cannot be created for a child run");
+            }
+            return create(
+                    run,
+                    agentDefinitionStableKey,
+                    started.ownerInstanceId(),
+                    started.ownerEpoch(),
+                    started.deadline(),
+                    projectContext,
+                    null);
+        });
     }
 
     public Mono<AgentScopeRuntimeContextRequest> forResume(
@@ -58,7 +83,8 @@ public final class AgentExecutionRuntimeContextRequests {
                 resumed.newOwnerInstanceId(),
                 resumed.newOwnerEpoch(),
                 resumed.deadline(),
-                run.getProjectId() != null ? new ProjectContext(run.getProjectId()) : null));
+                run.getProjectId() != null ? new ProjectContext(run.getProjectId()) : null,
+                parentForResume(run)));
     }
 
     private Mono<AgentRun> load(String runId) {
@@ -78,7 +104,8 @@ public final class AgentExecutionRuntimeContextRequests {
             String ownerInstanceId,
             long ownerEpoch,
             Instant deadline,
-            ProjectContext requestedProject) {
+            ProjectContext requestedProject,
+            ParentAgentRunContext parentRun) {
         if (!Objects.equals(persisted.getAgentType(), agentDefinitionStableKey)) {
             throw new IllegalArgumentException(
                     "RuntimeContext agent definition does not match the persisted run");
@@ -94,6 +121,7 @@ public final class AgentExecutionRuntimeContextRequests {
             throw new IllegalArgumentException(
                     "RuntimeContext project does not match the persisted run project");
         }
+        validateParent(persisted, parentRun);
         long userId = persisted.getUserId();
         return new AgentScopeRuntimeContextRequest(
                 new AuthenticatedUserContext(userId),
@@ -102,11 +130,58 @@ public final class AgentExecutionRuntimeContextRequests {
                         agentDefinitionStableKey,
                         persisted.getAgentStateSessionId()),
                 new AgentRunContext(
-                        persisted.getRunId(), ownerInstanceId, ownerEpoch, deadline),
+                        persisted.getRunId(),
+                        ownerInstanceId,
+                        ownerEpoch,
+                        deadline,
+                        persisted.getParentToolCallId(),
+                        persisted.getAgentName()),
+                parentRun,
                 project,
                 new PipelineRequestContext(
                         persisted.getRunId(), PipelineRequestContext.Kind.PIPELINE),
                 new ToolExecutionContext(userId, 1, userId),
                 CancellationContext.noop());
+    }
+
+    private ParentAgentRunContext parentForResume(AgentRun child) {
+        if (child.getParentRunId() == null) {
+            return null;
+        }
+        AgentRun parent = runRepository.findRun(child.getParentRunId());
+        if (parent == null
+                || parent.getOwnerInstanceId() == null
+                || parent.getOwnerInstanceId().isBlank()
+                || parent.getOwnerEpoch() == null
+                || parent.getOwnerEpoch() <= 0) {
+            throw new IllegalStateException(
+                    "Child Agent run has no active parent owner: "
+                            + child.getRunId());
+        }
+        return new ParentAgentRunContext(
+                parent.getRunId(),
+                parent.getOwnerInstanceId(),
+                parent.getOwnerEpoch(),
+                child.getParentToolCallId(),
+                child.getAgentName());
+    }
+
+    private void validateParent(
+            AgentRun persisted, ParentAgentRunContext parentRun) {
+        if (persisted.getParentRunId() == null) {
+            if (parentRun != null) {
+                throw new IllegalArgumentException(
+                        "Root RuntimeContext must not carry a parent run");
+            }
+            return;
+        }
+        if (parentRun == null
+                || !Objects.equals(persisted.getParentRunId(), parentRun.runId())
+                || !Objects.equals(
+                        persisted.getParentToolCallId(), parentRun.toolCallId())
+                || !Objects.equals(persisted.getAgentName(), parentRun.agentName())) {
+            throw new IllegalArgumentException(
+                    "Child RuntimeContext parent identity does not match the persisted run");
+        }
     }
 }

@@ -5,6 +5,7 @@ import com.stonewu.fusion.service.ai.agentscope.state.StateStoreGuardedChatModel
 import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeShutdownRecoveryBridge;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.tool.Toolkit;
+import io.agentscope.core.tool.ToolkitConfig;
 import io.agentscope.harness.agent.HarnessAgent;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -29,7 +30,9 @@ public final class AgentScopeHarnessFactory {
         AgentKernelToolkitResources toolResources = null;
         HarnessAgent agent = null;
         try {
-            Toolkit toolkit = new Toolkit();
+            Toolkit toolkit = new Toolkit(ToolkitConfig.builder()
+                    .parallel(true)
+                    .build());
             toolResources = Objects.requireNonNull(
                     toolRegistry.register(spec, toolkit), "toolRegistry returned null resources");
             if (!toolkit.getToolNames().equals(spec.toolWhitelist())) {
@@ -45,7 +48,6 @@ public final class AgentScopeHarnessFactory {
                     .model(new StateStoreGuardedChatModel(ownedModel.model(), failures))
                     .stateStore(stateStore)
                     .toolkit(toolkit)
-                    .hook(shutdownRecoveryBridge)
                     .middleware(shutdownRecoveryBridge)
                     .maxIters(spec.maxIters())
                     .disableFilesystemTools()

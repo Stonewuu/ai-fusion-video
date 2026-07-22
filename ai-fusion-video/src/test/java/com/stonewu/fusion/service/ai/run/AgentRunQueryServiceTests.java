@@ -112,6 +112,33 @@ class AgentRunQueryServiceTests {
     }
 
     @Test
+    void projectsOfficialAgentScopeErrorBlockAsErrorDespiteSuccessEndState() {
+        AgentRun run = run();
+        AgentEvent delta = AgentEvent.builder()
+                .id(42L)
+                .runId("run-1")
+                .sequenceNo(6L)
+                .rawEventType("TOOL_RESULT_TEXT_DELTA")
+                .payloadJson("{\"delta\":\"Error: Tool execution failed: invalid input\"}")
+                .build();
+        when(eventMapper.selectToolDeltas("run-1", "tool-1", 7))
+                .thenReturn(List.of(delta));
+        ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("toolCallName", "update_script_info")
+                .put("state", "SUCCESS");
+        CommittedAgentEvent event = committed(
+                7, "TOOL_FINISHED", "TOOL_RESULT_END", "tool-1", payload);
+
+        StepVerifier.create(service.project(run, event))
+                .assertNext(projected -> {
+                    assertThat(projected.getToolResult())
+                            .isEqualTo("Error: Tool execution failed: invalid input");
+                    assertThat(projected.getToolStatus()).isEqualTo("error");
+                })
+                .verifyComplete();
+    }
+
+    @Test
     void hidesMissingOrCrossUserRunAsNotFound() {
         when(runMapper.selectAuthorizedByRunId("foreign-run", 42L))
                 .thenReturn(null);

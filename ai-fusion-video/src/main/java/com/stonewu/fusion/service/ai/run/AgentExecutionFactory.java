@@ -16,6 +16,7 @@ import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.kernel.PersistedAgentKernelSnapshotResolver;
 import com.stonewu.fusion.service.ai.run.kernel.RunConfigUnavailableException;
+import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.Msg;
 import org.springframework.stereotype.Component;
@@ -29,7 +30,7 @@ import java.util.Set;
 @Component
 public final class AgentExecutionFactory {
 
-    private static final String SNAPSHOT_WHITELIST_VERSION = "snapshot-schema-1";
+    private static final String SNAPSHOT_WHITELIST_VERSION = "snapshot-schema-2";
 
     private final AgentScopeHarnessInvoker harnessInvoker;
     private final AgentScopeRuntimeContextFactory runtimeContextFactory;
@@ -71,17 +72,39 @@ public final class AgentExecutionFactory {
                     runId, ownerInstanceId, ownerEpoch,
                     stateSessionId, deadline, runtimeRequest);
             RuntimeContext runtimeContext = runtimeContextFactory.create(runtimeRequest);
+            AgentRunContext run = runtimeRequest.run();
             return new AgentExecution(
                     runId,
                     ownerInstanceId,
                     ownerEpoch,
                     runtimeRequest.authenticatedUser().userId(),
                     stateSessionId,
+                    runtimeRequest.parentRun(),
                     harnessInvoker.streamEvents(spec, List.copyOf(messages), runtimeContext)
-                            .map(eventMapper::map),
+                            .map(eventMapper::map)
+                            .map(event -> childIdentity(event, run)),
                     ignored -> Mono.empty(),
                     () -> { });
         });
+    }
+
+    private AgentEventEnvelope childIdentity(
+            AgentEventEnvelope event, AgentRunContext run) {
+        if (!run.childRun()) {
+            return event;
+        }
+        return new AgentEventEnvelope(
+                event.rawEventId(),
+                event.rawEventType(),
+                event.source(),
+                event.replyId(),
+                event.blockId(),
+                event.toolCallId(),
+                run.parentToolCallId(),
+                run.agentName(),
+                event.outputType(),
+                event.payload(),
+                event.createdAt());
     }
 
     /** Rehydrates only an exact, currently available no-tool kernel; other states fail closed. */
@@ -115,7 +138,8 @@ public final class AgentExecutionFactory {
         AgentKernelKey key = AgentKernelKey.create(
                 payload.agentDefinitionStableKey(),
                 modelFingerprint,
-                AgentKernelKey.promptVersion(payload.systemPrompt()),
+                AgentKernelKey.promptVersion(
+                        payload.systemPrompt(), payload.promptVariables()),
                 List.of(),
                 SNAPSHOT_WHITELIST_VERSION);
         return new AgentKernelSpec(
@@ -125,6 +149,7 @@ public final class AgentExecutionFactory {
                 payload.agentName(),
                 payload.description(),
                 payload.systemPrompt(),
+                payload.promptVariables(),
                 payload.maxIters(),
                 List.of(),
                 Set.of(),
@@ -163,6 +188,18 @@ public final class AgentExecutionFactory {
                 || !Objects.equals(deadline, run.deadline())) {
             throw new IllegalArgumentException(
                     "RuntimeContext run identity does not match durable execution ownership");
+        }
+        if (run.childRun()) {
+            if (request.parentRun() == null
+                    || !Objects.equals(
+                            run.parentToolCallId(), request.parentRun().toolCallId())
+                    || !Objects.equals(run.agentName(), request.parentRun().agentName())) {
+                throw new IllegalArgumentException(
+                        "Child RuntimeContext must carry its durable parent run identity");
+            }
+        } else if (request.parentRun() != null) {
+            throw new IllegalArgumentException(
+                    "Root RuntimeContext must not carry a parent run identity");
         }
     }
 

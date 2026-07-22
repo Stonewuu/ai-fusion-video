@@ -177,7 +177,7 @@ class AgentOwnedJournalTakeoverIT {
                 "chat");
         AgentKernelSnapshot snapshot = new CanonicalAgentKernelSnapshotBuilder().build(
                 new AgentKernelSnapshotPayload(
-                        1,
+                        AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION,
                         "assistant",
                         "assistant",
                         "test",

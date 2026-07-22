@@ -136,7 +136,7 @@ class AgentKernelSnapshotContractTests {
                 snapshot.snapshotJson(), wrongFingerprint, 7L, List.of()));
 
         String unsupportedSchema = snapshot.snapshotJson()
-                .replace("\"schemaVersion\":1", "\"schemaVersion\":2");
+                .replace("\"schemaVersion\":2", "\"schemaVersion\":99");
         assertUnavailable(() -> resolver.resolve(
                 unsupportedSchema,
                 fingerprint(unsupportedSchema),
@@ -156,7 +156,7 @@ class AgentKernelSnapshotContractTests {
             JsonNode modelOptions,
             List<ToolManifestSnapshot> tools) {
         return new AgentKernelSnapshotPayload(
-                1,
+                AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION,
                 "storyboard_creator",
                 "Storyboard Creator",
                 "Creates storyboard scenes",

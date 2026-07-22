@@ -5,7 +5,7 @@ import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
 import com.stonewu.fusion.controller.ai.vo.PipelineRunStatusRespVO;
 import com.stonewu.fusion.controller.ai.vo.RunningPipelineRunRespVO;
-import com.stonewu.fusion.service.ai.agentscope.AgentScopeAssistantService;
+import com.stonewu.fusion.service.ai.agentscope.AgentScopePipelineRunService;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
 import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
 import com.stonewu.fusion.service.ai.run.CancellationCoordinator;
@@ -37,7 +37,7 @@ import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 @RequiredArgsConstructor
 public class AiPipelineController {
 
-    private final AgentScopeAssistantService aiAssistantService;
+    private final AgentScopePipelineRunService pipelineRuns;
     private final AgentRunQueryService runQueries;
     private final AgentRunReplayService replayService;
     private final PipelineCursorParser cursorParser;
@@ -50,7 +50,7 @@ public class AiPipelineController {
         long currentUserId = requireCurrentUserId();
         return runQueries.authorizeConversationForStart(
                         request.getConversationId(), currentUserId)
-                .thenMany(Flux.defer(() -> aiAssistantService.stream(
+                .thenMany(Flux.defer(() -> pipelineRuns.stream(
                         request, currentUserId)))
                 .map(this::toSse);
     }

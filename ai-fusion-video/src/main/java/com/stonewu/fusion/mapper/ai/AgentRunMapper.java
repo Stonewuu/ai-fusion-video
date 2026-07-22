@@ -31,6 +31,19 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
     AgentRun selectByRunId(@Param("runId") String runId);
 
     @Select("""
+            SELECT *
+            FROM afv_agent_run
+            WHERE terminal_sequence IS NOT NULL
+              AND (
+                projected_through_sequence < terminal_sequence
+                OR projection_completed_at IS NULL
+              )
+            ORDER BY id
+            LIMIT #{limit}
+            """)
+    List<AgentRun> selectProjectionRecoveryCandidates(@Param("limit") int limit);
+
+    @Select("""
             SELECT r.*
             FROM afv_agent_run r FORCE INDEX (uk_agent_run_id)
             INNER JOIN afv_agent_conversation c

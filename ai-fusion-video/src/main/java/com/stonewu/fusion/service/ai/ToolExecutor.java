@@ -69,6 +69,16 @@ public interface ToolExecutor {
         return true;
     }
 
+    /** Whether the tool is guaranteed not to mutate platform state. */
+    default boolean isReadOnly() {
+        return false;
+    }
+
+    /** Whether separate invocations may safely execute concurrently. */
+    default boolean isConcurrencySafe() {
+        return false;
+    }
+
     /**
      * 执行工具
      *

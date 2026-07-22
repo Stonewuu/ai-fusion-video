@@ -3,7 +3,9 @@ package com.stonewu.fusion.service.ai.agentscope.kernel;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeShutdownRecoveryBridge;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
+import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.ToolResultBlock;
+import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.tool.ToolBase;
@@ -12,6 +14,7 @@ import io.agentscope.core.tool.Toolkit;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -129,6 +132,50 @@ class AgentScopeHarnessFactoryTests {
     }
 
     @Test
+    void harnessToolkitRunsRepeatedConcurrencySafeToolsInParallel() {
+        AtomicInteger active = new AtomicInteger();
+        AtomicInteger maxActive = new AtomicInteger();
+        AgentKernelToolRegistry registry = (spec, toolkit) -> {
+            toolkit.registerAgentTool(new ConcurrentTestTool(active, maxActive));
+            return AgentKernelToolkitResources.none();
+        };
+        AgentScopeHarnessFactory factory = new AgentScopeHarnessFactory(
+                ignored -> OwnedChatModel.owned(new CloseableModel()),
+                registry,
+                mock(AgentStateStore.class),
+                mock(StateStoreFailureGuard.class),
+                recoveryBridge());
+        AgentKernelToolManifest concurrentTool = new AgentKernelToolManifest(
+                "concurrent_tool",
+                AgentKernelToolManifest.schemaSha256("{}"),
+                false,
+                true);
+        String whitelistVersion = AgentKernelKey.whitelistVersion(
+                "tools-v1", Set.of("concurrent_tool"));
+        AgentKernelKey key = AgentKernelKey.create(
+                "writer", "model-a", "prompt-v1",
+                List.of(concurrentTool), whitelistVersion);
+
+        try (AgentKernelResource resource = factory.create(spec(
+                key,
+                List.of(concurrentTool),
+                Set.of("concurrent_tool"),
+                whitelistVersion))) {
+            List<ToolResultBlock> results = resource.agent().getToolkit().callTools(
+                            List.of(
+                                    toolCall("call-1", "concurrent_tool"),
+                                    toolCall("call-2", "concurrent_tool")),
+                            null,
+                            resource.agent(),
+                            RuntimeContext.builder().build())
+                    .block(Duration.ofSeconds(2));
+
+            assertThat(results).hasSize(2);
+            assertThat(maxActive).hasValue(2);
+        }
+    }
+
+    @Test
     void closesAcquiredResourcesWhenRegistryResultViolatesWhitelist() {
         CloseableModel delegate = new CloseableModel();
         AtomicInteger resourceCloses = new AtomicInteger();
@@ -187,6 +234,15 @@ class AgentScopeHarnessFactoryTests {
         return mock(AgentScopeShutdownRecoveryBridge.class);
     }
 
+    private static ToolUseBlock toolCall(String id, String name) {
+        return ToolUseBlock.builder()
+                .id(id)
+                .name(name)
+                .input(Map.of())
+                .content("{}")
+                .build();
+    }
+
     private static final class TestTool extends ToolBase {
         private TestTool() {
             super(ToolBase.builder()
@@ -200,6 +256,38 @@ class AgentScopeHarnessFactoryTests {
         @Override
         public Mono<ToolResultBlock> callAsync(ToolCallParam param) {
             return Mono.just(ToolResultBlock.text("ok"));
+        }
+    }
+
+    private static final class ConcurrentTestTool extends ToolBase {
+        private final AtomicInteger active;
+        private final AtomicInteger maxActive;
+
+        private ConcurrentTestTool(
+                AtomicInteger active,
+                AtomicInteger maxActive) {
+            super(ToolBase.builder()
+                    .name("concurrent_tool")
+                    .description("concurrent test")
+                    .inputSchema(Map.of("type", "object"))
+                    .readOnly(false)
+                    .concurrencySafe(true));
+            this.active = active;
+            this.maxActive = maxActive;
+        }
+
+        @Override
+        public Mono<ToolResultBlock> callAsync(ToolCallParam param) {
+            return Mono.defer(() -> {
+                        int current = active.incrementAndGet();
+                        maxActive.accumulateAndGet(current, Math::max);
+                        return Mono.delay(Duration.ofMillis(75))
+                                .map(ignored -> ToolResultBlock.text("ok")
+                                        .withIdAndName(
+                                                param.getToolUseBlock().getId(),
+                                                param.getToolUseBlock().getName()));
+                    })
+                    .doFinally(ignored -> active.decrementAndGet());
         }
     }
 

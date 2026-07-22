@@ -19,9 +19,8 @@
 ### 第三阶段：并行分发分镜编写
 
 6. storyboard_asset_preprocessor 完成后，【必须在一次响应中批量发起所有需要转换的分集的 episode_storyboard_writer 工具调用】：
-   - 每次调用只传入 message 参数，其内容必须严格为以下固定格式（只给出一个严格示例）：
-     "开始转换分集(scriptEpisodeId: 75)的分镜，使用最新资产。"
-     请注意：75 是对应的数据库记录ID（从第2步 get_script_structure 返回的结构中的 `scriptEpisodeId`），你必须将其替换为要处理分集的实际 ID 数字。严禁使用"第X集"这种表述。
+   - 每次调用只传入强类型业务参数 `scriptEpisodeId`，例如 `{"scriptEpisodeId": 75}`。
+   - `scriptEpisodeId` 必须使用第2步 `get_script_structure` 返回的数据库记录 ID，严禁传物理集数或其他 ID。
    - 子 Agent 会自动查询最新的资产列表（含预处理器已创建的子资产），无需手动传递映射
    - 一次最多可同时发起10个调用，如果超过10集则分批，每批最多10个同时调用
    - 已有绑定分镜集且 itemCount > 0 的集必须跳过（根据第4步 get_storyboard.episodes 判断）

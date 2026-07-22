@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.run;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.enums.ai.AgentRuntimeErrorCode;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentConversationContext;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
@@ -10,6 +11,7 @@ import com.stonewu.fusion.service.ai.agentscope.context.AgentScopeRuntimeContext
 import com.stonewu.fusion.service.ai.agentscope.context.AuthenticatedUserContext;
 import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
 import com.stonewu.fusion.service.ai.agentscope.context.PipelineRequestContext;
+import com.stonewu.fusion.service.ai.agentscope.context.ParentAgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelKey;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.HarnessLeaseCache;
@@ -136,6 +138,187 @@ class RunExecutionSupervisorTests {
     }
 
     @Test
+    void durablyMirrorsCommittedChildEventsToTheOwnedParentRun() {
+        Fixture fixture = fixture();
+        ParentAgentRunContext parent = new ParentAgentRunContext(
+                "parent-run-1",
+                "parent-node-a",
+                3,
+                "parent-tool-1",
+                "episode_scene_writer");
+        AtomicReference<AgentEventEnvelope> childEnvelope = new AtomicReference<>();
+        AtomicReference<AgentEventEnvelope> parentEnvelope = new AtomicReference<>();
+        when(fixture.journal.appendOwned(anyString(), anyString(), anyLong(), any()))
+                .thenAnswer(invocation -> {
+                    String runId = invocation.getArgument(0, String.class);
+                    AgentEventEnvelope envelope = invocation.getArgument(
+                            3, AgentEventEnvelope.class);
+                    if (fixture.command.run().runId().equals(runId)) {
+                        childEnvelope.set(envelope);
+                        return Mono.just(Optional.of(new CommittedAgentEvent(
+                                11,
+                                runId,
+                                4,
+                                envelope,
+                                Instant.now())));
+                    }
+                    parentEnvelope.set(envelope);
+                    return Mono.just(Optional.of(new CommittedAgentEvent(
+                            12,
+                            runId,
+                            9,
+                            envelope,
+                            Instant.now())));
+                });
+        AgentEventEnvelope content = new AgentEventEnvelope(
+                "child-content-1",
+                "TEXT_BLOCK_DELTA",
+                "main",
+                "reply-child",
+                "block-child",
+                null,
+                "parent-tool-1",
+                "episode_scene_writer",
+                "CONTENT",
+                JsonNodeFactory.instance.objectNode().put("delta", "实时内容"),
+                Instant.now());
+        when(fixture.executionFactory.start(
+                anyString(), anyString(), anyLong(), anyString(),
+                any(), any(), any(), any())).thenReturn(Mono.just(
+                        new AgentExecution(
+                                fixture.command.run().runId(),
+                                fixture.command.run().ownerInstanceId(),
+                                fixture.command.run().ownerEpoch(),
+                                7,
+                                fixture.command.run().agentStateSessionId(),
+                                parent,
+                                Flux.just(content),
+                                ignored -> Mono.empty(),
+                                () -> { })));
+
+        StepVerifier.create(fixture.supervisor.start(fixture.command)).verifyComplete();
+        StepVerifier.create(fixture.registry.awaitEmpty(Duration.ofSeconds(1)))
+                .verifyComplete();
+
+        verify(fixture.journal).appendOwned(
+                eq("parent-run-1"), eq("parent-node-a"), eq(3L), any());
+        AgentEventEnvelope committedChild = childEnvelope.get();
+        AgentEventEnvelope mirrored = parentEnvelope.get();
+        assertThat(committedChild).isNotNull();
+        assertThat(mirrored).isNotNull();
+        assertThat(mirrored.rawEventId()).matches("child-[0-9a-f]{32}");
+        assertThat(mirrored.rawEventType()).isEqualTo(committedChild.rawEventType());
+        assertThat(mirrored.outputType()).isEqualTo(committedChild.outputType());
+        assertThat(mirrored.parentToolCallId()).isEqualTo("parent-tool-1");
+        assertThat(mirrored.agentName()).isEqualTo("episode_scene_writer");
+        assertThat(mirrored.source()).isEqualTo("main/episode_scene_writer");
+        assertThat(mirrored.payload().path("_platformMirroredChildEvent").asBoolean())
+                .isTrue();
+        assertThat(mirrored.payload().path("childRunId").asText())
+                .isEqualTo(fixture.command.run().runId());
+        assertThat(mirrored.payload().path("childSequence").asLong()).isEqualTo(4);
+        assertThat(mirrored.payload().path("delta").asText()).isEqualTo("实时内容");
+    }
+
+    @Test
+    void parentJournalOwnershipLossFailsTheChildExecutionClosed() {
+        Fixture fixture = fixture();
+        ParentAgentRunContext parent = new ParentAgentRunContext(
+                "parent-run-1",
+                "parent-node-a",
+                3,
+                "parent-tool-1",
+                "episode_scene_writer");
+        when(fixture.journal.appendOwned(anyString(), anyString(), anyLong(), any()))
+                .thenAnswer(invocation -> {
+                    String runId = invocation.getArgument(0, String.class);
+                    AgentEventEnvelope envelope = invocation.getArgument(
+                            3, AgentEventEnvelope.class);
+                    if (!fixture.command.run().runId().equals(runId)) {
+                        return Mono.just(Optional.empty());
+                    }
+                    return Mono.just(Optional.of(new CommittedAgentEvent(
+                            11,
+                            runId,
+                            4,
+                            envelope,
+                            Instant.now())));
+                });
+        when(fixture.executionFactory.start(
+                anyString(), anyString(), anyLong(), anyString(),
+                any(), any(), any(), any())).thenReturn(Mono.just(
+                        new AgentExecution(
+                                fixture.command.run().runId(),
+                                fixture.command.run().ownerInstanceId(),
+                                fixture.command.run().ownerEpoch(),
+                                7,
+                                fixture.command.run().agentStateSessionId(),
+                                parent,
+                                Flux.just(event("child-event-1")),
+                                ignored -> Mono.empty(),
+                                () -> { })));
+
+        StepVerifier.create(fixture.supervisor.start(fixture.command)).verifyComplete();
+        StepVerifier.create(fixture.registry.awaitEmpty(Duration.ofSeconds(1)))
+                .verifyComplete();
+
+        ArgumentCaptor<RunTerminalRequest> terminal =
+                ArgumentCaptor.forClass(RunTerminalRequest.class);
+        verify(fixture.terminals).terminateOwned(
+                terminal.capture(),
+                eq(fixture.command.run().ownerInstanceId()),
+                eq(fixture.command.run().ownerEpoch()));
+        assertThat(terminal.getValue().terminalStatus()).isEqualTo(AgentRunStatus.FAILED);
+        assertThat(terminal.getValue().errorCode())
+                .isEqualTo(AgentRuntimeErrorCode.EVENT_PERSIST_FAILED);
+        assertThat(terminal.getValue().errorMessage())
+                .contains("Parent Agent run ownership was lost");
+    }
+
+    @Test
+    void childCompletionKeepsDurableIdentityAndProjectsTheTerminalJournal() {
+        Fixture fixture = fixture();
+        CommittedAgentEvent terminalEvent = mock(CommittedAgentEvent.class);
+        when(terminalEvent.runId()).thenReturn(fixture.command.run().runId());
+        when(terminalEvent.sequence()).thenReturn(7L);
+        when(fixture.terminals.terminateOwned(any(), anyString(), anyLong()))
+                .thenReturn(Mono.just(Optional.of(terminalEvent)));
+        when(fixture.executionFactory.start(
+                anyString(), anyString(), anyLong(), anyString(),
+                any(), any(), any(), any())).thenReturn(Mono.just(
+                        new AgentExecution(
+                                fixture.command.run().runId(),
+                                fixture.command.run().ownerInstanceId(),
+                                fixture.command.run().ownerEpoch(),
+                                7,
+                                fixture.command.run().agentStateSessionId(),
+                                "parent-tool-1",
+                                "episode_scene_writer",
+                                Flux.empty(),
+                                ignored -> Mono.empty(),
+                                () -> { })));
+
+        StepVerifier.create(fixture.supervisor.start(fixture.command)).verifyComplete();
+        StepVerifier.create(fixture.registry.awaitEmpty(Duration.ofSeconds(1)))
+                .verifyComplete();
+
+        ArgumentCaptor<RunTerminalRequest> terminal =
+                ArgumentCaptor.forClass(RunTerminalRequest.class);
+        verify(fixture.terminals).terminateOwned(
+                terminal.capture(),
+                eq(fixture.command.run().ownerInstanceId()),
+                eq(fixture.command.run().ownerEpoch()));
+        assertThat(terminal.getValue().terminalEnvelope().parentToolCallId())
+                .isEqualTo("parent-tool-1");
+        assertThat(terminal.getValue().terminalEnvelope().agentName())
+                .isEqualTo("episode_scene_writer");
+        assertThat(terminal.getValue().terminalEnvelope().source())
+                .isEqualTo("main/episode_scene_writer");
+        verify(fixture.projections).projectThrough(
+                fixture.command.run().runId(), 7L);
+    }
+
+    @Test
     void deadlineInterruptsTheExactOwnedExecution() {
         Fixture fixture = fixture(Duration.ofMillis(500));
         AtomicReference<ExecutionStopReason> interrupted = new AtomicReference<>();
@@ -258,6 +441,10 @@ class RunExecutionSupervisorTests {
         when(terminals.terminateOwned(any(), anyString(), anyLong()))
                 .thenReturn(Mono.just(Optional.empty()));
         HarnessLeaseCache cache = mock(HarnessLeaseCache.class);
+        AgentMessageProjectionService projections = mock(
+                AgentMessageProjectionService.class);
+        when(projections.projectThrough(anyString(), anyLong()))
+                .thenReturn(Mono.empty());
         when(cache.drainAndClose(any())).thenReturn(Mono.empty());
         RunShutdownCancellationPort shutdown = mock(RunShutdownCancellationPort.class);
         when(shutdown.request(anyString())).thenReturn(Mono.empty());
@@ -278,6 +465,7 @@ class RunExecutionSupervisorTests {
                 coalescer,
                 journal,
                 terminals,
+                projections,
                 cache,
                 new CanonicalAgentKernelSnapshotBuilder(objectMapper),
                 shutdown,
@@ -308,7 +496,7 @@ class RunExecutionSupervisorTests {
                 runtime(started.runId(), started.ownerInstanceId(), 1, deadline));
         return new Fixture(
                 factory, registry, journal, terminals, cache, shutdown,
-                supervisor, command);
+                projections, supervisor, command);
     }
 
     private AgentExecution execution(
@@ -391,6 +579,7 @@ class RunExecutionSupervisorTests {
             RunTerminalCoordinator terminals,
             HarnessLeaseCache cache,
             RunShutdownCancellationPort shutdownCancellation,
+            AgentMessageProjectionService projections,
             DefaultRunExecutionSupervisor supervisor,
             StartAgentExecutionCommand command) {
     }

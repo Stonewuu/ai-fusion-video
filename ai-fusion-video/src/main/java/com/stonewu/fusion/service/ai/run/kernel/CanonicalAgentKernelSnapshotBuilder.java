@@ -31,7 +31,7 @@ import java.util.regex.Pattern;
 @Component
 public final class CanonicalAgentKernelSnapshotBuilder implements AgentKernelSnapshotBuilder {
 
-    private static final String APPLICATION_VERSION = "ai-fusion-video-p1";
+    private static final String APPLICATION_VERSION = "ai-fusion-video-p2";
 
     private static final Set<String> SECRET_FIELD_NAMES = Set.of(
             "authorization",
@@ -84,6 +84,10 @@ public final class CanonicalAgentKernelSnapshotBuilder implements AgentKernelSna
             validateSafeText(payload.agentName());
             validateSafeText(payload.description());
             validateSafeText(payload.systemPrompt());
+            payload.promptVariables().forEach((name, value) -> {
+                validateSafeText(name);
+                validateSafeText(value);
+            });
             validateSafeText(payload.modelConfigId());
             validateSafeText(payload.provider());
             validateSafeText(payload.modelCode());
@@ -99,6 +103,7 @@ public final class CanonicalAgentKernelSnapshotBuilder implements AgentKernelSna
                     payload.agentName(),
                     payload.description(),
                     payload.systemPrompt(),
+                    payload.promptVariables(),
                     payload.maxIters(),
                     payload.modelConfigId(),
                     payload.modelConfigVersion(),

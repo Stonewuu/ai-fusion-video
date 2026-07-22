@@ -86,7 +86,14 @@ function PipelineDetailPanel({ task }: { task: PipelineTask }) {
         </div>
         {canCancel && (
           <button
-            onClick={() => usePipelineStore.getState().cancelPipeline(task.id)}
+            onClick={() => {
+              void usePipelineStore
+                .getState()
+                .cancelPipeline(task.id)
+                .catch((error) =>
+                  console.error("[Pipeline] 取消请求失败:", error)
+                );
+            }}
             className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-destructive/20 text-destructive/70 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40 transition-colors"
             title="停止工作流"
           >
@@ -398,6 +405,25 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
           setConversations((prev) => [...prev, ...filtered]);
         } else {
           setConversations(filtered);
+          setSelected((current) => {
+            if (current?.type === "pipeline") {
+              const stillPresent = usePipelineStore
+                .getState()
+                .tasks.some((task) => task.id === current.taskId);
+              if (stillPresent) return current;
+            }
+            if (current?.type === "history") {
+              const refreshed = filtered.find(
+                (conversation) => conversation.id === current.conversation.id
+              );
+              return refreshed
+                ? { type: "history", conversation: refreshed }
+                : current;
+            }
+            return filtered[0]
+              ? { type: "history", conversation: filtered[0] }
+              : null;
+          });
         }
 
         setHistoryTotal(result.total - (result.list.length - filtered.length));

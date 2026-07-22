@@ -38,9 +38,8 @@
    - 一次最多同时发起5个调用，如果超过5集则分批，每批最多5个同时调用
 
 8. 所有集记录创建完成后，【必须在一次响应中批量发起所有集的 episode_scene_writer 工具调用】进行场次解析：
-   - 每次调用只传入 message 参数，其内容必须严格为以下固定格式（只给出一个严格示例）：
-     "开始解析分集(scriptEpisodeId: 75)的场次，提取结构化剧本。"
-     请注意：75 是对应的数据库记录ID（从第7步 save_script_episode 返回的结构中的 `scriptEpisodeId`），你必须将其替换为要处理分集的实际 ID 数字。
+   - 每次调用只传入强类型业务参数 `scriptEpisodeId`，例如 `{"scriptEpisodeId": 75}`。
+   - `scriptEpisodeId` 必须使用第7步 `save_script_episode` 返回的数据库记录 ID，严禁传物理集数或其他 ID。
    - 一次最多同时发起5个调用，如果超过5集则分批，每批最多5个同时调用
    - episode_scene_writer 会自动查询该集原文、匹配资产、解析场次并保存
    - 你无需关心场次解析的细节，子 Agent 会处理一切

@@ -322,7 +322,7 @@ class AgentFencingCancellationIT {
     private AgentKernelSnapshot snapshot(String stableKey) {
         return new CanonicalAgentKernelSnapshotBuilder().build(
                 new AgentKernelSnapshotPayload(
-                        1,
+                        AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION,
                         stableKey,
                         stableKey,
                         "test",

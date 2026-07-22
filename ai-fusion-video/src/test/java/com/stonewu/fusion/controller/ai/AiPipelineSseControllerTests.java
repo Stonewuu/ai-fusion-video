@@ -10,7 +10,7 @@ import com.stonewu.fusion.controller.ai.vo.PipelineRunStatusRespVO;
 import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.security.SecurityUserDetails;
-import com.stonewu.fusion.service.ai.agentscope.AgentScopeAssistantService;
+import com.stonewu.fusion.service.ai.agentscope.AgentScopePipelineRunService;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
 import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
 import com.stonewu.fusion.service.ai.run.CancellationCoordinator;
@@ -50,7 +50,7 @@ class AiPipelineSseControllerTests {
 
     private static final long CURRENT_USER_ID = 42L;
 
-    private AgentScopeAssistantService assistant;
+    private AgentScopePipelineRunService pipelineRuns;
     private AgentRunQueryService queries;
     private AgentRunReplayService replay;
     private CancellationCoordinator cancellations;
@@ -59,12 +59,12 @@ class AiPipelineSseControllerTests {
 
     @BeforeEach
     void setUp() {
-        assistant = mock(AgentScopeAssistantService.class);
+        pipelineRuns = mock(AgentScopePipelineRunService.class);
         queries = mock(AgentRunQueryService.class);
         replay = mock(AgentRunReplayService.class);
         cancellations = mock(CancellationCoordinator.class);
         controller = new AiPipelineController(
-                assistant,
+                pipelineRuns,
                 queries,
                 replay,
                 new PipelineCursorParser(),
@@ -193,7 +193,7 @@ class AiPipelineSseControllerTests {
                 "run-start", 1, "CONTENT", "started", false);
         when(queries.authorizeConversationForStart(
                 "conversation-start", CURRENT_USER_ID)).thenReturn(Mono.empty());
-        when(assistant.stream(
+        when(pipelineRuns.stream(
                 org.mockito.ArgumentMatchers.any(AiChatReqVO.class),
                 org.mockito.ArgumentMatchers.eq(CURRENT_USER_ID)))
                 .thenReturn(Flux.just(projection));

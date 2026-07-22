@@ -153,6 +153,8 @@ public class AgentScopeV2Properties {
     public static final class Execution {
         private String instanceId;
         private Duration ownerLease = Duration.ofSeconds(30);
+        private Duration runTimeout = Duration.ofMinutes(30);
+        private int maxIters = 999;
 
         public String getInstanceId() {
             return instanceId;
@@ -170,6 +172,25 @@ public class AgentScopeV2Properties {
 
         public void setOwnerLease(Duration ownerLease) {
             this.ownerLease = requirePositive(ownerLease, "ownerLease");
+        }
+
+        public Duration getRunTimeout() {
+            return runTimeout;
+        }
+
+        public void setRunTimeout(Duration runTimeout) {
+            this.runTimeout = requirePositive(runTimeout, "runTimeout");
+        }
+
+        public int getMaxIters() {
+            return maxIters;
+        }
+
+        public void setMaxIters(int maxIters) {
+            if (maxIters <= 0) {
+                throw new IllegalArgumentException("maxIters must be greater than zero");
+            }
+            this.maxIters = maxIters;
         }
     }
 

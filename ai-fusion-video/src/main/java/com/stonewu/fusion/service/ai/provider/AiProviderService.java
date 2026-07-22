@@ -50,7 +50,7 @@ public class AiProviderService {
         AiModel model = Objects.requireNonNull(context.getModel(), "provider model must not be null");
         ApiConfig apiConfig = context.getApiConfig();
         return AgentKernelKey.contentFingerprint(
-                "agentscope-provider-config-v1",
+                "agentscope-v2-provider-config-schema-1",
                 AgentKernelKey.modelRecordFingerprint(model),
                 context.getPlatform(),
                 context.getApiKey(),

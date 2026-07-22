@@ -43,7 +43,8 @@ class AgentScopeGaDependencyContractTests {
 
     private static final Pattern FORBIDDEN_SOURCE = Pattern.compile(
             "io\\.agentscope\\.core\\.(model\\.(OpenAIChatModel|AnthropicChatModel|GeminiChatModel|DashScopeChatModel|OllamaChatModel)(\\.Builder)?"
-                    + "|formatter\\.(gemini|anthropic)\\.[A-Za-z0-9_$]+|session\\.mysql\\.[A-Za-z0-9_$]+)"
+                    + "|formatter\\.(gemini|anthropic)\\.[A-Za-z0-9_$]+|session\\.mysql\\.[A-Za-z0-9_$]+"
+                    + "|hook\\.[A-Za-z0-9_$]+|ReActAgent)"
                     + "|AnthropicAgentScopeProxySupport|ProxyAwareAnthropicChatModel"
                     + "|GeminiToolResponseAwareChatFormatter|VertexAgentScopeProxySupport|MysqlSession");
 
