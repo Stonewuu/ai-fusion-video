@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import { cn } from "@/lib/utils";
+import React, { useState } from "react";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
 
 export interface SafeImageProps extends Omit<React.ImgHTMLAttributes<HTMLImageElement>, "src"> {
@@ -16,12 +15,8 @@ export function SafeImage({
   alt,
   ...props
 }: SafeImageProps) {
-  const [isError, setIsError] = useState(false);
-
-  // 当 src 改变时重置错误状态
-  useEffect(() => {
-    setIsError(false);
-  }, [src]);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const isError = Boolean(src && failedSrc === src);
 
   // 映射 fallbackType 到 AssetTypePlaceholder 的 type
   const mappedType = (() => {
@@ -63,11 +58,18 @@ export function SafeImage({
 
   return (
     <img
+      {...props}
       src={src}
       className={className}
       alt={alt}
-      onError={() => setIsError(true)}
-      {...props}
+      onError={(event) => {
+        setFailedSrc(src);
+        props.onError?.(event);
+      }}
+      onLoad={(event) => {
+        setFailedSrc(null);
+        props.onLoad?.(event);
+      }}
     />
   );
 }
