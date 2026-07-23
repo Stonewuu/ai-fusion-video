@@ -26,6 +26,10 @@ public class VideoTaskSubmitReqVO {
 
     private String referenceImageUrls;
 
+    private String referenceVideoUrls;
+
+    private String referenceAudioUrls;
+
     private String ratio;
 
     private String resolution;

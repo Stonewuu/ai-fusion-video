@@ -1,0 +1,280 @@
+[
+  {
+    "code": "kling-v1-5-image",
+    "modelCode": "kling-v1-5",
+    "name": "Kling Image 1.5",
+    "platform": "newapi",
+    "modelProtocol": "newapi",
+    "modelType": 2,
+    "description": "可灵 2025-03-12 发布的图片模型，支持文生图和单图图生图；通过 New API 图片生成协议接入。",
+    "capabilities": ["文生图", "图生图"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 1,
+      "referenceImagesViaGenerations": true,
+      "maxCount": 9,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9"],
+      "supportedSizes": {
+        "1K": {
+          "16:9": "1344x768",
+          "9:16": "768x1344",
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1536x672"
+        }
+      }
+    }
+  },
+  {
+    "code": "kling-v2-image",
+    "modelCode": "kling-v2",
+    "name": "Kling Image 2.0",
+    "platform": "newapi",
+    "modelProtocol": "newapi",
+    "modelType": 2,
+    "description": "可灵 2025-05-13 发布的图片模型，支持文生图和图生图；通过 New API 图片生成协议接入。",
+    "capabilities": ["文生图", "图生图"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 1,
+      "referenceImagesViaGenerations": true,
+      "maxCount": 9,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9"],
+      "supportedSizes": {
+        "1K": {
+          "16:9": "1344x768",
+          "9:16": "768x1344",
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1536x672"
+        }
+      }
+    }
+  },
+  {
+    "code": "kling-v2-1-image",
+    "modelCode": "kling-v2-1",
+    "name": "Kling Image 2.1",
+    "platform": "newapi",
+    "modelProtocol": "newapi",
+    "modelType": 2,
+    "description": "可灵 2025-07-30 发布的图片模型，支持文生图、图生图、组图、多图参考以及人物/人脸参考，最高 2K。",
+    "capabilities": ["文生图", "图生图", "组图生成", "多图参考", "人物参考", "人脸参考"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 10,
+      "maxReferenceElements": 10,
+      "referenceImagesViaGenerations": true,
+      "maxCount": 9,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9"],
+      "supportedSizes": {
+        "1K": {
+          "16:9": "1344x768",
+          "9:16": "768x1344",
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1536x672"
+        },
+        "2K": {
+          "16:9": "2688x1536",
+          "9:16": "1536x2688",
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3072x1344"
+        }
+      }
+    }
+  },
+  {
+    "code": "kling-v2-new-image",
+    "modelCode": "kling-v2-new",
+    "name": "Kling Image 2 New",
+    "platform": "newapi",
+    "modelProtocol": "newapi",
+    "modelType": 2,
+    "description": "可灵 2025-08-15 发布的风格增强图片模型，主打近 300 种图生图风格，输出为 1K。",
+    "capabilities": ["图生图", "风格转换", "近 300 种风格"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 1,
+      "maxReferenceImages": 1,
+      "referenceImagesViaGenerations": true,
+      "maxCount": 9,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9"],
+      "supportedSizes": {
+        "1K": {
+          "16:9": "1344x768",
+          "9:16": "768x1344",
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1536x672"
+        }
+      }
+    }
+  },
+  {
+    "code": "kling-image-o1-image",
+    "modelCode": "kling-image-o1",
+    "name": "Kling Image O1",
+    "platform": "newapi",
+    "modelProtocol": "newapi",
+    "modelType": 2,
+    "description": "可灵 2025-12-15 发布的统一图片模型，支持文生图、图生图、多图参考和精确编辑，最高 2K。",
+    "capabilities": ["文生图", "图生图", "多图参考", "精确编辑"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 10,
+      "maxReferenceElements": 10,
+      "referenceImagesViaGenerations": true,
+      "maxCount": 9,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": ["auto", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9"],
+      "supportedSizes": {
+        "1K": {
+          "16:9": "1344x768",
+          "9:16": "768x1344",
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1536x672"
+        },
+        "2K": {
+          "16:9": "2688x1536",
+          "9:16": "1536x2688",
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3072x1344"
+        }
+      }
+    }
+  },
+  {
+    "code": "kling-v3-image",
+    "modelCode": "kling-v3",
+    "name": "Kling Image 3.0",
+    "platform": "newapi",
+    "modelProtocol": "newapi",
+    "modelType": 2,
+    "description": "可灵 2026-02-25 发布的图片模型，支持文生图、单图图生图和多参考主体控制，最高 2K。",
+    "capabilities": ["文生图", "图生图", "多图参考", "主体控制"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 10,
+      "maxReferenceElements": 10,
+      "referenceImagesViaGenerations": true,
+      "maxCount": 9,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": ["16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9"],
+      "supportedSizes": {
+        "1K": {
+          "16:9": "1344x768",
+          "9:16": "768x1344",
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1536x672"
+        },
+        "2K": {
+          "16:9": "2688x1536",
+          "9:16": "1536x2688",
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3072x1344"
+        }
+      }
+    }
+  },
+  {
+    "code": "kling-v3-omni-image",
+    "modelCode": "kling-v3-omni",
+    "name": "Kling Image 3.0 Omni",
+    "platform": "newapi",
+    "modelProtocol": "newapi",
+    "modelType": 2,
+    "description": "可灵 2026-02-25 发布的全能图片模型，支持文生图、图生图、组图、多图参考和 4K 输出。",
+    "capabilities": ["文生图", "图生图", "组图生成", "多图参考", "4K 输出"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 10,
+      "maxReferenceElements": 10,
+      "referenceImagesViaGenerations": true,
+      "maxCount": 9,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": ["auto", "16:9", "9:16", "1:1", "4:3", "3:4", "3:2", "2:3", "21:9"],
+      "supportedSizes": {
+        "1K": {
+          "16:9": "1344x768",
+          "9:16": "768x1344",
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1536x672"
+        },
+        "2K": {
+          "16:9": "2688x1536",
+          "9:16": "1536x2688",
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3072x1344"
+        },
+        "4K": {
+          "16:9": "4096x2304",
+          "9:16": "2304x4096",
+          "1:1": "4096x4096",
+          "4:3": "4096x3072",
+          "3:4": "3072x4096",
+          "3:2": "4096x2736",
+          "2:3": "2736x4096",
+          "21:9": "4096x1760"
+        }
+      }
+    }
+  }
+]

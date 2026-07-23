@@ -295,9 +295,9 @@ export default function GeneralSettingsPage() {
 
   return (
     <motion.div
-      className="max-w-[800px]"
+      className="w-full"
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
     >
       {/* 标题 */}

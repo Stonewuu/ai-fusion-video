@@ -35,7 +35,7 @@ import java.util.Map;
  *     video.json
  * </pre>
  * <p>
- * 当用户在后台添加模型时，如果模型 code 匹配已知预设，可自动填充 config 字段。
+ * 预设可作为显式的模型能力模板；选择后由 capabilityPresetCode 引用，模型 config 仅保存覆盖项。
  */
 @Service
 @Slf4j
@@ -43,6 +43,9 @@ public class ModelPresetService {
 
     /** code → 预设 JSON 对象 */
     private final Map<String, JSONObject> presets = new LinkedHashMap<>();
+
+    /** 实际模型代码 + 类型 → 能力预设代码；用于同一上游代码跨图片/视频复用的场景。 */
+    private final Map<String, String> presetCodesByModelKey = new LinkedHashMap<>();
 
     @PostConstruct
     public void init() {
@@ -74,6 +77,11 @@ public class ModelPresetService {
                 String code = obj.getStr("code");
                 if (StrUtil.isNotBlank(code)) {
                     presets.put(code, obj);
+                    String modelCode = StrUtil.blankToDefault(obj.getStr("modelCode"), code);
+                    Integer modelType = obj.getInt("modelType");
+                    if (modelType != null && StrUtil.isNotBlank(modelCode)) {
+                        presetCodesByModelKey.put(modelKey(modelCode, modelType), code);
+                    }
                 }
             }
             log.debug("[ModelPreset] 加载预设文件: {}, 模型数: {}", resource.getFilename(), array.size());
@@ -83,16 +91,14 @@ public class ModelPresetService {
     }
 
     /**
-     * 根据模型代码查找预设
+     * 根据能力预设代码查找预设
      */
     public JSONObject getPreset(String code) {
         return presets.get(code);
     }
 
     /**
-     * 根据模型代码获取预设的 config JSON 字符串
-     * <p>
-     * 用于自动填充 AiModel.config 字段
+     * 根据能力预设代码获取预设的 config JSON 字符串
      */
     public String getPresetConfig(String code) {
         JSONObject preset = presets.get(code);
@@ -104,10 +110,24 @@ public class ModelPresetService {
     }
 
     /**
-     * 判断模型代码是否有已知预设
+     * 判断代码是否精确对应内置能力预设。
      */
     public boolean hasPreset(String code) {
         return presets.containsKey(code);
+    }
+
+    /**
+     * 按上游实际模型代码和模型类型查找能力预设代码。
+     */
+    public String findPresetCode(String modelCode, Integer modelType) {
+        if (StrUtil.isBlank(modelCode) || modelType == null) {
+            return null;
+        }
+        JSONObject directPreset = presets.get(modelCode);
+        if (directPreset != null && modelType.equals(directPreset.getInt("modelType"))) {
+            return modelCode;
+        }
+        return presetCodesByModelKey.get(modelKey(modelCode, modelType));
     }
 
     /**
@@ -126,5 +146,9 @@ public class ModelPresetService {
         return presets.values().stream()
                 .filter(p -> p.getInt("modelType", 0) == modelType)
                 .toList();
+    }
+
+    private String modelKey(String modelCode, int modelType) {
+        return modelCode.trim() + "\u0000" + modelType;
     }
 }

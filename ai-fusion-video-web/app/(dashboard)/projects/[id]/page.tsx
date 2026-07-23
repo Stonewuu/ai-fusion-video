@@ -33,6 +33,7 @@ import {
 import { assetApi, type Asset } from "@/lib/api/asset";
 import { artStyleApi, type ArtStylePreset } from "@/lib/api/art-style";
 import { resolveMediaUrl } from "@/lib/api/client";
+import { MainContentFrame } from "@/components/dashboard/main-content-frame";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
 import { SafeImage } from "@/components/ui/safe-image";
 import { useProject } from "./project-context";
@@ -305,11 +306,12 @@ export default function ProjectOverviewPage() {
     : null;
 
   return (
-    <motion.div
-      variants={containerVariants}
-      initial="hidden"
-      animate="visible"
-    >
+    <MainContentFrame>
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
       {/* 项目详情概览条 */}
       <motion.div variants={itemVariants} className="mb-8">
         <div
@@ -703,7 +705,7 @@ export default function ProjectOverviewPage() {
       </motion.div>
 
       {/* 资产概览区域 */}
-      <motion.div variants={itemVariants} className="mt-10 pb-8">
+      <motion.div variants={itemVariants} className="mt-10">
         <div className="flex items-center justify-between mb-5">
           <h2 className="text-xl font-semibold flex items-center gap-2">
             <Images className="h-5 w-5 text-amber-400" />
@@ -842,6 +844,7 @@ export default function ProjectOverviewPage() {
           </div>
         )}
       </motion.div>
-    </motion.div>
+      </motion.div>
+    </MainContentFrame>
   );
 }

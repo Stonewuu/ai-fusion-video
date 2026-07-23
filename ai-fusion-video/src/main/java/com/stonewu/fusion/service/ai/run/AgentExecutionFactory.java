@@ -11,6 +11,7 @@ import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelKey;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentScopeHarnessInvoker;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
@@ -39,6 +40,7 @@ public final class AgentExecutionFactory {
     private final AgentScopeModelFactory modelFactory;
     private final AgentRuntimeSchedulers schedulers;
     private final PersistedAgentKernelSnapshotResolver snapshotResolver;
+    private final AiModelMetadataResolver modelMetadataResolver;
 
     public AgentExecutionFactory(
             AgentScopeHarnessInvoker harnessInvoker,
@@ -47,6 +49,7 @@ public final class AgentExecutionFactory {
             AiModelService modelService,
             AgentScopeModelFactory modelFactory,
             AgentRuntimeSchedulers schedulers,
+            AiModelMetadataResolver modelMetadataResolver,
             ObjectMapper objectMapper) {
         this.harnessInvoker = Objects.requireNonNull(harnessInvoker, "harnessInvoker must not be null");
         this.runtimeContextFactory = Objects.requireNonNull(
@@ -55,6 +58,8 @@ public final class AgentExecutionFactory {
         this.modelService = Objects.requireNonNull(modelService, "modelService must not be null");
         this.modelFactory = Objects.requireNonNull(modelFactory, "modelFactory must not be null");
         this.schedulers = Objects.requireNonNull(schedulers, "schedulers must not be null");
+        this.modelMetadataResolver = Objects.requireNonNull(
+                modelMetadataResolver, "modelMetadataResolver must not be null");
         this.snapshotResolver = new PersistedAgentKernelSnapshotResolver(objectMapper);
     }
 
@@ -164,11 +169,8 @@ public final class AgentExecutionFactory {
     }
 
     private String provider(AiModel model) {
-        String provider = model.getModelProtocol();
-        if (provider == null || provider.isBlank()) {
-            provider = model.getModelFamily();
-        }
-        return provider == null ? "" : provider.trim();
+        String protocol = modelMetadataResolver.resolve(model).modelProtocol();
+        return protocol == null ? "" : protocol.trim();
     }
 
     private void requireRuntimeIdentity(

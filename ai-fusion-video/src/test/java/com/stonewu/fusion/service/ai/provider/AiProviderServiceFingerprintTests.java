@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.ai.provider;
 
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
+import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import org.junit.jupiter.api.Test;
 
@@ -19,7 +20,8 @@ class AiProviderServiceFingerprintTests {
         AiProviderService service = new AiProviderService(
                 contextFactory,
                 mock(AiProviderRegistry.class),
-                mock(AiModelMetadataResolver.class));
+                mock(AiModelMetadataResolver.class),
+                mock(ModelPresetService.class));
         AiModel model = AiModel.builder()
                 .id(7L)
                 .code("gpt-test")

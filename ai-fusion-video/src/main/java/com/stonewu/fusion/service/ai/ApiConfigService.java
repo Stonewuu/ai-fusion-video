@@ -27,6 +27,9 @@ public class ApiConfigService {
         if (apiConfig.getAutoAppendV1Path() == null) {
             apiConfig.setAutoAppendV1Path(true);
         }
+        apiConfig.setTextProtocol(normalizeProtocol(apiConfig.getTextProtocol()));
+        apiConfig.setImageProtocol(normalizeProtocol(apiConfig.getImageProtocol()));
+        apiConfig.setVideoProtocol(normalizeProtocol(apiConfig.getVideoProtocol()));
         apiConfig.setApiUrl(normalizeApiUrl(apiConfig.getPlatform(), apiConfig.getApiUrl()));
         normalizeProxyConfig(apiConfig);
         apiConfigMapper.insert(apiConfig);
@@ -34,7 +37,9 @@ public class ApiConfigService {
     }
 
     @Transactional
-    public void updateApiConfig(Long id, String name, String platform, String apiUrl,
+    public void updateApiConfig(Long id, String name, String platform,
+                                 String textProtocol, String imageProtocol, String videoProtocol,
+                                 String apiUrl,
                                  Boolean autoAppendV1Path,
                                  String proxyType, String proxyHost, Integer proxyPort,
                                  String proxyUsername, String proxyPassword,
@@ -45,6 +50,9 @@ public class ApiConfigService {
         String effectivePlatform = platform != null ? platform : config.getPlatform();
         if (name != null) config.setName(name);
         if (platform != null) config.setPlatform(platform);
+        if (textProtocol != null) config.setTextProtocol(normalizeProtocol(textProtocol));
+        if (imageProtocol != null) config.setImageProtocol(normalizeProtocol(imageProtocol));
+        if (videoProtocol != null) config.setVideoProtocol(normalizeProtocol(videoProtocol));
         if (apiUrl != null) config.setApiUrl(normalizeApiUrl(effectivePlatform, apiUrl));
         if (autoAppendV1Path != null) config.setAutoAppendV1Path(autoAppendV1Path);
         if (proxyType != null) config.setProxyType(proxyType);
@@ -114,6 +122,13 @@ public class ApiConfigService {
             return null;
         }
         return normalizedApiUrl;
+    }
+
+    private String normalizeProtocol(String protocol) {
+        if (StrUtil.isBlank(protocol)) {
+            return null;
+        }
+        return protocol.trim().toLowerCase().replace(' ', '_').replace('-', '_');
     }
 
     private void normalizeProxyConfig(ApiConfig config) {

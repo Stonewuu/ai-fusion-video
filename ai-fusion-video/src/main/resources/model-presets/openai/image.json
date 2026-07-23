@@ -1,62 +1,17 @@
 [
   {
-    "code": "dall-e-3",
-    "name": "DALL·E 3",
-    "platform": "openai_compatible",
-    "modelType": 2,
-    "description": "OpenAI DALL·E 3 文生图模型，官方固定尺寸为 1024x1024 / 1792x1024 / 1024x1792",
-    "config": {
-      "supportReferenceImages": false,
-      "minReferenceImages": 0,
-      "maxReferenceImages": 0,
-      "defaultWidth": 1024,
-      "defaultHeight": 1024,
-      "minPixels": 1048576,
-      "maxPixels": 1835008,
-      "supportedAspectRatios": ["1:1", "7:4", "4:7"],
-      "supportedSizes": {
-        "standard": {
-          "1:1": "1024x1024",
-          "4:7": "1024x1792",
-          "7:4": "1792x1024"
-        }
-      }
-    }
-  },
-  {
     "code": "gpt-image-1",
     "name": "GPT Image 1",
     "platform": "openai_compatible",
+    "modelProtocol": "openai",
     "modelType": 2,
-    "description": "OpenAI GPT Image 1 文生图模型，官方固定尺寸为 1024x1024 / 1536x1024 / 1024x1536",
+    "description": "OpenAI 2025 年发布的图片生成与编辑模型，支持文生图、图生图、多图参考和透明背景。官方固定尺寸为 1024x1024 / 1024x1536 / 1536x1024。",
+    "capabilities": ["文生图", "图生图", "多图参考", "图片编辑", "透明背景"],
     "config": {
       "supportReferenceImages": true,
       "minReferenceImages": 0,
       "maxReferenceImages": 16,
-      "defaultWidth": 1024,
-      "defaultHeight": 1024,
-      "minPixels": 1048576,
-      "maxPixels": 1572864,
-      "supportedAspectRatios": ["1:1", "2:3", "3:2"],
-      "supportedSizes": {
-        "standard": {
-          "1:1": "1024x1024",
-          "2:3": "1024x1536",
-          "3:2": "1536x1024"
-        }
-      }
-    }
-  },
-  {
-    "code": "gpt-image-1.5",
-    "name": "GPT Image 1.5",
-    "platform": "openai_compatible",
-    "modelType": 2,
-    "description": "OpenAI GPT Image 1.5 文生图模型，官方固定尺寸为 1024x1024 / 1536x1024 / 1024x1536",
-    "config": {
-      "supportReferenceImages": true,
-      "minReferenceImages": 0,
-      "maxReferenceImages": 16,
+      "supportTransparentBackground": true,
       "defaultWidth": 1024,
       "defaultHeight": 1024,
       "minPixels": 1048576,
@@ -75,12 +30,42 @@
     "code": "gpt-image-1-mini",
     "name": "GPT Image 1 Mini",
     "platform": "openai_compatible",
+    "modelProtocol": "openai",
     "modelType": 2,
-    "description": "OpenAI GPT Image 1 Mini 文生图模型，官方固定尺寸为 1024x1024 / 1536x1024 / 1024x1536",
+    "description": "OpenAI 2025-10-06 发布的高性价比图片生成与编辑模型，支持多图参考和透明背景。官方固定尺寸为 1024x1024 / 1024x1536 / 1536x1024。",
+    "capabilities": ["文生图", "图生图", "多图参考", "图片编辑", "透明背景"],
     "config": {
       "supportReferenceImages": true,
       "minReferenceImages": 0,
       "maxReferenceImages": 16,
+      "supportTransparentBackground": true,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "minPixels": 1048576,
+      "maxPixels": 1572864,
+      "supportedAspectRatios": ["1:1", "2:3", "3:2"],
+      "supportedSizes": {
+        "standard": {
+          "1:1": "1024x1024",
+          "2:3": "1024x1536",
+          "3:2": "1536x1024"
+        }
+      }
+    }
+  },
+  {
+    "code": "gpt-image-1.5",
+    "name": "GPT Image 1.5",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "OpenAI 2025-12-16 发布的高质量图片生成与编辑模型，支持多图参考和透明背景。官方固定尺寸为 1024x1024 / 1024x1536 / 1536x1024。",
+    "capabilities": ["文生图", "图生图", "多图参考", "图片编辑", "透明背景"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 16,
+      "supportTransparentBackground": true,
       "defaultWidth": 1024,
       "defaultHeight": 1024,
       "minPixels": 1048576,
@@ -99,16 +84,16 @@
     "code": "gpt-image-2",
     "name": "GPT Image 2",
     "platform": "openai_compatible",
+    "modelProtocol": "openai",
     "modelType": 2,
-    "description": "OpenAI GPT Image 2 文生图模型，官方支持任意满足约束的分辨率，平台预置常用尺寸",
+    "description": "OpenAI 2026-04-21 发布的图片生成与编辑模型，支持满足约束的自定义尺寸和高保真参考图；不支持透明背景。",
+    "capabilities": ["文生图", "图生图", "多图参考", "高保真编辑", "自定义尺寸"],
     "config": {
       "supportReferenceImages": true,
       "minReferenceImages": 0,
       "maxReferenceImages": 16,
+      "supportTransparentBackground": false,
       "asyncMode": false,
-      "asyncTaskInitialDelaySeconds": 10,
-      "asyncTaskPollIntervalSeconds": 5,
-      "asyncTaskTimeoutSeconds": 180,
       "supportCustomSize": true,
       "sizeMultiple": 16,
       "maxEdge": 3840,

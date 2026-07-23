@@ -205,9 +205,9 @@ export default function ProfileSettingsPage() {
 
   return (
     <motion.div
-      className="max-w-[1200px]"
+      className="w-full"
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
     >
       {/* 页面标题 */}
@@ -406,7 +406,7 @@ export default function ProfileSettingsPage() {
       </motion.div>
 
       {/* ========== 账户信息卡片 ========== */}
-      <motion.div variants={itemVariants} className="mb-8">
+      <motion.div variants={itemVariants}>
         <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1">
           账户信息
         </h3>

@@ -40,14 +40,9 @@ public class AiModelService {
     public Long createAiModel(AiModel aiModel) {
         validateApiConfig(aiModel.getApiConfigId(), true);
         validateUniqueCode(null, aiModel.getApiConfigId(), aiModel.getCode());
-        // 如果用户未设置 config，尝试从预设自动填充
-        if (StrUtil.isBlank(aiModel.getConfig()) && StrUtil.isNotBlank(aiModel.getCode())) {
-            String presetConfig = modelPresetService.getPresetConfig(aiModel.getCode());
-            if (presetConfig != null) {
-                aiModel.setConfig(presetConfig);
-            }
-        }
         normalizeMetadata(aiModel);
+        validateRequestProtocol(aiModel);
+        validateCapabilityPreset(aiModel);
         try {
             aiModelMapper.insert(aiModel);
         } catch (DuplicateKeyException e) {
@@ -60,8 +55,8 @@ public class AiModelService {
     }
 
     @Transactional
-    public void updateAiModel(Long id, String name, String code, String modelFamily,
-                               String modelProtocol, Integer modelType, String icon,
+    public void updateAiModel(Long id, String name, String code, String modelProtocol,
+                               String capabilityPresetCode, Integer modelType, String icon,
                                String description, Integer sort, Integer status,
                                String config, Boolean defaultModel, Long apiConfigId,
                                Integer maxConcurrency, Boolean supportVision,
@@ -74,8 +69,8 @@ public class AiModelService {
         validateUniqueCode(id, nextApiConfigId, nextCode);
         if (name != null) model.setName(name);
         if (code != null) model.setCode(code);
-        if (modelFamily != null) model.setModelFamily(aiModelMetadataResolver.normalizeFamily(modelFamily));
         if (modelProtocol != null) model.setModelProtocol(aiModelMetadataResolver.normalizeProtocol(modelProtocol));
+        if (capabilityPresetCode != null) model.setCapabilityPresetCode(normalizeCapabilityPresetCode(capabilityPresetCode));
         if (modelType != null) model.setModelType(modelType);
         if (icon != null) model.setIcon(icon);
         if (description != null) model.setDescription(description);
@@ -89,6 +84,8 @@ public class AiModelService {
         if (contextWindow != null) model.setContextWindow(contextWindow > 0 ? contextWindow : null);
         if (apiConfigId != null) model.setApiConfigId(apiConfigId);
         normalizeMetadata(model);
+        validateRequestProtocol(model);
+        validateCapabilityPreset(model);
         try {
             aiModelMapper.updateById(model);
         } catch (DuplicateKeyException e) {
@@ -211,8 +208,48 @@ public class AiModelService {
         if (model == null) {
             return;
         }
-        model.setModelFamily(aiModelMetadataResolver.normalizeFamily(model.getModelFamily()));
         model.setModelProtocol(aiModelMetadataResolver.normalizeProtocol(model.getModelProtocol()));
+        model.setCapabilityPresetCode(normalizeCapabilityPresetCode(model.getCapabilityPresetCode()));
+    }
+
+    private String normalizeCapabilityPresetCode(String code) {
+        return StrUtil.isBlank(code) ? null : code.trim();
+    }
+
+    private void validateCapabilityPreset(AiModel model) {
+        if (model == null || StrUtil.isBlank(model.getCapabilityPresetCode())) {
+            return;
+        }
+        var preset = modelPresetService.getPreset(model.getCapabilityPresetCode());
+        if (preset == null) {
+            throw new BusinessException(400, "模型能力预设不存在: " + model.getCapabilityPresetCode());
+        }
+        Integer presetModelType = preset.getInt("modelType");
+        if (presetModelType != null && !presetModelType.equals(model.getModelType())) {
+            throw new BusinessException(400, "模型能力预设与模型类型不匹配");
+        }
+        String presetProtocol = aiModelMetadataResolver.normalizeProtocol(preset.getStr("modelProtocol"));
+        String effectiveProtocol = aiModelMetadataResolver.resolve(model).modelProtocol();
+        if (StrUtil.isNotBlank(presetProtocol) && !presetProtocol.equals(effectiveProtocol)) {
+            throw new BusinessException(400, "模型能力预设与当前请求协议不匹配");
+        }
+    }
+
+    private void validateRequestProtocol(AiModel model) {
+        if (model == null || model.getModelType() == null || model.getModelType() < 1 || model.getModelType() > 3) {
+            return;
+        }
+        var metadata = aiModelMetadataResolver.resolve(model);
+        if (StrUtil.isBlank(metadata.modelProtocol()) || "generic".equals(metadata.modelProtocol())) {
+            String capability = switch (model.getModelType()) {
+                case 1 -> "文本";
+                case 2 -> "图片";
+                case 3 -> "视频";
+                default -> "当前";
+            };
+            throw new BusinessException(400, capability
+                    + "模型未配置有效请求协议：请在模型中设置覆盖协议，或在 API 配置中设置对应的默认协议");
+        }
     }
 
     private void clearOtherDefaults(Integer modelType, Long excludeId) {

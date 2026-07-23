@@ -686,7 +686,7 @@ export default function ScriptTabPage() {
       variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}
       initial="hidden"
       animate="visible"
-      className="flex h-full rounded-xl border border-border/20 overflow-hidden bg-card/10"
+      className="flex min-h-0 flex-1 rounded-xl border border-border/20 overflow-hidden bg-card/10"
     >
       {/* 左栏：树形导航 */}
       <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="shrink-0 hidden xl:block">

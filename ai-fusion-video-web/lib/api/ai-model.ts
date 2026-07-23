@@ -7,8 +7,8 @@ export interface AiModel {
   id: number;
   name: string;
   code: string;
-  modelFamily: string | null;
   modelProtocol: string | null;
+  capabilityPresetCode: string | null;
   modelType: number;
   icon: string | null;
   description: string | null;
@@ -38,8 +38,8 @@ export interface AiModelConnectivityResult {
 export interface AiModelCreateReq {
   name: string;
   code: string;
-  modelFamily?: string;
   modelProtocol?: string;
+  capabilityPresetCode?: string;
   modelType: number;
   icon?: string;
   description?: string;
@@ -58,8 +58,8 @@ export interface AiModelUpdateReq {
   id: number;
   name?: string;
   code?: string;
-  modelFamily?: string;
   modelProtocol?: string;
+  capabilityPresetCode?: string;
   modelType?: number;
   icon?: string;
   description?: string;
@@ -74,11 +74,13 @@ export interface AiModelUpdateReq {
   apiConfigId?: number;
 }
 
-/** 模型预设（从后端 JSON 加载） */
+/** 模型能力预设（从后端 JSON 加载） */
 export interface ModelPreset {
   code: string;
+  modelCode?: string;
   name: string;
   platform: string;
+  modelProtocol?: string | null;
   modelType: number;
   description: string;
   config: Record<string, unknown>;
@@ -91,8 +93,8 @@ export interface RemoteModel {
   ownedBy: string;
   providerPlatform?: string | null;
   modelType?: number | null;
-  modelFamily?: string | null;
   modelProtocol?: string | null;
+  capabilityPresetCode?: string | null;
   inferredMetadata?: boolean | null;
 }
 
@@ -119,6 +121,9 @@ export interface ApiConfig {
   id: number;
   name: string;
   platform: string | null;
+  textProtocol: string | null;
+  imageProtocol: string | null;
+  videoProtocol: string | null;
   apiUrl: string | null;
   autoAppendV1Path: boolean;
   proxyType: string | null;
@@ -141,6 +146,9 @@ export interface ApiConfigSaveReq {
   id?: number;
   name: string;
   platform?: string;
+  textProtocol?: string;
+  imageProtocol?: string;
+  videoProtocol?: string;
   apiUrl?: string;
   autoAppendV1Path?: boolean;
   proxyType?: string;
@@ -167,9 +175,10 @@ export interface ApiConfigPageReq {
 
 // ========== 常量 ==========
 
-/** 平台选项 */
+/** 接入与鉴权类型选项 */
 export const PLATFORM_OPTIONS = [
-  { value: "openai_compatible", label: "OpenAI 兼容", description: "OpenAI / DeepSeek / 智谱 / 硅基流动等" },
+  { value: "openai_compatible", label: "OpenAI / 兼容接入", description: "API Key / Bearer 鉴权；文本、图片、视频协议可分别配置" },
+  { value: "deepseek", label: "DeepSeek", description: "DeepSeek 官方 API，支持聊天与推理模型" },
   { value: "newapi", label: "New API", description: "New API 聚合网关，支持远程模型发现与视频任务接口" },
   { value: "volcengine", label: "火山引擎（豆包）", description: "字节跳动火山引擎豆包大模型" },
   { value: "vertex_ai", label: "Google Vertex AI", description: "Google Cloud Vertex AI Gemini" },
@@ -198,10 +207,10 @@ export const MODEL_TYPE_LABELS: Record<number, string> = {
   5: "语音识别",
 };
 
-/** 平台标签映射 */
+/** 接入与鉴权类型标签映射 */
 export const PLATFORM_LABELS: Record<string, string> = {
-  openai_compatible: "OpenAI 兼容",
-  openai: "OpenAI 兼容",
+  openai_compatible: "OpenAI / 兼容接入",
+  openai: "OpenAI / 兼容接入",
   newapi: "New API",
   deepseek: "DeepSeek",
   volcengine: "火山引擎",
@@ -258,7 +267,7 @@ export const aiModelApi = {
   testTextConnectivity: (id: number) =>
     http.post<never, AiModelConnectivityResult>(`/api/ai/model/test-text-connectivity?id=${id}`),
 
-  /** 获取模型预设列表 */
+  /** 获取模型能力预设列表 */
   presets: (type?: number) =>
     http.get<never, ModelPreset[]>(
       type !== undefined ? `/api/ai/model/presets?type=${type}` : `/api/ai/model/presets`

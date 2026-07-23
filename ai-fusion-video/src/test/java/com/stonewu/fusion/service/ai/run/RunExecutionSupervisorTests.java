@@ -520,7 +520,6 @@ class RunExecutionSupervisorTests {
                 .id(1L)
                 .name("test")
                 .code("test-model")
-                .modelFamily("openai")
                 .modelProtocol("openai")
                 .modelType(1)
                 .status(1)

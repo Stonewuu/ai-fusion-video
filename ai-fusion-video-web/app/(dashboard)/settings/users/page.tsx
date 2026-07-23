@@ -26,23 +26,21 @@ export default function SettingsUsersPage() {
   const currentUser = useAuthStore((state) => state.user);
   const isAdmin = currentUser?.roles?.includes("admin") ?? false;
   const [keyword, setKeyword] = useState("");
-  const [loading, setLoading] = useState(true);
+  const normalizedKeyword = keyword.trim();
+  const [loadedKeyword, setLoadedKeyword] = useState<string | null>(null);
   const [users, setUsers] = useState<UserRespVO[]>([]);
   const [total, setTotal] = useState(0);
+  const loading = isAdmin && loadedKeyword !== normalizedKeyword;
 
   useEffect(() => {
-    if (!isAdmin) {
-      setLoading(false);
-      return;
-    }
+    if (!isAdmin) return;
 
     let cancelled = false;
-    setLoading(true);
 
     userApi.page({
       pageNo: 1,
       pageSize: 100,
-      username: keyword.trim() || undefined,
+      username: normalizedKeyword || undefined,
     })
       .then((result) => {
         if (cancelled) return;
@@ -58,14 +56,14 @@ export default function SettingsUsersPage() {
       })
       .finally(() => {
         if (!cancelled) {
-          setLoading(false);
+          setLoadedKeyword(normalizedKeyword);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, keyword]);
+  }, [isAdmin, normalizedKeyword]);
 
   const adminCount = useMemo(
     () => users.filter((user) => user.roles.includes("admin")).length,
@@ -75,9 +73,9 @@ export default function SettingsUsersPage() {
   if (!isAdmin) {
     return (
       <motion.div
-        className="max-w-[800px]"
+        className="w-full"
         variants={containerVariants}
-        initial="hidden"
+        initial={false}
         animate="visible"
       >
         <motion.div variants={itemVariants} className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-6">
@@ -92,9 +90,9 @@ export default function SettingsUsersPage() {
 
   return (
     <motion.div
-      className="max-w-[1000px]"
+      className="w-full"
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
     >
       <motion.div variants={itemVariants} className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">

@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.ai;
 
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
@@ -26,6 +27,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -77,7 +79,11 @@ class AiModelServiceTests {
                 .apiConfigId(1L)
                 .defaultModel(true)
                 .build();
-        when(apiConfigService.getById(1L)).thenReturn(ApiConfig.builder().id(1L).name("OpenAI Compatible").build());
+        when(apiConfigService.getById(1L)).thenReturn(ApiConfig.builder()
+                .id(1L)
+                .name("OpenAI Compatible")
+                .imageProtocol("openai")
+                .build());
         doAnswer(invocation -> {
             AiModel inserted = invocation.getArgument(0);
             inserted.setId(101L);
@@ -101,6 +107,10 @@ class AiModelServiceTests {
                 .defaultModel(false)
                 .build();
         when(aiModelMapper.selectById(202L)).thenReturn(existing);
+        when(apiConfigService.getById(1L)).thenReturn(ApiConfig.builder()
+                .id(1L)
+                .videoProtocol("dashscope")
+                .build());
 
         aiModelService.updateAiModel(
                 202L,
@@ -171,18 +181,46 @@ class AiModelServiceTests {
         assertEquals("仅支持文本模型连通性检测", exception.getMessage());
     }
 
+    @Test
+    void createAiModelShouldNotSelectCapabilityPresetFromModelCode() {
+        AiModel model = AiModel.builder()
+                .name("GPT Image 1")
+                .code("gpt-image-1")
+                .modelProtocol("openai")
+                .modelType(2)
+                .apiConfigId(1L)
+                .build();
+        when(apiConfigService.getById(1L)).thenReturn(ApiConfig.builder()
+                .id(1L)
+                .platform("openai_compatible")
+                .imageProtocol("openai")
+                .build());
+        doAnswer(invocation -> {
+            AiModel inserted = invocation.getArgument(0);
+            inserted.setId(500L);
+            return 1;
+        }).when(aiModelMapper).insert(model);
+
+        aiModelService.createAiModel(model);
+
+        assertNull(model.getCapabilityPresetCode());
+    }
+
         @Test
-        void createAiModelShouldNormalizeSemanticMetadata() {
+        void createAiModelShouldNormalizeExplicitMetadata() {
                 AiModel model = AiModel.builder()
                                 .name("Kling via NewAPI")
                                 .code("kling-v1")
-                                .modelFamily(" Kling ")
+                                .capabilityPresetCode(" agnes-video-v2.0 ")
                                 .modelProtocol(" Sora ")
                                 .modelType(3)
                                 .apiConfigId(1L)
                                 .build();
 
                 when(apiConfigService.getById(1L)).thenReturn(ApiConfig.builder().id(1L).platform("newapi").build());
+                when(modelPresetService.getPreset("agnes-video-v2.0")).thenReturn(JSONUtil.createObj()
+                                .set("modelType", 3)
+                                .set("modelProtocol", "sora"));
                 doAnswer(invocation -> {
                         AiModel inserted = invocation.getArgument(0);
                         inserted.setId(501L);
@@ -191,7 +229,7 @@ class AiModelServiceTests {
 
                 aiModelService.createAiModel(model);
 
-                assertEquals("kling", model.getModelFamily());
+                assertEquals("agnes-video-v2.0", model.getCapabilityPresetCode());
                 assertEquals("sora", model.getModelProtocol());
         }
 

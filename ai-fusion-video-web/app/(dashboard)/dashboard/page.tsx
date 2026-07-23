@@ -157,7 +157,7 @@ export default function DashboardPage() {
 
   return (
     <motion.div
-      className="max-w-[1200px] pb-12"
+      className="max-w-[1200px]"
       variants={containerVariants}
       initial="hidden"
       animate="visible"

@@ -134,6 +134,31 @@ pnpm dev
 
 启动后访问 `http://localhost:3000`，后端 API 位于 `http://localhost:18080`。
 
+### 数据库迁移开发规范
+
+Flyway 迁移脚本位于 `ai-fusion-video/src/main/resources/db/migration/`，统一使用以下命名：
+
+```text
+V1.<产品主版本>.<产品次版本>.<产品修订版本>.<迁移序号>__<英文描述>.sql
+```
+
+- 第一个 `V1` 是兼容已有数据库的固定前缀，不代表产品主版本。
+- 产品版本三段必须与迁移所属版本一致；例如产品版本 `1.0.0` 从 `V1.1.0.0.0__...sql` 开始。
+- 同一产品版本的迁移序号从 `0` 开始连续递增，描述使用小写 snake_case。
+- 已在持久化数据库执行的迁移不得修改内容、版本或文件名，只能通过新增迁移继续演进。
+- 仅在本地执行且尚未发布的迁移需要改名时，优先重建本地数据库；不要改写共享、测试或生产数据库的 Flyway 历史。
+- 稳定版本可以提供 `B1.<产品主版本>.<产品次版本>.<产品修订版本>.<迁移序号>__baseline_<产品版本>.sql` 基线，让全新空数据库直接建立当前结构；已有数据库会忽略 B 并继续执行 V 增量迁移。
+- 基线不能替代或删除旧 V 迁移，发布后的 B 和 V 都必须永久保留且不可修改。
+
+新增迁移后运行命名检查，并通过应用启动确认 Flyway validate 成功：
+
+```bash
+cd ai-fusion-video
+./mvnw -Dtest=FlywayMigrationNamingTests test
+```
+
+完整规则及历史迁移处理方式见 [Flyway 迁移命名约定](ai-fusion-video/src/main/resources/db/migration/README.md)。
+
 ---
 
 ## 🔑 配置说明

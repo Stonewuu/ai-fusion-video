@@ -474,7 +474,7 @@ class AgentModelCallUsageIT {
                         "gpt-test",
                         JsonNodeFactory.instance.objectNode().put("temperature", 0.2),
                         List.of(),
-                        "0.6.3-test"));
+                        "1.0.0-test"));
     }
 
     private RunTerminalRequest completedTerminal(StartedAgentRun run) {

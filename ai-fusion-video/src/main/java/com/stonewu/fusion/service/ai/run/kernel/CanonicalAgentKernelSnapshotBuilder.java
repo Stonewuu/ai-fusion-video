@@ -12,6 +12,7 @@ import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -61,15 +62,22 @@ public final class CanonicalAgentKernelSnapshotBuilder implements AgentKernelSna
     private static final Pattern SHA256_HEX = Pattern.compile("[0-9a-fA-F]{64}");
 
     private final ObjectMapper objectMapper;
+    private final AiModelMetadataResolver modelMetadataResolver;
 
     public CanonicalAgentKernelSnapshotBuilder() {
-        this(new ObjectMapper());
+        this(new ObjectMapper(), null);
+    }
+
+    public CanonicalAgentKernelSnapshotBuilder(ObjectMapper objectMapper) {
+        this(objectMapper, null);
     }
 
     @Autowired
-    public CanonicalAgentKernelSnapshotBuilder(ObjectMapper objectMapper) {
+    public CanonicalAgentKernelSnapshotBuilder(ObjectMapper objectMapper,
+                                               AiModelMetadataResolver modelMetadataResolver) {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null")
                 .copy();
+        this.modelMetadataResolver = modelMetadataResolver;
         this.objectMapper.enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
         this.objectMapper.enable(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY);
         this.objectMapper.enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
@@ -179,14 +187,13 @@ public final class CanonicalAgentKernelSnapshotBuilder implements AgentKernelSna
     }
 
     private String provider(AiModel model) {
-        String provider = model.getModelProtocol();
-        if (provider == null || provider.isBlank()) {
-            provider = model.getModelFamily();
-        }
-        if (provider == null || provider.isBlank()) {
+        String protocol = modelMetadataResolver != null
+                ? modelMetadataResolver.resolve(model).modelProtocol()
+                : model.getModelProtocol();
+        if (protocol == null || protocol.isBlank()) {
             throw new IllegalArgumentException("model provider must not be blank");
         }
-        return provider.trim();
+        return protocol.trim();
     }
 
     private JsonNode normalizeNode(JsonNode node) {

@@ -3,8 +3,9 @@
     "code": "doubao-seedream-3-0-t2i-250415",
     "name": "Seedream 3.0",
     "platform": "volcengine",
+    "modelProtocol": "volcengine",
     "modelType": 2,
-    "description": "火山引擎 Seedream 3.0 文生图模型，支持 1K~4K 分辨率",
+    "description": "火山方舟 2025-04-15 发布的 Seedream 3.0 文生图端点。",
     "capabilities": ["文生图"],
     "config": {
       "supportReferenceImages": false,
@@ -14,21 +15,22 @@
       "defaultHeight": 2048,
       "minPixels": 921600,
       "maxPixels": 16777216,
+      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9"],
       "supportedSizes": {
         "1K": {
           "1:1": "1024x1024",
-          "3:4": "864x1152",
           "4:3": "1152x864",
+          "3:4": "864x1152",
           "16:9": "1312x736",
           "9:16": "736x1312",
-          "2:3": "832x1248",
           "3:2": "1248x832",
+          "2:3": "832x1248",
           "21:9": "1568x672"
         },
         "2K": {
           "1:1": "2048x2048",
-          "3:4": "1728x2304",
           "4:3": "2304x1728",
+          "3:4": "1728x2304",
           "16:9": "2848x1600",
           "9:16": "1600x2848",
           "3:2": "2496x1664",
@@ -37,12 +39,12 @@
         },
         "4K": {
           "1:1": "4096x4096",
-          "3:4": "3520x4704",
           "4:3": "4704x3520",
+          "3:4": "3520x4704",
           "16:9": "5504x3040",
           "9:16": "3040x5504",
-          "2:3": "3328x4992",
           "3:2": "4992x3328",
+          "2:3": "3328x4992",
           "21:9": "6240x2656"
         }
       }
@@ -52,31 +54,40 @@
     "code": "doubao-seedream-4-0-250828",
     "name": "Seedream 4.0",
     "platform": "volcengine",
+    "modelProtocol": "volcengine",
     "modelType": 2,
-    "description": "火山引擎 Seedream 4.0 文生图模型，支持 1K~4K 分辨率",
-    "capabilities": ["文生图", "图生图", "生成组图"],
+    "description": "火山方舟 2025-08-28 发布的 Seedream 4.0，支持单图、图生图、多参考图和组图生成。",
+    "capabilities": ["文生图", "图生图", "多图参考", "组图生成", "自定义尺寸"],
     "config": {
       "supportReferenceImages": true,
       "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "maxCount": 15,
+      "maxTotalImages": 15,
+      "supportSequentialImages": true,
+      "supportWebSearch": false,
+      "supportCustomSize": true,
+      "maxAspectRatio": 16,
       "defaultWidth": 2048,
       "defaultHeight": 2048,
       "minPixels": 921600,
       "maxPixels": 16777216,
+      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9"],
       "supportedSizes": {
         "1K": {
           "1:1": "1024x1024",
-          "3:4": "864x1152",
           "4:3": "1152x864",
-          "16:9": "1312x736",
-          "9:16": "736x1312",
-          "2:3": "832x1248",
+          "3:4": "864x1152",
+          "16:9": "1280x720",
+          "9:16": "720x1280",
           "3:2": "1248x832",
-          "21:9": "1568x672"
+          "2:3": "832x1248",
+          "21:9": "1512x648"
         },
         "2K": {
           "1:1": "2048x2048",
-          "3:4": "1728x2304",
           "4:3": "2304x1728",
+          "3:4": "1728x2304",
           "16:9": "2848x1600",
           "9:16": "1600x2848",
           "3:2": "2496x1664",
@@ -85,12 +96,12 @@
         },
         "4K": {
           "1:1": "4096x4096",
-          "3:4": "3520x4704",
           "4:3": "4704x3520",
+          "3:4": "3520x4704",
           "16:9": "5504x3040",
           "9:16": "3040x5504",
-          "2:3": "3328x4992",
           "3:2": "4992x3328",
+          "2:3": "3328x4992",
           "21:9": "6240x2656"
         }
       }
@@ -100,21 +111,30 @@
     "code": "doubao-seedream-4-5-251128",
     "name": "Seedream 4.5",
     "platform": "volcengine",
+    "modelProtocol": "volcengine",
     "modelType": 2,
-    "description": "火山引擎 Seedream 4.5 文生图模型，支持 2K~4K 分辨率",
-    "capabilities": ["文生图", "图生图", "生成组图"],
+    "description": "火山方舟 2025-11-28 发布的 Seedream 4.5，支持单图、图生图、多参考图和组图生成。",
+    "capabilities": ["文生图", "图生图", "多图参考", "组图生成", "自定义尺寸"],
     "config": {
       "supportReferenceImages": true,
       "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "maxCount": 15,
+      "maxTotalImages": 15,
+      "supportSequentialImages": true,
+      "supportWebSearch": false,
+      "supportCustomSize": true,
+      "maxAspectRatio": 16,
       "defaultWidth": 2048,
       "defaultHeight": 2048,
       "minPixels": 3686400,
       "maxPixels": 16777216,
+      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9"],
       "supportedSizes": {
         "2K": {
           "1:1": "2048x2048",
-          "3:4": "1728x2304",
           "4:3": "2304x1728",
+          "3:4": "1728x2304",
           "16:9": "2848x1600",
           "9:16": "1600x2848",
           "3:2": "2496x1664",
@@ -123,12 +143,12 @@
         },
         "4K": {
           "1:1": "4096x4096",
-          "3:4": "3520x4704",
           "4:3": "4704x3520",
+          "3:4": "3520x4704",
           "16:9": "5504x3040",
           "9:16": "3040x5504",
-          "2:3": "3328x4992",
           "3:2": "4992x3328",
+          "2:3": "3328x4992",
           "21:9": "6240x2656"
         }
       }
@@ -138,21 +158,31 @@
     "code": "doubao-seedream-5-0-260128",
     "name": "Seedream 5.0",
     "platform": "volcengine",
+    "modelProtocol": "volcengine",
     "modelType": 2,
-    "description": "火山引擎 Seedream 5.0 文生图模型，支持 2K~3K 分辨率，全能力",
-    "capabilities": ["文生图", "图生图", "生成组图"],
+    "description": "火山方舟 2026-01-28 发布的 Seedream 5.0（与 5.0 Lite 同能力端点），支持多参考图、组图、流式输出和联网搜索。",
+    "capabilities": ["文生图", "图生图", "多图参考", "组图生成", "联网搜索", "自定义尺寸"],
     "config": {
       "supportReferenceImages": true,
       "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "maxCount": 15,
+      "maxTotalImages": 15,
+      "supportSequentialImages": true,
+      "supportStreaming": true,
+      "supportWebSearch": true,
+      "supportCustomSize": true,
+      "maxAspectRatio": 16,
       "defaultWidth": 2048,
       "defaultHeight": 2048,
       "minPixels": 3686400,
-      "maxPixels": 10404496,
+      "maxPixels": 16777216,
+      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9"],
       "supportedSizes": {
         "2K": {
           "1:1": "2048x2048",
-          "3:4": "1728x2304",
           "4:3": "2304x1728",
+          "3:4": "1728x2304",
           "16:9": "2848x1600",
           "9:16": "1600x2848",
           "3:2": "2496x1664",
@@ -161,13 +191,23 @@
         },
         "3K": {
           "1:1": "3072x3072",
-          "3:4": "2592x3456",
           "4:3": "3456x2592",
+          "3:4": "2592x3456",
           "16:9": "4096x2304",
           "9:16": "2304x4096",
-          "2:3": "2496x3744",
           "3:2": "3744x2496",
+          "2:3": "2496x3744",
           "21:9": "4704x2016"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "4:3": "4704x3520",
+          "3:4": "3520x4704",
+          "16:9": "5504x3040",
+          "9:16": "3040x5504",
+          "3:2": "4992x3328",
+          "2:3": "3328x4992",
+          "21:9": "6240x2656"
         }
       }
     }
@@ -176,21 +216,31 @@
     "code": "doubao-seedream-5-0-lite-260128",
     "name": "Seedream 5.0 Lite",
     "platform": "volcengine",
+    "modelProtocol": "volcengine",
     "modelType": 2,
-    "description": "火山引擎 Seedream 5.0 Lite 文生图模型，支持 2K~3K 分辨率",
-    "capabilities": ["文生图", "图生图", "生成组图"],
+    "description": "火山方舟 2026-01-28 发布的 Seedream 5.0 Lite，支持多参考图、组图、流式输出和联网搜索。",
+    "capabilities": ["文生图", "图生图", "多图参考", "组图生成", "联网搜索", "自定义尺寸"],
     "config": {
       "supportReferenceImages": true,
       "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "maxCount": 15,
+      "maxTotalImages": 15,
+      "supportSequentialImages": true,
+      "supportStreaming": true,
+      "supportWebSearch": true,
+      "supportCustomSize": true,
+      "maxAspectRatio": 16,
       "defaultWidth": 2048,
       "defaultHeight": 2048,
       "minPixels": 3686400,
-      "maxPixels": 10404496,
+      "maxPixels": 16777216,
+      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9"],
       "supportedSizes": {
         "2K": {
           "1:1": "2048x2048",
-          "3:4": "1728x2304",
           "4:3": "2304x1728",
+          "3:4": "1728x2304",
           "16:9": "2848x1600",
           "9:16": "1600x2848",
           "3:2": "2496x1664",
@@ -199,13 +249,70 @@
         },
         "3K": {
           "1:1": "3072x3072",
-          "3:4": "2592x3456",
           "4:3": "3456x2592",
+          "3:4": "2592x3456",
           "16:9": "4096x2304",
           "9:16": "2304x4096",
-          "2:3": "2496x3744",
           "3:2": "3744x2496",
+          "2:3": "2496x3744",
           "21:9": "4704x2016"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "4:3": "4704x3520",
+          "3:4": "3520x4704",
+          "16:9": "5504x3040",
+          "9:16": "3040x5504",
+          "3:2": "4992x3328",
+          "2:3": "3328x4992",
+          "21:9": "6240x2656"
+        }
+      }
+    }
+  },
+  {
+    "code": "doubao-seedream-5-0-pro-260628",
+    "name": "Seedream 5.0 Pro",
+    "platform": "volcengine",
+    "modelProtocol": "volcengine",
+    "modelType": 2,
+    "description": "火山方舟 2026-06-28 发布的 Seedream 5.0 Pro，支持最多 10 张参考图和高质量单图编辑；不支持组图、联网搜索或流式输出。",
+    "capabilities": ["文生图", "图生图", "多图参考", "高质量编辑", "自定义尺寸"],
+    "config": {
+      "supportReferenceImages": true,
+      "minReferenceImages": 0,
+      "maxReferenceImages": 10,
+      "maxCount": 1,
+      "supportSequentialImages": false,
+      "supportStreaming": false,
+      "supportWebSearch": false,
+      "supportCustomSize": true,
+      "maxAspectRatio": 16,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 921600,
+      "maxPixels": 4624220,
+      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16", "3:2", "2:3", "21:9"],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "16:9": "1424x800",
+          "9:16": "800x1424",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2368x1776",
+          "3:4": "1776x2368",
+          "16:9": "2816x1584",
+          "9:16": "1584x2816",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3136x1344"
         }
       }
     }

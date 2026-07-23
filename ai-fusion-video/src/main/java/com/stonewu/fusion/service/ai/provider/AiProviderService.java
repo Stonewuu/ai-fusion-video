@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
+import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelKey;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.ai.model.RemoteModelMetadata;
@@ -25,6 +26,7 @@ public class AiProviderService {
     private final AiProviderContextFactory contextFactory;
     private final AiProviderRegistry providerRegistry;
     private final AiModelMetadataResolver aiModelMetadataResolver;
+    private final ModelPresetService modelPresetService;
 
     public ChatModel createChatModel(AiModel model) {
         AiProviderContext context = contextFactory.createForModel(model);
@@ -58,6 +60,9 @@ public class AiProviderService {
                 context.getModelName(),
                 apiConfig != null ? apiConfig.getId() : null,
                 apiConfig != null ? apiConfig.getPlatform() : null,
+                apiConfig != null ? apiConfig.getTextProtocol() : null,
+                apiConfig != null ? apiConfig.getImageProtocol() : null,
+                apiConfig != null ? apiConfig.getVideoProtocol() : null,
                 apiConfig != null ? apiConfig.getApiType() : null,
                 apiConfig != null ? apiConfig.getApiUrl() : null,
                 apiConfig != null ? apiConfig.getAutoAppendV1Path() : null,
@@ -98,14 +103,15 @@ public class AiProviderService {
             StrUtil.blankToDefault(model.getDisplayName(), model.getOwnedBy()),
             model.getModelType());
 
+        Integer resolvedModelType = model.getModelType() != null ? model.getModelType() : metadata.modelType();
         return RemoteModelVO.builder()
             .id(model.getId())
             .displayName(StrUtil.blankToDefault(model.getDisplayName(), metadata.displayName()))
             .ownedBy(model.getOwnedBy())
             .providerPlatform(StrUtil.blankToDefault(model.getProviderPlatform(), metadata.providerPlatform()))
-            .modelType(model.getModelType() != null ? model.getModelType() : metadata.modelType())
-            .modelFamily(StrUtil.blankToDefault(model.getModelFamily(), metadata.modelFamily()))
+            .modelType(resolvedModelType)
             .modelProtocol(StrUtil.blankToDefault(model.getModelProtocol(), metadata.modelProtocol()))
+            .capabilityPresetCode(modelPresetService.findPresetCode(model.getId(), resolvedModelType))
             .inferredMetadata(model.getInferredMetadata() != null ? model.getInferredMetadata() : metadata.inferred())
             .build();
     }

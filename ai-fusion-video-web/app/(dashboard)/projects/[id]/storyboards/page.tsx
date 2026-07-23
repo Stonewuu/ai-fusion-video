@@ -44,7 +44,6 @@ import {
 import { CreateStoryboardDialog } from "./_components/create-dialog";
 import { EditItemAssetsDialog } from "./_components/edit-assets-dialog";
 import { assetApi } from "@/lib/api/asset";
-import { useFullWidth } from "@/lib/hooks/use-layout";
 import { useProject } from "../project-context";
 
 type ViewMode = "table" | "card";
@@ -74,9 +73,6 @@ export default function StoryboardTabPage() {
     setExpandedTaskId,
     setNotificationOpen,
   } = usePipelineStore();
-
-  // 分镜页始终占满 layout 宽度
-  useFullWidth(true);
 
   const [loading, setLoading] = useState(true);
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
@@ -1092,7 +1088,7 @@ export default function StoryboardTabPage() {
       variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}
       initial="hidden"
       animate="visible"
-      className="flex h-full rounded-xl border border-border/20 overflow-hidden bg-card/10"
+      className="flex min-h-0 w-full flex-1 rounded-xl border border-border/20 overflow-hidden bg-card/10"
     >
       {/* 左栏：分镜目录 */}
       <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="shrink-0 hidden xl:block">

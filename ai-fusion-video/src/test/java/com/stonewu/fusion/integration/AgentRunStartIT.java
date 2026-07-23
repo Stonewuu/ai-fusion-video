@@ -384,7 +384,7 @@ class AgentRunStartIT {
                 JsonNodeFactory.instance.objectNode().put("temperature", 0.2),
                 List.of(new ToolManifestSnapshot(
                         "read_asset", "a".repeat(64), true, true, "test-v1")),
-                "0.6.3-test");
+                "1.0.0-test");
         return new CanonicalAgentKernelSnapshotBuilder().build(payload);
     }
 

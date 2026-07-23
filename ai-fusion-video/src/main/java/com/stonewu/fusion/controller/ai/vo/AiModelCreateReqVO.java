@@ -13,8 +13,8 @@ public class AiModelCreateReqVO {
     private String name;
     @NotBlank(message = "模型标识不能为空")
     private String code;
-    private String modelFamily;
     private String modelProtocol;
+    private String capabilityPresetCode;
     @NotNull(message = "模型类型不能为空")
     private Integer modelType;
     private String icon;

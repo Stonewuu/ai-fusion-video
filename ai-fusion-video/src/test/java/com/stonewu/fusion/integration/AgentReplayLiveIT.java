@@ -311,7 +311,7 @@ class AgentReplayLiveIT {
                         "gpt-test",
                         JsonNodeFactory.instance.objectNode().put("temperature", 0.2),
                         List.of(),
-                        "0.6.3-test"));
+                        "1.0.0-test"));
     }
 
     private AgentEventEnvelope contentEvent(int index) {

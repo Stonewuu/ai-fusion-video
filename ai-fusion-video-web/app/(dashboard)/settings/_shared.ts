@@ -29,6 +29,7 @@ export const itemVariants = {
 
 export const platformIconColors: Record<string, { color: string; bg: string }> = {
   openai_compatible: { color: "text-emerald-400", bg: "bg-emerald-500/10" },
+  deepseek: { color: "text-indigo-400", bg: "bg-indigo-500/10" },
   newapi: { color: "text-lime-400", bg: "bg-lime-500/10" },
   volcengine: { color: "text-sky-400", bg: "bg-sky-500/10" },
   vertex_ai: { color: "text-blue-400", bg: "bg-blue-500/10" },
@@ -61,10 +62,25 @@ export interface PlatformField {
 
 export function getPlatformFields(platform: string): PlatformField[] {
   switch (platform) {
+    case "deepseek":
+      return [
+        { key: "apiUrl", label: "API 地址", placeholder: "https://api.deepseek.com", type: "text", helperText: "留空时使用 DeepSeek 官方地址。" },
+        { key: "apiKey", label: "API 密钥", placeholder: "sk-...", type: "password", required: true },
+      ];
     case "openai_compatible":
+      return [
+        {
+          key: "apiUrl",
+          label: "API 地址",
+          placeholder: "https://api.openai.com（只填服务根地址）",
+          type: "text",
+          helperText: "这里配置连接与鉴权。文本、图片、视频可在 API 配置中分别设置默认协议，特殊模型再单独覆盖。",
+        },
+        { key: "apiKey", label: "API 密钥", placeholder: "sk-...", type: "password", required: true },
+      ];
     case "volcengine":
       return [
-        { key: "apiUrl", label: "API 地址", placeholder: "https://api.openai.com（只填根域名）", type: "text" },
+        { key: "apiUrl", label: "API 地址", placeholder: "https://ark.cn-beijing.volces.com", type: "text" },
         { key: "apiKey", label: "API 密钥", placeholder: "sk-...", type: "password", required: true },
       ];
     case "newapi":

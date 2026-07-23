@@ -16,6 +16,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
 import { CreateProjectDialog } from "@/components/dashboard/create-project-dialog";
+import { MainContentFrame } from "@/components/dashboard/main-content-frame";
 
 // 动画
 const containerVariants = {
@@ -116,7 +117,7 @@ export default function ProjectsPage() {
   );
 
   return (
-    <>
+    <MainContentFrame>
       <motion.div
         className="max-w-[1200px]"
         variants={containerVariants}
@@ -286,6 +287,6 @@ export default function ProjectsPage() {
         onClose={() => setShowCreate(false)}
         onCreated={fetchProjects}
       />
-    </>
+    </MainContentFrame>
   );
 }

@@ -19,6 +19,7 @@ import java.util.Map;
 import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -79,6 +80,19 @@ class AgentKernelSpecFactoryTests {
                 .containsEntry("projectId", "7")
                 .containsEntry("scriptId", "41");
         assertThat(snapshot.snapshotJson()).contains("\"promptVariables\"");
+    }
+
+    @Test
+    void capabilityPresetDoesNotReplaceMissingSnapshotProtocolIdentity() {
+        AiChatReqVO request = requestForScript(41L)
+                .setAgentType("script_full_parse");
+        model.setModelProtocol(null);
+        model.setCapabilityPresetCode("gpt-image-1");
+        AgentKernelSpec spec = factory.createRoot(request, model, "root prompt");
+
+        assertThatThrownBy(() -> new CanonicalAgentKernelSnapshotBuilder().build(spec))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("provider must not be blank");
     }
 
     @Test

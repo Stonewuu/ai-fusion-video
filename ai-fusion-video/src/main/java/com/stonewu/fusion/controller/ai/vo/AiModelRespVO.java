@@ -10,8 +10,8 @@ public class AiModelRespVO {
     private Long id;
     private String name;
     private String code;
-    private String modelFamily;
     private String modelProtocol;
+    private String capabilityPresetCode;
     private Integer modelType;
     private String icon;
     private String description;

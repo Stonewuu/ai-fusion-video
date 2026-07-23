@@ -37,6 +37,9 @@ public class ApiConfigController {
     public CommonResult<Long> create(@Valid @RequestBody ApiConfigSaveReqVO reqVO) {
         ApiConfig config = ApiConfig.builder()
                 .name(reqVO.getName()).platform(reqVO.getPlatform())
+                .textProtocol(reqVO.getTextProtocol())
+                .imageProtocol(reqVO.getImageProtocol())
+                .videoProtocol(reqVO.getVideoProtocol())
                 .apiUrl(reqVO.getApiUrl())
                 .autoAppendV1Path(reqVO.getAutoAppendV1Path() != null ? reqVO.getAutoAppendV1Path() : true)
                 .proxyType(reqVO.getProxyType())
@@ -56,6 +59,7 @@ public class ApiConfigController {
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<Boolean> update(@Valid @RequestBody ApiConfigSaveReqVO reqVO) {
         apiConfigService.updateApiConfig(reqVO.getId(), reqVO.getName(), reqVO.getPlatform(),
+            reqVO.getTextProtocol(), reqVO.getImageProtocol(), reqVO.getVideoProtocol(),
             reqVO.getApiUrl(), reqVO.getAutoAppendV1Path(), reqVO.getProxyType(),
             reqVO.getProxyHost(), reqVO.getProxyPort(), reqVO.getProxyUsername(),
             reqVO.getProxyPassword(), reqVO.getApiKey(), reqVO.getAppId(), reqVO.getAppSecret(),

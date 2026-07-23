@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   FolderKanban,
   Images,
+  Wrench,
   Settings,
   Bell,
   Github,
@@ -49,6 +50,14 @@ const menuItems = [
     iconColor: "text-orange-500",
   },
   {
+    icon: Wrench,
+    label: "工具",
+    href: "/generate/image",
+    gradient:
+      "radial-gradient(circle, rgba(6,182,212,0.15) 0%, rgba(8,145,178,0.06) 50%, rgba(14,116,144,0) 85%, rgba(14,116,144,0) 100%)",
+    iconColor: "text-cyan-500",
+  },
+  {
     icon: Settings,
     label: "系统设置",
     href: "/settings",
@@ -63,6 +72,7 @@ const routeToLabel: Record<string, string> = {
   "/dashboard": "仪表盘",
   "/projects": "项目",
   "/assets": "资产",
+  "/generate": "工具",
   "/settings": "系统设置",
 };
 
@@ -83,7 +93,7 @@ export function AppHeader() {
   const mobileMenuOpen = displayMode === "mobile" && mobileMenuRoute === pathname;
 
   // Pipeline 通知
-  const { tasks, notificationOpen, setNotificationOpen, panelExpanded, setPanelExpanded } = usePipelineStore();
+  const { tasks, setNotificationOpen, panelExpanded, setPanelExpanded } = usePipelineStore();
   const runningCount = tasks.filter((t) => t.status === "running").length;
   const hasAnyTasks = tasks.length > 0;
 

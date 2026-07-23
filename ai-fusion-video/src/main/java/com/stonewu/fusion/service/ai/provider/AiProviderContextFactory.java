@@ -6,6 +6,8 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.ApiConfigService;
+import com.stonewu.fusion.service.ai.model.AiModelMetadata;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,6 +23,7 @@ import java.util.Map;
 public class AiProviderContextFactory {
 
     private final ApiConfigService apiConfigService;
+    private final AiModelMetadataResolver aiModelMetadataResolver;
 
     public AiProviderContext createForModel(AiModel model) {
         if (model == null) {
@@ -28,14 +31,18 @@ public class AiProviderContextFactory {
         }
         ApiConfig apiConfig = resolveApiConfig(model.getApiConfigId());
         Map<String, Object> config = parseConfig(model.getConfig(), model.getId());
-        String baseUrl = resolveBaseUrl(apiConfig, config);
+        AiModelMetadata metadata = aiModelMetadataResolver.resolve(model, apiConfig);
+        String requestProtocol = metadata.modelProtocol();
+        if (StrUtil.isBlank(requestProtocol)) {
+            throw new BusinessException("文本模型未配置请求协议：请在模型中设置覆盖协议，或在 API 配置中设置文本默认协议");
+        }
         return AiProviderContext.builder()
                 .model(model)
                 .apiConfig(apiConfig)
                 .config(config)
-                .platform(resolvePlatform(apiConfig, baseUrl))
-                .apiKey(resolveApiKey(apiConfig, config))
-                .baseUrl(baseUrl)
+                .platform(normalizePlatform(requestProtocol))
+                .apiKey(apiConfig.getApiKey())
+                .baseUrl(apiConfig.getApiUrl())
                 .modelName(resolveModelName(model, config))
                 .build();
     }
@@ -49,25 +56,26 @@ public class AiProviderContextFactory {
     }
 
     public AiProviderContext createForApiConfig(ApiConfig apiConfig) {
-        String baseUrl = apiConfig != null ? apiConfig.getApiUrl() : null;
+        if (apiConfig == null || StrUtil.isBlank(apiConfig.getPlatform())) {
+            throw new BusinessException("API 配置未设置接入与鉴权类型");
+        }
         return AiProviderContext.builder()
                 .apiConfig(apiConfig)
-                .platform(resolvePlatform(apiConfig, baseUrl))
-                .apiKey(apiConfig != null ? apiConfig.getApiKey() : null)
-                .baseUrl(baseUrl)
+                .platform(normalizePlatform(apiConfig.getPlatform()))
+                .apiKey(apiConfig.getApiKey())
+                .baseUrl(apiConfig.getApiUrl())
                 .build();
     }
 
     private ApiConfig resolveApiConfig(Long apiConfigId) {
         if (apiConfigId == null) {
-            return null;
+            throw new BusinessException("AI 模型未绑定 API 配置");
         }
-        try {
-            return apiConfigService.getById(apiConfigId);
-        } catch (Exception e) {
-            log.warn("[AiProviderContextFactory] ApiConfig 获取失败: {}", apiConfigId);
-            return null;
+        ApiConfig apiConfig = apiConfigService.getById(apiConfigId);
+        if (apiConfig == null) {
+            throw new BusinessException(404, "API 配置不存在");
         }
+        return apiConfig;
     }
 
     private Map<String, Object> parseConfig(String json, Long modelId) {
@@ -82,49 +90,9 @@ public class AiProviderContextFactory {
         }
     }
 
-    private String resolveApiKey(ApiConfig apiConfig, Map<String, Object> config) {
-        if (apiConfig != null && StrUtil.isNotBlank(apiConfig.getApiKey())) {
-            return apiConfig.getApiKey();
-        }
-        Object apiKey = config.get("apiKey");
-        return apiKey != null ? apiKey.toString() : null;
-    }
-
-    private String resolveBaseUrl(ApiConfig apiConfig, Map<String, Object> config) {
-        if (apiConfig != null && StrUtil.isNotBlank(apiConfig.getApiUrl())) {
-            return apiConfig.getApiUrl();
-        }
-        Object baseUrl = config.get("baseUrl");
-        return baseUrl != null ? baseUrl.toString() : null;
-    }
-
     private String resolveModelName(AiModel model, Map<String, Object> config) {
         Object modelName = config.get("modelName");
         return modelName != null ? modelName.toString() : model.getCode();
-    }
-
-    private String resolvePlatform(ApiConfig apiConfig, String baseUrl) {
-        if (apiConfig != null && StrUtil.isNotBlank(apiConfig.getPlatform())) {
-            return normalizePlatform(apiConfig.getPlatform());
-        }
-        if (StrUtil.isNotBlank(baseUrl)) {
-            String url = baseUrl.toLowerCase();
-            if (url.contains("deepseek")) return "deepseek";
-            if (url.contains("dashscope") || url.contains("aliyuncs")) return "dashscope";
-            if (url.contains("bigmodel.cn")) return "zhipu";
-            if (url.contains("volces.com") || url.contains("volcengine")) return "volcengine";
-            if (url.contains("moonshot")) return "moonshot";
-            if (url.contains("siliconflow")) return "siliconflow";
-            if (url.contains("newapi")) return "newapi";
-            if (url.contains("anthropic")) return "anthropic";
-            if (url.contains("flow2api")) return "GoogleFlowReverseApi";
-            if (url.contains("localhost") || url.contains("127.0.0.1")) return "ollama";
-            if (url.contains("ai.google.dev") || url.contains("generativelanguage")) return "gemini";
-            if (url.contains("googleapis.com") || url.contains("vertex")) return "vertex_ai";
-            if (url.contains("openai.com")) return "openai_compatible";
-            return "openai_compatible";
-        }
-        return "openai_compatible";
     }
 
     private String normalizePlatform(String platform) {

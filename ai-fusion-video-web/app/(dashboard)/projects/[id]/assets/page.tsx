@@ -1,368 +1,371 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
-import { useParams, useSearchParams, useRouter } from "next/navigation";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Images, Loader2, Plus, X } from "lucide-react";
+import { assetApi, type Asset, type AssetItem, type AssetWithItems } from "@/lib/api/asset";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
-import {
-  Images,
-  Plus,
-  Search,
-  Loader2,
-  Trash2,
-  X,
-} from "lucide-react";
-import { motion } from "framer-motion";
-import { cn } from "@/lib/utils";
-import { assetApi, type Asset } from "@/lib/api/asset";
-import { resolveMediaUrl } from "@/lib/api/client";
-import AssetDetailPanel from "@/components/dashboard/asset-detail-sheet";
-import { SafeImage } from "@/components/ui/safe-image";
-import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
-import { useFullWidth } from "@/lib/hooks/use-layout";
+import { Button } from "@/components/ui/button";
+import { AssetSidebar } from "./_components/asset-sidebar";
+import { MasterAssetForm, MasterAssetHeader } from "./_components/asset-master-panels";
+import { AssetItemTabs } from "./_components/asset-item-tabs";
+import { AssetItemWorkspace } from "./_components/asset-item-workspace";
+import { parseProperties } from "./_components/asset-types";
 
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.06, delayChildren: 0.1 },
-  },
-};
-const itemVariants = {
-  hidden: { opacity: 0, y: 16 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] as [number, number, number, number] },
-  },
-};
-
-// 资产类型配置
-const assetTypes = [
-  { key: undefined as string | undefined, label: "全部" },
-  { key: "character", label: "角色" },
-  { key: "scene", label: "场景" },
-  { key: "prop", label: "道具" },
-];
-
-const typeColorMap: Record<string, string> = {
-  character: "text-blue-400 bg-blue-500/10",
-  scene: "text-green-400 bg-green-500/10",
-  prop: "text-amber-400 bg-amber-500/10",
-};
-
-const typeLabelMap: Record<string, string> = {
-  character: "角色",
-  scene: "场景",
-  prop: "道具",
-};
+function enqueueAssetGeneration(
+  projectId: number,
+  assetIds: number[],
+  itemIds?: number[],
+  label = "批量生成资产图",
+) {
+  const { addPipeline, setNotificationOpen } = usePipelineStore.getState();
+  addPipeline({
+    label,
+    projectId,
+    request: {
+      agentType: "asset_image_gen",
+      projectId,
+      context: {
+        selectedAssetIds: assetIds,
+        ...(itemIds?.length ? { selectedAssetItemIds: itemIds } : {}),
+      },
+    },
+  });
+  setNotificationOpen(true);
+}
 
 export default function ProjectAssetsPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const projectId = Number(params.id);
   const highlightId = searchParams.get("highlight");
 
-  const [assets, setAssets] = useState<Asset[]>([]);
+  const [assets, setAssets] = useState<AssetWithItems[]>([]);
+  const [selectedAssetId, setSelectedAssetId] = useState<number | null>(null);
+  const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeType, setActiveType] = useState<string | undefined>(undefined);
+  const [saving, setSaving] = useState(false);
+  const [creatingAsset, setCreatingAsset] = useState(false);
+  const [creatingItem, setCreatingItem] = useState(false);
   const [search, setSearch] = useState("");
-  const debounceRef = useRef<ReturnType<typeof setTimeout>>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [error, setError] = useState("");
 
-  // 选中资产
-  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
-  // 创建模式
-  const [isCreating, setIsCreating] = useState(false);
+  const selectedAssetIdRef = useRef<number | null>(null);
 
-  const isPanelOpen = !!selectedAsset || isCreating;
+  useEffect(() => {
+    selectedAssetIdRef.current = selectedAssetId;
+  }, [selectedAssetId]);
 
-  // 展开编辑面板时占满 layout 宽度
-  useFullWidth(isPanelOpen);
-
-  const fetchData = useCallback(async (type?: string, keyword?: string) => {
+  const loadAssets = useCallback(async (keepSelection = true) => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const data = await assetApi.list(projectId, type, keyword || undefined);
+      const data = await assetApi.listWithItems(projectId);
       setAssets(data);
-    } catch (err) {
-      console.error("加载资产列表失败:", err);
+      if (
+        !keepSelection ||
+        !data.some((asset) => asset.id === selectedAssetIdRef.current)
+      ) {
+        const first = data[0];
+        setSelectedAssetId(first?.id ?? null);
+        setSelectedItemId(first?.items?.[0]?.id ?? null);
+        setCreatingItem(Boolean(first && first.items.length === 0));
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "资产加载失败");
     } finally {
       setLoading(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      fetchData(activeType, search);
-    }, search ? 300 : 0);
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId, activeType, search]);
+  useEffect(() => { void loadAssets(false); }, [loadAssets]);
 
-  // AI 工具执行后自动刷新
-  const assetsInvalidation = usePipelineStore((s) => s.invalidation.assets);
-  const assetsInvRef = useRef(assetsInvalidation);
   useEffect(() => {
-    if (assetsInvRef.current !== assetsInvalidation) {
-      assetsInvRef.current = assetsInvalidation;
-      fetchData(activeType, search);
-    }
-  }, [assetsInvalidation, activeType, search, fetchData]);
+    if (loading || !highlightId || assets.length === 0) return;
 
-  // URL highlight 参数驱动自动选中
-  const highlightHandled = useRef(false);
-  useEffect(() => {
-    if (!highlightId || highlightHandled.current || loading || assets.length === 0) return;
-    const target = assets.find((a) => String(a.id) === highlightId);
-    if (target) {
-      setSelectedAsset(target);
-      highlightHandled.current = true;
-      // 清除 URL 中的 highlight 参数，避免刷新重复触发
-      router.replace(`/projects/${projectId}/assets`, { scroll: false });
-    }
-  }, [highlightId, loading, assets, router, projectId]);
+    const target = assets.find((asset) => String(asset.id) === highlightId);
+    if (!target) return;
 
-  const handleDelete = async (id: number) => {
-    if (!confirm("确定要删除该资产吗？")) return;
+    setSelectedAssetId(target.id);
+    setSelectedItemId(target.items?.[0]?.id ?? null);
+    setCreatingItem(target.items.length === 0);
+    router.replace(`/projects/${projectId}/assets`, { scroll: false });
+  }, [assets, highlightId, loading, projectId, router]);
+
+  const selectedAsset =
+    assets.find((asset) => asset.id === selectedAssetId) || null;
+  const selectedItem =
+    selectedAsset?.items.find((item) => item.id === selectedItemId) || null;
+
+  const selectAsset = (asset: AssetWithItems) => {
+    setCreatingAsset(false);
+    setCreatingItem(asset.items.length === 0);
+    setSelectedAssetId(asset.id);
+    setSelectedItemId(asset.items[0]?.id ?? null);
+  };
+
+  const saveAsset = async (payload: { name: string; type: string; description: string }) => {
+    if (!selectedAsset || !payload.name.trim()) return;
+    setSaving(true);
     try {
-      await assetApi.delete(id);
-      if (selectedAsset?.id === id) setSelectedAsset(null);
-      await fetchData(activeType, search);
-    } catch (err) {
-      console.error("删除资产失败:", err);
+      await assetApi.update({
+        id: selectedAsset.id,
+        type: payload.type,
+        name: payload.name.trim(),
+        description: payload.description.trim(),
+        properties: JSON.stringify({ setting: payload.description.trim() }),
+      });
+      await loadAssets(true);
+    } finally {
+      setSaving(false);
     }
   };
 
-  const handleOpenCreate = () => {
-    setSelectedAsset(null);
-    setIsCreating(true);
+  const createAsset = async (name: string, type: string, description: string) => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      const created = await assetApi.create({
+        projectId,
+        type,
+        name: name.trim(),
+        description: description.trim(),
+        properties: JSON.stringify({ setting: description.trim() }),
+      });
+      await loadAssets(false);
+      setSelectedAssetId(created.id);
+      setSelectedItemId(null);
+      setCreatingAsset(false);
+      setCreatingItem(true);
+    } finally {
+      setSaving(false);
+    }
   };
 
-  // 选中资产时自动滚动
-  useEffect(() => {
-    if (!selectedAsset || !scrollRef.current) return;
-    const timer = setTimeout(() => {
-      const container = scrollRef.current;
-      const el = container?.querySelector(`[data-asset-id="${selectedAsset.id}"]`) as HTMLElement | null;
-      if (!container || !el) return;
-      const containerRect = container.getBoundingClientRect();
-      const elRect = el.getBoundingClientRect();
-      // 如果元素不在可视区域内，滚动到居中位置
-      if (elRect.top < containerRect.top || elRect.bottom > containerRect.bottom) {
-        const scrollTarget = el.offsetTop - container.offsetTop - containerRect.height / 2 + elRect.height / 2;
-        container.scrollTo({ top: scrollTarget, behavior: "smooth" });
+  const saveItem = async (item: AssetItem, name: string, appearance: string, imageUrl: string) => {
+    if (!name.trim()) return;
+    setSaving(true);
+    try {
+      await assetApi.updateItem({
+        id: item.id,
+        name: name.trim(),
+        imageUrl: imageUrl.trim(),
+        properties: JSON.stringify({
+          ...parseProperties(item.properties),
+          appearanceDescription: appearance.trim(),
+        }),
+      });
+      await loadAssets(true);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const deleteAsset = async (asset: Asset) => {
+    if (!confirm(`确定删除主资产“${asset.name}”及其子资产吗？`)) return;
+    await assetApi.delete(asset.id);
+    await loadAssets(false);
+  };
+
+  const deleteItem = async (item: AssetItem) => {
+    if (!confirm(`确定删除子资产“${item.name || "未命名"}”吗？`)) return;
+    const nextItem = selectedAsset?.items.find((candidate) => candidate.id !== item.id);
+    await assetApi.deleteItem(item.id);
+    await loadAssets(true);
+    setSelectedItemId(nextItem?.id ?? null);
+    setCreatingItem(!nextItem);
+  };
+
+  const createItem = async (
+    name: string,
+    appearance: string,
+    imageUrl: string,
+    generateAfterCreate: boolean,
+  ) => {
+    if (!selectedAsset || !name.trim()) return;
+    setSaving(true);
+    try {
+      const created = await assetApi.createItem({
+        assetId: selectedAsset.id,
+        name: name.trim(),
+        imageUrl: imageUrl.trim() || undefined,
+        properties: JSON.stringify({
+          appearanceDescription: appearance.trim(),
+        }),
+        sortOrder: selectedAsset.items.length,
+      });
+      await loadAssets(true);
+      setSelectedItemId(created.id);
+      setCreatingItem(false);
+      if (generateAfterCreate) {
+        enqueueAssetGeneration(
+          projectId,
+          [selectedAsset.id],
+          [created.id],
+          `生成 ${created.name || name.trim()}`,
+        );
       }
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [selectedAsset]);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading && assets.length === 0) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
-    <motion.div variants={containerVariants} initial="hidden" animate="visible" className="h-full relative overflow-hidden">
-      {/* ========== 左侧：资产列表（宽度立即跳到目标值，卡片用 layout 动画归位） ========== */}
-      <div
-        className="h-full flex flex-col min-h-0 overflow-hidden"
-        style={{ width: isPanelOpen ? "40%" : "100%" }}
-      >
-        {/* 标题 + 操作 */}
-        <motion.div variants={itemVariants} className="flex items-center justify-between mb-4 shrink-0 px-1">
-          <h2 className="text-xl font-semibold flex items-center gap-2">
-            <Images className="h-5 w-5 text-primary" />
-            资产库
-            <span className="text-xs text-muted-foreground font-normal ml-1">
-              {assets.length} 个
-            </span>
-          </h2>
-          <button
-            onClick={handleOpenCreate}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
-              "bg-primary text-primary-foreground hover:bg-primary/90"
-            )}
+    <div className="flex min-h-[680px] w-full flex-1 flex-col gap-5">
+      <header className="flex shrink-0 flex-wrap items-end justify-between gap-4 px-1">
+        <div>
+          <h1 className="text-3xl font-semibold tracking-tight">资产管理</h1>
+          <p className="mt-1 text-sm text-muted-foreground">角色、场景与道具</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button
+            variant="image"
+            size="sm"
+            onClick={() =>
+              enqueueAssetGeneration(
+                projectId,
+                assets.map((asset) => asset.id),
+                undefined,
+                "批量生成全部资产图",
+              )
+            }
+            disabled={!assets.length}
+          >
+            <Images className="h-3.5 w-3.5" />
+            批量生图
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => {
+              setCreatingAsset(true);
+              setCreatingItem(false);
+            }}
           >
             <Plus className="h-3.5 w-3.5" />
-            新建
+            新建主资产
+          </Button>
+        </div>
+      </header>
+
+      {error && (
+        <div className="flex items-center justify-between rounded-xl border border-destructive/20 bg-destructive/8 px-3 py-2 text-xs text-destructive">
+          <span>{error}</span>
+          <button
+            type="button"
+            onClick={() => setError("")}
+            title="关闭"
+            aria-label="关闭"
+          >
+            <X className="h-3.5 w-3.5" />
           </button>
-        </motion.div>
+        </div>
+      )}
 
-        {/* 类型过滤标签 + 搜索 */}
-        <motion.div variants={itemVariants} className="flex items-center gap-3 mb-4 shrink-0 px-1">
-          <div className="flex items-center gap-1 overflow-x-auto flex-1">
-            {assetTypes.map((t) => (
-              <button
-                key={t.key ?? "all"}
-                onClick={() => setActiveType(t.key)}
-                className={cn(
-                  "px-2.5 py-1 rounded-lg text-xs font-medium transition-all whitespace-nowrap",
-                  activeType === t.key
-                    ? "bg-foreground/10 text-foreground"
-                    : "text-muted-foreground hover:text-foreground hover:bg-foreground/5"
-                )}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-          <div className="relative w-48 shrink-0 group/search">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground/40 group-focus-within/search:text-primary/60 transition-colors" />
-            <input
-              type="text"
-              placeholder="搜索资产..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-8 pr-7 py-1.5 rounded-lg border border-border/30 bg-card/50 text-xs outline-none placeholder:text-muted-foreground/40 focus:border-primary/40 focus:ring-1 focus:ring-primary/20 transition-all"
+      <div className="grid min-h-0 flex-1 gap-5 lg:grid-cols-[300px_minmax(0,1fr)]">
+        <AssetSidebar
+          assets={assets}
+          selectedAssetId={selectedAssetId}
+          search={search}
+          typeFilter={typeFilter}
+          onSearchChange={setSearch}
+          onTypeFilterChange={setTypeFilter}
+          onSelect={selectAsset}
+          onRefresh={() => void loadAssets(true)}
+        />
+        <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[30px] border border-border/50 bg-card/75 shadow-[0_24px_70px_-42px_rgba(15,23,42,.45)]">
+          {creatingAsset ? (
+            <MasterAssetForm
+              saving={saving}
+              onCancel={() => setCreatingAsset(false)}
+              onSubmit={createAsset}
             />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded text-muted-foreground/40 hover:text-foreground transition-colors"
-              >
-                <X className="h-3 w-3" />
-              </button>
-            )}
-          </div>
-        </motion.div>
-
-        {/* 资产网格 */}
-        <motion.div variants={itemVariants} ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto px-1">
-          {loading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : assets.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border/30 p-10 flex flex-col items-center justify-center text-center bg-card/10">
-              <Images className="h-8 w-8 text-muted-foreground/20 mb-2" />
-              <p className="text-muted-foreground/60 text-xs">
-                {search ? "没有找到匹配的资产" : "暂无资产"}
-              </p>
-            </div>
+          ) : selectedAsset ? (
+            <>
+              <MasterAssetHeader
+                key={`${selectedAsset.id}-${selectedAsset.updateTime}`}
+                asset={selectedAsset}
+                saving={saving}
+                onSave={saveAsset}
+                onDelete={() => void deleteAsset(selectedAsset)}
+              />
+              <AssetItemTabs
+                items={selectedAsset.items}
+                assetType={selectedAsset.type}
+                selectedItemId={selectedItemId}
+                creating={creatingItem}
+                onSelect={(id) => {
+                  setCreatingItem(false);
+                  setSelectedItemId(id);
+                }}
+                onCreate={() => {
+                  setCreatingItem(true);
+                  setSelectedItemId(null);
+                }}
+                onGenerate={() =>
+                  enqueueAssetGeneration(
+                    projectId,
+                    [selectedAsset.id],
+                    undefined,
+                    `生成 ${selectedAsset.name} 全部资产图`,
+                  )
+                }
+              />
+              <div className="min-h-0 flex-1 overflow-y-auto">
+                {creatingItem || selectedItem ? (
+                  <AssetItemWorkspace
+                    key={
+                      creatingItem
+                        ? `create-${selectedAsset.id}`
+                        : `${selectedItem?.id}-${selectedItem?.updateTime}`
+                    }
+                    mode={creatingItem ? "create" : "edit"}
+                    item={creatingItem ? null : selectedItem}
+                    assetType={selectedAsset.type}
+                    saving={saving}
+                    onCreate={createItem}
+                    onSave={saveItem}
+                    onDelete={() => {
+                      if (selectedItem) void deleteItem(selectedItem);
+                    }}
+                    onCancelCreate={() => {
+                      setCreatingItem(false);
+                      setSelectedItemId(selectedAsset.items[0]?.id ?? null);
+                    }}
+                    onGenerate={() => {
+                      if (!selectedItem) return;
+                      enqueueAssetGeneration(
+                        projectId,
+                        [selectedAsset.id],
+                        [selectedItem.id],
+                        `生成 ${selectedItem.name || "子资产"}`,
+                      );
+                    }}
+                  />
+                ) : (
+                  <div className="flex h-full min-h-64 flex-col items-center justify-center text-center">
+                    <Images className="mb-3 h-9 w-9 text-muted-foreground/20" />
+                    <p className="text-sm font-medium">选择或新增子资产</p>
+                  </div>
+                )}
+              </div>
+            </>
           ) : (
-            <motion.div
-              className="grid gap-3 pb-4 p-1"
-              style={{
-                gridTemplateColumns: "repeat(auto-fill, minmax(300px, 1fr))",
-              }}
-            >
-              {assets.map((asset) => {
-                const color = typeColorMap[asset.type] || "text-muted-foreground bg-muted/50";
-                const isSelected = selectedAsset?.id === asset.id;
-                return (
-                  <motion.div
-                    key={asset.id}
-                    layout
-                    layoutId={`asset-card-${asset.id}`}
-                    transition={{ type: "spring", stiffness: 350, damping: 30 }}
-                    data-asset-id={asset.id}
-                    className={cn(
-                      "group relative rounded-xl border cursor-pointer overflow-hidden",
-                      "bg-card/50 transition-colors duration-150",
-                      isSelected
-                        ? "border-primary/40 ring-1 ring-primary/20"
-                        : "border-border/25 hover:border-border/50"
-                    )}
-                    onClick={() => { setIsCreating(false); setSelectedAsset(asset); }}
-                  >
-                    {/* 封面 */}
-                    <div className="aspect-4/3 relative overflow-hidden">
-                      {asset.coverUrl ? (
-                        <>
-                          {/* 毛玻璃背景层：用同一张图放大模糊填充留白区域 */}
-                          <SafeImage
-                            src={resolveMediaUrl(asset.coverUrl) || undefined}
-                            alt=""
-                            aria-hidden
-                            className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-60"
-                            fallback={<div className="hidden" />}
-                          />
-                          {/* 前景图：object-contain 完整显示 */}
-                          <SafeImage
-                            src={resolveMediaUrl(asset.coverUrl) || undefined}
-                            alt={asset.name}
-                            className="relative w-full h-full object-contain z-1"
-                            fallbackType={
-                              asset.type === "character"
-                                ? "avatar"
-                                : asset.type === "scene"
-                                ? "scene"
-                                : asset.type === "prop"
-                                ? "prop"
-                                : "image"
-                            }
-                          />
-                        </>
-                      ) : (
-                        <AssetTypePlaceholder type={asset.type} className="w-full h-full" />
-                      )}
-                      {/* 删除按钮 hover 显示 */}
-                      <button
-                        onClick={(e) => { e.stopPropagation(); handleDelete(asset.id); }}
-                        className="absolute top-1.5 right-1.5 p-1 rounded-md bg-black/40 text-white/70 hover:bg-destructive hover:text-white opacity-0 group-hover:opacity-100 transition-all backdrop-blur-sm z-20"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                    {/* 信息 */}
-                    <div className="px-2.5 py-2">
-                      <p className="text-xs font-medium truncate mb-0.5">{asset.name}</p>
-                      <div className="flex items-center gap-1.5">
-                        <span className={cn("px-1 py-0.5 rounded text-[9px] leading-none shrink-0 whitespace-nowrap", color)}>
-                          {typeLabelMap[asset.type] || asset.type}
-                        </span>
-                        {asset.description && (
-                          <span className="text-[10px] text-muted-foreground/50 truncate min-w-0">{asset.description}</span>
-                        )}
-                      </div>
-                    </div>
-                  </motion.div>
-                );
-              })}
-            </motion.div>
+            <div className="flex h-full flex-col items-center justify-center">
+              <Images className="mb-3 h-10 w-10 text-muted-foreground/20" />
+              <p className="text-sm font-medium">选择主资产</p>
+            </div>
           )}
-        </motion.div>
+        </main>
       </div>
-
-      {/* ========== 右侧：详情面板（absolute 定位，从右侧滑入） ========== */}
-      <div
-        className={cn(
-          "absolute top-0 right-0 h-full min-h-0 overflow-hidden border-l border-border/20 bg-card/20",
-          "transition-all duration-400 ease-in-out"
-        )}
-        style={{
-          width: isPanelOpen ? "60%" : "0%",
-          opacity: isPanelOpen ? 1 : 0,
-          borderLeftWidth: isPanelOpen ? undefined : 0,
-        }}
-      >
-        {isCreating ? (
-          <AssetDetailPanel
-            key="create"
-            isCreating
-            projectId={projectId}
-            onClose={() => setIsCreating(false)}
-            onSaved={async () => {
-              await fetchData(activeType);
-            }}
-            onCreated={async (created) => {
-              setIsCreating(false);
-              await fetchData(activeType);
-              setSelectedAsset(created);
-            }}
-          />
-        ) : selectedAsset ? (
-          <AssetDetailPanel
-            key={selectedAsset.id}
-            asset={selectedAsset}
-            onClose={() => setSelectedAsset(null)}
-            onSaved={() => fetchData(activeType)}
-            onDeleted={() => {
-              setSelectedAsset(null);
-              fetchData(activeType);
-            }}
-          />
-        ) : null}
-      </div>
-    </motion.div>
+    </div>
   );
 }

@@ -55,8 +55,10 @@ class GetGenerationModelCapabilitiesToolExecutorTests {
             }
         });
 
-        AiModel imageModel = AiModel.builder().id(11L).name("GPT Image 1").code("gpt-image-1").build();
-        AiModel videoModel = AiModel.builder().id(22L).name("Veo R2V").code("veo_3_1_r2v_fast").build();
+        AiModel imageModel = AiModel.builder().id(11L).name("GPT Image 1").code("gpt-image-1")
+                .capabilityPresetCode("gpt-image-1").build();
+        AiModel videoModel = AiModel.builder().id(22L).name("Veo R2V").code("veo_3_1_r2v_fast")
+                .capabilityPresetCode("veo_3_1_r2v_fast").build();
 
         when(aiModelService.getDefaultByType(2)).thenReturn(imageModel);
         when(aiModelService.getDefaultByType(3)).thenReturn(videoModel);
