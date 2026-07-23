@@ -30,7 +30,9 @@ public class TokenService {
 
     private static final String ACCESS_TOKEN_PREFIX = "fusion:token:";
     private static final String REFRESH_TOKEN_PREFIX = "fusion:refresh_token:";
-    private static final String USER_TOKEN_PREFIX = "fusion:user_token:";
+    private static final String LEGACY_USER_TOKEN_PREFIX = "fusion:user_token:";
+    private static final String ACCESS_REFRESH_SUFFIX = ":refresh";
+    private static final String REFRESH_ACCESS_SUFFIX = ":access";
 
     /** access_token 有效期：2 小时 */
     private static final long ACCESS_TOKEN_EXPIRE_HOURS = 2;
@@ -71,19 +73,6 @@ public class TokenService {
      * @return 包含 access_token 和 refresh_token 的令牌对
      */
     public TokenPair createToken(Long userId, String username, Long currentTeamId) {
-        // 删除该用户之前的 token（单端登录）
-        String oldAccessToken = redisTemplate.opsForValue().get(USER_TOKEN_PREFIX + userId);
-        if (oldAccessToken != null) {
-            // 清除旧 access_token
-            redisTemplate.delete(ACCESS_TOKEN_PREFIX + oldAccessToken);
-            // 清除旧 refresh_token（通过 access_token 查找）
-            String oldRefreshToken = redisTemplate.opsForValue().get(ACCESS_TOKEN_PREFIX + oldAccessToken + ":refresh");
-            if (oldRefreshToken != null) {
-                redisTemplate.delete(REFRESH_TOKEN_PREFIX + oldRefreshToken);
-                redisTemplate.delete(ACCESS_TOKEN_PREFIX + oldAccessToken + ":refresh");
-            }
-        }
-
         String userValue = serializeSession(new TokenSession(userId, username, currentTeamId));
 
         // 生成 access_token
@@ -104,14 +93,14 @@ public class TokenService {
 
         // 记录 access_token 对应的 refresh_token（用于登出时一起清除）
         redisTemplate.opsForValue().set(
-                ACCESS_TOKEN_PREFIX + accessToken + ":refresh",
+                accessRefreshKey(accessToken),
                 refreshToken,
                 Duration.ofDays(REFRESH_TOKEN_EXPIRE_DAYS)
         );
 
-        // userId -> accessToken（用于单端登录踢出）
+        // 记录 refresh_token 对应的 access_token，刷新时只轮换当前登录会话
         redisTemplate.opsForValue().set(
-                USER_TOKEN_PREFIX + userId,
+                refreshAccessKey(refreshToken),
                 accessToken,
                 Duration.ofDays(REFRESH_TOKEN_EXPIRE_DAYS)
         );
@@ -132,48 +121,18 @@ public class TokenService {
         }
 
         Long userId = session.getUserId();
-        String username = session.getUsername();
-
-        // 删除旧的 access_token
-        String oldAccessToken = redisTemplate.opsForValue().get(USER_TOKEN_PREFIX + userId);
+        String oldAccessToken = findAccessTokenForRefresh(refreshToken, userId);
         if (oldAccessToken != null) {
             redisTemplate.delete(ACCESS_TOKEN_PREFIX + oldAccessToken);
-            redisTemplate.delete(ACCESS_TOKEN_PREFIX + oldAccessToken + ":refresh");
+            redisTemplate.delete(accessRefreshKey(oldAccessToken));
+            removeLegacyUserTokenReference(userId, oldAccessToken);
         }
 
-        // 删除旧的 refresh_token
+        // 只轮换当前 refresh_token 所属的会话，其他设备上的登录态保持有效
         redisTemplate.delete(REFRESH_TOKEN_PREFIX + refreshToken);
+        redisTemplate.delete(refreshAccessKey(refreshToken));
 
-        // 生成新的令牌对（refresh_token 也会轮换，更安全）
-        String newAccessToken = generateUUID();
-        String newRefreshToken = generateUUID();
-        String userValue = serializeSession(new TokenSession(userId, username, session.getCurrentTeamId()));
-
-        redisTemplate.opsForValue().set(
-                ACCESS_TOKEN_PREFIX + newAccessToken,
-                userValue,
-                Duration.ofHours(ACCESS_TOKEN_EXPIRE_HOURS)
-        );
-
-        redisTemplate.opsForValue().set(
-                REFRESH_TOKEN_PREFIX + newRefreshToken,
-                userValue,
-                Duration.ofDays(REFRESH_TOKEN_EXPIRE_DAYS)
-        );
-
-        redisTemplate.opsForValue().set(
-                ACCESS_TOKEN_PREFIX + newAccessToken + ":refresh",
-                newRefreshToken,
-                Duration.ofDays(REFRESH_TOKEN_EXPIRE_DAYS)
-        );
-
-        redisTemplate.opsForValue().set(
-                USER_TOKEN_PREFIX + userId,
-                newAccessToken,
-                Duration.ofDays(REFRESH_TOKEN_EXPIRE_DAYS)
-        );
-
-        return new TokenPair(newAccessToken, newRefreshToken, ACCESS_TOKEN_EXPIRE_HOURS * 3600);
+        return createToken(userId, session.getUsername(), session.getCurrentTeamId());
     }
 
     /**
@@ -224,7 +183,7 @@ public class TokenService {
         writeSession(accessTokenKey, updatedSession, redisTemplate.getExpire(accessTokenKey, TimeUnit.SECONDS),
                 Duration.ofHours(ACCESS_TOKEN_EXPIRE_HOURS));
 
-        String refreshToken = redisTemplate.opsForValue().get(ACCESS_TOKEN_PREFIX + accessToken + ":refresh");
+        String refreshToken = redisTemplate.opsForValue().get(accessRefreshKey(accessToken));
         if (refreshToken != null) {
             String refreshTokenKey = REFRESH_TOKEN_PREFIX + refreshToken;
             writeSession(refreshTokenKey, updatedSession, redisTemplate.getExpire(refreshTokenKey, TimeUnit.SECONDS),
@@ -244,21 +203,16 @@ public class TokenService {
      * 删除令牌（登出时调用），同时清除 access_token 和 refresh_token
      */
     public void removeToken(String token) {
-        Long userId = getUserIdFromToken(token);
-
         // 清除关联的 refresh_token
-        String refreshToken = redisTemplate.opsForValue().get(ACCESS_TOKEN_PREFIX + token + ":refresh");
+        String refreshToken = redisTemplate.opsForValue().get(accessRefreshKey(token));
         if (refreshToken != null) {
             redisTemplate.delete(REFRESH_TOKEN_PREFIX + refreshToken);
+            redisTemplate.delete(refreshAccessKey(refreshToken));
         }
 
         // 清除 access_token 及其关联键
         redisTemplate.delete(ACCESS_TOKEN_PREFIX + token);
-        redisTemplate.delete(ACCESS_TOKEN_PREFIX + token + ":refresh");
-
-        if (userId != null) {
-            redisTemplate.delete(USER_TOKEN_PREFIX + userId);
-        }
+        redisTemplate.delete(accessRefreshKey(token));
     }
 
     private String generateUUID() {
@@ -267,6 +221,37 @@ public class TokenService {
 
     private TokenSession getRefreshTokenSession(String refreshToken) {
         return deserializeSession(redisTemplate.opsForValue().get(REFRESH_TOKEN_PREFIX + refreshToken));
+    }
+
+    private String findAccessTokenForRefresh(String refreshToken, Long userId) {
+        String accessToken = redisTemplate.opsForValue().get(refreshAccessKey(refreshToken));
+        if (accessToken != null) {
+            return accessToken;
+        }
+
+        // 兼容多端登录改造前签发的令牌对
+        String legacyAccessToken = redisTemplate.opsForValue().get(LEGACY_USER_TOKEN_PREFIX + userId);
+        if (legacyAccessToken == null) {
+            return null;
+        }
+        String linkedRefreshToken = redisTemplate.opsForValue().get(accessRefreshKey(legacyAccessToken));
+        return refreshToken.equals(linkedRefreshToken) ? legacyAccessToken : null;
+    }
+
+    private void removeLegacyUserTokenReference(Long userId, String accessToken) {
+        String legacyKey = LEGACY_USER_TOKEN_PREFIX + userId;
+        String legacyAccessToken = redisTemplate.opsForValue().get(legacyKey);
+        if (accessToken.equals(legacyAccessToken)) {
+            redisTemplate.delete(legacyKey);
+        }
+    }
+
+    private String accessRefreshKey(String accessToken) {
+        return ACCESS_TOKEN_PREFIX + accessToken + ACCESS_REFRESH_SUFFIX;
+    }
+
+    private String refreshAccessKey(String refreshToken) {
+        return REFRESH_TOKEN_PREFIX + refreshToken + REFRESH_ACCESS_SUFFIX;
     }
 
     private String serializeSession(TokenSession session) {
