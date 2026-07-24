@@ -6,6 +6,7 @@ import type {
   SubTimelineItem,
   TimelineItem,
 } from "@/lib/store/pipeline-store";
+import { isSubAgentTool } from "./constants";
 
 function pushReasoningToTimeline(
   timeline: TimelineItem[],
@@ -103,16 +104,69 @@ function updateLastSubTimelineReasoningDuration(
   }
 }
 
+function normalizeToolResult(
+  toolName: string | undefined,
+  content: string | undefined
+): string | undefined {
+  if (!content || !toolName || !isSubAgentTool(toolName)) {
+    return content;
+  }
+
+  try {
+    const value: unknown = JSON.parse(content);
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return content;
+    }
+    const result = (value as Record<string, unknown>).result;
+    if (typeof result === "string" && result.trim()) {
+      return result;
+    }
+    const error = (value as Record<string, unknown>).error;
+    if (typeof error === "string" && error.trim()) {
+      return error;
+    }
+  } catch {
+    // 非 JSON 的子 Agent 结果直接按原文本展示。
+  }
+
+  return content;
+}
+
 export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
   const timeline: TimelineItem[] = [];
   const toolIndexMap = new Map<string, number>();
+  const pendingParentUpdates = new Map<
+    string,
+    Array<(children: SubTimelineItem[]) => void>
+  >();
+
+  const registerTool = (toolCallId: string, index: number) => {
+    toolIndexMap.set(toolCallId, index);
+    const pendingUpdates = pendingParentUpdates.get(toolCallId);
+    if (!pendingUpdates?.length) return;
+
+    const parentItem = timeline[index];
+    if (parentItem.type !== "tool") return;
+    if (!parentItem.children) {
+      parentItem.children = [];
+    }
+    for (const update of pendingUpdates) {
+      update(parentItem.children);
+    }
+    pendingParentUpdates.delete(toolCallId);
+  };
 
   const appendToParentChildren = (
     parentToolCallId: string,
     updater: (children: SubTimelineItem[]) => void
   ) => {
     const parentIdx = toolIndexMap.get(parentToolCallId);
-    if (parentIdx === undefined) return;
+    if (parentIdx === undefined) {
+      const pendingUpdates = pendingParentUpdates.get(parentToolCallId) ?? [];
+      pendingUpdates.push(updater);
+      pendingParentUpdates.set(parentToolCallId, pendingUpdates);
+      return;
+    }
 
     const parentItem = timeline[parentIdx];
     if (parentItem.type !== "tool") return;
@@ -147,7 +201,10 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
           if (existingChild && existingChild.type === "tool") {
             existingChild.status =
               msg.toolStatus === "error" ? "error" : "done";
-            existingChild.result = msg.content;
+            existingChild.result = normalizeToolResult(
+              msg.toolName,
+              msg.content
+            );
             return;
           }
 
@@ -157,7 +214,7 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
             name: msg.toolName || "tool",
             arguments: "",
             status: msg.toolStatus === "error" ? "error" : "done",
-            result: msg.content,
+            result: normalizeToolResult(msg.toolName, msg.content),
           });
         });
         continue;
@@ -172,7 +229,7 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
           arguments: msg.content || "",
           status: "calling",
         });
-        toolIndexMap.set(toolCallId, idx);
+        registerTool(toolCallId, idx);
         continue;
       }
 
@@ -182,7 +239,7 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
         if (existingItem.type === "tool") {
           existingItem.status =
             msg.toolStatus === "error" ? "error" : "done";
-          existingItem.result = msg.content;
+          existingItem.result = normalizeToolResult(msg.toolName, msg.content);
         }
         continue;
       }
@@ -194,9 +251,9 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
         name: msg.toolName || "tool",
         arguments: "",
         status: msg.toolStatus === "error" ? "error" : "done",
-        result: msg.content,
+        result: normalizeToolResult(msg.toolName, msg.content),
       });
-      toolIndexMap.set(toolCallId, idx);
+      registerTool(toolCallId, idx);
       continue;
     }
 

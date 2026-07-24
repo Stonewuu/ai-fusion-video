@@ -208,9 +208,16 @@ export interface StoryboardItemUpdateReq {
   lastFramePrompt?: string | null;
   videoPrompt?: string | null;
   status?: number;
-  characterIds?: string | null;
+}
+
+/** 分镜条目资产关联局部更新请求 */
+export interface StoryboardItemAssetsUpdateReq {
+  /** 字段缺省表示不修改，空数组表示清空 */
+  characterIds?: number[];
+  /** 字段缺省表示不修改，显式 null 表示清空 */
   sceneAssetItemId?: number | null;
-  propIds?: string | null;
+  /** 字段缺省表示不修改，空数组表示清空 */
+  propIds?: number[];
 }
 
 /** 分镜首尾帧类型 */
@@ -330,6 +337,10 @@ export const storyboardApi = {
   /** 更新分镜条目 */
   updateItem: (data: StoryboardItemUpdateReq) =>
     http.put<never, StoryboardItem>("/api/storyboard/item", data),
+
+  /** 局部更新分镜条目资产关联 */
+  updateItemAssets: (id: number, data: StoryboardItemAssetsUpdateReq) =>
+    http.patch<never, StoryboardItem>(`/api/storyboard/item/${id}/assets`, data),
 
   /** 更新分镜条目首尾帧 */
   updateFrame: (id: number, data: StoryboardFrameUpdateReq) =>

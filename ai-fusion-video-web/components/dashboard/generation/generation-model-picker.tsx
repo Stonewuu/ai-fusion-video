@@ -2,6 +2,7 @@
 
 import { Cpu, Loader2 } from "lucide-react";
 import type { AiModel } from "@/lib/api/ai-model";
+import { getModelDisplayParts } from "@/lib/model-display";
 import {
   Select,
   SelectContent,
@@ -20,17 +21,6 @@ interface GenerationModelPickerProps {
   compact?: boolean;
   className?: string;
   onChange: (modelId: number) => void;
-}
-
-function modelLabel(model: AiModel) {
-  const code = model.code?.trim();
-  return code && code !== model.name.trim()
-    ? `${model.name} · ${code}`
-    : model.name;
-}
-
-function hasDistinctCode(model: AiModel) {
-  return Boolean(model.code?.trim() && model.code.trim() !== model.name.trim());
 }
 
 /** 生成页模型选择器，始终保留可点击的模型入口。 */
@@ -84,7 +74,7 @@ export function GenerationModelPicker({
       onValueChange={(value) => onChange(Number(value))}
       items={models.map((model) => ({
         value: model.id,
-        label: modelLabel(model),
+        label: getModelDisplayParts(model).name,
       }))}
     >
       <SelectTrigger
@@ -114,28 +104,32 @@ export function GenerationModelPicker({
           <SelectLabel className="px-2.5 py-1.5 text-[10px] font-medium">
             生成模型
           </SelectLabel>
-          {models.map((model) => (
-            <SelectItem
-              key={model.id}
-              value={model.id}
-              title={modelLabel(model)}
-              className="min-h-11 py-2.5 pl-2.5"
-            >
-              <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
-                <Cpu className="size-3.5" />
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-xs font-medium">
-                  {model.name}
+          {models.map((model) => {
+            const display = getModelDisplayParts(model);
+            const modelCode = model.code.trim();
+            return (
+              <SelectItem
+                key={model.id}
+                value={model.id}
+                title={modelCode ? `${display.name} · ${modelCode}` : display.name}
+                className="min-h-11 py-2.5 pl-2.5"
+              >
+                <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
+                  <Cpu className="size-3.5" />
                 </span>
-                {hasDistinctCode(model) && (
-                  <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">
-                    {model.code}
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-xs font-medium">
+                    {display.name}
                   </span>
-                )}
-              </span>
-            </SelectItem>
-          ))}
+                  {modelCode && (
+                    <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">
+                      {modelCode}
+                    </span>
+                  )}
+                </span>
+              </SelectItem>
+            );
+          })}
         </SelectGroup>
       </SelectContent>
     </Select>

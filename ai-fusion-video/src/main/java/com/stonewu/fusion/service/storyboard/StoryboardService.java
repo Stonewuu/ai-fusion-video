@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.storyboard;
 
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.stonewu.fusion.common.BusinessException;
@@ -14,6 +15,7 @@ import com.stonewu.fusion.mapper.storyboard.StoryboardItemMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardSceneMapper;
 import com.stonewu.fusion.security.SecurityUtils;
+import com.stonewu.fusion.service.storyboard.dto.StoryboardItemAssetsPatch;
 import com.stonewu.fusion.service.team.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -386,6 +388,40 @@ public class StoryboardService {
         getItemById(item.getId());
         itemMapper.updateById(item);
         return itemMapper.selectById(item.getId());
+    }
+
+    /**
+     * 局部更新分镜条目的角色、场景和道具关联。
+     *
+     * <p>字段缺省时不修改；角色、道具空数组写入 JSON 空数组；场景显式 null 写入数据库 null。</p>
+     */
+    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @Transactional
+    public StoryboardItem updateItemAssets(Long itemId, StoryboardItemAssetsPatch patch) {
+        StoryboardItem existing = getItemById(itemId);
+        if (!patch.hasUpdates()) {
+            return existing;
+        }
+        if (patch.characterIdsPresent() && patch.characterIds() == null) {
+            throw new BusinessException("角色关联清空时请传空数组，不能传 null");
+        }
+        if (patch.propIdsPresent() && patch.propIds() == null) {
+            throw new BusinessException("道具关联清空时请传空数组，不能传 null");
+        }
+
+        UpdateWrapper<StoryboardItem> wrapper = new UpdateWrapper<StoryboardItem>()
+                .eq("id", itemId);
+        if (patch.characterIdsPresent()) {
+            wrapper.set("character_ids", JSONUtil.toJsonStr(patch.characterIds()));
+        }
+        if (patch.sceneAssetItemIdPresent()) {
+            wrapper.set("scene_asset_item_id", patch.sceneAssetItemId());
+        }
+        if (patch.propIdsPresent()) {
+            wrapper.set("prop_ids", JSONUtil.toJsonStr(patch.propIds()));
+        }
+        itemMapper.update(null, wrapper);
+        return itemMapper.selectById(itemId);
     }
 
     /**

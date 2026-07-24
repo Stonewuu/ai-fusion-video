@@ -179,7 +179,7 @@ export function CreateProjectDialog({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            className="modal-overlay fixed inset-0 z-50"
             onClick={handleClose}
           />
           {/* 弹窗 */}
@@ -192,8 +192,7 @@ export function CreateProjectDialog({
           >
             <div
               className={cn(
-                "rounded-2xl border border-border/40",
-                "bg-card shadow-2xl shadow-black/20",
+                "modal-surface rounded-2xl border border-border/40",
                 "flex flex-col overflow-hidden max-h-[90vh]"
               )}
             >

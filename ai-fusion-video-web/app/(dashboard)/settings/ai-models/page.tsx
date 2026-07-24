@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { getModelDisplayParts } from "@/lib/model-display";
 import {
   aiModelApi,
   apiConfigApi,
@@ -153,7 +154,7 @@ export default function AiModelsPage() {
         description,
       });
     } catch (err) {
-      toast.error(`${model.name} 检测失败`, {
+      toast.error(`${getModelDisplayParts(model).name} 检测失败`, {
         description: err instanceof Error ? err.message : "请求失败",
       });
     } finally {
@@ -424,6 +425,7 @@ export default function AiModelsPage() {
 
                     {/* 模型行 */}
                     {group.models.map((model) => {
+                      const modelDisplay = getModelDisplayParts(model);
                       const matchedPreset = findCapabilityPreset(model, modelPresets);
                       const effectiveModelConfig = mergeConfigObjects(
                         matchedPreset?.config || {},
@@ -451,7 +453,7 @@ export default function AiModelsPage() {
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-medium break-words">{model.name}</p>
+                              <p className="text-sm font-medium break-words">{modelDisplay.name}</p>
                               {model.defaultModel && (
                                 <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px] text-amber-500 font-medium">
                                   <Star className="h-2.5 w-2.5" />
@@ -464,7 +466,11 @@ export default function AiModelsPage() {
                               )} />
                             </div>
                             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
-                              <span className="font-mono px-1 py-0.5 rounded bg-muted/40 break-all">{model.code}</span>
+                              {modelDisplay.code && (
+                                <span className="font-mono px-1 py-0.5 rounded bg-muted/40 break-all">
+                                  {modelDisplay.code}
+                                </span>
+                              )}
                               <span
                                 className={cn(
                                   "px-1 py-0.5 rounded",

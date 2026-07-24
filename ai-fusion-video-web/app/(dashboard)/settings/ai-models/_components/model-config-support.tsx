@@ -310,20 +310,13 @@ export function isEquivalentPresetPlatform(
 export function isCapabilityPresetCompatible({
   preset,
   modelType,
-  platform,
-  effectiveProtocol,
 }: {
   preset: ModelPreset;
   modelType: number;
   platform: string | null | undefined;
   effectiveProtocol: string | null | undefined;
 }): boolean {
-  if (preset.modelType !== modelType || !isEquivalentPresetPlatform(preset.platform, platform)) {
-    return false;
-  }
-
-  const presetProtocol = normalizeProtocol(preset.modelProtocol);
-  return !presetProtocol || presetProtocol === normalizeProtocol(effectiveProtocol);
+  return preset.modelType === modelType;
 }
 
 export function findCapabilityPreset(model: AiModel, presets: ModelPreset[]): ModelPreset | null {
@@ -796,18 +789,24 @@ export function ToggleSettingCard({
   title,
   description,
   onToggle,
+  disabled = false,
 }: {
   checked: boolean;
   title: string;
   description: string;
   onToggle: () => void;
+  disabled?: boolean;
 }) {
   return (
-    <div className="rounded-lg border border-border/30 bg-background/70 px-3 py-2.5">
+    <div className={cn(
+      "rounded-lg border border-border/30 bg-background/70 px-3 py-2.5",
+      disabled && "opacity-50",
+    )}>
       <div className="flex items-start gap-3">
         <button
           type="button"
           onClick={onToggle}
+          disabled={disabled}
           className={cn(
             "relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors duration-200",
             checked ? "bg-primary" : "bg-muted-foreground/30"
@@ -821,7 +820,12 @@ export function ToggleSettingCard({
           />
         </button>
         <div className="min-w-0">
-          <Label className="cursor-pointer text-xs text-muted-foreground" onClick={onToggle}>
+          <Label
+            className={cn("text-xs text-muted-foreground", !disabled && "cursor-pointer")}
+            onClick={() => {
+              if (!disabled) onToggle();
+            }}
+          >
             {title}
           </Label>
           <p className="mt-1 text-[10px] leading-5 text-muted-foreground/70">{description}</p>

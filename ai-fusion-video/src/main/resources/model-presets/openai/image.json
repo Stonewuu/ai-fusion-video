@@ -9,6 +9,7 @@
     "capabilities": ["文生图", "图生图", "多图参考", "图片编辑", "透明背景"],
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "minReferenceImages": 0,
       "maxReferenceImages": 16,
       "supportTransparentBackground": true,
@@ -36,6 +37,7 @@
     "capabilities": ["文生图", "图生图", "多图参考", "图片编辑", "透明背景"],
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "minReferenceImages": 0,
       "maxReferenceImages": 16,
       "supportTransparentBackground": true,
@@ -63,6 +65,7 @@
     "capabilities": ["文生图", "图生图", "多图参考", "图片编辑", "透明背景"],
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "minReferenceImages": 0,
       "maxReferenceImages": 16,
       "supportTransparentBackground": true,
@@ -90,6 +93,7 @@
     "capabilities": ["文生图", "图生图", "多图参考", "高保真编辑", "自定义尺寸"],
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "minReferenceImages": 0,
       "maxReferenceImages": 16,
       "supportTransparentBackground": false,

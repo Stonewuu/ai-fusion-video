@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import { memo, type CSSProperties } from "react";
 import { XMarkdown } from "@ant-design/x-markdown";
 import { useTheme } from "next-themes";
 import { cn } from "@/lib/utils";
@@ -13,7 +13,7 @@ interface StreamMarkdownProps {
   className?: string;
 }
 
-export function StreamMarkdown({
+export const StreamMarkdown = memo(function StreamMarkdown({
   content,
   streaming = false,
   compact = false,
@@ -74,4 +74,4 @@ export function StreamMarkdown({
       )}
     />
   );
-}
+});

@@ -2,6 +2,7 @@
 
 import { useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import {
+  CircleAlert,
   ImagePlus,
   Loader2,
   Paperclip,
@@ -41,6 +42,7 @@ interface GenerationSimpleComposerProps {
   onRemoveAttachment: (url: string) => void;
   onSubmit: () => void;
   onAdvanced: () => void;
+  attachmentDisabledReason?: string;
 }
 
 export function GenerationSimpleComposer({
@@ -60,6 +62,7 @@ export function GenerationSimpleComposer({
   onRemoveAttachment,
   onSubmit,
   onAdvanced,
+  attachmentDisabledReason = "",
 }: GenerationSimpleComposerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
@@ -70,10 +73,10 @@ export function GenerationSimpleComposer({
   const missingRequiredAttachments = attachments.length < minAttachments;
   const canSubmit = Boolean(
     modelId &&
-      prompt.trim() &&
-      !missingRequiredAttachments &&
-      !submitting &&
-      !uploading,
+    prompt.trim() &&
+    !missingRequiredAttachments &&
+    !submitting &&
+    !uploading,
   );
 
   const uploadFiles = async (files: File[]) => {
@@ -126,7 +129,7 @@ export function GenerationSimpleComposer({
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
         className={cn(
-          "relative isolate overflow-hidden rounded-[28px] border bg-card/68 shadow-[0_6px_20px_-12px_rgba(15,23,42,.4)] backdrop-blur-2xl backdrop-saturate-150 transition-colors transition-shadow supports-[backdrop-filter]:bg-card/58",
+          "relative isolate overflow-hidden rounded-[28px] border bg-card/76 shadow-[0_6px_20px_-12px_rgba(15,23,42,.4)] backdrop-blur-2xl backdrop-saturate-150 transition-[border-color,box-shadow] duration-150 supports-[backdrop-filter]:bg-card/70 motion-reduce:transition-none",
           dragging
             ? "border-primary/45 ring-4 ring-primary/8"
             : "border-border/55 focus-within:border-primary/30 focus-within:shadow-[0_8px_24px_-14px_rgba(15,23,42,.46)]",
@@ -142,6 +145,13 @@ export function GenerationSimpleComposer({
           <SlidersHorizontal className="h-3 w-3" />
           高级模式
         </Button>
+
+        {attachmentDisabledReason && (
+          <div className="flex items-start gap-1.5 px-5 pr-32 pt-4 text-[11px] leading-5 text-amber-600">
+            <CircleAlert className="mt-0.5 size-3.5 shrink-0" />
+            <span>{attachmentDisabledReason}</span>
+          </div>
+        )}
 
         {attachments.length > 0 && (
           <div className="flex gap-2 overflow-x-auto px-4 pr-32 pt-4 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -191,7 +201,10 @@ export function GenerationSimpleComposer({
               ? "描述你想生成的画面，也可以直接粘贴参考图片…"
               : "描述画面、动作与镜头，也可以粘贴首帧或参考图片…"
           }
-          className="min-h-32 resize-none rounded-none border-0 bg-transparent px-5 pb-4 pr-32 pt-5 text-[15px] leading-7 shadow-none focus-visible:ring-0"
+          className={cn(
+            "min-h-32 resize-none rounded-none border-0 bg-transparent px-5 pb-4 pr-32 text-[15px] leading-7 shadow-none focus-visible:ring-0",
+            attachmentDisabledReason || attachments.length > 0 ? "pt-3" : "pt-5",
+          )}
         />
 
         <div className="mx-2 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/15 bg-background/42 p-1.5 shadow-sm backdrop-blur-xl dark:border-white/6">
@@ -201,7 +214,12 @@ export function GenerationSimpleComposer({
               size="icon-sm"
               disabled={!canAttach || uploading}
               onClick={() => inputRef.current?.click()}
-              title={maxAttachments > 0 ? `上传图片，最多 ${maxAttachments} 张` : "当前模型不支持图片输入"}
+              title={
+                attachmentDisabledReason ||
+                (maxAttachments > 0
+                  ? `上传图片，最多 ${maxAttachments} 张`
+                  : "当前模型不支持图片输入")
+              }
               aria-label="上传参考图片"
             >
               {uploading ? (
@@ -230,7 +248,14 @@ export function GenerationSimpleComposer({
           </div>
 
           <div className="flex items-center gap-1.5 pl-1">
-            {error && <span className="text-[10px] text-destructive">{error}</span>}
+            {error && (
+              <span
+                className="max-w-72 truncate text-[10px] text-destructive"
+                title={error}
+              >
+                {error}
+              </span>
+            )}
             <span className="hidden text-[10px] tabular-nums text-muted-foreground sm:inline">
               {prompt.length}/5000
             </span>

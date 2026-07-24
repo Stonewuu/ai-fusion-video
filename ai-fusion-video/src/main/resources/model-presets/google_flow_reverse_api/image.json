@@ -7,6 +7,7 @@
     "description": "Flow2API 图片别名模型，内部按比例映射到 Gemini 2.5 Flash 的具体生图型号",
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "minReferenceImages": 0,
       "defaultWidth": 1792,
       "defaultHeight": 1024,
@@ -27,6 +28,7 @@
     "description": "Flow2API 图片别名模型，支持先选模型，再选比例与 1K / 2K / 4K 输出档位",
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "minReferenceImages": 0,
       "defaultWidth": 1792,
       "defaultHeight": 1024,
@@ -64,6 +66,7 @@
     "description": "Flow2API 图片别名模型，支持更多比例与 2K / 4K 放大档位",
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "minReferenceImages": 0,
       "defaultWidth": 1792,
       "defaultHeight": 1024,
@@ -101,6 +104,7 @@
     "description": "Flow2API Imagen 4.0 图片别名模型，仅支持 1K 横屏 / 竖屏输出",
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "minReferenceImages": 0,
       "defaultWidth": 1792,
       "defaultHeight": 1024,

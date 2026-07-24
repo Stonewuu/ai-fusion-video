@@ -160,7 +160,7 @@ public class OpenAiCompatibleImageProtocolSupport {
                 context.imageUrls().stream()
                         .filter(StrUtil::isNotBlank)
                         .map(String::trim)
-                        .map(imageUrl -> resolveAgnesImageInput(imageUrl, context.apiConfig()))
+                        .map(imageUrl -> resolveAgnesImageInput(imageUrl, context.modelCode()))
                         .forEach(imageArray::add);
             }
 
@@ -178,6 +178,8 @@ public class OpenAiCompatibleImageProtocolSupport {
                 root.set("extra_body", extraBody);
             }
             return jsonRequest(resolveImagesGenerateUrl(context.apiConfig()), root);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("构建 Agnes 图片请求失败: " + e.getMessage(), e);
         }
@@ -688,16 +690,21 @@ public class OpenAiCompatibleImageProtocolSupport {
         throw new BusinessException("参考图地址不可访问: " + trimmed);
     }
 
-    private String resolveAgnesImageInput(String imageUrl, ApiConfig apiConfig) {
+    private String resolveAgnesImageInput(String imageUrl, String modelCode) {
         String trimmed = StrUtil.blankToDefault(imageUrl, "").trim();
-        if (StrUtil.startWithIgnoreCase(trimmed, "data:") || isHttpUrl(trimmed)) return trimmed;
-        try {
-            BinaryResource resource = loadBinaryResource(trimmed, apiConfig);
-            return "data:" + StrUtil.blankToDefault(resource.mimeType(), "image/png") + ";base64,"
-                    + Base64.getEncoder().encodeToString(resource.bytes());
-        } catch (IOException e) {
-            throw new RuntimeException("加载 Agnes 参考图失败: " + e.getMessage(), e);
+        if (StrUtil.isBlank(trimmed)) {
+            throw new BusinessException("Agnes 参考图地址为空");
         }
+        if (StrUtil.startWithIgnoreCase(trimmed, "data:") || isHttpUrl(trimmed)) {
+            return trimmed;
+        }
+        throw unsupportedReferenceImageInput(modelCode,
+                "参考图尚未按模型能力解析为公网 URL 或 base64/Data URI");
+    }
+
+    private BusinessException unsupportedReferenceImageInput(String modelCode, String reason) {
+        return new BusinessException("图片模型 " + StrUtil.blankToDefault(modelCode, "Agnes")
+                + " 无法使用当前参考图：" + reason + "。");
     }
 
     private BinaryResource parseDataUrl(String sourceUrl) {

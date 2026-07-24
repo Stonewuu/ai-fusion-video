@@ -81,6 +81,8 @@ class AgnesImageProtocolTests {
                 {
                   "imageProtocol": "agnes",
                   "responseFormat": "url",
+                  "supportDataUriInput": true,
+                  "referenceImageInputFormats": ["url", "data_uri"],
                   "supportedResolutions": ["1024x768"],
                   "supportedSizes": {"standard": {"4:3": "1024x768"}}
                 }
@@ -92,6 +94,8 @@ class AgnesImageProtocolTests {
                 {
                   "imageProtocol": "agnes",
                   "responseFormat": "url",
+                  "supportDataUriInput": true,
+                  "referenceImageInputFormats": ["url", "data_uri"],
                   "supportedResolutions": ["1K", "2K"],
                   "supportedSizes": {"2K": {"16:9": "2624x1472"}}
                 }

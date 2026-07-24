@@ -292,7 +292,8 @@ export default function AssetsPage() {
         <div
           className={cn(
             "flex-1 min-w-[200px] flex items-center gap-2.5 px-3.5 py-2 rounded-xl",
-            "border border-border/30 bg-card/50 backdrop-blur-sm"
+            "border border-border/30 bg-card/50 backdrop-blur-sm",
+            "transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 motion-reduce:transition-none"
           )}
         >
           <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />

@@ -22,6 +22,7 @@ import {
   getPositiveNumberValue,
   getConfigBooleanValue,
   getConfigNumberValue,
+  getConfigStringArray,
   SizesMap,
   SupportedSizesEditor,
   AspectRatiosEditor,
@@ -135,6 +136,30 @@ export function ModelConfigForm({
   const supportsVideoReferenceImages = getConfigBooleanValue(configObj.supportReferenceImages);
   const supportsReferenceVideos = getConfigBooleanValue(configObj.supportReferenceVideos);
   const supportsReferenceAudios = getConfigBooleanValue(configObj.supportReferenceAudios);
+  const referenceImageInputFormats = getConfigStringArray(configObj.referenceImageInputFormats)
+    .map(value => value.toLowerCase())
+    .map(value => value === "base64" || value === "data-uri" ? "data_uri" : value)
+    .filter(value => value === "url" || value === "data_uri");
+  if (
+    getConfigBooleanValue(configObj.supportDataUriInput) &&
+    !referenceImageInputFormats.includes("data_uri")
+  ) {
+    referenceImageInputFormats.push("data_uri");
+  }
+  const supportsReferenceImageUrlInput = referenceImageInputFormats.includes("url");
+  const supportsReferenceImageDataUriInput = referenceImageInputFormats.includes("data_uri");
+  const supportsAnyVideoImageInput = supportsFirstFrame || supportsLastFrame || supportsVideoReferenceImages;
+
+  const updateReferenceImageInputFormat = (format: "url" | "data_uri", enabled: boolean) => {
+    const nextFormats = new Set(referenceImageInputFormats.filter(value => value === "url" || value === "data_uri"));
+    if (enabled) nextFormats.add(format);
+    else nextFormats.delete(format);
+    emitChange({
+      ...configObj,
+      referenceImageInputFormats: Array.from(nextFormats),
+      ...(format === "data_uri" ? { supportDataUriInput: enabled } : {}),
+    });
+  };
 
   return (
     <div className="space-y-3">
@@ -292,9 +317,28 @@ export function ModelConfigForm({
                         supportReferenceImages: nextEnabled,
                         minReferenceImages: nextEnabled ? configObj.minReferenceImages : 0,
                         maxReferenceImages: nextEnabled ? configObj.maxReferenceImages : 0,
+                        referenceImageInputFormats: nextEnabled ? configObj.referenceImageInputFormats : [],
+                        supportDataUriInput: nextEnabled ? configObj.supportDataUriInput : false,
                       });
                     }}
                   />
+
+                  <div className="grid gap-2.5 sm:grid-cols-2">
+                    <ToggleSettingCard
+                      checked={supportsReferenceImageUrlInput}
+                      title="允许 URL 传递"
+                      description="有公网对象存储或项目访问域名时，参考图直接以 URL 传给上游。"
+                      disabled={!supportsImageReferenceInputs}
+                      onToggle={() => updateReferenceImageInputFormat("url", !supportsReferenceImageUrlInput)}
+                    />
+                    <ToggleSettingCard
+                      checked={supportsReferenceImageDataUriInput}
+                      title="允许 base64 / Data URI"
+                      description="没有公网访问地址时，服务端读取图片并转换为 Data URI。"
+                      disabled={!supportsImageReferenceInputs}
+                      onToggle={() => updateReferenceImageInputFormat("data_uri", !supportsReferenceImageDataUriInput)}
+                    />
+                  </div>
 
                   <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">
                     <CapabilityNumberField
@@ -398,6 +442,31 @@ export function ModelConfigForm({
                         });
                       }}
                     />
+                  </div>
+
+                  <div className="space-y-2">
+                    <div>
+                      <Label className="text-[11px] text-muted-foreground">图片传递模式</Label>
+                      <p className="mt-1 text-[10px] text-muted-foreground/70">
+                        同时作用于首帧图、尾帧图和 referenceImageUrls；至少启用一种才能提交图片输入。
+                      </p>
+                    </div>
+                    <div className="grid gap-2.5 sm:grid-cols-2">
+                      <ToggleSettingCard
+                        checked={supportsReferenceImageUrlInput}
+                        title="允许 URL 传递"
+                        description="有公网对象存储或项目访问域名时，直接传递图片 URL。"
+                        disabled={!supportsAnyVideoImageInput}
+                        onToggle={() => updateReferenceImageInputFormat("url", !supportsReferenceImageUrlInput)}
+                      />
+                      <ToggleSettingCard
+                        checked={supportsReferenceImageDataUriInput}
+                        title="允许 base64 / Data URI"
+                        description="没有公网访问地址时，将图片转换为 Data URI 后再提交。"
+                        disabled={!supportsAnyVideoImageInput}
+                        onToggle={() => updateReferenceImageInputFormat("data_uri", !supportsReferenceImageDataUriInput)}
+                      />
+                    </div>
                   </div>
 
                   <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(220px,1fr))]">

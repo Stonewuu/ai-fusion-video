@@ -84,6 +84,9 @@ public interface StoryboardConvert {
 
     @Mapping(target = "aiGenerated", ignore = true)
     @Mapping(target = "status", ignore = true)
+    @Mapping(target = "characterIds", ignore = true)
+    @Mapping(target = "sceneAssetItemId", ignore = true)
+    @Mapping(target = "propIds", ignore = true)
     StoryboardItem convert(StoryboardItemUpdateReqVO reqVO);
 
     List<StoryboardItem> convertCreateList(List<StoryboardItemCreateReqVO> list);

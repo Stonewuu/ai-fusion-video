@@ -8,7 +8,10 @@ import {
   Sparkles,
 } from "lucide-react";
 import type { AiModel } from "@/lib/api/ai-model";
-import type { GenerationCapabilities } from "@/lib/generation-capabilities";
+import type {
+  GenerationCapabilities,
+  ReferenceImageUploadAvailability,
+} from "@/lib/generation-capabilities";
 import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -31,6 +34,7 @@ interface GenerationAdvancedPanelProps {
   onFormChange: (patch: Partial<GenerationFormState>) => void;
   onSubmit: () => void;
   onSimple: () => void;
+  referenceImageUploadAvailability: ReferenceImageUploadAvailability;
 }
 
 export function GenerationAdvancedPanel({
@@ -45,6 +49,7 @@ export function GenerationAdvancedPanel({
   onFormChange,
   onSubmit,
   onSimple,
+  referenceImageUploadAvailability,
 }: GenerationAdvancedPanelProps) {
   const outputLimit = parseLimit(capabilities?.maxCount || 0, 4);
   const imageInputCount =
@@ -150,7 +155,7 @@ export function GenerationAdvancedPanel({
             )}
           </section>
 
-          <section className="overflow-hidden rounded-[18px] border border-border/45 bg-background/48 shadow-[0_14px_45px_-38px_rgba(15,23,42,.55)] transition-colors focus-within:border-primary/25">
+          <section className="overflow-hidden rounded-[18px] border border-border/45 bg-background/48 shadow-[0_14px_45px_-38px_rgba(15,23,42,.55)] transition-colors duration-150 focus-within:border-primary/25 motion-reduce:transition-none">
             <div className="flex items-center justify-between gap-3 px-3.5 pt-3.5">
               <div>
                 <h4 className="text-xs font-semibold">创作提示词</h4>
@@ -217,6 +222,15 @@ export function GenerationAdvancedPanel({
                     values={form.firstFrame}
                     maxCount={1}
                     mediaType="image"
+                    uploadDisabledReason={
+                      !referenceImageUploadAvailability.supported
+                        ? referenceImageUploadAvailability.reason
+                        : undefined
+                    }
+                    manualInputAllowed={
+                      capabilities.supportsReferenceImageUrlInput ||
+                      capabilities.supportsReferenceImageBase64Input
+                    }
                     onChange={(firstFrame) => onFormChange({ firstFrame })}
                   />
                 )}
@@ -227,6 +241,15 @@ export function GenerationAdvancedPanel({
                     values={form.lastFrame}
                     maxCount={1}
                     mediaType="image"
+                    uploadDisabledReason={
+                      !referenceImageUploadAvailability.supported
+                        ? referenceImageUploadAvailability.reason
+                        : undefined
+                    }
+                    manualInputAllowed={
+                      capabilities.supportsReferenceImageUrlInput ||
+                      capabilities.supportsReferenceImageBase64Input
+                    }
                     onChange={(lastFrame) => onFormChange({ lastFrame })}
                   />
                 )}
@@ -237,6 +260,15 @@ export function GenerationAdvancedPanel({
                     values={form.referenceImages}
                     maxCount={parseLimit(capabilities.maxReferenceImages, 12)}
                     mediaType="image"
+                    uploadDisabledReason={
+                      !referenceImageUploadAvailability.supported
+                        ? referenceImageUploadAvailability.reason
+                        : undefined
+                    }
+                    manualInputAllowed={
+                      capabilities.supportsReferenceImageUrlInput ||
+                      capabilities.supportsReferenceImageBase64Input
+                    }
                     onChange={(referenceImages) =>
                       onFormChange({ referenceImages })
                     }

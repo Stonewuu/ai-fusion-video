@@ -1,6 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -43,20 +50,63 @@ import {
   getElapsedStr,
 } from "./utils";
 
-function PipelineDetailPanel({ task }: { task: PipelineTask }) {
+const EMPTY_TIMELINE: PipelineTask["state"]["timeline"] = [];
+const EMPTY_MESSAGES: AgentMessage[] = [];
+
+function selectTaskListVersion(state: {
+  tasks: PipelineTask[];
+}): string {
+  return JSON.stringify(
+    state.tasks.map((task) => [
+      task.id,
+      task.label,
+      task.status,
+      task.createdAt,
+      task.finishedAt,
+    ])
+  );
+}
+
+function PipelineDetailPanel({ taskId }: { taskId: string }) {
+  const task = usePipelineStore(
+    (state) => state.tasks.find((candidate) => candidate.id === taskId) ?? null
+  );
+  const loadPipelineContent = usePipelineStore(
+    (state) => state.loadPipelineContent
+  );
+  const disconnectPipelineContent = usePipelineStore(
+    (state) => state.disconnectPipelineContent
+  );
   const [idleTimelineLength, setIdleTimelineLength] = useState<number | null>(null);
-  const timelineLength = task.state.timeline.length;
-  const isIdle = task.status === "running" && idleTimelineLength === timelineLength;
-  const canCancel = task.status === "running" && task.cancellable !== false;
-  const timelineRef = useSmartScroll([task.state.timeline, isIdle], task.status === "running");
+  const timeline = task?.state.timeline ?? EMPTY_TIMELINE;
+  const timelineLength = timeline.length;
+  const isRunning = task?.status === "running";
+  const isContentPending =
+    task?.state.contentLoaded === false && !task.state.error;
+  const isIdle = isRunning && idleTimelineLength === timelineLength;
+  const canCancel = isRunning && task?.cancellable !== false;
+  const timelineRef = useSmartScroll([timeline, isIdle], isRunning);
 
   useEffect(() => {
-    if (task.status !== "running") return;
+    loadPipelineContent(taskId);
+    return () => disconnectPipelineContent(taskId);
+  }, [disconnectPipelineContent, loadPipelineContent, taskId]);
+
+  useEffect(() => {
+    if (!isRunning) return;
     const timer = setTimeout(() => {
       setIdleTimelineLength(timelineLength);
     }, 2000);
     return () => clearTimeout(timer);
-  }, [timelineLength, task.status]);
+  }, [timelineLength, isRunning]);
+
+  if (!task) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+        任务已从当前列表中移除
+      </div>
+    );
+  }
 
   const statusText = {
     running: "运行中",
@@ -104,13 +154,22 @@ function PipelineDetailPanel({ task }: { task: PipelineTask }) {
       </div>
 
       <div ref={timelineRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
-        <MessageTimeline
-          reasoningText={task.state.reasoningText}
-          reasoningDurationMs={task.state.reasoningDurationMs}
-          timeline={task.state.timeline}
-          streaming={task.status === "running"}
-          error={task.state.error}
-        />
+        {isContentPending && timeline.length === 0 ? (
+          <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            正在加载 Pipeline 内容…
+          </div>
+        ) : (
+          <MessageTimeline
+            reasoningText={task.state.reasoningText}
+            reasoningDurationMs={task.state.reasoningDurationMs}
+            timeline={timeline}
+            scrollRef={timelineRef}
+            initialScrollToEnd
+            streaming={isRunning}
+            error={task.state.error}
+          />
+        )}
 
         <AnimatePresence>
           {isIdle && task.status === "running" && (
@@ -136,6 +195,7 @@ function HistoryDetailPanel({
 }: {
   conversation: AgentConversation;
 }) {
+  const timelineRef = useRef<HTMLDivElement>(null);
   const [messageState, setMessageState] = useState<{
     conversationId: string;
     messages: AgentMessage[];
@@ -144,7 +204,7 @@ function HistoryDetailPanel({
   const messages =
     messageState?.conversationId === conversation.conversationId
       ? messageState.messages
-      : [];
+      : EMPTY_MESSAGES;
 
   useEffect(() => {
     let cancelled = false;
@@ -177,17 +237,27 @@ function HistoryDetailPanel({
     conversation.category === "pipeline" ||
     (conversation.agentType != null &&
       (PIPELINE_AGENT_TYPES as readonly string[]).includes(conversation.agentType));
-  const displayMessages = isPipeline
-    ? messages.filter((message) => message.role !== "user")
-    : messages;
+  const displayMessages = useMemo(
+    () =>
+      isPipeline
+        ? messages.filter((message) => message.role !== "user")
+        : messages,
+    [isPipeline, messages]
+  );
   const firstAssistant = displayMessages.find(
     (message) =>
       message.role === "assistant" &&
       !message.parentToolCallId &&
       message.reasoningContent
   );
-  const timeline = messagesToTimeline(displayMessages);
-  const historyError = resolveHistoryErrorMessage(conversation, displayMessages);
+  const timeline = useMemo(
+    () => messagesToTimeline(displayMessages),
+    [displayMessages]
+  );
+  const historyError = useMemo(
+    () => resolveHistoryErrorMessage(conversation, displayMessages),
+    [conversation, displayMessages]
+  );
 
   return (
     <div className="flex flex-col h-full">
@@ -215,7 +285,7 @@ function HistoryDetailPanel({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+      <div ref={timelineRef} className="flex-1 min-h-0 overflow-y-auto p-4">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -227,6 +297,8 @@ function HistoryDetailPanel({
             reasoningText={firstAssistant?.reasoningContent || undefined}
             reasoningDurationMs={firstAssistant?.reasoningDurationMs || undefined}
             timeline={timeline}
+            scrollRef={timelineRef}
+            initialScrollToEnd
             streaming={false}
             error={historyError}
           />
@@ -267,7 +339,8 @@ function TaskListItem({
 }
 
 export function PipelineTaskCard({ task }: { task: PipelineTask }) {
-  const { setPanelExpanded, setExpandedTaskId } = usePipelineStore();
+  const setPanelExpanded = usePipelineStore((state) => state.setPanelExpanded);
+  const setExpandedTaskId = usePipelineStore((state) => state.setExpandedTaskId);
   const isRunning = task.status === "running";
 
   const statusIcon = {
@@ -357,7 +430,22 @@ type SelectedItem =
   | { type: "history"; conversation: AgentConversation };
 
 export function ExpandedPanel({ onClose }: { onClose: () => void }) {
-  const { tasks, clearCompleted, expandedTaskId } = usePipelineStore();
+  // Timeline chunks change task objects very frequently. The shell only needs
+  // task metadata, so keep it stable until list-visible fields actually change.
+  const taskListVersion = usePipelineStore(selectTaskListVersion);
+  const taskListSnapshotRef = useRef<{
+    version: string;
+    tasks: PipelineTask[];
+  } | null>(null);
+  if (taskListSnapshotRef.current?.version !== taskListVersion) {
+    taskListSnapshotRef.current = {
+      version: taskListVersion,
+      tasks: usePipelineStore.getState().tasks,
+    };
+  }
+  const tasks = taskListSnapshotRef.current.tasks;
+  const clearCompleted = usePipelineStore((state) => state.clearCompleted);
+  const expandedTaskId = usePipelineStore((state) => state.expandedTaskId);
   const listEndRef = useRef<HTMLDivElement>(null);
   // mobile: track whether we're showing detail view
   const [mobileShowDetail, setMobileShowDetail] = useState(false);
@@ -482,11 +570,12 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [handleClose]);
 
-  const selectedPipelineTask =
-    selected?.type === "pipeline"
-      ? tasks.find((task) => task.id === selected.taskId)
+  const selectedPipelineTaskId =
+    selected?.type === "pipeline" &&
+    tasks.some((task) => task.id === selected.taskId)
+      ? selected.taskId
       : null;
   const selectedConversation =
     selected?.type === "history" ? selected.conversation : null;
@@ -633,8 +722,8 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
   );
 
   /* ---- detail content ---- */
-  const detailContent = selectedPipelineTask ? (
-    <PipelineDetailPanel task={selectedPipelineTask} />
+  const detailContent = selectedPipelineTaskId ? (
+    <PipelineDetailPanel taskId={selectedPipelineTaskId} />
   ) : selectedConversation ? (
     <HistoryDetailPanel conversation={selectedConversation} />
   ) : (
@@ -656,7 +745,7 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 z-60 bg-black/40 backdrop-blur-sm"
+            className="modal-overlay fixed inset-0 z-60"
             onClick={handleClose}
           />
           <motion.div
@@ -671,7 +760,7 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
               "inset-3 rounded-xl",
               // desktop: centered dialog
               "md:inset-auto md:left-1/2 md:top-1/2 md:-translate-x-1/2 md:-translate-y-1/2 md:w-[1400px] md:max-w-[92vw] md:h-[75vh] md:rounded-2xl",
-              "border border-border/40 bg-card/98 backdrop-blur-xl shadow-2xl shadow-black/30"
+              "modal-surface border border-border/40"
             )}
           >
             {/* ---- Header ---- */}
@@ -706,30 +795,26 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
               </div>
             </div>
 
-            {/* ---- Body: desktop two-column, mobile single-column toggle ---- */}
-            {/* Desktop layout */}
-            <div className="hidden md:flex flex-1 min-h-0">
-              <div className="w-72 shrink-0 border-r border-border/20 flex flex-col min-h-0">
+            {/* One responsive tree avoids mounting the full timeline twice. */}
+            <div className="flex flex-1 min-h-0">
+              <div
+                className={cn(
+                  "w-full min-h-0 flex-col overflow-hidden md:flex md:w-72 md:shrink-0 md:border-r md:border-border/20",
+                  mobileShowDetail ? "hidden" : "flex"
+                )}
+              >
                 <div className="flex-1 min-h-0 overflow-y-auto">
                   {listContent}
                 </div>
               </div>
-              <div className="flex-1 min-w-0 min-h-0 bg-muted/10">
+              <div
+                className={cn(
+                  "flex-1 min-w-0 min-h-0 bg-muted/10 md:block",
+                  mobileShowDetail ? "block" : "hidden"
+                )}
+              >
                 {detailContent}
               </div>
-            </div>
-
-            {/* Mobile layout */}
-            <div className="flex md:hidden flex-1 min-h-0">
-              {mobileShowDetail ? (
-                <div className="flex-1 min-w-0 min-h-0 bg-muted/10">
-                  {detailContent}
-                </div>
-              ) : (
-                <div className="flex-1 min-h-0 overflow-y-auto">
-                  {listContent}
-                </div>
-              )}
             </div>
           </motion.div>
         </>

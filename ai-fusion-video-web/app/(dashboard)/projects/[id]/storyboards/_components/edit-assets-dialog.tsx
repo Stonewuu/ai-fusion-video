@@ -14,9 +14,9 @@ interface EditItemAssetsDialogProps {
   item: StoryboardItem | null;
   assetsList: AssetWithItems[];
   onConfirm: (data: {
-    characterIds: string | null;
+    characterIds: number[];
     sceneAssetItemId: number | null;
-    propIds: string | null;
+    propIds: number[];
   }) => Promise<void> | void;
 }
 
@@ -124,9 +124,9 @@ export function EditItemAssetsDialog({
       const propIdsArr = Array.from(selectedPropIds);
 
       await onConfirm({
-        characterIds: charIdsArr.length > 0 ? JSON.stringify(charIdsArr) : null,
+        characterIds: charIdsArr,
         sceneAssetItemId: selectedSceneAssetItemId,
-        propIds: propIdsArr.length > 0 ? JSON.stringify(propIdsArr) : null,
+        propIds: propIdsArr,
       });
       onClose();
     } catch (err) {
@@ -433,12 +433,12 @@ export function EditItemAssetsDialog({
 
       {/* 图片预览 Modal */}
       {previewImage && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200">
+        <div className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="absolute inset-0" onClick={() => setPreviewImage(null)} />
           <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center gap-3 z-10">
             <button
               onClick={() => setPreviewImage(null)}
-              className="absolute -top-10 right-0 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              className="absolute -top-10 right-0 rounded-full border border-border/40 bg-background/80 p-1.5 text-foreground shadow-xl backdrop-blur-xl transition-colors hover:bg-background"
             >
               <X className="h-5 w-5" />
             </button>
@@ -446,9 +446,9 @@ export function EditItemAssetsDialog({
               src={resolveMediaUrl(previewImage.url)}
               alt={previewImage.title}
               fallbackType="image"
-              className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl border border-white/10"
+              className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl border border-border/40"
             />
-            <p className="text-white/95 text-xs font-medium px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm border border-white/5">
+            <p className="rounded-full border border-border/40 bg-background/80 px-3 py-1.5 text-xs font-medium text-foreground shadow-xl backdrop-blur-xl">
               {previewImage.title}
             </p>
           </div>

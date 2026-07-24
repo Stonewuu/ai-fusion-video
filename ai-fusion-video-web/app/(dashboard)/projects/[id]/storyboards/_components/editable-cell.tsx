@@ -73,6 +73,7 @@ export function EditableCell({
           "px-2 py-1.5 rounded-md",
           "border border-primary/40 bg-background shadow-sm",
           "focus-within:ring-2 focus-within:ring-primary/30",
+          "transition-[box-shadow] duration-150 motion-reduce:transition-none",
           "text-xs leading-relaxed",
           className
         )}

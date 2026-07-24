@@ -165,6 +165,105 @@
   }
 }
 
+/*
+ * 表单控件聚焦基线
+ *
+ * Shadcn 的焦点环由 box-shadow 实现，而组件自带的 transition-colors
+ * 不会过渡 box-shadow，导致聚焦与失焦时焦点环瞬间跳变。这里统一覆盖
+ * 共享控件和仍在使用的原生文本控件，同时保留各使用处自己的焦点配色。
+ */
+:where(
+  [data-slot="input"]:not([type="file"]),
+  [data-slot="textarea"],
+  [data-slot="select-trigger"],
+  input:not([type="file"]):not([type="hidden"]),
+  textarea,
+  select,
+  [contenteditable="true"]
+) {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :where(
+    [data-slot="input"]:not([type="file"]),
+    [data-slot="textarea"],
+    [data-slot="select-trigger"],
+    input:not([type="file"]):not([type="hidden"]),
+    textarea,
+    select,
+    [contenteditable="true"]
+  ) {
+    transition-duration: 0.01ms;
+  }
+}
+
+/*
+ * Select 浮层自身承担毛玻璃，避免内部列表滚动时伪元素随内容移走。
+ * 作用于所有共享 Select，业务页面无需重复覆盖。
+ */
+[data-slot="select-content"] {
+  @apply backdrop-blur-2xl backdrop-saturate-150;
+}
+
+[data-slot="select-content"]::before {
+  display: none;
+}
+
+/*
+ * 模态层级基线
+ * 浅色主题使用白色毛玻璃遮罩，深色主题使用更高不透明度的黑色毛玻璃；
+ * 弹窗本体更接近实体背景，避免透景干扰文字与表单阅读。
+ */
+html:not(.dark) :where(
+  [data-slot="dialog-overlay"],
+  [data-slot="sheet-overlay"],
+  .modal-overlay
+) {
+  @apply backdrop-blur-sm backdrop-saturate-125;
+  background-color: oklch(1 0 0 / 40%);
+}
+
+html.dark :where(
+  [data-slot="dialog-overlay"],
+  [data-slot="sheet-overlay"],
+  .modal-overlay
+) {
+  @apply backdrop-blur-sm backdrop-saturate-125;
+  background-color: oklch(0 0 0 / 50%);
+}
+
+html:not(.dark) :where(
+  [data-slot="dialog-content"],
+  [data-slot="sheet-content"],
+  .modal-surface
+) {
+  @apply backdrop-blur-xl backdrop-saturate-150;
+  border-color: color-mix(in oklab, var(--foreground) 12%, transparent);
+  background-color: color-mix(in oklab, var(--background) 92%, transparent);
+  box-shadow: 0 24px 80px -32px oklch(0 0 0 / 42%);
+}
+
+html.dark :where(
+  [data-slot="dialog-content"],
+  [data-slot="sheet-content"],
+  .modal-surface
+) {
+  @apply backdrop-blur-xl backdrop-saturate-150;
+  border-color: color-mix(in oklab, var(--foreground) 12%, transparent);
+  background-color: color-mix(in oklab, var(--background) 94%, transparent);
+  box-shadow: 0 24px 88px -30px oklch(0 0 0 / 78%);
+}
+
+[data-slot="dialog-content"][data-variant="media-lightbox"] {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
 /* View Transitions API - 主题切换动画（动画由 JS animate() 控制） */
 ::view-transition-old(root) {
   animation: none;

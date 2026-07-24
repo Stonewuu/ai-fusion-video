@@ -51,9 +51,9 @@ export function GenerationAssetDialog({
 }: GenerationAssetDialogProps) {
   const [attachMode, setAttachMode] = useState<"existing" | "new">("existing");
   const [projects, setProjects] = useState<Project[]>([]);
-  const [projectId, setProjectId] = useState<number | undefined>();
+  const [projectId, setProjectId] = useState<number | null>(null);
   const [assets, setAssets] = useState<AssetWithItems[]>([]);
-  const [assetId, setAssetId] = useState<number | undefined>();
+  const [assetId, setAssetId] = useState<number | null>(null);
   const [assetType, setAssetType] = useState(
     target.mode === "video" ? "scene" : "character",
   );
@@ -75,11 +75,11 @@ export function GenerationAssetDialog({
     try {
       const list = await assetApi.listWithItems(nextProjectId);
       setAssets(list);
-      setAssetId(list[0]?.id);
+      setAssetId(list[0]?.id ?? null);
       if (list.length === 0) setAttachMode("new");
     } catch {
       setAssets([]);
-      setAssetId(undefined);
+      setAssetId(null);
     } finally {
       setLoadingAssets(false);
     }
@@ -92,12 +92,15 @@ export function GenerationAssetDialog({
       .then((list) => {
         if (cancelled) return;
         setProjects(list);
-        const firstProjectId = list[0]?.id;
+        const firstProjectId = list[0]?.id ?? null;
         setProjectId(firstProjectId);
         if (firstProjectId) void loadAssets(firstProjectId);
       })
       .catch(() => {
-        if (!cancelled) setProjects([]);
+        if (!cancelled) {
+          setProjects([]);
+          setProjectId(null);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingProjects(false);
@@ -107,11 +110,11 @@ export function GenerationAssetDialog({
     };
   }, [open]);
 
-  const handleProjectChange = (nextProjectId: number) => {
+  const handleProjectChange = (nextProjectId: number | null) => {
     setProjectId(nextProjectId);
-    setAssetId(undefined);
+    setAssetId(null);
     setAssets([]);
-    void loadAssets(nextProjectId);
+    if (nextProjectId !== null) void loadAssets(nextProjectId);
   };
 
   const save = async () => {
@@ -247,7 +250,9 @@ export function GenerationAssetDialog({
                 <label className="text-xs font-medium text-muted-foreground">项目</label>
                 <Select
                   value={projectId}
-                  onValueChange={(value) => handleProjectChange(Number(value))}
+                  onValueChange={(value) =>
+                    handleProjectChange(value === null ? null : Number(value))
+                  }
                   items={projects.map((project) => ({
                     value: project.id,
                     label: project.name,
@@ -277,7 +282,9 @@ export function GenerationAssetDialog({
                   </label>
                   <Select
                     value={assetId}
-                    onValueChange={(value) => setAssetId(Number(value))}
+                    onValueChange={(value) =>
+                      setAssetId(value === null ? null : Number(value))
+                    }
                     items={assets.map((asset) => ({
                       value: asset.id,
                       label: asset.name,

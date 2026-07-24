@@ -71,7 +71,7 @@ export function ParseScriptDialog({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            className="modal-overlay fixed inset-0 z-50"
             onClick={handleClose}
           />
           <motion.div
@@ -81,7 +81,7 @@ export function ParseScriptDialog({
             transition={{ duration: 0.2 }}
             className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg"
           >
-            <div className="rounded-2xl border border-border/40 p-6 bg-card shadow-2xl shadow-black/20">
+            <div className="modal-surface rounded-2xl border border-border/40 p-6">
               <div className="flex items-center justify-between mb-5">
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-5 w-5 text-purple-400" />

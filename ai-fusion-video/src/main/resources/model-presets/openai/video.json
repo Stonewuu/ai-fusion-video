@@ -9,6 +9,7 @@
     "capabilities": ["文生视频", "图生视频-首帧", "同步音频"],
     "config": {
       "supportFirstFrame": true,
+      "referenceImageInputFormats": ["data_uri"],
       "supportLastFrame": false,
       "supportReferenceImages": false,
       "supportReferenceVideos": false,
@@ -38,6 +39,7 @@
     "capabilities": ["文生视频", "图生视频-首帧", "同步音频", "1080p 输出"],
     "config": {
       "supportFirstFrame": true,
+      "referenceImageInputFormats": ["data_uri"],
       "supportLastFrame": false,
       "supportReferenceImages": false,
       "supportReferenceVideos": false,

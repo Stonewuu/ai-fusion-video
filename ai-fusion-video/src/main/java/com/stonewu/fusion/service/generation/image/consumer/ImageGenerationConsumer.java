@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.generation.image.consumer;
 
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
@@ -12,6 +13,7 @@ import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.generation.image.ImageGenerationService;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
+import com.stonewu.fusion.service.generation.ReferenceImageTransportService;
 import com.stonewu.fusion.service.generation.image.strategy.ImageGenerationStrategy;
 import com.stonewu.fusion.service.generation.image.strategy.ImageGenerationStrategyRouter;
 import com.stonewu.fusion.service.storage.MediaStorageService;
@@ -46,6 +48,7 @@ public class ImageGenerationConsumer {
     private final AiModelService aiModelService;
     private final ApiConfigService apiConfigService;
     private final GenerationModelCapabilityService generationModelCapabilityService;
+    private final ReferenceImageTransportService referenceImageTransportService;
     private final ImageGenerationStrategyRouter imageGenerationStrategyRouter;
     private final MediaStorageService mediaStorageService;
 
@@ -65,6 +68,7 @@ public class ImageGenerationConsumer {
             throw new BusinessException("没有可用的图片生成模型");
         }
         task.setModelId(queueModel.getId());
+        generationModelCapabilityService.validateImageTask(queueModel, task);
 
         String queueName = resolveQueueName(task.getModelId());
         String taskId = IdUtil.fastSimpleUUID();
@@ -202,6 +206,16 @@ public class ImageGenerationConsumer {
         try {
             strategy = imageGenerationStrategyRouter.resolve(model, apiConfig);
             generationModelCapabilityService.validateImageTask(model, task);
+            List<String> referenceImages = referenceImageTransportService.parseJsonInputs(
+                    task.getRefImageUrls(), "refImageUrls");
+            if (!referenceImages.isEmpty()) {
+                List<String> resolvedInputs = referenceImageTransportService.resolveInputs(
+                        model,
+                        generationModelCapabilityService.getMergedModelConfig(model),
+                        referenceImages,
+                        apiConfig);
+                task.setRefImageUrls(JSONUtil.toJsonStr(resolvedInputs));
+            }
             String platformTaskId = strategy.submit(task, apiConfig);
             log.info("[ImageConsumer] 任务已提交到平台: taskId={}, platformTaskId={}", taskId, platformTaskId);
 

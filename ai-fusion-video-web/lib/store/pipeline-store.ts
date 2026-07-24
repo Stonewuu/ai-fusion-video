@@ -9,6 +9,7 @@ import {
   listRunningPipelines,
   type AiChatReq,
   type AiChatStreamEvent,
+  type PipelineRunStatus,
 } from "@/lib/api/ai-pipeline";
 import type { AiChatStreamEvent as GenericStreamEvent } from "@/lib/api/ai-assistant";
 import {
@@ -92,6 +93,13 @@ export interface PipelineState {
   lastSequence: number;
   conversationId?: string;
   error?: string;
+  /** 页面恢复的 Pipeline 在打开详情前不回放 journal 内容。 */
+  contentLoaded?: boolean;
+  contentLoading?: boolean;
+  /** 仅在详情选中时建立前端 reconnect SSE，不影响后端 Pipeline。 */
+  reconnectOnSelect?: boolean;
+  /** 页面列表/轮询得到的后端 run 状态。 */
+  runStatus?: PipelineRunStatus;
 }
 
 export interface PipelineTask {
@@ -115,8 +123,8 @@ interface PipelineStoreState {
   panelExpanded: boolean;
   /** 当前展开详情的 pipeline id */
   expandedTaskId: string | null;
-  /** 是否已执行过自动重连 */
-  reconnected: boolean;
+  /** 是否已恢复过运行中 Pipeline 列表 */
+  runningPipelinesRestored: boolean;
   /** 数据失效计数器 —— 页面监听对应 key 触发刷新 */
   invalidation: Record<InvalidationType, number>;
 
@@ -160,8 +168,12 @@ interface PipelineStoreState {
   setNotificationOpen: (open: boolean) => void;
   setPanelExpanded: (expanded: boolean) => void;
   setExpandedTaskId: (id: string | null) => void;
-  /** 页面加载时调用：查询后端 running 对话并尝试 SSE 重连 */
-  tryReconnect: () => void;
+  /** 首次打开恢复任务详情时，从 journal 起点加载完整内容。 */
+  loadPipelineContent: (id: string) => void;
+  /** 仅终止前端内容流；不会取消后端 Pipeline。 */
+  disconnectPipelineContent: (id: string) => void;
+  /** 页面加载时调用：查询 running 对话并轮询状态，不建立 SSE。 */
+  restoreRunningPipelines: () => void;
 }
 
 // 简单任务的完成回调（不放在 zustand state 里避免序列化问题）
@@ -169,6 +181,17 @@ const simpleTaskCallbacks = new Map<string, () => void>();
 
 // 存储 AbortController 的 map（不放在 zustand state 里避免序列化问题）
 const abortControllers = new Map<string, AbortController>();
+const PIPELINE_STATUS_POLL_INTERVAL_MS = 3000;
+let pipelineStatusPollTimer: ReturnType<typeof setTimeout> | null = null;
+
+function toTerminalTaskStatus(
+  status: PipelineRunStatus
+): PipelineTask["status"] | null {
+  if (status === "COMPLETED") return "done";
+  if (status === "FAILED") return "error";
+  if (status === "CANCELLED") return "cancelled";
+  return null;
+}
 
 function isMainAgentTerminalEvent(event: GenericStreamEvent): boolean {
   return !event.parentToolCallId && !event.agentName && (
@@ -438,6 +461,14 @@ function createEventHandler(
                   );
                 }
               }
+              // 收集 invalidation
+              if (
+                event.toolName &&
+                event.toolStatus !== "error" &&
+                TOOL_INVALIDATION_MAP[event.toolName]
+              ) {
+                invalidations.push(TOOL_INVALIDATION_MAP[event.toolName]);
+              }
               break;
 
             case "CONTENT":
@@ -599,14 +630,6 @@ function createEventHandler(
                     });
                   }
                 }
-              }
-              // 收集 invalidation
-              if (
-                event.toolName &&
-                event.toolStatus !== "error" &&
-                TOOL_INVALIDATION_MAP[event.toolName]
-              ) {
-                invalidations.push(TOOL_INVALIDATION_MAP[event.toolName]);
               }
               break;
 
@@ -812,7 +835,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
   notificationOpen: false,
   panelExpanded: false,
   expandedTaskId: null,
-  reconnected: false,
+  runningPipelinesRestored: false,
   invalidation: { assets: 0, scripts: 0, storyboards: 0 },
 
   addSimpleTask: ({ label, projectId, initialNote, onComplete }) => {
@@ -1104,10 +1127,110 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     set({ expandedTaskId: id });
   },
 
-  /** 页面加载时调用：发现 durable root runs 并从 journal 起点重放。 */
-  tryReconnect: () => {
-    if (get().reconnected) return;
-    set({ reconnected: true });
+  loadPipelineContent: (id: string) => {
+    const task = get().tasks.find((candidate) => candidate.id === id);
+    if (
+      !task?.state.runId ||
+      !task.state.reconnectOnSelect ||
+      task.status !== "running" ||
+      task.state.contentLoading
+    ) {
+      return;
+    }
+
+    abortControllers.get(id)?.abort();
+    abortControllers.delete(id);
+    const afterSequence = task.state.lastSequence;
+    set((s) => ({
+      tasks: s.tasks.map((candidate) =>
+        candidate.id === id
+          ? {
+              ...candidate,
+              state: {
+                ...candidate.state,
+                error: undefined,
+                contentLoading: true,
+                ...(afterSequence === 0
+                  ? {
+                      reasoningText: "",
+                      reasoningDurationMs: undefined,
+                      timeline: [],
+                    }
+                  : {}),
+              },
+            }
+          : candidate
+      ),
+    }));
+
+    const handleEvent = createEventHandler(id, set);
+    const controller = reconnectPipelineStream(
+      task.state.runId,
+      afterSequence,
+      {
+        onEvent: handleEvent,
+        onError: (error) => {
+          set((s) => ({
+            tasks: s.tasks.map((candidate) =>
+              candidate.id === id
+                ? {
+                    ...candidate,
+                    state: {
+                      ...candidate.state,
+                      contentLoading: false,
+                      error: `Pipeline 内容加载中断：${error.message}`,
+                    },
+                  }
+                : candidate
+            ),
+          }));
+          abortControllers.delete(id);
+        },
+        onComplete: () => {
+          set((s) => ({
+            tasks: s.tasks.map((candidate) =>
+              candidate.id === id
+                ? {
+                    ...candidate,
+                    state: {
+                      ...candidate.state,
+                      contentLoaded: true,
+                      contentLoading: false,
+                    },
+                  }
+                : candidate
+            ),
+          }));
+          abortControllers.delete(id);
+        },
+      }
+    );
+    abortControllers.set(id, controller);
+  },
+
+  disconnectPipelineContent: (id: string) => {
+    const task = get().tasks.find((candidate) => candidate.id === id);
+    if (!task?.state.reconnectOnSelect) return;
+
+    // 仅关闭当前浏览器的 SSE；不调用 cancelPipeline，不影响服务端 run。
+    abortControllers.get(id)?.abort();
+    abortControllers.delete(id);
+    set((s) => ({
+      tasks: s.tasks.map((candidate) =>
+        candidate.id === id
+          ? {
+              ...candidate,
+              state: { ...candidate.state, contentLoading: false },
+            }
+          : candidate
+      ),
+    }));
+  },
+
+  /** 页面加载时调用：只查询 durable root run 的元数据和状态，不建立 SSE。 */
+  restoreRunningPipelines: () => {
+    if (get().runningPipelinesRestored) return;
+    set({ runningPipelinesRestored: true });
 
     void (async () => {
       try {
@@ -1129,82 +1252,128 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
             state: {
               status: "running",
               reasoningText: "",
-              timeline: [{ type: "content", text: "正在重连……" }],
+              timeline: [],
               runId: run.runId,
               lastSequence: 0,
               conversationId: run.conversationId,
+              contentLoaded: false,
+              contentLoading: false,
+              reconnectOnSelect: true,
+              runStatus: run.status,
             },
             createdAt: new Date(run.startedAt).getTime(),
             cancellable: true,
           };
           set((s) => ({ tasks: [...s.tasks, placeholder] }));
+        }
 
-          try {
-            const status = await getPipelineStatus({ runId: run.runId });
-            if (status.runId !== run.runId) {
-              throw new Error("Pipeline status returned a different runId");
-            }
-            const handleEvent = createEventHandler(id, set);
+        const pollStatuses = async () => {
+          pipelineStatusPollTimer = null;
+          const candidates = get().tasks.filter(
+            (task) =>
+              task.state.reconnectOnSelect &&
+              task.status === "running" &&
+              !task.state.contentLoading &&
+              task.state.runId
+          );
 
-            set((s) => ({
-              tasks: s.tasks.map((task) =>
-                task.id === id
-                  ? { ...task, state: { ...task.state, timeline: [] } }
-                  : task
-              ),
-            }));
+          await Promise.all(
+            candidates.map(async (task) => {
+              try {
+                const status = await getPipelineStatus({
+                  runId: task.state.runId!,
+                });
+                if (status.runId !== task.state.runId) {
+                  throw new Error("Pipeline status returned a different runId");
+                }
 
-            if (status.terminalEvent) {
-              handleEvent(status.terminalEvent);
-              continue;
-            }
-            if (
-              status.status === "COMPLETED" ||
-              status.status === "FAILED" ||
-              status.status === "CANCELLED"
-            ) {
-              throw new Error("Terminal Pipeline status has no terminal event");
-            }
+                const terminalStatus = toTerminalTaskStatus(status.status);
+                set((s) => {
+                  const current = s.tasks.find(
+                    (candidate) => candidate.id === task.id
+                  );
+                  if (
+                    !current ||
+                    current.state.contentLoading ||
+                    current.status !== "running"
+                  ) {
+                    return {};
+                  }
 
-            // A refreshed page has no local projection, so replay from sequence 0.
-            const controller = reconnectPipelineStream(run.runId, 0, {
-              onEvent: handleEvent,
-              onError: (error) => {
-                set((s) => ({
-                  tasks: s.tasks.map((task) =>
-                    task.id === id && task.status === "running"
+                  if (terminalStatus && !s.panelExpanded) {
+                    return {
+                      tasks: s.tasks.filter(
+                        (candidate) => candidate.id !== task.id
+                      ),
+                    };
+                  }
+
+                  const tasks = s.tasks.map((candidate) =>
+                    candidate.id === task.id
                       ? {
-                          ...task,
+                          ...candidate,
+                          status: terminalStatus ?? candidate.status,
+                          ...(terminalStatus ? { finishedAt: Date.now() } : {}),
                           state: {
-                            ...task.state,
-                            error: `Pipeline 重连中断：${error.message}`,
+                            ...candidate.state,
+                            runStatus: status.status,
+                            status: terminalStatus ?? candidate.state.status,
+                            ...(terminalStatus === "error"
+                              ? {
+                                  error:
+                                    status.terminalEvent?.error || "任务失败",
+                                }
+                              : {}),
                           },
                         }
-                      : task
-                  ),
-                }));
-                abortControllers.delete(id);
-              },
-              onComplete: () => abortControllers.delete(id),
-            });
-            abortControllers.set(id, controller);
-          } catch (err) {
-            const message = err instanceof Error ? err.message : String(err);
-            console.error(`[Pipeline] 重连 ${run.runId} 失败:`, err);
-            set((s) => ({
-              tasks: s.tasks.map((task) =>
-                task.id === id
-                  ? {
-                      ...task,
-                      state: {
-                        ...task.state,
-                        error: `Pipeline 重连失败：${message}`,
-                      },
-                    }
-                  : task
-              ),
-            }));
+                      : candidate
+                  );
+
+                  return terminalStatus
+                    ? {
+                        tasks,
+                        invalidation: {
+                          assets: (s.invalidation.assets || 0) + 1,
+                          scripts: (s.invalidation.scripts || 0) + 1,
+                          storyboards: (s.invalidation.storyboards || 0) + 1,
+                        },
+                      }
+                    : { tasks };
+                });
+              } catch (error) {
+                console.error(
+                  `[Pipeline] 查询 ${task.state.runId} 状态失败:`,
+                  error
+                );
+              }
+            })
+          );
+
+          const hasTrackedRuns = get().tasks.some(
+            (task) =>
+              task.state.reconnectOnSelect && task.status === "running"
+          );
+          if (hasTrackedRuns) {
+            pipelineStatusPollTimer = setTimeout(
+              () => void pollStatuses(),
+              PIPELINE_STATUS_POLL_INTERVAL_MS
+            );
           }
+        };
+
+        if (
+          get().tasks.some(
+            (task) =>
+              task.state.reconnectOnSelect && task.status === "running"
+          )
+        ) {
+          if (pipelineStatusPollTimer) {
+            clearTimeout(pipelineStatusPollTimer);
+          }
+          pipelineStatusPollTimer = setTimeout(
+            () => void pollStatuses(),
+            PIPELINE_STATUS_POLL_INTERVAL_MS
+          );
         }
       } catch (err) {
         console.error("[Pipeline] 查询 durable runs 失败:", err);

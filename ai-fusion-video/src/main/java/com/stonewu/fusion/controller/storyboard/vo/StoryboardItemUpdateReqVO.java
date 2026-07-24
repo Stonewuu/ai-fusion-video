@@ -75,13 +75,7 @@ public class StoryboardItemUpdateReqVO {
 
     private String transition;
 
-    private String characterIds;
-
     private Long sceneId;
-
-    private Long sceneAssetItemId;
-
-    private String propIds;
 
     private String remark;
 

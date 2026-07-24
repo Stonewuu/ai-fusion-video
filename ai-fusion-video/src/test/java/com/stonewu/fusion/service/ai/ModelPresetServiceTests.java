@@ -60,6 +60,31 @@ class ModelPresetServiceTests {
     }
 
     @Test
+    void shouldResolveJimengImageAndVideoCapabilityPresets() {
+        assertEquals("jimeng-4.0-image", service.findPresetCode("jimeng-4.0", 2));
+        assertEquals("jimeng-video-3.0-pro", service.findPresetCode("jimeng-video-3.0-pro", 3));
+        assertEquals(List.of("url"), JSONUtil.toList(
+                service.getPreset("jimeng-4.0-image").getJSONObject("config")
+                        .getJSONArray("referenceImageInputFormats"), String.class));
+    }
+
+    @Test
+    void shouldDeclareTransportFormatsForEveryPresetWithImageInputs() {
+        service.getAllPresets().forEach(preset -> {
+            var config = preset.getJSONObject("config");
+            int modelType = preset.getInt("modelType", 0);
+            boolean hasImageInputs = modelType == 2 && config.getBool("supportReferenceImages", false)
+                    || modelType == 3 && (config.getBool("supportFirstFrame", false)
+                    || config.getBool("supportLastFrame", false)
+                    || config.getBool("supportReferenceImages", false));
+            if (hasImageInputs) {
+                assertFalse(config.getJSONArray("referenceImageInputFormats").isEmpty(),
+                        preset.getStr("code"));
+            }
+        });
+    }
+
+    @Test
     void shouldExposeCorrectedVolcengineAndSoraCapabilities() {
         var seedance = service.getPreset("doubao-seedance-2-0-260128").getJSONObject("config");
         assertEquals(List.of("480p", "720p", "1080p", "4k"),

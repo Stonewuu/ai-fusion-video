@@ -53,7 +53,6 @@ import {
   getPositiveNumberValue,
   getFirstConfigString,
   isCapabilityPresetCompatible,
-  isEquivalentPresetPlatform,
   ToggleSettingCard,
 } from "./model-config-support";
 
@@ -142,9 +141,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
   const selectedCapabilityPreset = form.capabilityPresetCode
     ? presets.find(p => p.code === form.capabilityPresetCode) || null
     : null;
-  const visiblePresets = !selectedPlatform
-    ? presets
-    : presets.filter(p => isEquivalentPresetPlatform(p.platform, selectedPlatform));
+  const visiblePresets = presets.filter(preset => preset.modelType === form.modelType);
   const selectedPresetConfig = selectedCapabilityPreset?.config as Record<string, unknown> | undefined;
   const effectiveModelConfig = mergeConfigObjects(selectedPresetConfig || {}, parseConfigJson(form.config));
   const showOpenAiResponsesMode = form.modelType === 1 && supportsOpenAiResponsesMode(selectedPlatform);

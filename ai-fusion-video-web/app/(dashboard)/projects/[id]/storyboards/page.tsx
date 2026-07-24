@@ -1457,11 +1457,10 @@ export default function StoryboardTabPage() {
         onConfirm={async ({ characterIds, sceneAssetItemId, propIds }) => {
           if (!editingItem) return;
           try {
-            const updated = await storyboardApi.updateItem({
-              id: editingItem.id,
-              characterIds: characterIds,
-              sceneAssetItemId: sceneAssetItemId,
-              propIds: propIds,
+            const updated = await storyboardApi.updateItemAssets(editingItem.id, {
+              characterIds,
+              sceneAssetItemId,
+              propIds,
             });
             // 局部更新场次数据状态
             setSceneGroups((prev) =>

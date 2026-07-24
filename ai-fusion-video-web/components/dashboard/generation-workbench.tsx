@@ -1,10 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ImageIcon, Settings2, Video } from "lucide-react";
 import { toast } from "sonner";
 import { aiModelApi, type AiModel, type ModelPreset } from "@/lib/api/ai-model";
-import { generationApi } from "@/lib/api/generation";
+import {
+  generationApi,
+  type ImageGenerationItem,
+  type VideoGenerationItem,
+} from "@/lib/api/generation";
 import { resolveGenerationCapabilities } from "@/lib/generation-capabilities";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -26,8 +31,10 @@ import {
 import {
   getResultMediaUrl,
   getResultPreviewUrl,
+  isGenerationTaskActive,
   parseLimit,
 } from "./generation/generation-utils";
+import { useReferenceImageUploadAvailability } from "./generation/use-reference-image-upload-availability";
 
 interface GenerationWorkbenchProps {
   mode: WorkbenchMode;
@@ -36,6 +43,8 @@ interface GenerationWorkbenchProps {
 function clean(values: string[]) {
   return values.map((value) => value.trim()).filter(Boolean);
 }
+
+const MODE_TRANSITION_EASE = [0.25, 0.46, 0.45, 0.94] as const;
 
 export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) {
   const modelType = mode === "image" ? 2 : 3;
@@ -51,8 +60,16 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
   const [historyLimit, setHistoryLimit] = useState(10);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [assetTarget, setAssetTarget] = useState<GenerationAssetTarget | null>(null);
-  const composerRef = useRef<HTMLDivElement>(null);
+  const simpleComposerRef = useRef<HTMLDivElement>(null);
+  const advancedComposerRef = useRef<HTMLDivElement>(null);
+  const historyRef = useRef<GenerationHistoryEntry[]>([]);
+  const activePollInFlightRef = useRef(false);
   const [composerHeight, setComposerHeight] = useState(220);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +100,10 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
         ? resolveGenerationCapabilities(selectedModel, presets)
         : null,
     [presets, selectedModel],
+  );
+  const referenceImageUploadAvailability = useReferenceImageUploadAvailability(
+    mode,
+    capabilities,
   );
 
   useEffect(() => {
@@ -139,12 +160,81 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
     [mode],
   );
 
+  const refreshActiveHistory = useCallback(async () => {
+    if (activePollInFlightRef.current) return;
+
+    const activeEntries = historyRef.current.filter(({ task }) =>
+      isGenerationTaskActive(task),
+    );
+    if (activeEntries.length === 0) return;
+
+    activePollInFlightRef.current = true;
+    try {
+      const refreshedEntries = await Promise.all(
+        activeEntries.map(async (entry) => {
+          try {
+            if (mode === "image") {
+              const task = await generationApi.getImageTask(entry.task.taskId);
+              const previousItems = entry.items.filter(
+                (item): item is ImageGenerationItem => "imageUrl" in item,
+              );
+              const items =
+                task.status === 0
+                  ? previousItems
+                  : await generationApi
+                      .listImageItems(task.id)
+                      .catch(() => previousItems);
+              return {
+                id: task.id,
+                entry: { task, items } satisfies GenerationHistoryEntry,
+              };
+            }
+
+            const task = await generationApi.getVideoTask(entry.task.taskId);
+            const previousItems = entry.items.filter(
+              (item): item is VideoGenerationItem => "videoUrl" in item,
+            );
+            const items =
+              task.status === 0
+                ? previousItems
+                : await generationApi
+                    .listVideoItems(task.id)
+                    .catch(() => previousItems);
+            return {
+              id: task.id,
+              entry: { task, items } satisfies GenerationHistoryEntry,
+            };
+          } catch {
+            return null;
+          }
+        }),
+      );
+
+      const updates = new Map(
+        refreshedEntries
+          .filter((result) => result !== null)
+          .map((result) => [result.id, result.entry]),
+      );
+      if (updates.size === 0) return;
+
+      setHistory((current) =>
+        current.map((entry) => {
+          if (!isGenerationTaskActive(entry.task)) return entry;
+          return updates.get(entry.task.id) ?? entry;
+        }),
+      );
+    } finally {
+      activePollInFlightRef.current = false;
+    }
+  }, [mode]);
+
   useEffect(() => {
     void loadHistory(historyLimit);
   }, [historyLimit, loadHistory]);
 
   useEffect(() => {
-    const element = composerRef.current;
+    if (composerMode !== "simple") return;
+    const element = simpleComposerRef.current;
     if (!element) return;
 
     const updateHeight = () => {
@@ -157,17 +247,26 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
     return () => observer.disconnect();
   }, [composerMode]);
 
-  const hasRunningTask = history.some(
-    ({ task }) => task.status === 0 || task.status === 1,
+  const hasRunningTask = history.some(({ task }) =>
+    isGenerationTaskActive(task),
   );
 
   useEffect(() => {
     if (!hasRunningTask) return;
-    const timer = window.setInterval(() => {
-      void loadHistory(historyLimit);
-    }, 4000);
-    return () => window.clearInterval(timer);
-  }, [hasRunningTask, historyLimit, loadHistory]);
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        void refreshActiveHistory();
+      }
+    };
+    const timer = window.setInterval(refreshWhenVisible, 4000);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [hasRunningTask, refreshActiveHistory]);
 
   const updateForm = (patch: Partial<GenerationFormState>) => {
     setForm((current) => ({ ...current, ...patch }));
@@ -184,6 +283,7 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
 
   const maxSimpleAttachments = useMemo(() => {
     if (!capabilities) return 0;
+    if (!referenceImageUploadAvailability.supported) return 0;
     if (mode === "image") {
       return capabilities.supportsReferenceImages
         ? parseLimit(capabilities.maxReferenceImages, 1)
@@ -198,10 +298,14 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
     return capabilities.maxImageInputs > 0
       ? Math.min(slots || capabilities.maxImageInputs, capabilities.maxImageInputs)
       : slots;
-  }, [capabilities, mode]);
+  }, [capabilities, mode, referenceImageUploadAvailability.supported]);
 
   const addSimpleAttachments = (urls: string[]) => {
     if (!capabilities || !urls.length) return;
+    if (!referenceImageUploadAvailability.supported) {
+      toast.error(referenceImageUploadAvailability.reason);
+      return;
+    }
     setForm((current) => {
       if (mode === "image") {
         return {
@@ -345,7 +449,11 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
   };
 
   const focusComposer = () => {
-    composerRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const composer =
+      composerMode === "advanced"
+        ? advancedComposerRef.current
+        : simpleComposerRef.current;
+    composer?.scrollIntoView({ behavior: "smooth", block: "end" });
   };
 
   const reusePrompt = (prompt: string) => {
@@ -379,19 +487,24 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
   const title = mode === "image" ? "生图" : "生视频";
   const PageIcon = mode === "image" ? ImageIcon : Video;
   const advancedMode = composerMode === "advanced";
-  const historyBottomInset =
-    composerMode === "simple" ? composerHeight + 16 : 0;
+  const historyBottomInset = advancedMode ? 0 : composerHeight + 16;
 
   return (
     <div className="relative flex min-h-0 w-full grow basis-0 flex-col overflow-hidden pb-20 lg:pb-3">
       <div className="w-full shrink-0 px-5 lg:px-8">
-        <header
+        <motion.header
+          layout
+          transition={{
+            layout: reduceMotion
+              ? { duration: 0 }
+              : { duration: 0.26, ease: MODE_TRANSITION_EASE },
+          }}
           className={cn(
             "mx-auto flex w-full items-center justify-between gap-4 pb-3",
-            advancedMode ? "max-w-[1480px]" : "max-w-[1180px]",
+            advancedMode ? "max-w-none" : "max-w-[1180px]",
           )}
         >
-          <div className="flex items-center gap-3">
+          <motion.div layout="position" className="flex items-center gap-3">
             <span className="grid h-10 w-10 place-items-center rounded-2xl border border-border/45 bg-card text-primary shadow-sm">
               <PageIcon className="h-4.5 w-4.5" />
             </span>
@@ -401,138 +514,195 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
                 {mode === "image" ? "描述想法，生成画面" : "描述场景、动作和镜头"}
               </p>
             </div>
-          </div>
-          <a
+          </motion.div>
+          <motion.a
+            layout="position"
             href="/settings/ai-models"
             className={cn(buttonVariants({ variant: "ghost", size: "sm" }))}
           >
             <Settings2 className="h-3.5 w-3.5" />
             模型配置
-          </a>
-        </header>
+          </motion.a>
+        </motion.header>
       </div>
 
       <div
         data-slot="generation-workspace"
-        className={cn(
-          "min-h-0 flex-1",
-          advancedMode && "px-5 lg:px-8",
-        )}
+        className={cn("min-h-0 flex-1", advancedMode && "px-5 lg:px-8")}
       >
         <div
           className={cn(
-            "h-full min-h-0",
+            "relative h-full min-h-0",
             advancedMode &&
-              "mx-auto grid w-full max-w-[1480px] gap-4 overflow-y-auto xl:grid-cols-[minmax(0,1fr)_minmax(420px,480px)] xl:overflow-hidden",
+              "grid w-full gap-4 overflow-y-auto xl:grid-cols-[minmax(400px,460px)_minmax(0,1fr)] xl:overflow-hidden",
           )}
         >
-          <OverlayScrollArea
-            data-slot="generation-history-scroll"
+          <AnimatePresence initial={false} mode="popLayout">
+            {advancedMode && (
+              <motion.div
+                key="advanced-composer"
+                data-slot="generation-composer-layer"
+                initial={reduceMotion ? false : { opacity: 0, x: -14 }}
+                animate={{
+                  opacity: 1,
+                  x: 0,
+                  transition: reduceMotion
+                    ? { duration: 0 }
+                    : { duration: 0.24, ease: MODE_TRANSITION_EASE },
+                }}
+                exit={{
+                  opacity: 0,
+                  x: reduceMotion ? 0 : -10,
+                  transition: reduceMotion
+                    ? { duration: 0 }
+                    : { duration: 0.14, ease: "easeIn" },
+                }}
+                className="min-h-0 xl:h-full"
+              >
+                <div
+                  data-slot="generation-composer"
+                  ref={advancedComposerRef}
+                  className="h-full min-h-0"
+                >
+                  <GenerationAdvancedPanel
+                    mode={mode}
+                    models={models}
+                    modelId={modelId}
+                    loadingModels={loadingModels}
+                    capabilities={capabilities}
+                    form={form}
+                    submitting={submitting}
+                    onModelChange={setModelId}
+                    onFormChange={updateForm}
+                    onSubmit={() => void submit()}
+                    onSimple={() => setComposerMode("simple")}
+                    referenceImageUploadAvailability={
+                      referenceImageUploadAvailability
+                    }
+                  />
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <motion.div
+            layout
+            transition={{
+              layout: reduceMotion
+                ? { duration: 0 }
+                : { duration: 0.26, ease: MODE_TRANSITION_EASE },
+            }}
             className={cn(
               "h-full min-h-0 w-full",
               advancedMode && "max-h-[42vh] xl:max-h-none",
             )}
-            viewportStyle={{
-              paddingBottom: historyBottomInset,
-              scrollPaddingBottom: historyBottomInset,
-            }}
           >
-            <div className={cn("w-full", !advancedMode && "px-5 lg:px-8")}>
-              <div
-                className={cn(
-                  "mx-auto w-full",
-                  !advancedMode && "max-w-[1180px]",
-                )}
-              >
-                <GenerationHistory
-                  mode={mode}
-                  entries={history}
-                  models={models}
-                  loading={historyLoading}
-                  total={historyTotal}
-                  onRefresh={() => void loadHistory(historyLimit)}
-                  onLoadMore={() =>
-                    setHistoryLimit((current) => Math.min(100, current + 10))
-                  }
-                  onUseSuggestion={reusePrompt}
-                  onReusePrompt={reusePrompt}
-                  onUseReference={useReference}
-                  onAddAsset={(item, prompt) =>
-                    setAssetTarget({ mode, item, prompt })
-                  }
-                />
-              </div>
-            </div>
-          </OverlayScrollArea>
-
-          {advancedMode && (
-            <div
-              data-slot="generation-composer-layer"
-              className="min-h-0 xl:h-full"
+            <OverlayScrollArea
+              data-slot="generation-history-scroll"
+              className="h-full min-h-0 w-full"
+              viewportStyle={{
+                paddingBottom: historyBottomInset,
+                scrollPaddingBottom: historyBottomInset,
+              }}
             >
               <div
-                data-slot="generation-composer"
-                ref={composerRef}
-                className="h-full min-h-0"
+                className={cn(
+                  "w-full",
+                  advancedMode ? "pr-3" : "px-5 lg:px-8",
+                )}
               >
-                <GenerationAdvancedPanel
+                <div
+                  className={cn(
+                    "mx-auto w-full",
+                    !advancedMode && "max-w-[1180px]",
+                  )}
+                >
+                  <GenerationHistory
+                    mode={mode}
+                    entries={history}
+                    models={models}
+                    loading={historyLoading}
+                    total={historyTotal}
+                    onRefresh={() => void loadHistory(historyLimit)}
+                    onLoadMore={() =>
+                      setHistoryLimit((current) => Math.min(100, current + 10))
+                    }
+                    onUseSuggestion={reusePrompt}
+                    onReusePrompt={reusePrompt}
+                    onUseReference={useReference}
+                    onAddAsset={(item, prompt) =>
+                      setAssetTarget({ mode, item, prompt })
+                    }
+                  />
+                </div>
+              </div>
+            </OverlayScrollArea>
+          </motion.div>
+        </div>
+      </div>
+
+      <AnimatePresence initial={false}>
+        {!advancedMode && (
+          <motion.div
+            key="simple-composer"
+            data-slot="generation-composer-layer"
+            initial={reduceMotion ? false : { opacity: 0, y: 14 }}
+            animate={{
+              opacity: 1,
+              y: 0,
+              transition: reduceMotion
+                ? { duration: 0 }
+                : { duration: 0.24, ease: MODE_TRANSITION_EASE },
+            }}
+            exit={{
+              opacity: 0,
+              y: reduceMotion ? 0 : 10,
+              transition: reduceMotion
+                ? { duration: 0 }
+                : { duration: 0.14, ease: "easeIn" },
+            }}
+            className="pointer-events-none absolute inset-x-0 bottom-20 z-20 lg:bottom-3"
+          >
+            <div
+              aria-hidden="true"
+              className="absolute inset-x-0 -top-12 -bottom-20 bg-linear-to-t from-background via-background/35 to-transparent lg:-bottom-3"
+            />
+            <div className="relative z-10 w-full px-5 lg:px-8">
+              <div
+                data-slot="generation-composer"
+                ref={simpleComposerRef}
+                className="pointer-events-auto mx-auto w-full max-w-[1180px]"
+              >
+                <GenerationSimpleComposer
                   mode={mode}
                   models={models}
                   modelId={modelId}
                   loadingModels={loadingModels}
                   capabilities={capabilities}
                   form={form}
+                  attachments={simpleAttachments}
+                  maxAttachments={maxSimpleAttachments}
+                  minAttachments={
+                    mode === "video" ? capabilities?.minImageInputs || 0 : 0
+                  }
                   submitting={submitting}
                   onModelChange={setModelId}
                   onFormChange={updateForm}
+                  onAddAttachments={addSimpleAttachments}
+                  onRemoveAttachment={removeSimpleAttachment}
                   onSubmit={() => void submit()}
-                  onSimple={() => setComposerMode("simple")}
+                  onAdvanced={() => setComposerMode("advanced")}
+                  attachmentDisabledReason={
+                    !referenceImageUploadAvailability.supported
+                      ? `无法使用${mode === "image" ? "参考图" : "参考图/视频"}：${referenceImageUploadAvailability.reason}`
+                      : ""
+                  }
                 />
               </div>
             </div>
-          )}
-        </div>
-      </div>
-
-      {!advancedMode && (
-        <div
-          data-slot="generation-composer-layer"
-          className="pointer-events-none absolute inset-x-0 bottom-20 z-20 lg:bottom-3"
-        >
-          <div
-            aria-hidden="true"
-            className="absolute inset-x-0 -top-12 -bottom-20 bg-linear-to-t from-background via-background/35 to-transparent lg:-bottom-3"
-          />
-          <div className="relative z-10 w-full px-5 lg:px-8">
-            <div
-              data-slot="generation-composer"
-              ref={composerRef}
-              className="pointer-events-auto mx-auto w-full max-w-[1180px]"
-            >
-              <GenerationSimpleComposer
-                mode={mode}
-                models={models}
-                modelId={modelId}
-                loadingModels={loadingModels}
-                capabilities={capabilities}
-                form={form}
-                attachments={simpleAttachments}
-                maxAttachments={maxSimpleAttachments}
-                minAttachments={
-                  mode === "video" ? capabilities?.minImageInputs || 0 : 0
-                }
-                submitting={submitting}
-                onModelChange={setModelId}
-                onFormChange={updateForm}
-                onAddAttachments={addSimpleAttachments}
-                onRemoveAttachment={removeSimpleAttachment}
-                onSubmit={() => void submit()}
-                onAdvanced={() => setComposerMode("advanced")}
-              />
-            </div>
-          </div>
-        </div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {assetTarget && (
         <GenerationAssetDialog

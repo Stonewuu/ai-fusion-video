@@ -4,6 +4,9 @@ type JsonRecord = Record<string, unknown>;
 
 export interface GenerationCapabilities {
   supportsReferenceImages: boolean;
+  referenceImageInputFormats: string[];
+  supportsReferenceImageUrlInput: boolean;
+  supportsReferenceImageBase64Input: boolean;
   minReferenceImages: number;
   maxReferenceImages: number;
   supportsFirstFrame: boolean;
@@ -25,6 +28,11 @@ export interface GenerationCapabilities {
   maxCount: number;
   defaultWidth?: number;
   defaultHeight?: number;
+}
+
+export interface ReferenceImageUploadAvailability {
+  supported: boolean;
+  reason: string;
 }
 
 function parseConfig(config?: string | null): JsonRecord {
@@ -82,9 +90,22 @@ export function resolveGenerationCapabilities(model: AiModel, presets: ModelPres
     : undefined;
   const config = { ...(preset?.config || {}), ...parseConfig(model.config) };
   const imageModel = model.modelType === 2;
+  const referenceImageInputFormats = strings(config, [], "referenceImageInputFormats")
+    .map((item) => item.toLowerCase())
+    .map((item) => item === "base64" || item === "data-uri" ? "data_uri" : item)
+    .filter((item) => item === "url" || item === "data_uri");
+  if (
+    bool(config, false, "supportDataUriInput") &&
+    !referenceImageInputFormats.includes("data_uri")
+  ) {
+    referenceImageInputFormats.push("data_uri");
+  }
 
   return {
     supportsReferenceImages: bool(config, false, "supportReferenceImages", "supportsReferenceImages"),
+    referenceImageInputFormats,
+    supportsReferenceImageUrlInput: referenceImageInputFormats.includes("url"),
+    supportsReferenceImageBase64Input: referenceImageInputFormats.includes("data_uri"),
     minReferenceImages: num(config, 0, "minReferenceImages", "minRefImages"),
     maxReferenceImages: num(config, 0, "maxReferenceImages", "maxRefImages"),
     supportsFirstFrame: bool(config, false, "supportFirstFrame", "supportsFirstFrame"),
@@ -106,5 +127,51 @@ export function resolveGenerationCapabilities(model: AiModel, presets: ModelPres
     maxCount: num(config, 4, "maxCount", "maxOutputCount"),
     defaultWidth: num(config, 0, "defaultWidth") || undefined,
     defaultHeight: num(config, 0, "defaultHeight") || undefined,
+  };
+}
+
+export function resolveReferenceImageUploadAvailability(
+  capabilities: GenerationCapabilities | null,
+  publicMediaAccessConfigured: boolean,
+  runtimeConfigLoaded: boolean,
+): ReferenceImageUploadAvailability {
+  if (
+    !capabilities ||
+    (!capabilities.supportsReferenceImages &&
+      !capabilities.supportsFirstFrame &&
+      !capabilities.supportsLastFrame)
+  ) {
+    return { supported: false, reason: "模型不支持图片输入" };
+  }
+
+  if (capabilities.referenceImageInputFormats.length === 0) {
+    return {
+      supported: false,
+      reason: "未配置 URL 或 Data URI 传递模式",
+    };
+  }
+
+  if (capabilities.supportsReferenceImageBase64Input) {
+    return { supported: true, reason: "" };
+  }
+
+  if (capabilities.supportsReferenceImageUrlInput && publicMediaAccessConfigured) {
+    return { supported: true, reason: "" };
+  }
+
+  if (capabilities.supportsReferenceImageUrlInput && !runtimeConfigLoaded) {
+    return { supported: false, reason: "正在检查公网访问配置" };
+  }
+
+  if (capabilities.supportsReferenceImageUrlInput) {
+    return {
+      supported: false,
+      reason: "仅支持公网 URL，且未配置公网访问",
+    };
+  }
+
+  return {
+    supported: false,
+    reason: "未声明 URL 或 Data URI 输入格式",
   };
 }

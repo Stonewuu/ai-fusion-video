@@ -9,6 +9,7 @@
     "description": "可灵 2025-01-07 发布的视频模型，支持文生视频、图生视频、首尾帧/尾帧和多人图片参考。当前 New API 可灵协议公开字段可稳定传递文本与单首帧。",
     "capabilities": ["文生视频", "图生视频-首帧", "首尾帧", "多人图片参考"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -43,6 +44,7 @@
     "description": "可灵 2025-05-13 发布的高质量视频模型，支持 5 / 10 秒文生与图生视频，输出 1080p。",
     "capabilities": ["文生视频", "图生视频-首帧", "1080p 输出"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -75,6 +77,7 @@
     "description": "可灵 2025-06-19 发布的视频模型，支持 5 / 10 秒、720p / 1080p 图生视频；上游首尾帧仅限 1080p。当前 New API 公开字段可稳定传递单首帧。",
     "capabilities": ["图生视频-首帧", "首尾帧", "720p", "1080p"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -109,6 +112,7 @@
     "description": "可灵 2025-06-19 发布的高质量视频模型，支持 5 / 10 秒文生与图生视频，输出 720p / 1080p。",
     "capabilities": ["文生视频", "图生视频-首帧", "720p", "1080p"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -141,6 +145,7 @@
     "description": "可灵 2025-10-20 发布的快速视频模型，支持 5 / 10 秒、720p / 1080p；上游首尾帧仅限 1080p。当前 New API 公开字段可稳定传递单首帧。",
     "capabilities": ["文生视频", "图生视频-首帧", "首尾帧", "快速生成"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -175,6 +180,7 @@
     "description": "可灵 2025-12-15 发布的原生音频视频模型，支持 3–10 秒、720p / 1080p；上游首尾帧仅限 1080p 无声模式。",
     "capabilities": ["文生视频", "图生视频-首帧", "首尾帧", "原生音频"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -210,6 +216,7 @@
     "description": "可灵 2025-12-15 发布的统一多模态视频模型，支持 3–10 秒、首尾帧、图片/视频参考和视频编辑；当前 New API 公开字段可稳定传递文本与单首帧。",
     "capabilities": ["文生视频", "图生视频-首帧", "首尾帧", "多模态参考", "视频参考", "视频编辑"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -244,6 +251,7 @@
     "description": "可灵 2026-02-25 发布的视频模型，支持 3–15 秒、最高 4K、多镜头、首尾帧、元素/运动控制和原生音频。当前 New API 公开字段可稳定传递文本与单首帧。",
     "capabilities": ["文生视频", "图生视频-首帧", "首尾帧", "多镜头", "元素控制", "运动控制", "原生音频", "4K 输出"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -279,6 +287,7 @@
     "description": "可灵 2026-02-25 发布的全能多模态视频模型，支持 3–15 秒、最高 4K、图片/视频参考、多镜头、首尾帧和原生音频。当前 New API 公开字段可稳定传递文本与单首帧。",
     "capabilities": ["文生视频", "图生视频-首帧", "首尾帧", "多模态参考", "视频参考", "多镜头", "原生音频", "4K 输出"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -315,6 +324,7 @@
     "description": "可灵 2026-06-17 发布的快速视频模型，支持 3–15 秒、720p / 1080p、文生/首帧图生、多镜头和原生音频；上游不支持首尾帧。",
     "capabilities": ["文生视频", "图生视频-首帧", "多镜头", "原生音频", "快速生成"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,

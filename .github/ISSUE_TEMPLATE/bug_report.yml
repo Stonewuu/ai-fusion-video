@@ -1,0 +1,99 @@
+name: 缺陷报告
+description: 报告可以稳定复现的错误或异常行为
+title: "[Bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢你帮助改进融光。提交前请先搜索现有 Issue，避免重复报告。
+
+        请勿在 Issue 中粘贴 API Key、密码、Token、Cookie 或其他敏感信息。安全漏洞请使用 Issue 创建页中的“安全漏洞报告”入口。
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 问题模块
+      description: 选择最接近问题发生位置的模块。
+      options:
+        - 前端界面
+        - 后端服务或 API
+        - AI 模型或生成任务
+        - Agent 工作流
+        - 数据库或迁移
+        - Docker 或部署
+        - 文件或对象存储
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 融光版本
+      description: 可填写 Release、Docker 镜像标签或 Git commit。
+      placeholder: 例如 v1.0.0、latest 或 abc1234
+    validations:
+      required: true
+
+  - type: input
+    id: environment
+    attributes:
+      label: 运行环境
+      description: 请填写操作系统、部署方式，以及与问题相关的浏览器或运行时版本。
+      placeholder: 例如 Ubuntu 24.04 / Docker Compose / Chrome 126
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 请提供能够稳定触发问题的最小步骤。
+      placeholder: |
+        1. 进入……
+        2. 配置……
+        3. 点击……
+        4. 出现……
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为
+      description: 说明你认为正常情况下应该发生什么。
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 实际行为
+      description: 说明实际发生了什么；可直接拖入截图或录屏。
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志或错误信息
+      description: 请粘贴相关日志和堆栈，并先删除密钥、Token、Cookie、内网地址等敏感信息。
+      render: shell
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息
+      description: 可补充模型提供商、存储类型、配置差异、出现频率或其他排查线索。
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已搜索现有 Issue，确认没有相同或高度相似的报告。
+          required: true
+        - label: 我已删除日志、截图和描述中的敏感信息。
+          required: true

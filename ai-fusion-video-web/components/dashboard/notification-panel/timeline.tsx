@@ -1,7 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type RefObject,
+} from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   AlertTriangle,
   Bot,
@@ -30,6 +39,13 @@ import {
   parseTaskContent,
   type TaskMediaLinkInfo,
 } from "./utils";
+
+// Preserve the full timeline while letting the browser skip layout and paint
+// for rows far outside the scroll viewport.
+const TIMELINE_ROW_STYLE: CSSProperties = {
+  contentVisibility: "auto",
+  containIntrinsicSize: "auto 96px",
+};
 
 function TaskMediaLinks({ mediaLinks }: { mediaLinks: TaskMediaLinkInfo[] }) {
   if (mediaLinks.length === 0) {
@@ -75,7 +91,7 @@ function TaskMediaLinks({ mediaLinks }: { mediaLinks: TaskMediaLinkInfo[] }) {
   );
 }
 
-function ExpandableToolCard({
+const ExpandableToolCard = memo(function ExpandableToolCard({
   toolName,
   toolStatus,
   result,
@@ -84,7 +100,7 @@ function ExpandableToolCard({
   toolStatus: "done" | "error";
   result?: string;
 }) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useState(false);
   const hasResult = !!result;
 
   return (
@@ -151,9 +167,13 @@ function ExpandableToolCard({
       )}
     </div>
   );
-}
+});
 
-function CallingToolCard({ toolName }: { toolName: string }) {
+const CallingToolCard = memo(function CallingToolCard({
+  toolName,
+}: {
+  toolName: string;
+}) {
   return (
     <div className="rounded-xl text-sm border overflow-hidden border-blue-500/20 bg-blue-500/5">
       <div className="flex items-center gap-3 px-4 py-2.5">
@@ -168,16 +188,63 @@ function CallingToolCard({ toolName }: { toolName: string }) {
       </div>
     </div>
   );
-}
+});
 
-function SubAgentCard({
+const SubTimelineEntry = memo(function SubTimelineEntry({
+  child,
+  streaming,
+}: {
+  child: SubTimelineItem;
+  streaming: boolean;
+}) {
+  let content;
+
+  if (child.type === "reasoning") {
+    const title = child.durationMs
+      ? `思考 (${(child.durationMs / 1000).toFixed(1)}s)`
+      : streaming
+        ? "思考中"
+        : "思考";
+    content = (
+      <StreamThink
+        title={title}
+        content={child.text}
+        compact
+        maxHeight={120}
+        streaming={streaming}
+      />
+    );
+  } else if (child.type === "tool") {
+    content =
+      child.status === "calling" ? (
+        <CallingToolCard toolName={child.name} />
+      ) : (
+        <ExpandableToolCard
+          toolName={child.name}
+          toolStatus={child.status}
+          result={child.result}
+        />
+      );
+  } else {
+    content = (
+      <div className="text-xs leading-relaxed text-muted-foreground/80">
+        <StreamMarkdown content={child.text} compact tone="muted" />
+      </div>
+    );
+  }
+
+  return <div style={TIMELINE_ROW_STYLE}>{content}</div>;
+});
+
+const SubAgentCard = memo(function SubAgentCard({
   item,
 }: {
   item: Extract<TimelineItem, { type: "tool" }>;
 }) {
-  const [expanded, setExpanded] = useState(true);
   const children = item.children ?? [];
   const isRunning = item.status === "calling";
+  const [completedExpanded, setCompletedExpanded] = useState(false);
+  const expanded = isRunning || completedExpanded;
   const lastContentChild = [...children]
     .reverse()
     .find(
@@ -224,8 +291,16 @@ function SubAgentCard({
       )}
     >
       <div
-        className="flex items-center gap-2.5 px-4 py-2.5 cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-        onClick={() => setExpanded(!expanded)}
+        className={cn(
+          "flex items-center gap-2.5 px-4 py-2.5 transition-colors",
+          !isRunning &&
+            "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5"
+        )}
+        onClick={() => {
+          if (!isRunning) {
+            setCompletedExpanded((current) => !current);
+          }
+        }}
       >
         {isRunning ? (
           <Loader2 className="h-3.5 w-3.5 animate-spin text-purple-400 shrink-0" />
@@ -268,55 +343,17 @@ function SubAgentCard({
               ref={innerScrollRef}
               className="border-t border-purple-500/10 px-4 py-3 space-y-2 max-h-[400px] overflow-y-auto"
             >
-              {children.map((child, index) => {
-                if (child.type === "reasoning") {
-                  const childIsStreaming = isRunning && index === children.length - 1;
-                  const childTitle = child.durationMs
-                    ? `思考 (${(child.durationMs / 1000).toFixed(1)}s)`
-                    : childIsStreaming
-                      ? "思考中"
-                      : "思考";
-                  return (
-                    <StreamThink
-                      key={`sub-reasoning-${index}`}
-                      title={childTitle}
-                      content={child.text}
-                      compact
-                      maxHeight={120}
-                      streaming={childIsStreaming}
-                    />
-                  );
-                }
-                if (child.type === "tool") {
-                  if (child.status === "calling") {
-                    return (
-                      <CallingToolCard
-                        key={`sub-tool-${child.id}`}
-                        toolName={child.name}
-                      />
-                    );
+              {children.map((child, index) => (
+                <SubTimelineEntry
+                  key={
+                    child.type === "tool"
+                      ? `sub-tool-${child.id}`
+                      : `sub-${child.type}-${index}`
                   }
-                  return (
-                    <ExpandableToolCard
-                      key={`sub-tool-${child.id}`}
-                      toolName={child.name}
-                      toolStatus={child.status}
-                      result={child.result}
-                    />
-                  );
-                }
-                if (child.type === "content") {
-                  return (
-                    <div
-                      key={`sub-content-${index}`}
-                      className="text-xs leading-relaxed text-muted-foreground/80"
-                    >
-                      <StreamMarkdown content={child.text} compact tone="muted" />
-                    </div>
-                  );
-                }
-                return null;
-              })}
+                  child={child}
+                  streaming={isRunning && index === children.length - 1}
+                />
+              ))}
 
               {hasResult && (
                 <div className="text-xs leading-relaxed text-foreground/70">
@@ -329,20 +366,131 @@ function SubAgentCard({
       </AnimatePresence>
     </div>
   );
-}
+});
+
+const TimelineEntry = memo(function TimelineEntry({
+  item,
+  previousItem,
+  streaming,
+}: {
+  item: TimelineItem;
+  previousItem: TimelineItem | null;
+  streaming: boolean;
+}) {
+  let content;
+
+  if (item.type === "reasoning") {
+    const title = item.durationMs
+      ? `思考 (${(item.durationMs / 1000).toFixed(1)}s)`
+      : streaming
+        ? "思考中"
+        : "思考";
+    content = (
+      <StreamThink
+        title={title}
+        content={item.text}
+        streaming={streaming}
+      />
+    );
+  } else if (item.type === "tool") {
+    if (isSubAgentTool(item.name) || (item.children && item.children.length > 0)) {
+      content = <SubAgentCard item={item} />;
+    } else if (item.status === "calling") {
+      content = <CallingToolCard toolName={item.name} />;
+    } else {
+      content = (
+        <ExpandableToolCard
+          toolName={item.name}
+          toolStatus={item.status}
+          result={item.result}
+        />
+      );
+    }
+  } else {
+    if (
+      previousItem?.type === "tool" &&
+      (isSubAgentTool(previousItem.name) ||
+        (previousItem.children && previousItem.children.length > 0)) &&
+      previousItem.result &&
+      item.text.trim() === previousItem.result.trim()
+    ) {
+      return null;
+    }
+
+    const { markdownContent, mediaLinks } = parseTaskContent(item.text);
+    content = (
+      <div className="space-y-3 text-sm leading-relaxed">
+        {markdownContent ? <StreamMarkdown content={markdownContent} /> : null}
+        <TaskMediaLinks mediaLinks={mediaLinks} />
+      </div>
+    );
+  }
+
+  return <div style={TIMELINE_ROW_STYLE}>{content}</div>;
+});
 
 export interface MessageTimelineProps {
   reasoningText?: string;
   reasoningDurationMs?: number;
   timeline: TimelineItem[];
+  scrollRef: RefObject<HTMLDivElement | null>;
+  initialScrollToEnd?: boolean;
   streaming?: boolean;
   error?: string;
+}
+
+type MessageTimelineRow =
+  | {
+      key: string;
+      type: "fallback-reasoning";
+      title: string;
+      content: string;
+      streaming: boolean;
+    }
+  | {
+      key: string;
+      type: "entry";
+      item: TimelineItem;
+      previousItem: TimelineItem | null;
+      streaming: boolean;
+    }
+  | { key: string; type: "error"; message: string };
+
+function MessageTimelineRowContent({ row }: { row: MessageTimelineRow }) {
+  if (row.type === "fallback-reasoning") {
+    return (
+      <StreamThink
+        title={row.title}
+        content={row.content}
+        streaming={row.streaming}
+      />
+    );
+  }
+
+  if (row.type === "error") {
+    return (
+      <div className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span className="leading-relaxed">{row.message}</span>
+      </div>
+    );
+  }
+
+  return (
+    <TimelineEntry
+      item={row.item}
+      previousItem={row.previousItem}
+      streaming={row.streaming}
+    />
+  );
 }
 
 export function MessageTimeline({
   reasoningText,
   reasoningDurationMs,
   timeline,
+  scrollRef,
+  initialScrollToEnd = false,
   streaming,
   error,
 }: MessageTimelineProps) {
@@ -353,76 +501,110 @@ export function MessageTimeline({
       ? "思考中"
       : "思考";
 
+  const rows = useMemo<MessageTimelineRow[]>(() => {
+    const nextRows: MessageTimelineRow[] = [];
+
+    if (!hasTimelineReasoning && reasoningText) {
+      nextRows.push({
+        key: "fallback-reasoning",
+        type: "fallback-reasoning",
+        title: reasoningTitle,
+        content: reasoningText,
+        streaming: !!streaming,
+      });
+    }
+
+    timeline.forEach((item, index) => {
+      nextRows.push({
+        key: item.type === "tool" ? `tool-${item.id}` : `${item.type}-${index}`,
+        type: "entry",
+        item,
+        previousItem: index > 0 ? timeline[index - 1] : null,
+        streaming: !!streaming && index === timeline.length - 1,
+      });
+    });
+
+    if (error) {
+      nextRows.push({ key: "error", type: "error", message: error });
+    }
+
+    return nextRows;
+  }, [
+    error,
+    hasTimelineReasoning,
+    reasoningText,
+    reasoningTitle,
+    streaming,
+    timeline,
+  ]);
+
+  // TanStack Virtual owns a mutable measurement instance; this component is
+  // intentionally excluded from React Compiler memoization.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => {
+      const row = rows[index];
+      if (row?.type === "fallback-reasoning") return 192;
+      if (row?.type === "error") return 48;
+      if (row?.type === "entry" && row.item.type === "reasoning") return 192;
+      return 72;
+    },
+    getItemKey: (index) => rows[index]?.key ?? index,
+    gap: 12,
+    overscan: 6,
+  });
+  const initialScrollCompletedRef = useRef(false);
+
+  useEffect(() => {
+    if (
+      !initialScrollToEnd ||
+      initialScrollCompletedRef.current ||
+      rows.length === 0
+    ) {
+      return;
+    }
+
+    let secondFrameId: number | undefined;
+    const firstFrameId = requestAnimationFrame(() => {
+      initialScrollCompletedRef.current = true;
+      rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
+      // Run once more after the last variable-height row has been measured.
+      secondFrameId = requestAnimationFrame(() => {
+        rowVirtualizer.scrollToIndex(rows.length - 1, { align: "end" });
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(firstFrameId);
+      if (secondFrameId !== undefined) {
+        cancelAnimationFrame(secondFrameId);
+      }
+    };
+  }, [initialScrollToEnd, rowVirtualizer, rows.length]);
+
   return (
-    <>
-      {!hasTimelineReasoning && reasoningText && (
-        <StreamThink
-          title={reasoningTitle}
-          content={reasoningText}
-          streaming={!!streaming}
-        />
-      )}
+    <div
+      className="relative w-full"
+      style={{ height: rowVirtualizer.getTotalSize() }}
+    >
+      {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+        const row = rows[virtualRow.index];
+        if (!row) return null;
 
-      {timeline.map((item, index) => {
-        if (item.type === "reasoning") {
-          const itemTitle = item.durationMs
-            ? `思考 (${(item.durationMs / 1000).toFixed(1)}s)`
-            : streaming && index === timeline.length - 1
-              ? "思考中"
-              : "思考";
-          return (
-            <StreamThink
-              key={`reasoning-${index}`}
-              title={itemTitle}
-              content={item.text}
-              streaming={streaming && index === timeline.length - 1}
-            />
-          );
-        }
-
-        if (item.type === "tool") {
-          if (isSubAgentTool(item.name) || (item.children && item.children.length > 0)) {
-            return <SubAgentCard key={`sub-agent-${item.id}`} item={item} />;
-          }
-          if (item.status === "calling") {
-            return <CallingToolCard key={`tool-${item.id}`} toolName={item.name} />;
-          }
-          return (
-            <ExpandableToolCard
-              key={`tool-${item.id}`}
-              toolName={item.name}
-              toolStatus={item.status}
-              result={item.result}
-            />
-          );
-        }
-
-        const prevItem = index > 0 ? timeline[index - 1] : null;
-        if (
-          prevItem?.type === "tool" &&
-          (isSubAgentTool(prevItem.name) ||
-            (prevItem.children && prevItem.children.length > 0)) &&
-          prevItem.result &&
-          item.text.trim() === prevItem.result.trim()
-        ) {
-          return null;
-        }
-
-        const { markdownContent, mediaLinks } = parseTaskContent(item.text);
         return (
-          <div key={`content-${index}`} className="space-y-3 text-sm leading-relaxed">
-            {markdownContent ? <StreamMarkdown content={markdownContent} /> : null}
-            <TaskMediaLinks mediaLinks={mediaLinks} />
+          <div
+            key={virtualRow.key}
+            ref={rowVirtualizer.measureElement}
+            data-index={virtualRow.index}
+            className="absolute left-0 top-0 w-full"
+            style={{ transform: `translateY(${virtualRow.start}px)` }}
+          >
+            <MessageTimelineRowContent row={row} />
           </div>
         );
       })}
-
-      {error && (
-        <div className="flex items-start gap-2 rounded-lg border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-          <span className="leading-relaxed">{error}</span>
-        </div>
-      )}
-    </>
+    </div>
   );
 }

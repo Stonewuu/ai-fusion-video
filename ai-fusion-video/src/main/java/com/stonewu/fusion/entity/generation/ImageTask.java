@@ -1,6 +1,7 @@
 package com.stonewu.fusion.entity.generation;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -43,7 +44,7 @@ public class ImageTask extends BaseEntity {
     private Long promptTemplateId;
 
     /** 参考图片URL列表 JSON */
-    @TableField(typeHandler = JsonbTypeHandler.class)
+    @TableField(typeHandler = JsonbTypeHandler.class, updateStrategy = FieldStrategy.NEVER)
     private String refImageUrls;
 
     /** 画面比例，如 16:9、1:1 */

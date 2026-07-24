@@ -443,7 +443,7 @@ export function StoryboardFrameReferenceDialog({
 
       {previewImageUrl && (
         <div
-          className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          className="modal-overlay fixed inset-0 z-[10020] flex items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => setPreviewImageUrl(null)}
         >
           <div
@@ -452,7 +452,7 @@ export function StoryboardFrameReferenceDialog({
           >
             <button
               onClick={() => setPreviewImageUrl(null)}
-              className="absolute -top-12 right-0 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              className="absolute -top-12 right-0 rounded-full border border-border/40 bg-background/80 p-1.5 text-foreground shadow-xl backdrop-blur-xl transition-colors hover:bg-background"
               type="button"
             >
               <X className="h-5 w-5" />
@@ -461,9 +461,9 @@ export function StoryboardFrameReferenceDialog({
               src={resolveMediaUrl(previewImageUrl)}
               alt={previewImageTitle}
               fallbackType="image"
-              className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl border border-white/10 select-none pointer-events-none"
+              className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl border border-border/40 select-none pointer-events-none"
             />
-            <p className="text-white/90 text-xs font-medium px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm border border-white/5">
+            <p className="rounded-full border border-border/40 bg-background/80 px-3 py-1.5 text-xs font-medium text-foreground shadow-xl backdrop-blur-xl">
               {previewImageTitle}
             </p>
           </div>

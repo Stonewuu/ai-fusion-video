@@ -10,8 +10,6 @@ import {
   DialogDescription,
   DialogFooter,
   DialogHeader,
-  DialogOverlay,
-  DialogPortal,
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -102,12 +100,6 @@ export function CapabilityPresetSelect({
           if (!nextOpen) setPendingPreset(null);
         }}
       >
-        <DialogPortal>
-          <DialogOverlay
-            forceRender
-            className="z-[60] bg-black/55 supports-backdrop-filter:backdrop-blur-sm"
-          />
-        </DialogPortal>
         <DialogContent className="z-[70] rounded-2xl border border-border/40 bg-popover/95 shadow-2xl ring-0 backdrop-blur-xl sm:max-w-md">
           <DialogHeader>
             <DialogTitle>覆盖自定义能力设置？</DialogTitle>

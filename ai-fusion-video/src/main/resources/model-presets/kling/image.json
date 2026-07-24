@@ -9,6 +9,7 @@
     "description": "可灵 2025-03-12 发布的图片模型，支持文生图和单图图生图；通过 New API 图片生成协议接入。",
     "capabilities": ["文生图", "图生图"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportReferenceImages": true,
       "minReferenceImages": 0,
       "maxReferenceImages": 1,
@@ -41,6 +42,7 @@
     "description": "可灵 2025-05-13 发布的图片模型，支持文生图和图生图；通过 New API 图片生成协议接入。",
     "capabilities": ["文生图", "图生图"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportReferenceImages": true,
       "minReferenceImages": 0,
       "maxReferenceImages": 1,
@@ -73,6 +75,7 @@
     "description": "可灵 2025-07-30 发布的图片模型，支持文生图、图生图、组图、多图参考以及人物/人脸参考，最高 2K。",
     "capabilities": ["文生图", "图生图", "组图生成", "多图参考", "人物参考", "人脸参考"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportReferenceImages": true,
       "minReferenceImages": 0,
       "maxReferenceImages": 10,
@@ -116,6 +119,7 @@
     "description": "可灵 2025-08-15 发布的风格增强图片模型，主打近 300 种图生图风格，输出为 1K。",
     "capabilities": ["图生图", "风格转换", "近 300 种风格"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportReferenceImages": true,
       "minReferenceImages": 1,
       "maxReferenceImages": 1,
@@ -148,6 +152,7 @@
     "description": "可灵 2025-12-15 发布的统一图片模型，支持文生图、图生图、多图参考和精确编辑，最高 2K。",
     "capabilities": ["文生图", "图生图", "多图参考", "精确编辑"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportReferenceImages": true,
       "minReferenceImages": 0,
       "maxReferenceImages": 10,
@@ -191,6 +196,7 @@
     "description": "可灵 2026-02-25 发布的图片模型，支持文生图、单图图生图和多参考主体控制，最高 2K。",
     "capabilities": ["文生图", "图生图", "多图参考", "主体控制"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportReferenceImages": true,
       "minReferenceImages": 0,
       "maxReferenceImages": 10,
@@ -234,6 +240,7 @@
     "description": "可灵 2026-02-25 发布的全能图片模型，支持文生图、图生图、组图、多图参考和 4K 输出。",
     "capabilities": ["文生图", "图生图", "组图生成", "多图参考", "4K 输出"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportReferenceImages": true,
       "minReferenceImages": 0,
       "maxReferenceImages": 10,

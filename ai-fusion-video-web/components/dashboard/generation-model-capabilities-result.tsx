@@ -1,6 +1,7 @@
 "use client";
 
 import { Clapperboard, Image as ImageIcon, Info, RefreshCcw } from "lucide-react";
+import { getModelDisplayParts } from "@/lib/model-display";
 
 type CapabilityResultRecord = Record<string, unknown>;
 
@@ -79,6 +80,32 @@ function DetailRow({ label, value }: { label: string; value: string }) {
   );
 }
 
+function ModelIdentity({
+  data,
+  fallback,
+}: {
+  data: CapabilityResultRecord;
+  fallback: string;
+}) {
+  const display = getModelDisplayParts({
+    name: toText(data.modelName),
+    code: toText(data.modelCode),
+  }, fallback);
+
+  return (
+    <div className="min-w-0">
+      <p className="truncate text-xs font-medium text-foreground">
+        {display.name}
+      </p>
+      {display.code && (
+        <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
+          {display.code}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ImageCapabilitySection({ data }: { data: CapabilityResultRecord }) {
   const configured = toBoolean(data.configured);
   if (!configured) {
@@ -101,7 +128,7 @@ function ImageCapabilitySection({ data }: { data: CapabilityResultRecord }) {
   return (
     <SectionBlock title="图片模型能力" icon={<ImageIcon className="h-3.5 w-3.5 text-sky-500" />}>
       <div className="space-y-1">
-        <p className="text-xs font-medium text-foreground">{toText(data.modelName) || "默认图片模型"}</p>
+        <ModelIdentity data={data} fallback="默认图片模型" />
         <p className="text-[11px] text-muted-foreground/80 leading-5">{toText(data.summary) || ""}</p>
       </div>
 
@@ -148,7 +175,7 @@ function VideoCapabilitySection({ data }: { data: CapabilityResultRecord }) {
   return (
     <SectionBlock title="视频模型能力" icon={<Clapperboard className="h-3.5 w-3.5 text-emerald-500" />}>
       <div className="space-y-1">
-        <p className="text-xs font-medium text-foreground">{toText(data.modelName) || "默认视频模型"}</p>
+        <ModelIdentity data={data} fallback="默认视频模型" />
         <p className="text-[11px] text-muted-foreground/80 leading-5">{toText(data.summary) || ""}</p>
       </div>
 

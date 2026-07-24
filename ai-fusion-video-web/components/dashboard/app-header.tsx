@@ -85,7 +85,9 @@ export function AppHeader() {
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const tryReconnect = usePipelineStore((s) => s.tryReconnect);
+  const restoreRunningPipelines = usePipelineStore(
+    (s) => s.restoreRunningPipelines
+  );
   const [mobileMenuRoute, setMobileMenuRoute] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<MenuDisplayMode>("full");
   const headerRef = useRef<HTMLDivElement>(null);
@@ -103,10 +105,10 @@ export function AppHeader() {
       pathname.startsWith(route)
     )?.[1] || "仪表盘";
 
-  // 页面加载时尝试重连 running pipelines
+  // 页面加载时只恢复 running Pipeline 列表；SSE 由面板选中态管理。
   useEffect(() => {
-    tryReconnect();
-  }, [tryReconnect]);
+    restoreRunningPipelines();
+  }, [restoreRunningPipelines]);
 
   // 点击外部区域关闭移动端菜单
   useEffect(() => {

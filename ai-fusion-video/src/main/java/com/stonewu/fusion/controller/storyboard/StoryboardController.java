@@ -6,6 +6,7 @@ import com.stonewu.fusion.controller.storyboard.vo.StoryboardCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeUpdateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardFrameUpdateReqVO;
+import com.stonewu.fusion.controller.storyboard.vo.StoryboardItemAssetsUpdateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardItemCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardItemSortReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardItemUpdateReqVO;
@@ -19,6 +20,7 @@ import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.service.storyboard.StoryboardService;
 import com.stonewu.fusion.service.storyboard.VideoComposeService;
+import com.stonewu.fusion.service.storyboard.dto.StoryboardItemAssetsPatch;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -218,6 +220,22 @@ public class StoryboardController {
     public CommonResult<StoryboardItem> updateItem(@Valid @RequestBody StoryboardItemUpdateReqVO reqVO) {
         StoryboardItem item = StoryboardConvert.INSTANCE.convert(reqVO);
         return CommonResult.success(storyboardService.updateItem(item));
+    }
+
+    @Operation(summary = "局部更新分镜条目资产关联")
+    @PatchMapping("/item/{id}/assets")
+    public CommonResult<StoryboardItem> updateItemAssets(
+            @PathVariable Long id,
+            @Valid @RequestBody StoryboardItemAssetsUpdateReqVO reqVO) {
+        StoryboardItemAssetsPatch patch = new StoryboardItemAssetsPatch(
+                reqVO.isCharacterIdsPresent(),
+                reqVO.getCharacterIds(),
+                reqVO.isSceneAssetItemIdPresent(),
+                reqVO.getSceneAssetItemId(),
+                reqVO.isPropIdsPresent(),
+                reqVO.getPropIds()
+        );
+        return CommonResult.success(storyboardService.updateItemAssets(id, patch));
     }
 
     /**

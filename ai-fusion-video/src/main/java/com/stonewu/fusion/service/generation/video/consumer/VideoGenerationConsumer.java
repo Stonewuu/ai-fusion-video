@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.generation.video.consumer;
 
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
@@ -9,7 +10,10 @@ import com.stonewu.fusion.entity.generation.VideoItem;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.infrastructure.queue.RedisTaskQueue;
 import com.stonewu.fusion.service.ai.AiModelService;
+import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
+import com.stonewu.fusion.service.generation.ReferenceImageTransportService;
+import com.stonewu.fusion.service.generation.video.VideoFrameExtractor;
 import com.stonewu.fusion.service.generation.video.VideoGenerationService;
 import com.stonewu.fusion.service.generation.video.strategy.VideoGenerationStrategy;
 import com.stonewu.fusion.service.generation.video.strategy.VideoGenerationStrategyRouter;
@@ -42,9 +46,12 @@ public class VideoGenerationConsumer {
     private final RedisTaskQueue taskQueue;
     private final VideoGenerationService videoGenerationService;
     private final AiModelService aiModelService;
+    private final ApiConfigService apiConfigService;
     private final GenerationModelCapabilityService generationModelCapabilityService;
+    private final ReferenceImageTransportService referenceImageTransportService;
     private final VideoGenerationStrategyRouter videoGenerationStrategyRouter;
     private final MediaStorageService mediaStorageService;
+    private final VideoFrameExtractor videoFrameExtractor;
 
     private final AtomicInteger workerThreadCounter = new AtomicInteger(1);
     private final ExecutorService workerExecutor = Executors.newCachedThreadPool(r -> {
@@ -63,6 +70,7 @@ public class VideoGenerationConsumer {
         }
         task.setModelId(queueModel.getId());
         applyTaskDefaults(task, queueModel);
+        generationModelCapabilityService.validateVideoTask(queueModel, task);
 
         String queueName = resolveQueueName(task.getModelId());
         String taskId = IdUtil.fastSimpleUUID();
@@ -195,6 +203,9 @@ public class VideoGenerationConsumer {
         try {
             VideoGenerationStrategy strategy = videoGenerationStrategyRouter.resolve(model);
             generationModelCapabilityService.validateVideoTask(model, task);
+            ApiConfig apiConfig = model.getApiConfigId() == null
+                    ? null : apiConfigService.getById(model.getApiConfigId());
+            resolveReferenceImageInputs(model, task, apiConfig);
             String platformTaskId = strategy.submit(task);
             log.info("[VideoConsumer] 任务已提交到平台: taskId={}, platformTaskId={}", taskId, platformTaskId);
             strategy.poll(platformTaskId, task);
@@ -206,6 +217,24 @@ public class VideoGenerationConsumer {
         } catch (Exception e) {
             log.error("[VideoConsumer] 任务执行失败: taskId={}", taskId, e);
             videoGenerationService.updateStatus(task.getId(), 3, e.getMessage());
+        }
+    }
+
+    private void resolveReferenceImageInputs(AiModel model, VideoTask task, ApiConfig apiConfig) {
+        var config = generationModelCapabilityService.getMergedModelConfig(model);
+        if (StrUtil.isNotBlank(task.getFirstFrameImageUrl())) {
+            task.setFirstFrameImageUrl(referenceImageTransportService.resolveInputs(
+                    model, config, List.of(task.getFirstFrameImageUrl()), apiConfig).getFirst());
+        }
+        if (StrUtil.isNotBlank(task.getLastFrameImageUrl())) {
+            task.setLastFrameImageUrl(referenceImageTransportService.resolveInputs(
+                    model, config, List.of(task.getLastFrameImageUrl()), apiConfig).getFirst());
+        }
+        List<String> referenceImages = referenceImageTransportService.parseJsonInputs(
+                task.getReferenceImageUrls(), "referenceImageUrls");
+        if (!referenceImages.isEmpty()) {
+            task.setReferenceImageUrls(JSONUtil.toJsonStr(referenceImageTransportService.resolveInputs(
+                    model, config, referenceImages, apiConfig)));
         }
     }
 
@@ -260,10 +289,10 @@ public class VideoGenerationConsumer {
     }
 
     /**
-     * 将远程视频/封面 URL 下载到持久化存储（本地磁盘 / S3），
-     * 并替换 VideoItem 中的 URL 为永久可访问地址。
+     * 持久化视频与平台返回的帧，并为缺少帧信息的视频自动提取首尾帧。
+     * 首帧统一作为封面；提帧失败时保留平台封面和原视频。
      */
-    private void persistVideoItems(VideoTask task) {
+    void persistVideoItems(VideoTask task) {
         List<VideoItem> items = videoGenerationService.listItems(task.getId());
         for (VideoItem item : items) {
             boolean updated = false;
@@ -280,10 +309,50 @@ public class VideoGenerationConsumer {
                 }
             }
 
-            if (StrUtil.isNotBlank(item.getCoverUrl())) {
+            if (StrUtil.isNotBlank(item.getFirstFrameUrl())) {
                 try {
-                    String persistedCoverUrl = mediaStorageService.downloadAndStore(item.getCoverUrl(), "images");
-                    item.setCoverUrl(persistedCoverUrl);
+                    item.setFirstFrameUrl(mediaStorageService.downloadAndStore(
+                            item.getFirstFrameUrl(), "images/video-frames"));
+                    updated = true;
+                } catch (Exception e) {
+                    log.warn("[VideoConsumer] 视频首帧持久化失败: itemId={}, error={}",
+                            item.getId(), e.getMessage());
+                }
+            }
+
+            if (StrUtil.isNotBlank(item.getLastFrameUrl())) {
+                try {
+                    item.setLastFrameUrl(mediaStorageService.downloadAndStore(
+                            item.getLastFrameUrl(), "images/video-frames"));
+                    updated = true;
+                } catch (Exception e) {
+                    log.warn("[VideoConsumer] 视频尾帧持久化失败: itemId={}, error={}",
+                            item.getId(), e.getMessage());
+                }
+            }
+
+            VideoFrameExtractor.ExtractedFrames extractedFrames = videoFrameExtractor.extract(
+                    item.getVideoUrl(),
+                    StrUtil.isBlank(item.getFirstFrameUrl()),
+                    StrUtil.isBlank(item.getLastFrameUrl())
+            );
+            if (StrUtil.isBlank(item.getFirstFrameUrl())
+                    && StrUtil.isNotBlank(extractedFrames.firstFrameUrl())) {
+                item.setFirstFrameUrl(extractedFrames.firstFrameUrl());
+                updated = true;
+            }
+            if (StrUtil.isBlank(item.getLastFrameUrl())
+                    && StrUtil.isNotBlank(extractedFrames.lastFrameUrl())) {
+                item.setLastFrameUrl(extractedFrames.lastFrameUrl());
+                updated = true;
+            }
+
+            if (StrUtil.isNotBlank(item.getFirstFrameUrl())) {
+                item.setCoverUrl(item.getFirstFrameUrl());
+                updated = true;
+            } else if (StrUtil.isNotBlank(item.getCoverUrl())) {
+                try {
+                    item.setCoverUrl(mediaStorageService.downloadAndStore(item.getCoverUrl(), "images"));
                     updated = true;
                 } catch (Exception e) {
                     log.warn("[VideoConsumer] 视频封面持久化失败: itemId={}, error={}",

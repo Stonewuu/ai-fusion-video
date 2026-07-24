@@ -36,6 +36,7 @@
     "description": "阿里云百炼万相 2.7 图生视频模型，支持首帧、首尾帧、视频续写和驱动音频",
     "capabilities": ["图生视频-首帧", "图生视频-首尾帧", "视频续写", "驱动音频", "720P/1080P"],
     "config": {
+      "referenceImageInputFormats": ["url", "data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,
@@ -68,6 +69,7 @@
       "supportFirstFrame": false,
       "supportLastFrame": false,
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["url", "data_uri"],
       "supportReferenceVideos": true,
       "supportReferenceAudios": true,
       "minImageInputs": 0,
@@ -97,6 +99,7 @@
       "supportFirstFrame": false,
       "supportLastFrame": false,
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["url", "data_uri"],
       "supportReferenceVideos": true,
       "supportReferenceAudios": false,
       "minImageInputs": 0,
@@ -152,6 +155,7 @@
     "description": "阿里云百炼万相 2.6 首帧图生视频模型",
     "capabilities": ["图生视频-首帧", "720P/1080P"],
     "config": {
+      "referenceImageInputFormats": ["url", "data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -181,6 +185,7 @@
     "description": "阿里云百炼万相 2.6 快速首帧图生视频模型",
     "capabilities": ["图生视频-首帧", "快速生成"],
     "config": {
+      "referenceImageInputFormats": ["url", "data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -210,6 +215,7 @@
     "description": "阿里云百炼万相 2.2 快速首尾帧生视频模型",
     "capabilities": ["图生视频-首尾帧", "快速生成"],
     "config": {
+      "referenceImageInputFormats": ["url", "data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,
@@ -297,6 +303,7 @@
     "description": "阿里云百炼万相 2.1 首帧图生视频 Plus 模型",
     "capabilities": ["图生视频-首帧"],
     "config": {
+      "referenceImageInputFormats": ["url", "data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -326,6 +333,7 @@
     "description": "阿里云百炼万相 2.1 快速首帧图生视频模型",
     "capabilities": ["图生视频-首帧", "快速生成"],
     "config": {
+      "referenceImageInputFormats": ["url", "data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -355,6 +363,7 @@
     "description": "阿里云百炼万相 2.1 首尾帧生视频 Plus 模型",
     "capabilities": ["图生视频-首尾帧"],
     "config": {
+      "referenceImageInputFormats": ["url", "data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,

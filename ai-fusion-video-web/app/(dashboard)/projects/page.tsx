@@ -155,7 +155,8 @@ export default function ProjectsPage() {
           <div
             className={cn(
               "flex items-center gap-3 px-4 py-3 rounded-xl",
-              "border border-border/30 bg-card/50 backdrop-blur-sm"
+              "border border-border/30 bg-card/50 backdrop-blur-sm",
+              "transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 motion-reduce:transition-none"
             )}
           >
             <Search className="h-4 w-4 text-muted-foreground" />

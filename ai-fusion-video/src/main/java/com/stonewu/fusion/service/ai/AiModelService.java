@@ -228,11 +228,6 @@ public class AiModelService {
         if (presetModelType != null && !presetModelType.equals(model.getModelType())) {
             throw new BusinessException(400, "模型能力预设与模型类型不匹配");
         }
-        String presetProtocol = aiModelMetadataResolver.normalizeProtocol(preset.getStr("modelProtocol"));
-        String effectiveProtocol = aiModelMetadataResolver.resolve(model).modelProtocol();
-        if (StrUtil.isNotBlank(presetProtocol) && !presetProtocol.equals(effectiveProtocol)) {
-            throw new BusinessException(400, "模型能力预设与当前请求协议不匹配");
-        }
     }
 
     private void validateRequestProtocol(AiModel model) {

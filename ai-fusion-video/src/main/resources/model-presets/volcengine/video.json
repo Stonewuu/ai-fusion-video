@@ -8,6 +8,7 @@
     "description": "火山方舟 2026-01-28 发布的 Seedance 2.0 旗舰视频模型，支持 4K 10-bit、音画同生、首尾帧、多模态参考、编辑与延长。",
     "capabilities": ["文生视频", "图生视频-首帧", "图生视频-首尾帧", "多模态参考", "编辑视频", "延长视频", "音画同生", "4K 10-bit"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": true,
@@ -43,6 +44,7 @@
     "description": "火山方舟 2026-01-28 发布的 Seedance 2.0 Fast，支持音画同生、首尾帧、多模态参考、编辑与延长，最高 720p。",
     "capabilities": ["文生视频", "图生视频-首帧", "图生视频-首尾帧", "多模态参考", "编辑视频", "延长视频", "音画同生"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": true,
@@ -78,6 +80,7 @@
     "description": "火山方舟 2026-06-15 发布的 Seedance 2.0 Mini，支持音画同生、首尾帧、多模态参考、编辑与延长，最高 720p。",
     "capabilities": ["文生视频", "图生视频-首帧", "图生视频-首尾帧", "多模态参考", "编辑视频", "延长视频", "音画同生"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": true,
@@ -113,6 +116,7 @@
     "description": "火山方舟 2025-12-15 发布的 Seedance 1.5 Pro，支持 4–12 秒、最高 1080p、首尾帧、音画同生和样片模式。",
     "capabilities": ["文生视频", "图生视频-首帧", "图生视频-首尾帧", "音画同生", "样片模式"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,
@@ -145,6 +149,7 @@
     "description": "火山方舟 2025-05-28 发布的 Seedance 1.0 Pro，支持 2–12 秒、最高 1080p、文生视频、首帧和首尾帧图生视频。",
     "capabilities": ["文生视频", "图生视频-首帧", "图生视频-首尾帧"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,
@@ -177,6 +182,7 @@
     "description": "火山方舟 2025-10-15 发布的 Seedance 1.0 Pro Fast，支持 2–12 秒、最高 1080p、文生视频和单首帧图生视频。",
     "capabilities": ["文生视频", "图生视频-首帧"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -209,6 +215,7 @@
     "description": "火山方舟 2025-04-28 发布的 Seedance 1.0 Lite 图生视频端点，支持首帧与首尾帧输入，最高 1080p。",
     "capabilities": ["图生视频-首帧", "图生视频-首尾帧"],
     "config": {
+      "referenceImageInputFormats": ["url"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,

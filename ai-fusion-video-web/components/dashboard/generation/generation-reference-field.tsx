@@ -26,6 +26,8 @@ interface GenerationReferenceFieldProps {
   maxCount: number;
   mediaType: ReferenceMediaType;
   onChange: (values: string[]) => void;
+  uploadDisabledReason?: string;
+  manualInputAllowed?: boolean;
 }
 
 const MEDIA_CONFIG: Record<
@@ -56,6 +58,8 @@ export function GenerationReferenceField({
   maxCount,
   mediaType,
   onChange,
+  uploadDisabledReason,
+  manualInputAllowed = true,
 }: GenerationReferenceFieldProps) {
   const config = MEDIA_CONFIG[mediaType];
   const inputRef = useRef<HTMLInputElement>(null);
@@ -63,9 +67,10 @@ export function GenerationReferenceField({
   const [showUrl, setShowUrl] = useState(false);
   const [uploading, setUploading] = useState(false);
   const canAdd = values.length < maxCount;
+  const canUpload = canAdd && !uploadDisabledReason;
 
   const uploadFiles = async (files: File[]) => {
-    if (!canAdd) return;
+    if (!canUpload) return;
     const remaining = maxCount - values.length;
     const selected = files.slice(0, remaining);
     if (!selected.length) return;
@@ -141,8 +146,10 @@ export function GenerationReferenceField({
         {canAdd && (
           <button
             type="button"
+            disabled={!canUpload}
             onClick={() => inputRef.current?.click()}
-            className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border/55 text-[10px] text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/[0.035] hover:text-primary"
+            title={uploadDisabledReason}
+            className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border/55 text-[10px] text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/[0.035] hover:text-primary disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-border/55 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           >
             {uploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -157,6 +164,13 @@ export function GenerationReferenceField({
           </button>
         )}
       </div>
+
+      {uploadDisabledReason && (
+        <p className="mt-2 text-[10px] leading-4 text-amber-600">
+          {uploadDisabledReason}
+          {manualInputAllowed ? "，仍可添加模型支持的公网图片 URL。" : "。"}
+        </p>
+      )}
 
       {showUrl ? (
         <div className="mt-3 flex gap-2">
@@ -181,7 +195,7 @@ export function GenerationReferenceField({
           </Button>
         </div>
       ) : (
-        canAdd && (
+        canAdd && manualInputAllowed && (
           <div className="mt-2 flex justify-end">
             <Button
               type="button"

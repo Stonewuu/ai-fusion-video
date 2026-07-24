@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef } from "react";
 import { Think } from "@ant-design/x";
 import { StreamMarkdown } from "@/components/dashboard/stream-markdown";
 
@@ -13,7 +13,7 @@ interface StreamThinkProps {
   className?: string;
 }
 
-export function StreamThink({
+export const StreamThink = memo(function StreamThink({
   title,
   content,
   streaming = false,
@@ -92,4 +92,4 @@ export function StreamThink({
       />
     </Think>
   );
-}
+});

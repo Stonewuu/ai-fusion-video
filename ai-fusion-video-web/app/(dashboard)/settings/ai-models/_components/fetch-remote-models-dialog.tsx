@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { getModelDisplayParts } from "@/lib/model-display";
 import {
   aiModelApi,
   apiConfigApi,
@@ -239,6 +240,10 @@ export function FetchRemoteModelsDialog({
                 {filteredModels.map(model => {
                   const alreadyExists = existingModelCodes.has(model.id);
                   const isSelected = selectedIds.has(model.id);
+                  const modelDisplay = getModelDisplayParts({
+                    name: model.displayName,
+                    code: model.id,
+                  });
 
                   return (
                     <button
@@ -272,7 +277,7 @@ export function FetchRemoteModelsDialog({
                       {/* 模型信息 */}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5 min-w-0">
-                          <p className="text-sm font-mono truncate">{model.id}</p>
+                          <p className="truncate text-sm font-medium">{modelDisplay.name}</p>
                           {model.modelType != null && (
                             <span className={cn(
                               "shrink-0 rounded px-1.5 py-0.5 text-[10px]",
@@ -297,8 +302,8 @@ export function FetchRemoteModelsDialog({
                           )}
                         </div>
                         <div className="text-[10px] text-muted-foreground space-y-0.5">
-                          {model.displayName && model.displayName !== model.id && (
-                            <p>{model.displayName}</p>
+                          {modelDisplay.code && (
+                            <p className="truncate font-mono">{modelDisplay.code}</p>
                           )}
                           {model.ownedBy && (
                             <p>{model.ownedBy}</p>

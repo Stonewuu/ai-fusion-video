@@ -111,12 +111,12 @@ type Props = EditProps | CreateProps;
 function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
   return createPortal(
     <div
-      className="fixed inset-0 z-200 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
+      className="modal-overlay fixed inset-0 z-200 flex cursor-pointer items-center justify-center"
       onClick={onClose}
     >
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white/80 hover:bg-white/20 transition-colors z-10"
+        className="absolute right-4 top-4 z-10 rounded-full border border-border/40 bg-background/80 p-2 text-foreground shadow-xl backdrop-blur-xl transition-colors hover:bg-background"
       >
         <X className="h-5 w-5" />
       </button>

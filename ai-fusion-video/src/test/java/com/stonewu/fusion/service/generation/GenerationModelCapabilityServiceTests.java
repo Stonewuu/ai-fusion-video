@@ -8,6 +8,9 @@ import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
+import com.stonewu.fusion.service.storage.StorageConfigService;
+import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
+import com.stonewu.fusion.service.system.SystemConfigService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -17,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class GenerationModelCapabilityServiceTests {
 
@@ -152,6 +156,43 @@ class GenerationModelCapabilityServiceTests {
                 JSONUtil.toList(config.getJSONArray("referenceImageInputFormats"), String.class));
         assertEquals("1024x768",
                 config.getJSONObject("supportedSizes").getJSONObject("standard").getStr("4:3"));
+    }
+
+    @Test
+    void shouldRejectUrlOnlyLocalReferenceWithoutPublicAccessAtSubmissionValidation() {
+        ModelPresetService urlOnlyPresetService = new ModelPresetService() {
+            @Override
+            public String getPresetConfig(String code) {
+                return """
+                        {
+                          "supportReferenceImages": true,
+                          "maxReferenceImages": 1,
+                          "referenceImageInputFormats": ["url"]
+                        }
+                        """;
+            }
+        };
+        SystemConfigService systemConfigService = mock(SystemConfigService.class);
+        when(systemConfigService.resolvePublicUrl("/media/reference.png")).thenReturn(null);
+        ReferenceImageTransportService transportService = new ReferenceImageTransportService(
+                mock(StorageConfigService.class),
+                systemConfigService,
+                mock(PresetArtStyleResourceResolver.class));
+        GenerationModelCapabilityService strictService = new GenerationModelCapabilityService(
+                metadataResolver, urlOnlyPresetService, transportService);
+        AiModel model = AiModel.builder()
+                .name("URL Only Image")
+                .code("url-only-image")
+                .capabilityPresetCode("url-only-image")
+                .build();
+        ImageTask task = ImageTask.builder()
+                .refImageUrls(JSONUtil.toJsonStr(List.of("/media/reference.png")))
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> strictService.validateImageTask(model, task, "openai_compatible"));
+
+        assertTrue(ex.getMessage().contains("未配置访问域名或公网对象存储"));
     }
 
     @Test

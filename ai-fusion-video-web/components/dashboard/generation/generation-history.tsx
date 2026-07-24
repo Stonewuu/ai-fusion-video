@@ -1,19 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import {
-  ArrowDownToLine,
   Clock3,
-  ImagePlus,
   Loader2,
-  PackagePlus,
   RefreshCw,
   RotateCcw,
   Sparkles,
 } from "lucide-react";
 import type { AiModel } from "@/lib/api/ai-model";
-import { resolveMediaUrl } from "@/lib/api/client";
+import { getModelDisplayParts } from "@/lib/model-display";
 import { Button } from "@/components/ui/button";
-import { SafeImage } from "@/components/ui/safe-image";
 import {
   Tooltip,
   TooltipContent,
@@ -26,12 +23,34 @@ import type {
   WorkbenchMode,
 } from "./generation-types";
 import {
-  formatGenerationTime,
+  formatGenerationDateTime,
+  getGenerationErrorSummary,
+  getGenerationParameterItems,
   generationSuggestions,
-  getResultMediaUrl,
-  getResultPreviewUrl,
   getTaskStatus,
 } from "./generation-utils";
+import { GenerationHistoryResult } from "./generation-history-result";
+import { GenerationHistoryReferences } from "./generation-history-references";
+import {
+  GenerationMediaPreviewDialog,
+  type GenerationMediaPreview,
+} from "./generation-media-preview-dialog";
+
+function getParameterTone(label: string) {
+  if (label === "比例" || label === "宽高比") {
+    return "bg-sky-500/10 text-sky-700 dark:text-sky-300";
+  }
+  if (label === "分辨率" || label === "尺寸") {
+    return "bg-violet-500/10 text-violet-700 dark:text-violet-300";
+  }
+  if (label === "数量") {
+    return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  }
+  if (label === "模式" || label === "时长") {
+    return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  }
+  return "bg-primary/8 text-primary";
+}
 
 interface GenerationHistoryProps {
   mode: WorkbenchMode;
@@ -47,162 +66,6 @@ interface GenerationHistoryProps {
   onAddAsset: (item: GenerationResultItem, prompt: string) => void;
 }
 
-function HistoryResult({
-  mode,
-  item,
-  prompt,
-  taskFailed,
-  taskError,
-  onUseReference,
-  onAddAsset,
-}: {
-  mode: WorkbenchMode;
-  item: GenerationResultItem;
-  prompt: string;
-  taskFailed: boolean;
-  taskError?: string | null;
-  onUseReference: (item: GenerationResultItem) => void;
-  onAddAsset: (item: GenerationResultItem, prompt: string) => void;
-}) {
-  const mediaUrl = resolveMediaUrl(getResultMediaUrl(item));
-  const previewUrl = resolveMediaUrl(getResultPreviewUrl(item));
-  const resultReady = Boolean(mediaUrl || previewUrl);
-  const displayUrl = mediaUrl || previewUrl;
-
-  if (!resultReady) {
-    const failed = taskFailed || item.status === 3;
-    const failureMessage = item.errorMsg || taskError || "未生成结果";
-    const resultPlaceholder = (
-      <article
-        tabIndex={failed ? 0 : undefined}
-        aria-label={failed ? `生成失败：${failureMessage}` : undefined}
-        className={cn(
-          "flex min-h-20 items-center gap-3 rounded-2xl border border-dashed border-border/45 bg-background/35 px-3 py-3",
-          failed &&
-            "cursor-help focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-        )}
-      >
-        <span
-          className={cn(
-            "grid size-9 shrink-0 place-items-center rounded-xl",
-            failed
-              ? "bg-destructive/8 text-destructive"
-              : "bg-primary/8 text-primary",
-          )}
-        >
-          {failed ? (
-            <ImagePlus className="size-4" />
-          ) : (
-            <Loader2 className="size-4 animate-spin" />
-          )}
-        </span>
-        <div className="min-w-0">
-          <p className="text-xs font-medium">
-            {failed ? "生成失败" : "正在生成"}
-          </p>
-          <p className="mt-0.5 line-clamp-1 text-[10px] text-muted-foreground">
-            {failed ? failureMessage : "完成后自动显示"}
-          </p>
-        </div>
-      </article>
-    );
-
-    if (!failed) return resultPlaceholder;
-
-    return (
-      <Tooltip>
-        <TooltipTrigger render={resultPlaceholder} />
-        <TooltipContent
-          side="top"
-          align="start"
-          className="max-w-sm whitespace-pre-wrap break-words text-left leading-5"
-        >
-          {failureMessage}
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  return (
-    <article className="group overflow-hidden rounded-2xl border border-border/45 bg-background/58 shadow-[0_12px_32px_-28px_rgba(15,23,42,.45)]">
-      <div className="relative overflow-hidden bg-muted/22">
-        {mode === "image" ? (
-          <a
-            href={displayUrl || undefined}
-            target="_blank"
-            rel="noreferrer"
-            title="打开原图"
-            className="block"
-          >
-            <SafeImage
-              src={displayUrl || undefined}
-              alt="生成图片"
-              className="aspect-square w-full object-contain transition-transform duration-300 group-hover:scale-[1.015]"
-              fallbackType="image"
-            />
-          </a>
-        ) : mediaUrl ? (
-          <video
-            controls
-            preload="metadata"
-            poster={previewUrl || undefined}
-            src={mediaUrl}
-            className="aspect-video w-full bg-black object-contain"
-          />
-        ) : previewUrl ? (
-          <SafeImage
-            src={previewUrl}
-            alt="视频封面"
-            className="aspect-video w-full object-cover"
-            fallbackType="image"
-          />
-        ) : (
-          <div className="grid aspect-video place-items-center text-xs text-muted-foreground">
-            视频处理中
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between gap-1.5 px-2 py-1.5">
-        <div className="flex min-w-0 items-center gap-0.5">
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => onUseReference(item)}
-            disabled={!resultReady}
-            title="作为下一次生成的参考"
-          >
-            <ImagePlus className="size-3" />
-            作为参考
-          </Button>
-          <Button
-            variant="ghost"
-            size="xs"
-            onClick={() => onAddAsset(item, prompt)}
-            disabled={!resultReady}
-          >
-            <PackagePlus className="size-3" />
-            添加资产
-          </Button>
-        </div>
-        {mediaUrl && (
-          <a
-            href={mediaUrl}
-            download
-            target="_blank"
-            rel="noreferrer"
-            title="下载"
-            aria-label="下载结果"
-            className="grid size-7 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-          >
-            <ArrowDownToLine className="h-3.5 w-3.5" />
-          </a>
-        )}
-      </div>
-    </article>
-  );
-}
-
 export function GenerationHistory({
   mode,
   entries,
@@ -216,7 +79,8 @@ export function GenerationHistory({
   onUseReference,
   onAddAsset,
 }: GenerationHistoryProps) {
-  const modelNames = new Map(models.map((model) => [model.id, model.name]));
+  const [mediaPreview, setMediaPreview] = useState<GenerationMediaPreview | null>(null);
+  const modelsById = new Map(models.map((model) => [model.id, model]));
 
   if (loading && entries.length === 0) {
     return (
@@ -277,40 +141,67 @@ export function GenerationHistory({
 
       {entries.map(({ task, items }) => {
         const status = getTaskStatus(task);
-        const modelName = task.modelId ? modelNames.get(task.modelId) : undefined;
+        const model = task.modelId ? modelsById.get(task.modelId) : undefined;
+        const modelDisplay = getModelDisplayParts(
+          model,
+          task.modelId ? `模型 #${task.modelId}` : "生成模型",
+        );
+        const parameterItems = getGenerationParameterItems(task, items);
         const failureMessage =
           task.errorMsg ||
           items.find((item) => item.errorMsg)?.errorMsg ||
           "未返回失败原因";
-        const statusBadge = (
-          <span
-            tabIndex={status.tone === "failed" ? 0 : undefined}
-            aria-label={
-              status.tone === "failed"
-                ? `${status.label}：${failureMessage}`
-                : undefined
-            }
-            className={cn(
-              "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5",
-              status.tone === "success" &&
-                "bg-emerald-500/10 text-emerald-600",
-              status.tone === "failed" &&
-                "cursor-help bg-destructive/10 text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-              status.tone === "running" && "bg-primary/10 text-primary",
-              status.tone === "queued" && "bg-amber-500/10 text-amber-600",
-            )}
-          >
+        const statusBadgeContent = (
+          <>
             {(status.tone === "running" || status.tone === "queued") && (
               <Clock3 className="h-2.5 w-2.5" />
             )}
             {status.label}
+          </>
+        );
+        const statusBadgeClassName = cn(
+          "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5",
+          status.tone === "success" &&
+            "bg-emerald-500/10 text-emerald-600",
+          status.tone === "failed" &&
+            "cursor-pointer bg-destructive/10 text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+          status.tone === "running" && "bg-primary/10 text-primary",
+          status.tone === "queued" && "bg-amber-500/10 text-amber-600",
+        );
+        const statusBadgeTrigger = (
+          <span
+            tabIndex={status.tone === "failed" ? 0 : undefined}
+            aria-label={
+              status.tone === "failed"
+                ? "生成失败，悬停或聚焦查看完整错误"
+                : undefined
+            }
+            className={statusBadgeClassName}
+          >
+            {statusBadgeContent}
           </span>
         );
+        const statusBadge =
+          status.tone === "failed" ? (
+            <Tooltip>
+              <TooltipTrigger render={statusBadgeTrigger} />
+              <TooltipContent className="max-w-[calc(100vw-2rem)] p-0 sm:max-w-lg">
+                <div className="max-h-[50vh] min-w-0 overflow-y-auto whitespace-pre-wrap break-all px-3 py-1.5 text-left">
+                  {failureMessage}
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          ) : (
+            statusBadgeTrigger
+          );
 
         return (
           <article
             key={task.id}
-            className="rounded-[22px] border border-border/45 bg-card/68 p-3.5 shadow-[0_12px_36px_-32px_rgba(15,23,42,.48)]"
+            className={cn(
+              "rounded-[22px] border border-border/45 bg-card/68 p-3.5",
+              "shadow-[0_12px_36px_-32px_rgba(15,23,42,.48)]",
+            )}
           >
             <header className="flex items-start justify-between gap-3">
               <div className="min-w-0 flex-1">
@@ -318,23 +209,39 @@ export function GenerationHistory({
                   {task.prompt}
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
-                  <span>{modelName || "生成模型"}</span>
-                  <span>·</span>
-                  <span>{formatGenerationTime(task.createTime)}</span>
-                  {status.tone === "failed" ? (
-                    <Tooltip>
-                      <TooltipTrigger render={statusBadge} />
-                      <TooltipContent
-                        side="top"
-                        align="start"
-                        className="max-w-sm whitespace-pre-wrap break-words text-left leading-5"
-                      >
-                        {failureMessage}
-                      </TooltipContent>
-                    </Tooltip>
-                  ) : (
-                    statusBadge
+                  {statusBadge}
+                  <span aria-hidden="true">·</span>
+                  <span className="font-medium text-foreground/75">
+                    {modelDisplay.name}
+                  </span>
+                  {modelDisplay.code && (
+                    <span className="max-w-full truncate font-mono text-muted-foreground/80">
+                      {modelDisplay.code}
+                    </span>
                   )}
+                  {parameterItems.length > 0 && (
+                    <>
+                      <span aria-hidden="true">·</span>
+                      {parameterItems.map((parameter) => (
+                        <span
+                          key={`${parameter.label}-${parameter.value}`}
+                          className={cn(
+                            "inline-flex items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-0.5",
+                            getParameterTone(parameter.label),
+                          )}
+                        >
+                          <span className="opacity-65">{parameter.label}</span>
+                          <span className="font-medium">
+                            {parameter.value}
+                          </span>
+                        </span>
+                      ))}
+                    </>
+                  )}
+                  <span aria-hidden="true">·</span>
+                  <span className="shrink-0 tabular-nums text-muted-foreground/70">
+                    {formatGenerationDateTime(task.createTime)}
+                  </span>
                 </div>
               </div>
               <Button
@@ -349,6 +256,11 @@ export function GenerationHistory({
               </Button>
             </header>
 
+            <GenerationHistoryReferences
+              task={task}
+              onPreview={setMediaPreview}
+            />
+
             {items.length > 0 ? (
               <div
                 className={cn(
@@ -359,7 +271,7 @@ export function GenerationHistory({
                 )}
               >
                 {items.map((item) => (
-                  <HistoryResult
+                  <GenerationHistoryResult
                     key={item.id}
                     mode={mode}
                     item={item}
@@ -368,13 +280,29 @@ export function GenerationHistory({
                     taskError={task.errorMsg}
                     onUseReference={onUseReference}
                     onAddAsset={onAddAsset}
+                    onPreview={setMediaPreview}
                   />
                 ))}
               </div>
             ) : status.tone === "failed" ? (
-              <p className="mt-2.5 rounded-xl bg-destructive/6 px-3 py-2 text-xs text-destructive">
-                {task.errorMsg || "生成失败"}
-              </p>
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <p
+                      tabIndex={0}
+                      aria-label="生成失败，悬停或聚焦查看完整错误"
+                      className="mt-2.5 line-clamp-2 w-full cursor-help break-all rounded-xl bg-destructive/6 px-3 py-2 text-left text-xs text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                    >
+                      {getGenerationErrorSummary(failureMessage)}
+                    </p>
+                  }
+                />
+                <TooltipContent className="max-w-[calc(100vw-2rem)] p-0 sm:max-w-lg">
+                  <div className="max-h-[50vh] min-w-0 overflow-y-auto whitespace-pre-wrap break-all px-3 py-1.5 text-left">
+                    {failureMessage}
+                  </div>
+                </TooltipContent>
+              </Tooltip>
             ) : (
               <div className="mt-2.5 flex h-14 max-w-xs items-center gap-2.5 rounded-xl border border-dashed border-border/45 bg-background/28 px-3 text-xs text-muted-foreground">
                 <Loader2 className="size-4 shrink-0 animate-spin" />
@@ -393,6 +321,13 @@ export function GenerationHistory({
           </Button>
         </div>
       )}
+
+      <GenerationMediaPreviewDialog
+        preview={mediaPreview}
+        onOpenChange={(open) => {
+          if (!open) setMediaPreview(null);
+        }}
+      />
     </div>
   );
 }
