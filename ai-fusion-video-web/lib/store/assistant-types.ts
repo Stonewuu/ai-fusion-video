@@ -34,11 +34,11 @@ export interface AssistantConversationRuntime {
   messagesError?: string;
   connectionError?: string;
   unread: boolean;
-  scrollTop: number;
 }
 
 export interface PersistedAssistantState {
   schemaVersion: number;
+  geometryVersion: number;
   mode: AssistantMode;
   lastOpenMode: Exclude<AssistantMode, "collapsed">;
   restoreMode: Exclude<AssistantMode, "collapsed" | "maximized">;
@@ -51,7 +51,6 @@ export interface PersistedAssistantState {
   /** A cursor is valid only when its conversation entry has the same run id. */
   runIds: Record<string, string>;
   lastSequences: Record<string, number>;
-  scrollPositions: Record<string, number>;
 }
 
 export interface AssistantStoreState {
@@ -95,7 +94,6 @@ export interface AssistantStoreState {
   updateNormalRect: (rect: AssistantRect, commit?: boolean) => void;
   updateDockWidth: (width: number, availableWidth: number, commit?: boolean) => void;
   clampViewportGeometry: (availableWidth?: number) => void;
-  setScrollTop: (conversationId: string, scrollTop: number) => void;
   loadMessagesIfNeeded: (conversationId: string) => Promise<void>;
   ensureContentConnection: () => void;
 }

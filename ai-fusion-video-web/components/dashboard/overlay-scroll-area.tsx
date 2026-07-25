@@ -5,7 +5,9 @@ import type {
   CSSProperties,
   ReactNode,
   Ref,
+  TouchEventHandler,
   UIEventHandler,
+  WheelEventHandler,
 } from "react";
 import { ScrollArea } from "@base-ui/react/scroll-area";
 import { cn } from "@/lib/utils";
@@ -17,6 +19,9 @@ interface OverlayScrollAreaProps
   viewportStyle?: CSSProperties;
   viewportRef?: Ref<HTMLDivElement>;
   onViewportScroll?: UIEventHandler<HTMLDivElement>;
+  onViewportWheel?: WheelEventHandler<HTMLDivElement>;
+  onViewportTouchStart?: TouchEventHandler<HTMLDivElement>;
+  onViewportTouchMove?: TouchEventHandler<HTMLDivElement>;
   scrollbarClassName?: string;
 }
 
@@ -27,6 +32,9 @@ export function OverlayScrollArea({
   viewportStyle,
   viewportRef,
   onViewportScroll,
+  onViewportWheel,
+  onViewportTouchStart,
+  onViewportTouchMove,
   scrollbarClassName,
   ...rootProps
 }: OverlayScrollAreaProps) {
@@ -43,6 +51,9 @@ export function OverlayScrollArea({
         className={cn("h-full w-full overscroll-contain", viewportClassName)}
         style={viewportStyle}
         onScroll={onViewportScroll}
+        onWheel={onViewportWheel}
+        onTouchStart={onViewportTouchStart}
+        onTouchMove={onViewportTouchMove}
       >
         {children}
       </ScrollArea.Viewport>

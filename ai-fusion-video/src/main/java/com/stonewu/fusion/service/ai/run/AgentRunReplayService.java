@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class AgentRunReplayService {
 
     static final int REPLAY_PAGE_SIZE = 256;
-    static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
+    static final Duration POLL_INTERVAL = Duration.ofMillis(300);
 
     private final AgentEventRepository repository;
     private final AgentRunRedisSignalService signals;

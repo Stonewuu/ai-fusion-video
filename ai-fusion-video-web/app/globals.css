@@ -201,9 +201,29 @@
 }
 
 /* 融光助手内部导航按容器宽度切换，而不是读取 viewport breakpoint。 */
-.assistant-shell {
+.assistant-shell,
+[data-assistant-dock-surface],
+[data-assistant-surface] {
   container-type: inline-size;
-  container-name: fusion-assistant;
+}
+
+.assistant-running-glow {
+  animation: assistant-running-halo 1.8s ease-out infinite;
+  will-change: box-shadow;
+}
+
+@keyframes assistant-running-halo {
+  0% {
+    box-shadow:
+      0 0 0 0 color-mix(in oklab, var(--primary) 24%, transparent),
+      0 8px 24px -12px color-mix(in oklab, var(--foreground) 24%, transparent);
+  }
+  75%,
+  100% {
+    box-shadow:
+      0 0 0 14px color-mix(in oklab, var(--primary) 0%, transparent),
+      0 8px 24px -12px color-mix(in oklab, var(--foreground) 24%, transparent);
+  }
 }
 
 /* Shared Base UI portals must stay above the floating/maximized assistant. */
@@ -237,29 +257,36 @@ body[data-assistant-layer="true"] > [data-base-ui-portal] > * {
   transform: translateX(0);
 }
 
-@container fusion-assistant (min-width: 880px) {
+@container (min-width: 650px) {
   .assistant-wide-only {
-    display: flex;
+    display: flex !important;
   }
 
   .assistant-narrow-only {
-    display: none;
+    display: none !important;
   }
 
   .assistant-navigation {
-    position: relative;
-    inset: auto;
-    z-index: auto;
-    width: 260px;
-    transform: none;
-    border-right: 1px solid color-mix(in oklab, var(--border) 20%, transparent);
-    background: color-mix(in oklab, var(--card) 20%, transparent);
-    box-shadow: none;
-    transition: none;
+    position: relative !important;
+    inset: auto !important;
+    z-index: auto !important;
+    width: 260px !important;
+    transform: none !important;
+    border-right: 1px solid color-mix(in oklab, var(--border) 20%, transparent) !important;
+    background: color-mix(in oklab, var(--card) 20%, transparent) !important;
+    box-shadow: none !important;
+    transition: none !important;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .assistant-running-glow {
+    animation: none;
+    box-shadow:
+      0 0 0 4px color-mix(in oklab, var(--primary) 8%, transparent),
+      0 0 22px color-mix(in oklab, var(--primary) 16%, transparent);
+  }
+
   .assistant-shell * {
     scroll-behavior: auto;
   }

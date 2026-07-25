@@ -1,7 +1,6 @@
 "use client";
 
 import type { PointerEvent as ReactPointerEvent } from "react";
-import { motion, useReducedMotion } from "framer-motion";
 import {
   Bot,
   Maximize2,
@@ -20,7 +19,7 @@ interface TitleBarProps {
   mode: AssistantMode;
   canDock: boolean;
   mobileViewport: boolean;
-  directManipulationActive: boolean;
+  showLeadingIcon: boolean;
   onToggleDock: () => void;
   onToggleMaximize: () => void;
   onClose: () => void;
@@ -46,25 +45,23 @@ function IconAction({
             className="inline-flex"
             tabIndex={disabled ? 0 : undefined}
             aria-label={disabled ? label : undefined}
-            title={disabled ? label : undefined}
             data-assistant-interactive="true"
-          />
+          >
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label={label}
+              disabled={disabled}
+              data-assistant-interactive="true"
+              onPointerDown={(event) => event.stopPropagation()}
+              onClick={onClick}
+            >
+              {children}
+            </Button>
+          </span>
         }
-      >
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          title={label}
-          disabled={disabled}
-          data-assistant-interactive="true"
-          onPointerDown={(event) => event.stopPropagation()}
-          onClick={onClick}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
+      />
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
@@ -74,13 +71,12 @@ export function AssistantTitleBar({
   mode,
   canDock,
   mobileViewport,
-  directManipulationActive,
+  showLeadingIcon,
   onToggleDock,
   onToggleMaximize,
   onClose,
   onStartDrag,
 }: TitleBarProps) {
-  const reducedMotion = useReducedMotion();
   const selectedId = useAssistantStore((state) => state.selectedConversationId);
   const title = useAssistantStore((state) =>
     selectedId ? state.conversationStates[selectedId]?.conversation.title : undefined,
@@ -97,18 +93,11 @@ export function AssistantTitleBar({
         onToggleMaximize();
       }}
     >
-      {mode !== "collapsed" ? (
-        <motion.span
-          layoutId={directManipulationActive ? undefined : "fusion-assistant-icon"}
-          transition={{
-            duration: directManipulationActive ? 0 : reducedMotion ? 0.01 : 0.5,
-            ease: [0.65, 0, 0.35, 1],
-          }}
-          className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"
-        >
+      {showLeadingIcon ? (
+        <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <Bot className="size-4" />
-        </motion.span>
-      ) : null}
+        </span>
+      ) : <span className="size-8 shrink-0" aria-hidden="true" />}
 
       <Button
         type="button"

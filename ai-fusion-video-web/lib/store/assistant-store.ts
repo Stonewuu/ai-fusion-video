@@ -9,6 +9,10 @@ import {
 } from "@/lib/api/ai-assistant";
 import { cancelPipeline, type AiChatReq } from "@/lib/api/ai-pipeline";
 import {
+  cancelCallingTimelineTools,
+  restoreOptimisticallyCancelledTimelineTools,
+} from "@/lib/store/pipeline-timeline";
+import {
   clampDockWidth,
   clampLauncherPosition,
   clampRect,
@@ -109,7 +113,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       const drafts = persisted.drafts ?? {};
       const restoredMode = persisted.mode ?? "collapsed";
       const initialMode = typeof window !== "undefined"
-        && window.innerWidth < 720
+        && window.innerWidth < 650
         && restoredMode !== "collapsed"
         ? "maximized"
         : restoredMode;
@@ -148,7 +152,6 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
                 drafts,
                 persisted.runIds ?? {},
                 persisted.lastSequences ?? {},
-                persisted.scrollPositions ?? {},
               );
             }
             const selected = state.selectedConversationId && conversationStates[state.selectedConversationId]
@@ -235,7 +238,6 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
                     persisted.drafts ?? {},
                     persisted.runIds ?? {},
                     persisted.lastSequences ?? {},
-                    persisted.scrollPositions ?? {},
                   );
             }
             return {
@@ -276,6 +278,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         };
       });
       persist();
+      connectionCoordinator.scheduleStatusPolling();
       if (conversationId && get().mode !== "collapsed") {
         void get().loadMessagesIfNeeded(conversationId);
         connectionCoordinator.ensureConnection();
@@ -323,7 +326,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
           status: "completed",
         };
         const runtime = {
-          ...makeRuntime(conversation, {}, {}, {}, {}),
+          ...makeRuntime(conversation, {}, {}, {}),
           // The optimistic conversation has no server history yet. Treat its
           // empty local transcript as loaded so connection recovery cannot
           // race the create request with a history lookup that must 404.
@@ -407,13 +410,27 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       const state = get();
       const conversationId = state.selectedConversationId;
       const runtime = conversationId ? state.conversationStates[conversationId] : undefined;
-      const runId = state.connection?.runId || runtime?.pipeline.runId || runtime?.knownRunId;
-      if (!conversationId) return;
-      await cancelPipeline(runId ? { runId } : { conversationId });
+      const connectionRunId = state.connection?.conversationId === conversationId
+        ? state.connection.runId
+        : undefined;
+      const runId = connectionRunId || runtime?.pipeline.runId || runtime?.knownRunId;
+      if (!conversationId || !runtime || runtime.status === "CANCEL_REQUESTED") return;
+      const previousStatus = runtime.status;
+      const previousConversationStatus = runtime.conversation.status;
+      const previousPipelineStatus = runtime.pipeline.status;
+      const previousTimeline = runtime.pipeline.timeline;
+      const previousListStatus = state.conversations.find(
+        (item) => item.conversationId === conversationId,
+      )?.status;
       updateRuntime(conversationId, (current) => ({
         ...current,
         status: "CANCEL_REQUESTED",
         connectionError: undefined,
+        pipeline: {
+          ...current.pipeline,
+          status: "cancelling",
+          timeline: cancelCallingTimelineTools(current.pipeline.timeline),
+        },
         conversation: { ...current.conversation, status: "CANCEL_REQUESTED" },
       }));
       set((current) => ({
@@ -421,7 +438,38 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
           ? { ...item, status: "CANCEL_REQUESTED" }
           : item),
       }));
-      connectionCoordinator.scheduleStatusPolling();
+      try {
+        await cancelPipeline(runId ? { runId } : { conversationId });
+        connectionCoordinator.scheduleStatusPolling();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        updateRuntime(conversationId, (current) => current.status === "CANCEL_REQUESTED"
+          ? {
+              ...current,
+              status: previousStatus,
+              connectionError: `取消请求失败：${message}`,
+              pipeline: {
+                ...current.pipeline,
+                status: previousPipelineStatus,
+                timeline: restoreOptimisticallyCancelledTimelineTools(
+                  current.pipeline.timeline,
+                  previousTimeline,
+                ),
+              },
+              conversation: {
+                ...current.conversation,
+                status: previousConversationStatus,
+              },
+            }
+          : current);
+        set((current) => ({
+          conversations: current.conversations.map((item) =>
+            item.conversationId === conversationId && item.status === "CANCEL_REQUESTED"
+              ? { ...item, status: previousListStatus ?? previousStatus }
+              : item),
+        }));
+        throw error;
+      }
     },
 
     markConversationRead: (conversationId) => updateRuntime(
@@ -490,7 +538,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
 
     openAssistant: (canDock = true) => {
       const state = get();
-      const mobileViewport = typeof window !== "undefined" && window.innerWidth < 720;
+      const mobileViewport = typeof window !== "undefined" && window.innerWidth < 650;
       const desired = mobileViewport
         ? "maximized"
         : state.lastOpenMode === "maximized"
@@ -540,11 +588,6 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         return changed ? { launcherPosition, normalRect, dockWidth } : state;
       });
       if (changed) persist();
-    },
-
-    setScrollTop: (conversationId, scrollTop) => {
-      updateRuntime(conversationId, (runtime) => ({ ...runtime, scrollTop: Math.max(0, scrollTop) }));
-      persist();
     },
 
     loadMessagesIfNeeded: async (conversationId) => {

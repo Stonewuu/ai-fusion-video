@@ -1,39 +1,52 @@
 "use client";
 
-import { useRef, type PointerEvent as ReactPointerEvent } from "react";
-import { motion, useReducedMotion } from "framer-motion";
-import { Bot, Loader2 } from "lucide-react";
+import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { Bot } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  ASSISTANT_LAUNCHER_SIZE,
+  clampLauncherPosition,
+  type AssistantPoint,
+} from "./geometry";
 import { useAssistantStore } from "@/lib/store/assistant-store";
 
 interface AssistantLauncherProps {
-  canDock: boolean;
+  collapsed: boolean;
+  onOpen: () => void;
+  onPositionPaint: (position: AssistantPoint) => void;
 }
 
-export function AssistantLauncher({ canDock }: AssistantLauncherProps) {
-  const reducedMotion = useReducedMotion();
+export function AssistantLauncher({
+  collapsed,
+  onOpen,
+  onPositionPaint,
+}: AssistantLauncherProps) {
   const position = useAssistantStore((state) => state.launcherPosition);
-  const openAssistant = useAssistantStore((state) => state.openAssistant);
-  const hasRunning = useAssistantStore((state) =>
-    Object.values(state.conversationStates).some((runtime) =>
-      runtime.status === "running"
-        || runtime.status === "pending"
-        || runtime.status === "RUNNING"
-        || runtime.status === "WAITING_CONFIRMATION"
-        || runtime.status === "WAITING_EXTERNAL"
-        || runtime.status === "CANCEL_REQUESTED",
-    ),
-  );
-  const hasUnread = useAssistantStore((state) =>
-    Object.values(state.conversationStates).some((runtime) => runtime.unread),
-  );
   const updatePosition = useAssistantStore((state) => state.updateLauncherPosition);
   const pointerRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   const livePositionRef = useRef(position);
+  const dragFrameRef = useRef<number | null>(null);
   const draggedRef = useRef(false);
 
+  const paintPosition = useCallback((nextPosition: typeof position) => {
+    onPositionPaint(nextPosition);
+  }, [onPositionPaint]);
+
+  const schedulePaint = useCallback(() => {
+    if (dragFrameRef.current !== null) return;
+    dragFrameRef.current = requestAnimationFrame(() => {
+      dragFrameRef.current = null;
+      paintPosition(livePositionRef.current);
+    });
+  }, [paintPosition]);
+
+  useEffect(() => () => {
+    if (dragFrameRef.current !== null) cancelAnimationFrame(dragFrameRef.current);
+  }, []);
+
   const handlePointerDown = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!collapsed) return;
     livePositionRef.current = position;
     pointerRef.current = {
       x: event.clientX,
@@ -46,19 +59,31 @@ export function AssistantLauncher({ canDock }: AssistantLauncherProps) {
   };
 
   const handlePointerMove = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!collapsed) return;
     const pointer = pointerRef.current;
     if (!pointer) return;
     const deltaX = event.clientX - pointer.x;
     const deltaY = event.clientY - pointer.y;
-    if (!draggedRef.current && Math.hypot(deltaX, deltaY) > 4) draggedRef.current = true;
+    if (!draggedRef.current && Math.hypot(deltaX, deltaY) > 4) {
+      draggedRef.current = true;
+    }
     if (draggedRef.current) {
-      livePositionRef.current = { x: pointer.originX + deltaX, y: pointer.originY + deltaY };
-      updatePosition(livePositionRef.current);
+      livePositionRef.current = clampLauncherPosition({
+        x: pointer.originX + deltaX,
+        y: pointer.originY + deltaY,
+      });
+      schedulePaint();
     }
   };
 
   const finishPointer = (event: ReactPointerEvent<HTMLButtonElement>) => {
+    if (!collapsed) return;
     if (pointerRef.current) {
+      if (dragFrameRef.current !== null) {
+        cancelAnimationFrame(dragFrameRef.current);
+        dragFrameRef.current = null;
+      }
+      paintPosition(livePositionRef.current);
       updatePosition(livePositionRef.current, true);
     }
     pointerRef.current = null;
@@ -70,15 +95,24 @@ export function AssistantLauncher({ canDock }: AssistantLauncherProps) {
   };
 
   return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
+    <div
+      aria-hidden={!collapsed}
+      className="absolute left-0 top-0 z-20"
+      style={{
+        width: ASSISTANT_LAUNCHER_SIZE,
+        height: ASSISTANT_LAUNCHER_SIZE,
+        pointerEvents: collapsed ? "auto" : "none",
+      }}
+    >
+      <Tooltip>
+        <TooltipTrigger
+          render={
           <Button
             type="button"
-            variant="ai"
+            variant="ghost"
             size="icon-lg"
             aria-label="打开融光助手"
-            title="打开融光助手"
+            tabIndex={collapsed ? 0 : -1}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={finishPointer}
@@ -90,37 +124,19 @@ export function AssistantLauncher({ canDock }: AssistantLauncherProps) {
                 draggedRef.current = false;
                 return;
               }
-              openAssistant(canDock);
+              if (collapsed) onOpen();
             }}
-            style={{
-              left: position.x,
-              top: position.y,
-              position: "fixed",
-              zIndex: 70,
-              touchAction: "none",
-            }}
-            className="relative"
+            style={{ touchAction: "none" }}
+            className="relative size-full rounded-full text-primary"
           >
-            <motion.span
-              layoutId="fusion-assistant-icon"
-              transition={{ duration: reducedMotion ? 0.01 : 0.5, ease: [0.65, 0, 0.35, 1] }}
-              className="flex items-center justify-center"
-            >
-              {hasRunning ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : <Bot />}
-            </motion.span>
-            {hasUnread ? (
-              <span
-                aria-label="有未读回复"
-                className="absolute right-1 top-1 size-2.5 rounded-full bg-primary ring-2 ring-background"
-              />
-            ) : null}
-            {hasRunning ? (
-              <span className="absolute -inset-1 -z-10 rounded-2xl border border-primary/20 motion-safe:animate-pulse" />
-            ) : null}
+            <span className="flex items-center justify-center">
+              <Bot className="size-7" />
+            </span>
           </Button>
-        }
-      />
-      <TooltipContent>融光助手</TooltipContent>
-    </Tooltip>
+          }
+        />
+        <TooltipContent>融光助手</TooltipContent>
+      </Tooltip>
+    </div>
   );
 }

@@ -33,15 +33,18 @@ function SubTimelineToolItem({
         "rounded-lg border text-xs px-3 py-2 flex items-center gap-2",
         child.status === "calling" && "border-blue-500/20 bg-blue-500/5",
         child.status === "done" && "border-green-500/20 bg-green-500/5",
-        child.status === "error" && "border-destructive/20 bg-destructive/5"
+        child.status === "error" && "border-destructive/20 bg-destructive/5",
+        child.status === "cancelled" && "border-border/30 bg-muted/30"
       )}
     >
       {child.status === "calling" ? (
         <Loader2 className="h-3 w-3 animate-spin text-blue-400 shrink-0" />
       ) : child.status === "done" ? (
         <CheckCircle2 className="h-3 w-3 text-green-400 shrink-0" />
-      ) : (
+      ) : child.status === "error" ? (
         <XCircle className="h-3 w-3 text-destructive shrink-0" />
+      ) : (
+        <Ban className="h-3 w-3 text-muted-foreground shrink-0" />
       )}
       {isSubAgentTool(child.name) ? (
         <Bot className="h-3 w-3 text-purple-400 shrink-0" />
@@ -50,7 +53,13 @@ function SubTimelineToolItem({
       )}
       <span className="font-medium">{getToolDisplayName(child.name)}</span>
       <span className="ml-auto text-muted-foreground/60">
-        {child.status === "calling" ? "执行中..." : child.status === "done" ? "✓" : "✗"}
+        {child.status === "calling"
+          ? "执行中..."
+          : child.status === "done"
+            ? "已完成"
+            : child.status === "error"
+              ? "失败"
+              : "已取消"}
       </span>
     </div>
   );
@@ -66,7 +75,7 @@ function ToolTimelineItem({
   onToggle: () => void;
 }) {
   const hasResult =
-    (item.status === "done" || item.status === "error") && item.result;
+    item.status !== "calling" && item.result;
   const hasChildren = !!item.children?.length;
   const canExpand = hasResult || hasChildren;
 
@@ -78,7 +87,8 @@ function ToolTimelineItem({
         "rounded-xl text-sm border overflow-hidden",
         item.status === "calling" && "border-blue-500/20 bg-blue-500/5",
         item.status === "done" && "border-green-500/20 bg-green-500/5",
-        item.status === "error" && "border-destructive/20 bg-destructive/5"
+        item.status === "error" && "border-destructive/20 bg-destructive/5",
+        item.status === "cancelled" && "border-border/30 bg-muted/30"
       )}
     >
       <div
@@ -92,8 +102,10 @@ function ToolTimelineItem({
           <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400 shrink-0" />
         ) : item.status === "done" ? (
           <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0" />
-        ) : (
+        ) : item.status === "error" ? (
           <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
+        ) : (
+          <Ban className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
         )}
         {item.agentName || isSubAgentTool(item.name) ? (
           <Bot className="h-3.5 w-3.5 text-purple-400 shrink-0" />
@@ -126,6 +138,17 @@ function ToolTimelineItem({
               ))}
           </span>
         )}
+        {item.status === "cancelled" && (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground ml-auto">
+            已取消
+            {canExpand &&
+              (isExpanded ? (
+                <ChevronDown className="h-3 w-3" />
+              ) : (
+                <ChevronRight className="h-3 w-3" />
+              ))}
+          </span>
+        )}
       </div>
 
       <AnimatePresence>
@@ -142,7 +165,9 @@ function ToolTimelineItem({
                 "border-t px-4 py-3 space-y-2",
                 item.status === "error"
                   ? "border-destructive/10"
-                  : "border-green-500/10"
+                  : item.status === "done"
+                    ? "border-green-500/10"
+                    : "border-border/20"
               )}
             >
               {item.children && item.children.length > 0 && (
@@ -151,8 +176,10 @@ function ToolTimelineItem({
                     const childCount = item.children?.length ?? 0;
                     if (child.type === "reasoning") {
                       const childIsStreaming =
-                        item.status === "calling" && childIndex === childCount - 1;
-                      const childTitle = child.durationMs
+                        item.status === "calling" &&
+                        childIndex === childCount - 1 &&
+                        child.durationMs === undefined;
+                      const childTitle = child.durationMs !== undefined
                         ? `子Agent 思考 (${(child.durationMs / 1000).toFixed(1)}s)`
                         : childIsStreaming
                           ? "子Agent 思考中"
@@ -225,9 +252,13 @@ export function AgentPipelineTimeline({
     <div ref={scrollRef} className="space-y-2 max-h-[60vh] overflow-y-auto">
       {timeline.map((item, index) => {
         if (item.type === "reasoning") {
-          const title = item.durationMs
+          const reasoningStreaming =
+            isActive &&
+            index === timeline.length - 1 &&
+            item.durationMs === undefined;
+          const title = item.durationMs !== undefined
             ? `思考 (${(item.durationMs / 1000).toFixed(1)}s)`
-            : isActive && index === timeline.length - 1
+            : reasoningStreaming
               ? "思考中"
               : "思考";
           return (
@@ -239,7 +270,7 @@ export function AgentPipelineTimeline({
               <StreamThink
                 title={title}
                 content={item.text}
-                streaming={isActive && index === timeline.length - 1}
+                streaming={reasoningStreaming}
               />
             </motion.div>
           );

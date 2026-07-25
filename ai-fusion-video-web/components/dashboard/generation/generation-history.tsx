@@ -17,6 +17,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
+import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import type {
   GenerationHistoryEntry,
   GenerationResultItem,
@@ -211,6 +212,7 @@ export function GenerationHistory({
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted-foreground">
                   {statusBadge}
                   <span aria-hidden="true">·</span>
+                  <ModelVendorIcon source={model} className="size-3.5" />
                   <span className="font-medium text-foreground/75">
                     {modelDisplay.name}
                   </span>

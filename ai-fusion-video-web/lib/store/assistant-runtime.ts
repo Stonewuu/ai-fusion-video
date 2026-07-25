@@ -8,6 +8,7 @@ import {
 } from "@/components/dashboard/agent-pipeline/state";
 import type { AgentPipelineState } from "@/components/dashboard/agent-pipeline/types";
 import type { TimelineItem } from "@/lib/store/pipeline-store";
+import { cancelCallingTimelineTools } from "@/lib/store/pipeline-timeline";
 import type { AssistantConversationRuntime } from "./assistant-types";
 
 export function statusIsRunning(status: string | undefined) {
@@ -24,6 +25,7 @@ export function statusFromPipeline(status: PipelineRunStatus | string): string {
     case "COMPLETED": return "completed";
     case "FAILED": return "failed";
     case "CANCELLED": return "cancelled";
+    case "CANCEL_REQUESTED": return "CANCEL_REQUESTED";
     case "ERROR": return "failed";
     default: return "running";
   }
@@ -43,7 +45,6 @@ export function makeRuntime(
   drafts: Record<string, string>,
   runIds: Record<string, string>,
   lastSequences: Record<string, number>,
-  scrollPositions: Record<string, number>,
 ): AssistantConversationRuntime {
   const conversationId = conversation.conversationId;
   const knownRunId = runIds[conversationId];
@@ -68,7 +69,6 @@ export function makeRuntime(
     messagesLoaded: false,
     messagesLoading: false,
     unread: false,
-    scrollTop: Math.max(0, Number.isFinite(scrollPositions[conversationId]) ? scrollPositions[conversationId] : 0),
   };
 }
 
@@ -107,7 +107,10 @@ export function reduceAssistantEvent(
   pipeline: AgentPipelineState,
   event: AiChatStreamEvent,
 ) {
-  return reducePipelineEvent(pipeline, event);
+  const next = reducePipelineEvent(pipeline, event);
+  return pipeline.status === "cancelling" && next.status === "cancelling"
+    ? { ...next, timeline: cancelCallingTimelineTools(next.timeline) }
+    : next;
 }
 
 export function pendingPipelineForNextRun(

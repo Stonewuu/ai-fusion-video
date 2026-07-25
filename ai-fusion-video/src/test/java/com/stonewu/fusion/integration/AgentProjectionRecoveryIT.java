@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
+import com.stonewu.fusion.enums.ai.AgentRuntimeErrorCode;
 import com.stonewu.fusion.enums.ai.AgentTerminalOutputType;
 import com.stonewu.fusion.mapper.ai.AgentMessageMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
@@ -45,6 +46,7 @@ import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.groups.Tuple.tuple;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers(disabledWithoutDocker = false)
@@ -213,6 +215,37 @@ class AgentProjectionRecoveryIT {
     }
 
     @Test
+    void cancellationMarksOnlyToolsWithoutAResultAsCancelled() {
+        StartedAgentRun run = startRoot("projection-cancel-tools");
+        append(run, "TOOL_CALL_END", "TOOL_CALL", "finished-tool",
+                objectPayload("toolCallName", "finished_tool"));
+        append(run, "TOOL_RESULT_END", "TOOL_FINISHED", "finished-tool",
+                objectPayload("toolCallName", "finished_tool").put("state", "SUCCESS"));
+        append(run, "TOOL_CALL_END", "TOOL_CALL", "unfinished-tool",
+                objectPayload("toolCallName", "unfinished_tool"));
+        assertThat(await(terminalCoordinator.terminateOwned(
+                cancelledTerminal(run),
+                run.ownerInstanceId(),
+                run.ownerEpoch())))
+                .isPresent();
+        long terminalSequence = requireRun(run.runId()).getTerminalSequence();
+
+        await(projectionService.projectThrough(run.runId(), terminalSequence));
+        await(projectionService.projectThrough(run.runId(), terminalSequence));
+
+        assertThat(projectedMessages(run.runId()))
+                .extracting(
+                        AgentMessage::getToolCallId,
+                        AgentMessage::getToolStatus)
+                .containsExactly(
+                        tuple("finished-tool", "running"),
+                        tuple("finished-tool", "success"),
+                        tuple("unfinished-tool", "cancelled"));
+        assertThat(conversationService.getByConversationId(run.conversationId()).getStatus())
+                .isEqualTo("cancelled");
+    }
+
+    @Test
     void mirroredChildEventsAdvanceTheParentCursorWithoutDuplicatingHistory() {
         StartedAgentRun run = startRoot("projection-mirrored-child");
         append(run, "TOOL_CALL_END", "TOOL_CALL", "child-inner-tool",
@@ -319,6 +352,33 @@ class AgentProjectionRecoveryIT {
                         null,
                         null,
                         "DONE",
+                        payload,
+                        Instant.now()));
+    }
+
+    private RunTerminalRequest cancelledTerminal(StartedAgentRun run) {
+        ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("outputType", "CANCELLED")
+                .put("finished", true)
+                .put("errorCode", AgentRuntimeErrorCode.RUN_CANCELLED.name());
+        return new RunTerminalRequest(
+                run.runId(),
+                new StateStoreSlot("42", run.agentStateSessionId()),
+                Set.of(AgentRunStatus.RUNNING),
+                AgentRunStatus.CANCELLED,
+                AgentTerminalOutputType.CANCELLED,
+                AgentRuntimeErrorCode.RUN_CANCELLED,
+                "用户已取消",
+                new AgentEventEnvelope(
+                        uniqueId("projection-terminal"),
+                        "REQUEST_STOP",
+                        "assistant",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "CANCELLED",
                         payload,
                         Instant.now()));
     }

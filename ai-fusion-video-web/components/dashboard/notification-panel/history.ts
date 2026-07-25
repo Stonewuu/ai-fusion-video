@@ -6,6 +6,7 @@ import type {
   SubTimelineItem,
   TimelineItem,
 } from "@/lib/store/pipeline-store";
+import { persistedToolTimelineStatus } from "@/lib/store/pipeline-timeline";
 import { isSubAgentTool } from "./constants";
 
 function pushReasoningToTimeline(
@@ -199,8 +200,7 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
             (child) => child.type === "tool" && child.id === toolCallId
           );
           if (existingChild && existingChild.type === "tool") {
-            existingChild.status =
-              msg.toolStatus === "error" ? "error" : "done";
+            existingChild.status = persistedToolTimelineStatus(msg.toolStatus);
             existingChild.result = normalizeToolResult(
               msg.toolName,
               msg.content
@@ -213,7 +213,7 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
             id: toolCallId,
             name: msg.toolName || "tool",
             arguments: "",
-            status: msg.toolStatus === "error" ? "error" : "done",
+            status: persistedToolTimelineStatus(msg.toolStatus),
             result: normalizeToolResult(msg.toolName, msg.content),
           });
         });
@@ -237,8 +237,7 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
       if (existingIdx !== undefined) {
         const existingItem = timeline[existingIdx];
         if (existingItem.type === "tool") {
-          existingItem.status =
-            msg.toolStatus === "error" ? "error" : "done";
+          existingItem.status = persistedToolTimelineStatus(msg.toolStatus);
           existingItem.result = normalizeToolResult(msg.toolName, msg.content);
         }
         continue;
@@ -250,7 +249,7 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
         id: toolCallId,
         name: msg.toolName || "tool",
         arguments: "",
-        status: msg.toolStatus === "error" ? "error" : "done",
+        status: persistedToolTimelineStatus(msg.toolStatus),
         result: normalizeToolResult(msg.toolName, msg.content),
       });
       registerTool(toolCallId, idx);

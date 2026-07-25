@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { AssistantComposer } from "./composer";
 import { ConversationNavigation, AssistantEmptyState } from "./conversation-navigation";
 import { AssistantMessageList } from "./message-list";
@@ -17,10 +17,12 @@ interface AssistantWindowProps {
   mode: AssistantMode;
   canDock: boolean;
   mobileViewport: boolean;
+  showLeadingIcon: boolean;
   projectId?: number | null;
   onToggleDock: () => void;
   onToggleMaximize: () => void;
   onClose: () => void;
+  onRectPaint: (rect: AssistantRect) => void;
   onDockResizeStart?: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }
 
@@ -43,10 +45,12 @@ export function AssistantWindow({
   mode,
   canDock,
   mobileViewport,
+  showLeadingIcon,
   projectId,
   onToggleDock,
   onToggleMaximize,
   onClose,
+  onRectPaint,
   onDockResizeStart,
 }: AssistantWindowProps) {
   const selectedConversationId = useAssistantStore((state) => state.selectedConversationId);
@@ -57,8 +61,22 @@ export function AssistantWindow({
   const shellRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerX: number; pointerY: number; rect: AssistantRect } | null>(null);
   const resizeRef = useRef<{ direction: ResizeDirection; pointerX: number; pointerY: number; rect: AssistantRect } | null>(null);
+  const liveRectRef = useRef<AssistantRect | null>(null);
+  const interactionFrameRef = useRef<number | null>(null);
   const [inputHeight, setInputHeight] = useState(0);
   const [interactionActive, setInteractionActive] = useState(false);
+
+  const paintRect = useCallback((rect: AssistantRect) => {
+    onRectPaint(rect);
+  }, [onRectPaint]);
+
+  const scheduleRectPaint = useCallback(() => {
+    if (interactionFrameRef.current !== null) return;
+    interactionFrameRef.current = requestAnimationFrame(() => {
+      interactionFrameRef.current = null;
+      if (liveRectRef.current) paintRect(liveRectRef.current);
+    });
+  }, [paintRect]);
 
   useEffect(() => {
     document.body.style.userSelect = interactionActive ? "none" : "";
@@ -74,7 +92,7 @@ export function AssistantWindow({
     if (!shell) return;
     const observer = new ResizeObserver((entries) => {
       const width = entries[0]?.contentRect.width ?? 0;
-      if (width >= 880) setDrawerOpen(false);
+      if (width >= 650) setDrawerOpen(false);
     });
     observer.observe(shell);
     return () => observer.disconnect();
@@ -84,28 +102,37 @@ export function AssistantWindow({
     const onPointerMove = (event: PointerEvent) => {
       const drag = dragRef.current;
       if (drag) {
-        updateNormalRect(clampRect({
+        liveRectRef.current = clampRect({
           ...drag.rect,
           x: drag.rect.x + event.clientX - drag.pointerX,
           y: drag.rect.y + event.clientY - drag.pointerY,
-        }));
+        });
+        scheduleRectPaint();
       }
       const resize = resizeRef.current;
       if (resize) {
-        updateNormalRect(resizeRect(
+        liveRectRef.current = resizeRect(
           resize.rect,
           resize.direction,
           event.clientX - resize.pointerX,
           event.clientY - resize.pointerY,
-        ));
+        );
+        scheduleRectPaint();
       }
     };
     const onPointerUp = () => {
       if (dragRef.current || resizeRef.current) {
-        updateNormalRect(useAssistantStore.getState().normalRect, true);
+        if (interactionFrameRef.current !== null) {
+          cancelAnimationFrame(interactionFrameRef.current);
+          interactionFrameRef.current = null;
+        }
+        const nextRect = liveRectRef.current ?? useAssistantStore.getState().normalRect;
+        paintRect(nextRect);
+        updateNormalRect(nextRect, true);
       }
       dragRef.current = null;
       resizeRef.current = null;
+      liveRectRef.current = null;
       setInteractionActive(false);
     };
     window.addEventListener("pointermove", onPointerMove);
@@ -115,8 +142,12 @@ export function AssistantWindow({
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerUp);
+      if (interactionFrameRef.current !== null) {
+        cancelAnimationFrame(interactionFrameRef.current);
+        interactionFrameRef.current = null;
+      }
     };
-  }, [updateNormalRect]);
+  }, [paintRect, scheduleRectPaint, updateNormalRect]);
 
   const startDrag = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (mode === "docked" || isInteractiveTarget(event.target)) return;
@@ -128,6 +159,7 @@ export function AssistantWindow({
       pointerY: event.clientY,
       rect: useAssistantStore.getState().normalRect,
     };
+    liveRectRef.current = dragRef.current.rect;
     setInteractionActive(true);
   };
 
@@ -140,6 +172,7 @@ export function AssistantWindow({
       pointerY: event.clientY,
       rect: useAssistantStore.getState().normalRect,
     };
+    liveRectRef.current = resizeRef.current.rect;
     setInteractionActive(true);
   };
 
@@ -149,7 +182,7 @@ export function AssistantWindow({
         mode={mode}
         canDock={canDock}
         mobileViewport={mobileViewport}
-        directManipulationActive={interactionActive}
+        showLeadingIcon={showLeadingIcon}
         onToggleDock={onToggleDock}
         onToggleMaximize={onToggleMaximize}
         onClose={onClose}
@@ -161,7 +194,13 @@ export function AssistantWindow({
         <section className="relative flex min-w-0 flex-1 flex-col bg-background/20">
           {mode !== "collapsed"
             ? selectedConversationId
-              ? <AssistantMessageList key={selectedConversationId} conversationId={selectedConversationId} inputHeight={inputHeight} />
+              ? (
+                  <AssistantMessageList
+                    key={selectedConversationId}
+                    conversationId={selectedConversationId}
+                    inputHeight={inputHeight}
+                  />
+                )
               : <AssistantEmptyState />
             : null}
           {mode !== "collapsed" ? (
@@ -180,7 +219,7 @@ export function AssistantWindow({
           role="separator"
           aria-label="调整助手宽度"
           tabIndex={0}
-          className="absolute inset-y-0 left-0 z-20 w-1 -translate-x-1/2 touch-none cursor-ew-resize bg-border/40 transition-colors hover:bg-primary/60 focus-visible:bg-primary/60"
+          className="absolute inset-y-0 left-0 z-50 w-1 touch-none cursor-ew-resize bg-border/40 transition-colors hover:bg-primary/60 focus-visible:bg-primary/60"
           data-assistant-interactive="true"
           onPointerDown={onDockResizeStart}
         />

@@ -325,7 +325,7 @@ public class AgentMessageProjectionService {
         boolean complete = run.getTerminalSequence() != null
                 && projectedThrough >= run.getTerminalSequence();
         if (complete) {
-            finishRootConversation(run, databaseNow);
+            finishTerminalProjection(run, databaseNow);
         }
         int updated = runMapper.update(null, new LambdaUpdateWrapper<AgentRun>()
                 .eq(AgentRun::getId, run.getId())
@@ -347,7 +347,7 @@ public class AgentMessageProjectionService {
             return;
         }
         LocalDateTime databaseNow = runMapper.selectDatabaseNow();
-        finishRootConversation(run, databaseNow);
+        finishTerminalProjection(run, databaseNow);
         if (run.getProjectionCompletedAt() != null) {
             return;
         }
@@ -361,17 +361,21 @@ public class AgentMessageProjectionService {
         }
     }
 
-    private void finishRootConversation(AgentRun run, LocalDateTime databaseNow) {
+    private void finishTerminalProjection(AgentRun run, LocalDateTime databaseNow) {
+        String terminalOutputType = requireText(
+                run.getTerminalOutputType(), "terminalOutputType");
+        if ("CANCELLED".equals(terminalOutputType)) {
+            messageMapper.cancelUnfinishedTools(run.getRunId(), databaseNow);
+        }
         if (run.getParentRunId() != null) {
             return;
         }
-        String status = switch (requireText(
-                run.getTerminalOutputType(), "terminalOutputType")) {
+        String status = switch (terminalOutputType) {
             case "DONE" -> "completed";
             case "ERROR" -> "error";
             case "CANCELLED" -> "cancelled";
             default -> throw new IllegalStateException(
-                    "Unsupported Agent terminal output type: "
+                            "Unsupported Agent terminal output type: "
                             + run.getTerminalOutputType());
         };
         if (conversationMapper.update(null,

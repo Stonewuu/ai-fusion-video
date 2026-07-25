@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { SlidersHorizontal } from "lucide-react";
 import type { ModelPreset } from "@/lib/api/ai-model";
+import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -37,6 +39,7 @@ export function CapabilityPresetSelect({
   onApplyPreset: (preset: ModelPreset) => void;
 }) {
   const [pendingPreset, setPendingPreset] = useState<ModelPreset | null>(null);
+  const selectedPreset = presets.find((preset) => preset.code === selectedCode) ?? null;
   const options = [
     { value: CUSTOM_CAPABILITY_PRESET_VALUE, label: "自定义" },
     ...presets.map(preset => ({ value: preset.code, label: preset.name })),
@@ -74,15 +77,22 @@ export function CapabilityPresetSelect({
           items={options}
         >
           <SelectTrigger className="w-full text-sm">
+            {selectedPreset ? (
+              <ModelVendorIcon source={selectedPreset} />
+            ) : (
+              <SlidersHorizontal className="size-4 text-muted-foreground" />
+            )}
             <SelectValue placeholder="选择能力预设" />
           </SelectTrigger>
           <SelectContent className="text-sm">
             <SelectGroup>
               <SelectItem value={CUSTOM_CAPABILITY_PRESET_VALUE} className="text-sm">
+                <SlidersHorizontal className="size-4 text-muted-foreground" />
                 自定义
               </SelectItem>
               {presets.map(preset => (
                 <SelectItem key={preset.code} value={preset.code} className="text-sm">
+                  <ModelVendorIcon source={preset} />
                   {preset.name}
                 </SelectItem>
               ))}

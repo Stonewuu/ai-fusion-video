@@ -8,11 +8,14 @@ import {
   type RefObject,
 } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Send, Settings2, Square, Sparkles } from "lucide-react";
+import { Loader2, Send, Settings2, Square } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { aiModelApi, type AiModel } from "@/lib/api/ai-model";
+import { getModelDisplayParts } from "@/lib/model-display";
 import { useAssistantStore } from "@/lib/store/assistant-store";
 
 interface AssistantComposerProps {
@@ -54,9 +57,12 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
   const [composing, setComposing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const localInputRef = useRef<HTMLTextAreaElement>(null);
+  const cancelling = runtimeStatus === "CANCEL_REQUESTED";
   const running = !!runtimeStatus && ["running", "pending", "RUNNING", "WAITING_CONFIRMATION", "WAITING_EXTERNAL", "CANCEL_REQUESTED"].includes(runtimeStatus);
   const currentConnection = connectionConversationId === selectedConversationId;
   const effectiveProjectId = selectedConversationId ? conversationProjectId : projectId;
+  const selectedModel = models.find((model) => model.id === selectedModelId) ?? null;
+  const sendDisabled = !text.trim() || !selectedModelId || !models.length || submitting;
 
   useEffect(() => {
     if (!active || modelsLoaded || modelsLoading) return;
@@ -95,13 +101,6 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
     return undefined;
   }, [active, inputRef]);
 
-  useLayoutEffect(() => {
-    const element = inputRef?.current ?? localInputRef.current;
-    if (!element) return;
-    element.style.height = "0px";
-    element.style.height = `${Math.min(Math.max(element.scrollHeight, 40), 160)}px`;
-  }, [text, inputRef]);
-
   const updateText = (value: string) => setDraft(selectedConversationId, value);
 
   const submit = async () => {
@@ -136,22 +135,22 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
             if (inputRef) inputRef.current = element;
           }}
           value={text}
-          rows={1}
+          rows={3}
           placeholder={models.length ? "发挥想象…" : "请先配置一个对话模型"}
           disabled={!models.length || modelsLoading || submitting || running}
           data-assistant-interactive="true"
-          className="min-h-10 max-h-40 border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0"
+          className="min-h-20 max-h-40 border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0"
           onChange={(event) => updateText(event.target.value)}
           onCompositionStart={() => setComposing(true)}
           onCompositionEnd={() => setComposing(false)}
           onKeyDown={(event) => {
-            if (event.key !== "Enter" || event.shiftKey || composing) return;
+            if (event.key !== "Enter" || !event.ctrlKey || composing) return;
             event.preventDefault();
             void submit();
           }}
         />
 
-        <div className="flex items-center justify-between gap-2 px-1 pt-1">
+        <div className="flex flex-wrap items-center gap-2 px-1 pt-1">
           <div className="flex min-w-0 items-center gap-2">
             {modelsLoading ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none text-muted-foreground" /> : null}
             {models.length ? (
@@ -161,18 +160,40 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
                 onValueChange={(value) => setSelectedModelId(value ? Number(value) : null)}
               >
                 <SelectTrigger
-                  size="sm"
                   data-assistant-interactive="true"
-                  className="max-w-44 border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-0"
+                  className="max-w-56 border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-0"
                   aria-label="选择对话模型"
                 >
-                  <SelectValue placeholder="选择模型" />
+                  <SelectValue className="sr-only" placeholder="选择模型" />
+                  {selectedModel ? (
+                    <>
+                      <ModelVendorIcon source={selectedModel} className="size-4" />
+                      <span className="min-w-0 flex-1 text-left leading-tight">
+                        <span className="block truncate text-[11px] font-medium">
+                          {getModelDisplayParts(selectedModel).name}
+                        </span>
+                        <span className="block truncate font-mono text-[9px] text-muted-foreground">
+                          {selectedModel.code}
+                        </span>
+                      </span>
+                    </>
+                  ) : null}
                 </SelectTrigger>
-                <SelectContent className="text-xs">
+                <SelectContent className="min-w-64 text-xs">
                   <SelectGroup>
                     {models.map((model) => (
-                      <SelectItem key={model.id} value={String(model.id)} className="text-xs">
-                        {model.name}
+                      <SelectItem key={model.id} value={String(model.id)} className="min-h-11 py-2 text-xs">
+                        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted/70">
+                          <ModelVendorIcon source={model} className="size-4" />
+                        </span>
+                        <span className="min-w-0 flex-1 leading-tight">
+                          <span className="block truncate text-xs font-medium">
+                            {getModelDisplayParts(model).name}
+                          </span>
+                          <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">
+                            {model.code}
+                          </span>
+                        </span>
                       </SelectItem>
                     ))}
                   </SelectGroup>
@@ -186,36 +207,58 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
             {effectiveProjectId ? <span className="max-w-32 truncate rounded-full bg-muted px-2 py-1 text-[10px] text-muted-foreground" title={`当前项目 #${effectiveProjectId}`}>项目上下文</span> : null}
           </div>
 
-          {running || currentConnection ? (
-            <Button
-              type="button"
-              variant="destructive-ghost"
-              size="sm"
-              data-assistant-interactive="true"
-              onClick={() => {
-                setError(null);
-                void stopGeneration().catch((stopError: unknown) => setError(stopError instanceof Error ? stopError.message : "停止失败"));
-              }}
-            >
-              <Square /> 停止生成
-            </Button>
-          ) : (
-            <Button
-              type="button"
-              variant="ai"
-              size="sm"
-              data-assistant-interactive="true"
-              disabled={!text.trim() || !selectedModelId || !models.length || submitting}
-              onClick={() => void submit()}
-            >
-              {submitting ? <Loader2 className="animate-spin" /> : <Send />}
-              发送
-            </Button>
-          )}
-        </div>
-        <div className="mt-1 flex items-center justify-between px-2 text-[10px] text-muted-foreground/60">
-          <span className="flex items-center gap-1"><Sparkles className="size-3" /> Enter 发送 · Shift+Enter 换行</span>
-          {running ? <span>服务端仍在运行，关闭窗口不会取消</span> : null}
+          <div className="ml-auto flex items-center gap-2">
+            {cancelling ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                data-assistant-interactive="true"
+                disabled
+              >
+                <Loader2 className="animate-spin motion-reduce:animate-none" /> 取消中…
+              </Button>
+            ) : running || currentConnection ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                data-assistant-interactive="true"
+                onClick={() => {
+                  setError(null);
+                  void stopGeneration().catch((stopError: unknown) => setError(stopError instanceof Error ? stopError.message : "停止失败"));
+                }}
+              >
+                <Square /> 停止
+              </Button>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger
+                  render={
+                    <span
+                      className="inline-flex"
+                      tabIndex={sendDisabled ? 0 : undefined}
+                      aria-label={sendDisabled ? "发送快捷键" : undefined}
+                      data-assistant-interactive="true"
+                    >
+                      <Button
+                        type="button"
+                        variant="default"
+                        size="sm"
+                        data-assistant-interactive="true"
+                        disabled={sendDisabled}
+                        onClick={() => void submit()}
+                      >
+                        {submitting ? <Loader2 className="animate-spin" /> : <Send />}
+                        发送
+                      </Button>
+                    </span>
+                  }
+                />
+                <TooltipContent>Enter 换行 · Ctrl+Enter 发送</TooltipContent>
+              </Tooltip>
+            )}
+          </div>
         </div>
       </div>
     </div>

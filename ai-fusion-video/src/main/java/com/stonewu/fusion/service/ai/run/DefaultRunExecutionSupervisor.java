@@ -212,7 +212,11 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             boolean parentWrite) {
         return journal.appendOwned(runId, ownerInstanceId, ownerEpoch, event)
                 .flatMap(committed -> committed
-                        .map(Mono::just)
+                        .map(c -> c.publishRequired()
+                                ? signals.publishWakeup(runId, c.sequence())
+                                        .onErrorResume(failure -> Mono.empty())
+                                        .thenReturn(c)
+                                : Mono.just(c))
                         .orElseGet(() -> Mono.error(parentWrite
                                 ? new ParentOwnerLostException(runId)
                                 : new OwnerLostException(runId))));

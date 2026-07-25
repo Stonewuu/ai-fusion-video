@@ -1,6 +1,6 @@
 "use client";
 
-import { memo, useCallback, useEffect, useRef } from "react";
+import { memo, useCallback, useEffect, useRef, useState } from "react";
 import { Think } from "@ant-design/x";
 import { StreamMarkdown } from "@/components/dashboard/stream-markdown";
 
@@ -21,51 +21,54 @@ export const StreamThink = memo(function StreamThink({
   maxHeight = 192,
   className,
 }: StreamThinkProps) {
-  const scrollRef = useRef<HTMLElement | null>(null);
-  const userScrolledUpRef = useRef(false);
+  const rootRef = useRef<HTMLElement | null>(null);
+  const contentRef = useRef<HTMLElement | null>(null);
+  const previousStreamingRef = useRef(streaming);
+  const [expanded, setExpanded] = useState(streaming);
+
+  const findScrollableContent = useCallback(() => {
+    const content = rootRef.current?.querySelector<HTMLElement>(
+      ".stream-think-scroll-content"
+    ) ?? null;
+    contentRef.current = content;
+    return content;
+  }, []);
 
   const setThinkRef = useCallback(
     (instance: { nativeElement?: HTMLElement | null } | null) => {
-      scrollRef.current = instance?.nativeElement ?? null;
+      rootRef.current = instance?.nativeElement ?? null;
+      findScrollableContent();
     },
-    []
+    [findScrollableContent]
   );
 
-  const isNearBottom = useCallback(() => {
-    const el = scrollRef.current;
-    if (!el) return true;
-    return el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-  }, []);
-
   useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
+    const shouldSyncExpanded = streaming || previousStreamingRef.current;
+    previousStreamingRef.current = streaming;
+    if (!shouldSyncExpanded) return;
 
-    const onScroll = () => {
-      userScrolledUpRef.current = !isNearBottom();
-    };
-
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [isNearBottom]);
-
-  useEffect(() => {
-    if (!streaming) {
-      userScrolledUpRef.current = false;
-    }
+    const frameId = requestAnimationFrame(() => setExpanded(streaming));
+    return () => cancelAnimationFrame(frameId);
   }, [streaming]);
 
   useEffect(() => {
-    if (!streaming || userScrolledUpRef.current) return;
+    if (!expanded) return;
+
+    const frameId = requestAnimationFrame(findScrollableContent);
+    return () => cancelAnimationFrame(frameId);
+  }, [expanded, findScrollableContent]);
+
+  useEffect(() => {
+    if (!streaming || !expanded) return;
 
     const frameId = requestAnimationFrame(() => {
-      const el = scrollRef.current;
-      if (!el || userScrolledUpRef.current) return;
+      const el = contentRef.current ?? findScrollableContent();
+      if (!el) return;
       el.scrollTop = el.scrollHeight;
     });
 
     return () => cancelAnimationFrame(frameId);
-  }, [content, streaming]);
+  }, [content, expanded, findScrollableContent, streaming]);
 
   const thinkStyles = {
     status: {
@@ -74,6 +77,8 @@ export const StreamThink = memo(function StreamThink({
     content: {
       color: "var(--foreground)",
       borderInlineStartColor: "var(--border)",
+      maxHeight: Math.max(0, maxHeight - 32),
+      overflowY: "auto" as const,
     },
   };
 
@@ -81,9 +86,12 @@ export const StreamThink = memo(function StreamThink({
     <Think
       ref={setThinkRef}
       className={className}
-      style={{ maxHeight, overflowY: "auto" }}
+      style={{ maxHeight }}
       styles={thinkStyles}
+      classNames={{ content: "stream-think-scroll-content" }}
       title={title}
+      expanded={expanded}
+      onExpand={setExpanded}
     >
       <StreamMarkdown
         content={content}

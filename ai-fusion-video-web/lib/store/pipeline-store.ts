@@ -16,6 +16,20 @@ import {
   reconnectTaskStream,
   getTaskStreamStatus,
 } from "@/lib/api/task-stream";
+import {
+  cancelCallingTimelineTools,
+  finishedToolTimelineStatus,
+  restoreOptimisticallyCancelledTimelineTools,
+  type SubTimelineItem,
+  type TimelineItem,
+  type ToolTimelineStatus,
+} from "@/lib/store/pipeline-timeline";
+
+export type {
+  SubTimelineItem,
+  TimelineItem,
+  ToolTimelineStatus,
+} from "@/lib/store/pipeline-timeline";
 
 // ========== 数据失效映射 ==========
 
@@ -54,36 +68,6 @@ const TOOL_INVALIDATION_MAP: Record<string, InvalidationType> = {
 
 // ========== 类型 ==========
 
-/** 子 Agent 时间线中的元素 */
-export type SubTimelineItem =
-  | {
-      type: "tool";
-      id: string;
-      name: string;
-      arguments: string;
-      status: "calling" | "done" | "error";
-      result?: string;
-    }
-  | { type: "content"; text: string }
-  | { type: "reasoning"; text: string; durationMs?: number };
-
-/** 时间线中的每个元素（与 agent-pipeline.tsx 一致） */
-export type TimelineItem =
-  | {
-      type: "tool";
-      id: string;
-      name: string;
-      arguments: string;
-      status: "calling" | "done" | "error";
-      result?: string;
-      /** 如果此工具是子 Agent 调用，agentName 标识来源 */
-      agentName?: string;
-      /** 子 Agent 的嵌套时间线（推理、内容、工具调用） */
-      children?: SubTimelineItem[];
-    }
-  | { type: "reasoning"; text: string; durationMs?: number }
-  | { type: "content"; text: string };
-
 export interface PipelineState {
   status: "running" | "done" | "error" | "cancelled";
   reasoningText: string;
@@ -100,6 +84,8 @@ export interface PipelineState {
   reconnectOnSelect?: boolean;
   /** 页面列表/轮询得到的后端 run 状态。 */
   runStatus?: PipelineRunStatus;
+  /** 取消请求已提交，等待 durable terminal event。 */
+  cancelRequested?: boolean;
 }
 
 export interface PipelineTask {
@@ -296,7 +282,7 @@ function appendToToolChildren(
 function updateToolStatus(
   timeline: TimelineItem[],
   toolCallId: string,
-  status: "calling" | "done" | "error"
+  status: ToolTimelineStatus
 ): TimelineItem[] {
   return timeline.map((item) =>
     item.type === "tool" && item.id === toolCallId
@@ -581,10 +567,7 @@ function createEventHandler(
 
             case "TOOL_FINISHED":
               if (event.toolCallId) {
-                const toolStatus =
-                  event.toolStatus === "error"
-                    ? ("error" as const)
-                    : ("done" as const);
+                const toolStatus = finishedToolTimelineStatus(event.toolStatus);
 
                 if (isSubAgent) {
                   next.timeline = appendToToolChildren(
@@ -646,6 +629,7 @@ function createEventHandler(
             case "DONE":
               if (!isMainAgentTerminalEvent(event)) break;
               next.status = "done";
+              next.cancelRequested = false;
               if (event.content) {
                 const last = next.timeline[next.timeline.length - 1];
                 if (last && last.type === "content") {
@@ -688,6 +672,7 @@ function createEventHandler(
                 });
               } else {
                 next.status = "error";
+                next.cancelRequested = false;
                 next.error = event.error || "未知错误";
               }
               break;
@@ -695,10 +680,16 @@ function createEventHandler(
             case "CANCELLED":
               if (isMainAgentTerminalEvent(event)) {
                 next.status = "cancelled";
+                next.cancelRequested = false;
+                next.timeline = cancelCallingTimelineTools(next.timeline);
               }
               break;
           }
         } // end for batch
+
+        if (next.cancelRequested) {
+          next.timeline = cancelCallingTimelineTools(next.timeline);
+        }
 
         const newStatus: PipelineTask["status"] =
           next.status === "done"
@@ -802,6 +793,10 @@ function settleTaskIfRunning(
         state: {
           ...t.state,
           status,
+          cancelRequested: false,
+          timeline: status === "cancelled"
+            ? cancelCallingTimelineTools(t.state.timeline)
+            : t.state.timeline,
           ...(status === "error"
             ? { error: options?.error || t.state.error || "任务失败" }
             : {}),
@@ -1061,10 +1056,35 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
 
   cancelPipeline: async (id: string) => {
     const task = get().tasks.find((t) => t.id === id);
+    if (!task || task.status !== "running" || task.state.cancelRequested) return;
+    if (!task.state.runId) {
+      const error = new Error("Pipeline 尚未返回 runId，无法提交取消请求");
+      set((s) => ({
+        tasks: s.tasks.map((item) =>
+          item.id === id
+            ? { ...item, state: { ...item.state, error: `取消请求失败：${error.message}` } }
+            : item
+        ),
+      }));
+      throw error;
+    }
+    const previousTimeline = task.state.timeline;
+    set((s) => ({
+      tasks: s.tasks.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              state: {
+                ...item.state,
+                cancelRequested: true,
+                error: undefined,
+                timeline: cancelCallingTimelineTools(item.state.timeline),
+              },
+            }
+          : item
+      ),
+    }));
     try {
-      if (!task?.state.runId) {
-        throw new Error("Pipeline 尚未返回 runId，无法提交取消请求");
-      }
       await cancelPipeline({ runId: task.state.runId });
       // 保持 SSE 连接，等待服务端持久化并发送 CANCELLED terminal event。
     } catch (error) {
@@ -1074,7 +1094,17 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
           item.id === id
             ? {
                 ...item,
-                state: { ...item.state, error: `取消请求失败：${message}` },
+                state: item.state.cancelRequested
+                  ? {
+                      ...item.state,
+                      cancelRequested: false,
+                      timeline: restoreOptimisticallyCancelledTimelineTools(
+                        item.state.timeline,
+                        previousTimeline,
+                      ),
+                      error: `取消请求失败：${message}`,
+                    }
+                  : item.state,
               }
             : item
         ),
@@ -1260,6 +1290,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
               contentLoading: false,
               reconnectOnSelect: true,
               runStatus: run.status,
+              cancelRequested: run.status === "CANCEL_REQUESTED",
             },
             createdAt: new Date(run.startedAt).getTime(),
             cancellable: true,
@@ -1318,6 +1349,11 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
                             ...candidate.state,
                             runStatus: status.status,
                             status: terminalStatus ?? candidate.state.status,
+                            cancelRequested: status.status === "CANCEL_REQUESTED",
+                            timeline: terminalStatus === "cancelled"
+                              || status.status === "CANCEL_REQUESTED"
+                              ? cancelCallingTimelineTools(candidate.state.timeline)
+                              : candidate.state.timeline,
                             ...(terminalStatus === "error"
                               ? {
                                   error:

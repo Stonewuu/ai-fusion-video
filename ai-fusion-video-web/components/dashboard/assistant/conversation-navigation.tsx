@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  Ban,
   CheckCircle2,
   CircleAlert,
   Clock3,
@@ -42,6 +43,7 @@ function relativeTime(value?: string) {
 }
 
 function statusLabel(status?: string) {
+  if (status === "CANCEL_REQUESTED") return "取消中";
   if (isRunningStatus(status)) return "运行中";
   if (status === "failed" || status === "error") return "失败";
   if (status === "cancelled") return "已取消";
@@ -49,8 +51,10 @@ function statusLabel(status?: string) {
 }
 
 function StatusIcon({ status, unread }: { status?: string; unread: boolean }) {
+  if (status === "CANCEL_REQUESTED") return <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none text-muted-foreground" />;
   if (isRunningStatus(status)) return <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none text-primary" />;
   if (status === "failed" || status === "error") return <XCircle className="size-3.5 text-destructive" />;
+  if (status === "cancelled") return <Ban className="size-3.5 text-muted-foreground" />;
   if (unread) return <CircleAlert className="size-3.5 text-primary" />;
   return <CheckCircle2 className="size-3.5 text-emerald-500" />;
 }
@@ -83,21 +87,27 @@ function ConversationRow({
 
   return (
     <div
+      role="button"
+      tabIndex={0}
       className={cn(
-        "group mb-1 flex items-start gap-2 rounded-xl border border-transparent px-2.5 py-2 transition-colors",
+        "group mb-1 flex cursor-pointer select-none items-start gap-2 rounded-xl border border-transparent px-2.5 py-2 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
         selected
           ? "border-primary/30 bg-primary/10"
           : "hover:border-border/30 hover:bg-muted/60",
       )}
-    >
-      <button
-        type="button"
-        className="flex min-w-0 flex-1 items-start gap-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-        onClick={() => {
+      onClick={() => {
+        selectConversation(conversation.conversationId);
+        onSelected?.();
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
           selectConversation(conversation.conversationId);
           onSelected?.();
-        }}
-      >
+        }
+      }}
+    >
+      <div className="flex min-w-0 flex-1 items-start gap-2">
         <span className="mt-0.5 shrink-0"><StatusIcon status={status} unread={unread} /></span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-xs font-medium" title={conversation.title}>
@@ -110,7 +120,7 @@ function ConversationRow({
             {unread ? <span className="size-1.5 rounded-full bg-primary" aria-label="未读" /> : null}
           </span>
         </span>
-      </button>
+      </div>
       <Button
         type="button"
         variant="destructive-ghost"
@@ -119,12 +129,15 @@ function ConversationRow({
         title={running ? "运行中的会话不能删除" : "删除会话"}
         disabled={running}
         data-assistant-interactive="true"
-        className="mt-0.5 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        onClick={() => onDelete({
-          conversationId: conversation.conversationId,
-          id: conversation.id,
-          title: conversation.title,
-        })}
+        className="mt-0.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
+        onClick={(event) => {
+          event.stopPropagation();
+          onDelete({
+            conversationId: conversation.conversationId,
+            id: conversation.id,
+            title: conversation.title,
+          });
+        }}
       >
         <Trash2 />
       </Button>

@@ -9,6 +9,7 @@ import {
 import type { AssistantMode } from "./assistant-types";
 
 export const ASSISTANT_STORAGE_SCHEMA_VERSION = 1;
+const ASSISTANT_GEOMETRY_VERSION = 2;
 
 let persistTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -78,7 +79,9 @@ export function defaultPersistedState(userId: number): Partial<PersistedAssistan
     launcherPosition: value.launcherPosition && typeof value.launcherPosition === "object"
       ? clampLauncherPosition(value.launcherPosition)
       : getDefaultLauncherPosition(),
-    normalRect: value.normalRect && typeof value.normalRect === "object"
+    normalRect: value.geometryVersion === ASSISTANT_GEOMETRY_VERSION
+      && value.normalRect
+      && typeof value.normalRect === "object"
       ? clampRect(value.normalRect)
       : getDefaultNormalRect(),
     dockWidth: Math.max(0, finiteNumber(value.dockWidth, 520)),
@@ -91,7 +94,6 @@ export function defaultPersistedState(userId: number): Partial<PersistedAssistan
     drafts: safeRecord(value.drafts),
     runIds: safeRecord(value.runIds),
     lastSequences: safeNumberRecord(value.lastSequences),
-    scrollPositions: safeNumberRecord(value.scrollPositions),
   };
 }
 
@@ -101,7 +103,6 @@ export function writeAssistantPersisted(state: AssistantStoreState) {
   const drafts: Record<string, string> = { __new__: state.newDraft };
   const runIds: Record<string, string> = {};
   const lastSequences: Record<string, number> = {};
-  const scrollPositions: Record<string, number> = {};
 
   for (const [conversationId, runtime] of Object.entries(state.conversationStates)) {
     if (runtime.draft) drafts[conversationId] = runtime.draft;
@@ -117,11 +118,11 @@ export function writeAssistantPersisted(state: AssistantStoreState) {
     if (cursor > 0 && cursorRunId && cursorRunId === advertisedRunId) {
       lastSequences[conversationId] = cursor;
     }
-    if (runtime.scrollTop > 0) scrollPositions[conversationId] = runtime.scrollTop;
   }
 
   const value: PersistedAssistantState = {
     schemaVersion: ASSISTANT_STORAGE_SCHEMA_VERSION,
+    geometryVersion: ASSISTANT_GEOMETRY_VERSION,
     mode: state.mode,
     lastOpenMode: state.lastOpenMode,
     restoreMode: state.restoreMode,
@@ -133,7 +134,6 @@ export function writeAssistantPersisted(state: AssistantStoreState) {
     drafts,
     runIds,
     lastSequences,
-    scrollPositions,
   };
 
   try {

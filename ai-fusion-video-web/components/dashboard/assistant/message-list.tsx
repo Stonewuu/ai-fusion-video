@@ -2,12 +2,8 @@
 
 import {
   Fragment,
-  useEffect,
   useMemo,
-  useRef,
-  useState,
   type RefObject,
-  type UIEvent,
 } from "react";
 import { ArrowDown, Bot, Loader2, RefreshCw, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,6 +13,7 @@ import { messagesToTimeline } from "@/components/dashboard/notification-panel/hi
 import type { AgentMessage } from "@/lib/api/ai-assistant";
 import type { TimelineItem } from "@/lib/store/pipeline-store";
 import { useAssistantStore, type AssistantConversationRuntime } from "@/lib/store/assistant-store";
+import { useAssistantMessageScroll } from "./use-assistant-message-scroll";
 
 interface AssistantMessageListProps {
   conversationId: string;
@@ -30,7 +27,6 @@ interface MessageSegment {
 }
 
 const EMPTY_TIMELINE: TimelineItem[] = [];
-
 function isRunning(runtime: AssistantConversationRuntime) {
   return [
     "running",
@@ -120,17 +116,16 @@ function AssistantTimelineBubble({
   );
 }
 
-export function AssistantMessageList({ conversationId, inputHeight }: AssistantMessageListProps) {
+export function AssistantMessageList({
+  conversationId,
+  inputHeight,
+}: AssistantMessageListProps) {
   const runtime = useAssistantStore((state) => state.conversationStates[conversationId]);
   const loadMessages = useAssistantStore((state) => state.loadMessagesIfNeeded);
   const ensureConnection = useAssistantStore((state) => state.ensureContentConnection);
-  const setScrollTop = useAssistantStore((state) => state.setScrollTop);
-  const viewportRef = useRef<HTMLDivElement>(null);
-  const followRef = useRef(true);
-  const initializedRef = useRef(false);
-  const [showBackToBottom, setShowBackToBottom] = useState(false);
 
   const running = !!runtime && isRunning(runtime);
+  const contentReady = !!runtime && (runtime.messagesLoaded || !!runtime.messagesError);
   const showPipelineTimeline = !!runtime && (running || !runtime.messagesLoaded);
   const activeRunId = showPipelineTimeline
     ? runtime?.pipeline.runId ?? runtime?.knownRunId
@@ -145,50 +140,23 @@ export function AssistantMessageList({ conversationId, inputHeight }: AssistantM
     : EMPTY_TIMELINE;
   const error = runtime?.messagesError || runtime?.pipeline.error || runtime?.connectionError;
 
-  useEffect(() => {
-    const element = viewportRef.current;
-    if (!element || !runtime) return;
-    const target = runtime.scrollTop > 0 ? runtime.scrollTop : element.scrollHeight;
-    const frame = requestAnimationFrame(() => {
-      if (initializedRef.current) return;
-      initializedRef.current = true;
-      if (runtime.scrollTop > 0) element.scrollTop = target;
-      else element.scrollTop = element.scrollHeight;
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [conversationId, runtime]);
-
-  useEffect(() => {
-    const element = viewportRef.current;
-    if (!element || !followRef.current) return;
-    const frame = requestAnimationFrame(() => {
-      if (followRef.current) element.scrollTop = element.scrollHeight;
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [liveTimeline, segments.length, inputHeight]);
+  const {
+    viewportRef,
+    contentRef,
+    viewportReady,
+    showBackToBottom,
+    onViewportScroll,
+    onWheel,
+    onTouchStart,
+    onTouchMove,
+    scrollToBottom,
+  } = useAssistantMessageScroll({
+    contentReady,
+    running,
+    inputHeight,
+  });
 
   if (!runtime) return null;
-
-  const handleViewportScroll = (event: UIEvent<HTMLDivElement>) => {
-    const element = event.currentTarget;
-    const distance = element.scrollHeight - element.scrollTop - element.clientHeight;
-    const nearBottom = distance < 96;
-    followRef.current = nearBottom;
-    setShowBackToBottom(!nearBottom && element.scrollHeight > element.clientHeight + 20);
-    setScrollTop(conversationId, element.scrollTop);
-  };
-
-  const scrollToBottom = () => {
-    const element = viewportRef.current;
-    if (!element) return;
-    followRef.current = true;
-    setShowBackToBottom(false);
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    element.scrollTo({
-      top: element.scrollHeight,
-      behavior: reducedMotion ? "auto" : "smooth",
-    });
-  };
 
   const hasContent = segments.length > 0 || liveTimeline.length > 0 || !!error;
 
@@ -197,14 +165,21 @@ export function AssistantMessageList({ conversationId, inputHeight }: AssistantM
       <OverlayScrollArea
         className="h-full"
         viewportRef={viewportRef}
+        onViewportWheel={onWheel}
+        onViewportTouchStart={onTouchStart}
+        onViewportTouchMove={onTouchMove}
         viewportClassName="assistant-message-viewport"
         viewportStyle={{
           paddingBottom: inputHeight + 28,
           scrollPaddingBottom: inputHeight + 28,
+          visibility: viewportReady ? "visible" : "hidden",
         }}
-        onViewportScroll={handleViewportScroll}
+        onViewportScroll={onViewportScroll}
       >
-        <div className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-4 px-4 py-5">
+        <div
+          ref={contentRef}
+          className="mx-auto flex min-h-full w-full max-w-3xl flex-col gap-4 px-4 py-5"
+        >
           {runtime.messagesLoading && runtime.messages.length === 0 ? (
             <div className="flex items-center justify-center gap-2 py-12 text-xs text-muted-foreground">
               <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> 加载消息

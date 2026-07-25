@@ -28,6 +28,7 @@ import {
   type AgentMessage,
 } from "@/lib/api/ai-assistant";
 import { PIPELINE_AGENT_TYPES } from "@/lib/api/ai-pipeline";
+import { Button } from "@/components/ui/button";
 import {
   usePipelineStore,
   type PipelineTask,
@@ -63,6 +64,7 @@ function selectTaskListVersion(state: {
       task.status,
       task.createdAt,
       task.finishedAt,
+      task.state.cancelRequested,
     ])
   );
 }
@@ -81,11 +83,13 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
   const timeline = task?.state.timeline ?? EMPTY_TIMELINE;
   const timelineLength = timeline.length;
   const isRunning = task?.status === "running";
+  const cancelling = !!task?.state.cancelRequested;
   const isContentPending =
     task?.state.contentLoaded === false && !task.state.error;
-  const isIdle = isRunning && idleTimelineLength === timelineLength;
-  const canCancel = isRunning && task?.cancellable !== false;
-  const timelineRef = useSmartScroll([timeline, isIdle], isRunning);
+  const isIdle = isRunning && !cancelling && idleTimelineLength === timelineLength;
+  const canCancel = isRunning && !cancelling && task?.cancellable !== false;
+  const showCancel = isRunning && task?.cancellable !== false;
+  const timelineRef = useSmartScroll([timeline, isIdle], isRunning && !cancelling);
 
   useEffect(() => {
     loadPipelineContent(taskId);
@@ -128,14 +132,18 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
         <div className="min-w-0">
           <h4 className="text-sm font-semibold truncate">{task.label}</h4>
           <p className={cn("text-xs mt-0.5", statusColor[task.status])}>
-            {statusText[task.status]} · <ElapsedText task={task} />
+            {cancelling ? "取消中" : statusText[task.status]} · <ElapsedText task={task} />
             <span className="text-muted-foreground/50 ml-1">
               启动于 {formatTimestamp(task.createdAt)}
             </span>
           </p>
         </div>
-        {canCancel && (
-          <button
+        {showCancel && (
+          <Button
+            type="button"
+            variant="destructive-ghost"
+            size="xs"
+            disabled={!canCancel}
             onClick={() => {
               void usePipelineStore
                 .getState()
@@ -144,12 +152,13 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
                   console.error("[Pipeline] 取消请求失败:", error)
                 );
             }}
-            className="shrink-0 flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium border border-destructive/20 text-destructive/70 hover:bg-destructive/10 hover:text-destructive hover:border-destructive/40 transition-colors"
-            title="停止工作流"
+            aria-label={cancelling ? "正在取消工作流" : "停止工作流"}
           >
-            <Ban className="h-3 w-3" />
-            停止
-          </button>
+            {cancelling
+              ? <Loader2 className="animate-spin motion-reduce:animate-none" />
+              : <Ban />}
+            {cancelling ? "取消中…" : "停止"}
+          </Button>
         )}
       </div>
 
@@ -166,7 +175,7 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
             timeline={timeline}
             scrollRef={timelineRef}
             initialScrollToEnd
-            streaming={isRunning}
+            streaming={isRunning && !cancelling}
             error={task.state.error}
           />
         )}
@@ -342,6 +351,7 @@ export function PipelineTaskCard({ task }: { task: PipelineTask }) {
   const setPanelExpanded = usePipelineStore((state) => state.setPanelExpanded);
   const setExpandedTaskId = usePipelineStore((state) => state.setExpandedTaskId);
   const isRunning = task.status === "running";
+  const cancelling = !!task.state.cancelRequested;
 
   const statusIcon = {
     running: <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400 shrink-0" />,
@@ -358,6 +368,7 @@ export function PipelineTaskCard({ task }: { task: PipelineTask }) {
   };
 
   const getLatestActivity = () => {
+    if (cancelling) return "取消中…";
     const timeline = task.state.timeline;
     const isTaskStream = task.cancellable === false;
     for (let index = timeline.length - 1; index >= 0; index--) {
@@ -606,7 +617,9 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
             <TaskListItem
               key={task.id}
               label={task.label}
-              subtitle={<ElapsedText task={task} />}
+              subtitle={task.state.cancelRequested
+                ? <>取消中… · <ElapsedText task={task} /></>
+                : <ElapsedText task={task} />}
               icon={<Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400 shrink-0" />}
               selected={selected?.type === "pipeline" && selected.taskId === task.id}
               onClick={() => handleSelect({ type: "pipeline", taskId: task.id })}

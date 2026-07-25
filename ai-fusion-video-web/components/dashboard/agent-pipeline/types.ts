@@ -7,7 +7,7 @@ import type {
 export type { SubTimelineItem, TimelineItem };
 
 export interface AgentPipelineState {
-  status: "idle" | "reasoning" | "running" | "done" | "error" | "cancelled";
+  status: "idle" | "reasoning" | "running" | "cancelling" | "done" | "error" | "cancelled";
   reasoningText: string;
   reasoningDurationMs?: number;
   timeline: TimelineItem[];

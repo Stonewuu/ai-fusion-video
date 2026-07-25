@@ -3,6 +3,7 @@
 import { Cpu, Loader2 } from "lucide-react";
 import type { AiModel } from "@/lib/api/ai-model";
 import { getModelDisplayParts } from "@/lib/model-display";
+import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import {
   Select,
   SelectContent,
@@ -85,7 +86,7 @@ export function GenerationModelPicker({
           className,
         )}
       >
-        <Cpu className="size-3.5 shrink-0 text-muted-foreground" />
+        <ModelVendorIcon source={selectedModel} className="size-3.5" />
         <SelectValue placeholder="选择模型" />
       </SelectTrigger>
       <SelectContent
@@ -114,8 +115,8 @@ export function GenerationModelPicker({
                 title={modelCode ? `${display.name} · ${modelCode}` : display.name}
                 className="min-h-11 py-2.5 pl-2.5"
               >
-                <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted text-muted-foreground">
-                  <Cpu className="size-3.5" />
+                <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted/70">
+                  <ModelVendorIcon source={model} className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-xs font-medium">

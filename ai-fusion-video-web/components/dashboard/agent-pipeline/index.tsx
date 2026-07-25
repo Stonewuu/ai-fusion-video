@@ -28,6 +28,7 @@ export function AgentPipeline(props: AgentPipelineProps) {
             {state.status === "idle" && "准备就绪"}
             {state.status === "reasoning" && "AI 正在思考..."}
             {state.status === "running" && "正在解析..."}
+            {state.status === "cancelling" && "取消中..."}
             {state.status === "done" && "解析完成"}
             {state.status === "error" && "解析出错"}
             {state.status === "cancelled" && "已取消"}
@@ -36,13 +37,14 @@ export function AgentPipeline(props: AgentPipelineProps) {
         {isActive && (
           <button
             onClick={cancelStream}
+            disabled={state.status === "cancelling"}
             className={cn(
               "px-3 py-1.5 rounded-lg text-xs font-medium",
               "border border-border/40 hover:bg-destructive/10 hover:text-destructive",
-              "transition-colors"
+              "transition-colors disabled:pointer-events-none disabled:opacity-60"
             )}
           >
-            取消
+            {state.status === "cancelling" ? "取消中..." : "取消"}
           </button>
         )}
         {state.status === "idle" && (

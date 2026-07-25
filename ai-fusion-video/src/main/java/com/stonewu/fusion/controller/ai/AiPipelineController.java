@@ -49,7 +49,7 @@ public class AiPipelineController {
             @RequestBody AiChatReqVO request) {
         long currentUserId = requireCurrentUserId();
         return runQueries.authorizeConversationForStart(
-                        request.getConversationId(), currentUserId)
+                request.getConversationId(), currentUserId)
                 .thenMany(Flux.defer(() -> pipelineRuns.stream(
                         request, currentUserId)))
                 .map(this::toSse);
@@ -62,7 +62,7 @@ public class AiPipelineController {
             @RequestParam(required = false) String conversationId) {
         long currentUserId = requireCurrentUserId();
         return runQueries.resolveAuthorizedTarget(
-                        runId, conversationId, currentUserId)
+                runId, conversationId, currentUserId)
                 .flatMap(run -> cancellations.cancel(
                         run.getRunId(), currentUserId))
                 .thenReturn(CommonResult.success(true));
@@ -74,16 +74,15 @@ public class AiPipelineController {
             @RequestParam(required = false) String runId,
             @RequestParam(required = false) String conversationId,
             @RequestParam(required = false) Long afterSequence,
-            @RequestHeader(name = "Last-Event-ID", required = false)
-            String lastEventId) {
+            @RequestHeader(name = "Last-Event-ID", required = false) String lastEventId) {
         long currentUserId = requireCurrentUserId();
         return runQueries.resolveAuthorizedTarget(
-                        runId, conversationId, currentUserId)
+                runId, conversationId, currentUserId)
                 .flatMapMany(run -> {
                     RunCursor cursor = cursorParser.parse(
                             run.getRunId(), afterSequence, lastEventId);
                     return replayService.replayThenLive(
-                                    cursor.runId(), cursor.afterSequence())
+                            cursor.runId(), cursor.afterSequence())
                             .concatMap(event -> runQueries.project(run, event))
                             .map(this::toSse);
                 });
@@ -109,9 +108,8 @@ public class AiPipelineController {
 
     private ServerSentEvent<AiChatStreamRespVO> toSse(
             AiChatStreamRespVO event) {
-        ServerSentEvent.Builder<AiChatStreamRespVO> builder =
-                ServerSentEvent.<AiChatStreamRespVO>builder(event)
-                        .event("pipeline-event");
+        ServerSentEvent.Builder<AiChatStreamRespVO> builder = ServerSentEvent.<AiChatStreamRespVO>builder(event)
+                .event("pipeline-event");
         if (event.getRunId() == null && event.getSequence() == null) {
             return builder.build();
         }

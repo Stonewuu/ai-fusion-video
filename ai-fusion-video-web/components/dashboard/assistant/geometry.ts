@@ -18,13 +18,12 @@ export type ResizeDirection =
   | "se"
   | "sw";
 
-export const ASSISTANT_MIN_WIDTH = 720;
-export const ASSISTANT_MIN_HEIGHT = 520;
-export const ASSISTANT_DOCK_MIN_WIDTH = 420;
-export const ASSISTANT_DEFAULT_WIDTH = 1040;
-export const ASSISTANT_DEFAULT_HEIGHT = 720;
+export const ASSISTANT_MIN_WIDTH = 300;
+export const ASSISTANT_MIN_HEIGHT = 300;
+export const ASSISTANT_DOCK_MIN_WIDTH = 300;
+export const ASSISTANT_DEFAULT_WIDTH = 1000;
 export const ASSISTANT_VIEWPORT_GAP = 12;
-export const ASSISTANT_LAUNCHER_SIZE = 40;
+export const ASSISTANT_LAUNCHER_SIZE = 48;
 
 function finite(value: unknown, fallback: number) {
   return typeof value === "number" && Number.isFinite(value) ? value : fallback;
@@ -50,13 +49,19 @@ export function getDefaultLauncherPosition(): AssistantPoint {
 
 export function getDefaultNormalRect(): AssistantRect {
   const viewport = getViewportSize();
-  const width = Math.max(1, Math.min(ASSISTANT_DEFAULT_WIDTH, viewport.width - 24));
-  const height = Math.max(1, Math.min(ASSISTANT_DEFAULT_HEIGHT, viewport.height - 24));
+  const maxWidth = Math.max(1, viewport.width - ASSISTANT_VIEWPORT_GAP * 2);
+  const maxHeight = Math.max(1, viewport.height - ASSISTANT_VIEWPORT_GAP * 2);
+  const preferredWidth = Math.min(640, Math.max(560, viewport.width * 0.45));
+  const width = Math.min(
+    maxWidth,
+    Math.max(Math.min(ASSISTANT_MIN_WIDTH, maxWidth), preferredWidth),
+  );
+  const height = maxHeight;
   return {
     width,
     height,
-    x: Math.max(12, viewport.width - width - 24),
-    y: Math.max(12, viewport.height - height - 24),
+    x: Math.max(ASSISTANT_VIEWPORT_GAP, viewport.width - width - ASSISTANT_VIEWPORT_GAP),
+    y: ASSISTANT_VIEWPORT_GAP,
   };
 }
 
@@ -78,14 +83,15 @@ export function clampRect(
 ): AssistantRect {
   const maxWidth = Math.max(1, viewport.width - ASSISTANT_VIEWPORT_GAP * 2);
   const maxHeight = Math.max(1, viewport.height - ASSISTANT_VIEWPORT_GAP * 2);
+  const defaultRect = getDefaultNormalRect();
   const minWidth = Math.min(ASSISTANT_MIN_WIDTH, maxWidth);
   const minHeight = Math.min(ASSISTANT_MIN_HEIGHT, maxHeight);
   const width = Math.min(
-    Math.max(minWidth, finite(rect.width, ASSISTANT_DEFAULT_WIDTH)),
+    Math.max(minWidth, finite(rect.width, defaultRect.width)),
     maxWidth,
   );
   const height = Math.min(
-    Math.max(minHeight, finite(rect.height, ASSISTANT_DEFAULT_HEIGHT)),
+    Math.max(minHeight, finite(rect.height, defaultRect.height)),
     maxHeight,
   );
   const maxX = Math.max(ASSISTANT_VIEWPORT_GAP, viewport.width - width - ASSISTANT_VIEWPORT_GAP);
@@ -101,13 +107,13 @@ export function clampRect(
 export function clampDockWidth(
   width: number,
   availableWidth: number,
-  minMainWidth = 480,
+  minMainWidth = 300,
 ): number {
   const safeAvailable = Math.max(0, finite(availableWidth, 0));
-  const min = Math.max(ASSISTANT_DOCK_MIN_WIDTH, safeAvailable * 0.4);
+  const min = Math.max(ASSISTANT_DOCK_MIN_WIDTH, Math.min(300, safeAvailable * 0.25));
   const max = Math.min(
     safeAvailable - Math.max(minMainWidth, 0),
-    safeAvailable * 0.6,
+    safeAvailable * 0.8,
   );
   if (max < min) return 0;
   return Math.min(max, Math.max(min, finite(width, safeAvailable * 0.5)));

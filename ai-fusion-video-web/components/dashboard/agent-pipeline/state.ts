@@ -4,6 +4,11 @@ import type {
   SubTimelineItem,
   TimelineItem,
 } from "./types";
+import {
+  cancelCallingTimelineTools,
+  finishedToolTimelineStatus,
+  type ToolTimelineStatus,
+} from "@/lib/store/pipeline-timeline";
 
 export function createInitialPipelineState(): AgentPipelineState {
   return {
@@ -92,7 +97,7 @@ function updateLastTimelineReasoningDuration(
 function updateToolStatus(
   timeline: TimelineItem[],
   toolCallId: string,
-  status: "calling" | "done" | "error"
+  status: ToolTimelineStatus
 ): TimelineItem[] {
   return timeline.map((item) =>
     item.type === "tool" && item.id === toolCallId
@@ -183,7 +188,7 @@ export function reducePipelineEvent(
               appendReasoningToSubTimeline(children, event.reasoningContent!)
           );
         } else {
-          next.status = "reasoning";
+          next.status = prev.status === "cancelling" ? "cancelling" : "reasoning";
           next.reasoningText += event.reasoningContent;
           next.timeline = appendReasoningToTimeline(
             next.timeline,
@@ -194,7 +199,7 @@ export function reducePipelineEvent(
       return next;
 
     case "CONTENT":
-      next.status = "running";
+      next.status = prev.status === "cancelling" ? "cancelling" : "running";
       if (event.reasoningDurationMs && !isSubAgent) {
         next.reasoningDurationMs = event.reasoningDurationMs;
         next.timeline = updateLastTimelineReasoningDuration(
@@ -221,7 +226,7 @@ export function reducePipelineEvent(
       return next;
 
     case "TOOL_CALL":
-      next.status = "running";
+      next.status = prev.status === "cancelling" ? "cancelling" : "running";
       if (event.toolCalls) {
         for (const toolCall of event.toolCalls) {
           if (isSubAgent) {
@@ -268,7 +273,7 @@ export function reducePipelineEvent(
 
     case "TOOL_FINISHED":
       if (event.toolCallId) {
-        const toolItemStatus = event.toolStatus === "error" ? "error" : "done";
+        const toolItemStatus = finishedToolTimelineStatus(event.toolStatus);
         if (isSubAgent) {
           next.timeline = appendToToolChildren(
             next.timeline,
@@ -335,6 +340,7 @@ export function reducePipelineEvent(
     case "CANCELLED":
       if (!event.parentToolCallId && !event.agentName) {
         next.status = "cancelled";
+        next.timeline = cancelCallingTimelineTools(next.timeline);
       }
       return next;
 

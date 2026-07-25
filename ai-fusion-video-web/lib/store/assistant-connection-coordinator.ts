@@ -100,6 +100,7 @@ export function createAssistantConnectionCoordinator(
     if (current) current.controller.abort();
     const nextGeneration = get().connectionGeneration + 1;
     set({ connection: null, connectionGeneration: nextGeneration });
+    scheduleStatusPolling();
     return nextGeneration;
   };
 
@@ -129,7 +130,6 @@ export function createAssistantConnectionCoordinator(
     conversationId: string,
     response: PipelineRunStatusResponse,
     requestGeneration: number,
-    requestConnectionGeneration: number,
     metadataGeneration: number,
     expectedRunId?: string,
   ) => {
@@ -140,10 +140,9 @@ export function createAssistantConnectionCoordinator(
     let applied = false;
     set((state) => {
       const runtime = state.conversationStates[conversationId];
-      // The selected live connection is authoritative. A request that began
-      // before it connected must not overwrite any of its metadata.
+      // Background status polling queries discrete conversation pipeline status.
+      // Do not overwrite metadata if a live SSE stream is active on this exact conversation.
       if (!runtime
-        || state.connectionGeneration !== requestConnectionGeneration
         || state.connection?.conversationId === conversationId
         || !isCurrentMetadataRequest(conversationId, metadataGeneration)) return state;
       if (expectedRunId
@@ -196,8 +195,10 @@ export function createAssistantConnectionCoordinator(
   const scheduleStatusPolling = () => {
     if (pollTimer || pollInFlightGeneration !== null || pollingCandidates().length === 0) return;
     const hidden = typeof document !== "undefined" && document.visibilityState === "hidden";
-    const backoff = Math.min(60000, 5000 * (2 ** pollFailureCount));
-    const delay = hidden ? Math.max(15000, backoff) : backoff;
+    //如果有运行中的对话，页面可见时固定每隔 1 秒 (1000ms) 查询一次对话状态，以便实时更新状态
+    const baseDelay = hidden ? 5000 : 1000;
+    const backoff = Math.min(5000, baseDelay * (2 ** pollFailureCount));
+    const delay = hidden ? Math.max(5000, backoff) : backoff;
     pollTimer = setTimeout(() => {
       pollTimer = null;
       void pollStatuses();
@@ -207,7 +208,6 @@ export function createAssistantConnectionCoordinator(
   const pollStatuses = async () => {
     if (pollInFlightGeneration !== null) return;
     const requestGeneration = lifecycleGeneration;
-    const requestConnectionGeneration = get().connectionGeneration;
     const candidates = pollingCandidates().map((conversation) => ({
       conversation,
       expectedRunId: get().conversationStates[conversation.conversationId]?.knownRunId,
@@ -232,7 +232,6 @@ export function createAssistantConnectionCoordinator(
             conversation.conversationId,
             response,
             requestGeneration,
-            requestConnectionGeneration,
             metadataGeneration,
             expectedRunId,
           );
@@ -336,11 +335,13 @@ export function createAssistantConnectionCoordinator(
           const terminal = hasTerminal(event);
           const nextStatus = terminal
             ? terminalStatusForEvent(event)
-            : event.outputType === "USER_CONFIRMATION_REQUIRED"
-              ? "WAITING_CONFIRMATION"
-              : event.outputType === "EXTERNAL_EXECUTION_REQUIRED"
-                ? "WAITING_EXTERNAL"
-                : "running";
+            : currentRuntime.status === "CANCEL_REQUESTED"
+              ? "CANCEL_REQUESTED"
+              : event.outputType === "USER_CONFIRMATION_REQUIRED"
+                ? "WAITING_CONFIRMATION"
+                : event.outputType === "EXTERNAL_EXECUTION_REQUIRED"
+                  ? "WAITING_EXTERNAL"
+                  : "running";
           updateRuntime(conversationId, (runtimeValue) => ({
             ...runtimeValue,
             pipeline: {
@@ -535,9 +536,15 @@ export function createAssistantConnectionCoordinator(
   const ensureConnection = () => {
     const state = get();
     const conversationId = state.selectedConversationId;
-    if (state.mode === "collapsed" || !conversationId) return;
+    if (state.mode === "collapsed" || !conversationId) {
+      scheduleStatusPolling();
+      return;
+    }
     const runtime = state.conversationStates[conversationId];
-    if (!runtime || !statusIsRunning(runtime.status)) return;
+    if (!runtime || !statusIsRunning(runtime.status)) {
+      scheduleStatusPolling();
+      return;
+    }
     if (state.connection?.conversationId === conversationId) return;
 
     void state.loadMessagesIfNeeded(conversationId);
