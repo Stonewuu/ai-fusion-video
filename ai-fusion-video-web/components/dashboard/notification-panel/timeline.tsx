@@ -49,6 +49,74 @@ const TIMELINE_ROW_STYLE: CSSProperties = {
   containIntrinsicSize: "auto 96px",
 };
 
+const REASONING_TIMER_INTERVAL_MS = 100;
+
+function useReasoningElapsedMs(
+  startedAtMs: number | undefined,
+  durationMs: number | undefined,
+  active: boolean,
+): number | undefined {
+  const [now, setNow] = useState(() => Date.now());
+  const running = active && durationMs === undefined && startedAtMs !== undefined;
+
+  useEffect(() => {
+    if (!running) return;
+
+    const updateNow = () => setNow(Date.now());
+    updateNow();
+    const timer = window.setInterval(updateNow, REASONING_TIMER_INTERVAL_MS);
+    window.addEventListener("focus", updateNow);
+    document.addEventListener("visibilitychange", updateNow);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", updateNow);
+      document.removeEventListener("visibilitychange", updateNow);
+    };
+  }, [running, startedAtMs]);
+
+  if (durationMs !== undefined) return durationMs;
+  if (!running || startedAtMs === undefined) return undefined;
+  return Math.max(0, now - startedAtMs);
+}
+
+function ReasoningThink({
+  content,
+  startedAtMs,
+  durationMs,
+  streaming,
+  compact,
+  maxHeight,
+}: {
+  content: string;
+  startedAtMs?: number;
+  durationMs?: number;
+  streaming: boolean;
+  compact?: boolean;
+  maxHeight?: number;
+}) {
+  const reasoningStreaming = streaming && durationMs === undefined;
+  const displayedDurationMs = useReasoningElapsedMs(
+    startedAtMs,
+    durationMs,
+    reasoningStreaming,
+  );
+  const title = displayedDurationMs !== undefined
+    ? `思考 (${(displayedDurationMs / 1000).toFixed(1)}s)`
+    : reasoningStreaming
+      ? "思考中"
+      : "思考";
+
+  return (
+    <StreamThink
+      title={title}
+      content={content}
+      compact={compact}
+      maxHeight={maxHeight}
+      streaming={reasoningStreaming}
+    />
+  );
+}
+
 function TaskMediaLinks({ mediaLinks }: { mediaLinks: TaskMediaLinkInfo[] }) {
   if (mediaLinks.length === 0) {
     return null;
@@ -209,19 +277,14 @@ const SubTimelineEntry = memo(function SubTimelineEntry({
   let content;
 
   if (child.type === "reasoning") {
-    const reasoningStreaming = streaming && child.durationMs === undefined;
-    const title = child.durationMs !== undefined
-      ? `思考 (${(child.durationMs / 1000).toFixed(1)}s)`
-      : reasoningStreaming
-        ? "思考中"
-        : "思考";
     content = (
-      <StreamThink
-        title={title}
+      <ReasoningThink
         content={child.text}
+        startedAtMs={child.startedAtMs}
+        durationMs={child.durationMs}
         compact
         maxHeight={120}
-        streaming={reasoningStreaming}
+        streaming={streaming}
       />
     );
   } else if (child.type === "tool") {
@@ -396,17 +459,12 @@ const TimelineEntry = memo(function TimelineEntry({
   let content;
 
   if (item.type === "reasoning") {
-    const reasoningStreaming = streaming && item.durationMs === undefined;
-    const title = item.durationMs !== undefined
-      ? `思考 (${(item.durationMs / 1000).toFixed(1)}s)`
-      : reasoningStreaming
-        ? "思考中"
-        : "思考";
     content = (
-      <StreamThink
-        title={title}
+      <ReasoningThink
         content={item.text}
-        streaming={reasoningStreaming}
+        startedAtMs={item.startedAtMs}
+        durationMs={item.durationMs}
+        streaming={streaming}
       />
     );
   } else if (item.type === "tool") {
@@ -448,6 +506,7 @@ const TimelineEntry = memo(function TimelineEntry({
 
 export interface MessageTimelineProps {
   reasoningText?: string;
+  reasoningStartTime?: number;
   reasoningDurationMs?: number;
   timeline: TimelineItem[];
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -460,8 +519,9 @@ type MessageTimelineRow =
   | {
       key: string;
       type: "fallback-reasoning";
-      title: string;
       content: string;
+      startedAtMs?: number;
+      durationMs?: number;
       streaming: boolean;
     }
   | {
@@ -482,9 +542,10 @@ function MessageTimelineRowContent({
 }) {
   if (row.type === "fallback-reasoning") {
     return (
-      <StreamThink
-        title={row.title}
+      <ReasoningThink
         content={row.content}
+        startedAtMs={row.startedAtMs}
+        durationMs={row.durationMs}
         streaming={row.streaming}
       />
     );
@@ -581,6 +642,7 @@ function VirtualizedMessageTimeline({
 
 export function MessageTimeline({
   reasoningText,
+  reasoningStartTime,
   reasoningDurationMs,
   timeline,
   scrollRef,
@@ -591,11 +653,6 @@ export function MessageTimeline({
   const hasTimelineReasoning = timeline.some((item) => item.type === "reasoning");
   const fallbackReasoningStreaming =
     !!streaming && reasoningDurationMs === undefined;
-  const reasoningTitle = reasoningDurationMs !== undefined
-    ? `思考 (${(reasoningDurationMs / 1000).toFixed(1)}s)`
-    : fallbackReasoningStreaming
-      ? "思考中"
-      : "思考";
 
   const rows = useMemo<MessageTimelineRow[]>(() => {
     const nextRows: MessageTimelineRow[] = [];
@@ -604,8 +661,9 @@ export function MessageTimeline({
       nextRows.push({
         key: "fallback-reasoning",
         type: "fallback-reasoning",
-        title: reasoningTitle,
         content: reasoningText,
+        startedAtMs: reasoningStartTime,
+        durationMs: reasoningDurationMs,
         streaming: fallbackReasoningStreaming,
       });
     }
@@ -629,8 +687,9 @@ export function MessageTimeline({
     error,
     hasTimelineReasoning,
     fallbackReasoningStreaming,
+    reasoningDurationMs,
+    reasoningStartTime,
     reasoningText,
-    reasoningTitle,
     streaming,
     timeline,
   ]);

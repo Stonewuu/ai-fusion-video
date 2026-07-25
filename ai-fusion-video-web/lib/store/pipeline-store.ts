@@ -71,6 +71,7 @@ const TOOL_INVALIDATION_MAP: Record<string, InvalidationType> = {
 export interface PipelineState {
   status: "running" | "done" | "error" | "cancelled";
   reasoningText: string;
+  reasoningStartTime?: number;
   reasoningDurationMs?: number;
   timeline: TimelineItem[];
   runId?: string;
@@ -226,6 +227,18 @@ function mergeContentText(
   return `${existingText}\n\n${incomingText}`;
 }
 
+function validTimestamp(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function validDuration(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
 /**
  * 获取当前运行中 pipeline 的 conversationId 集合
  * 供 notification-panel 过滤历史列表使用
@@ -293,13 +306,18 @@ function updateToolStatus(
 
 function appendReasoningToSubTimeline(
   children: SubTimelineItem[],
-  reasoningContent: string
+  reasoningContent: string,
+  startedAtMs?: number
 ): SubTimelineItem[] {
   const last = children[children.length - 1];
   if (last && last.type === "reasoning") {
     return [
       ...children.slice(0, -1),
-      { ...last, text: last.text + reasoningContent },
+      {
+        ...last,
+        text: last.text + reasoningContent,
+        startedAtMs: last.startedAtMs ?? startedAtMs,
+      },
     ];
   }
   return [
@@ -307,6 +325,7 @@ function appendReasoningToSubTimeline(
     {
       type: "reasoning",
       text: reasoningContent,
+      ...(startedAtMs !== undefined ? { startedAtMs } : {}),
     },
   ];
 }
@@ -330,13 +349,18 @@ function updateLastSubTimelineReasoningDuration(
 
 function appendReasoningToTimeline(
   timeline: TimelineItem[],
-  reasoningContent: string
+  reasoningContent: string,
+  startedAtMs?: number
 ): TimelineItem[] {
   const last = timeline[timeline.length - 1];
   if (last && last.type === "reasoning") {
     return [
       ...timeline.slice(0, -1),
-      { ...last, text: last.text + reasoningContent },
+      {
+        ...last,
+        text: last.text + reasoningContent,
+        startedAtMs: last.startedAtMs ?? startedAtMs,
+      },
     ];
   }
   return [
@@ -344,6 +368,7 @@ function appendReasoningToTimeline(
     {
       type: "reasoning",
       text: reasoningContent,
+      ...(startedAtMs !== undefined ? { startedAtMs } : {}),
     },
   ];
 }
@@ -425,10 +450,36 @@ function createEventHandler(
           }
 
           const isSubAgent = !!event.parentToolCallId;
+          const eventReasoningDurationMs = validDuration(
+            event.reasoningDurationMs
+          );
+
+          if (eventReasoningDurationMs !== undefined) {
+            if (isSubAgent) {
+              next.timeline = appendToToolChildren(
+                next.timeline,
+                event.parentToolCallId!,
+                (children) =>
+                  updateLastSubTimelineReasoningDuration(
+                    children,
+                    eventReasoningDurationMs
+                  )
+              );
+            } else {
+              next.reasoningDurationMs = eventReasoningDurationMs;
+              next.timeline = updateLastTimelineReasoningDuration(
+                next.timeline,
+                eventReasoningDurationMs
+              );
+            }
+          }
 
           switch (event.outputType) {
             case "REASONING":
               if (event.reasoningContent) {
+                const reasoningStartTime = validTimestamp(
+                  event.reasoningStartTime
+                );
                 if (isSubAgent) {
                   next.timeline = appendToToolChildren(
                     next.timeline,
@@ -436,14 +487,24 @@ function createEventHandler(
                     (children) =>
                       appendReasoningToSubTimeline(
                         children,
-                        event.reasoningContent!
+                        event.reasoningContent!,
+                        reasoningStartTime
                       )
                   );
                 } else {
+                  const last = next.timeline[next.timeline.length - 1];
+                  if (!last || last.type !== "reasoning") {
+                    next.reasoningText = "";
+                    next.reasoningDurationMs = undefined;
+                    next.reasoningStartTime = reasoningStartTime;
+                  } else if (next.reasoningStartTime === undefined) {
+                    next.reasoningStartTime = reasoningStartTime;
+                  }
                   next.reasoningText += event.reasoningContent;
                   next.timeline = appendReasoningToTimeline(
                     next.timeline,
-                    event.reasoningContent
+                    event.reasoningContent,
+                    reasoningStartTime
                   );
                 }
               }
@@ -458,13 +519,6 @@ function createEventHandler(
               break;
 
             case "CONTENT":
-              if (event.reasoningDurationMs && !isSubAgent) {
-                next.reasoningDurationMs = event.reasoningDurationMs;
-                next.timeline = updateLastTimelineReasoningDuration(
-                  next.timeline,
-                  event.reasoningDurationMs
-                );
-              }
               if (event.content) {
                 const content = event.content;
                 if (isSubAgent) {
@@ -472,13 +526,7 @@ function createEventHandler(
                     next.timeline,
                     event.parentToolCallId!,
                     (children) => {
-                      let updatedChildren = [...children];
-                      if (event.reasoningDurationMs) {
-                        updatedChildren = updateLastSubTimelineReasoningDuration(
-                          updatedChildren,
-                          event.reasoningDurationMs
-                        );
-                      }
+                      const updatedChildren = [...children];
 
                       const last =
                         updatedChildren[updatedChildren.length - 1];
@@ -1183,6 +1231,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
                 ...(afterSequence === 0
                   ? {
                       reasoningText: "",
+                      reasoningStartTime: undefined,
                       reasoningDurationMs: undefined,
                       timeline: [],
                     }

@@ -173,13 +173,21 @@ public class AgentMessageProjectionService {
                 boundary.getParentToolCallId());
         StringBuilder content = new StringBuilder();
         StringBuilder reasoning = new StringBuilder();
+        Long reasoningDurationMs = nonNegativeLong(
+                payload(boundary), "reasoningDurationMs");
         for (AgentEvent delta : deltas) {
-            String value = deltaValue(payload(delta));
+            JsonNode deltaPayload = payload(delta);
+            String value = deltaValue(deltaPayload);
             if (value == null) {
                 continue;
             }
             if ("CONTENT".equals(delta.getOutputType())) {
                 content.append(value);
+                Long deltaDurationMs = nonNegativeLong(
+                        deltaPayload, "reasoningDurationMs");
+                if (deltaDurationMs != null) {
+                    reasoningDurationMs = deltaDurationMs;
+                }
             } else if ("REASONING".equals(delta.getOutputType())) {
                 reasoning.append(value);
             }
@@ -193,6 +201,7 @@ public class AgentMessageProjectionService {
                 .role("assistant")
                 .content(content.isEmpty() ? null : content.toString())
                 .reasoningContent(reasoning.isEmpty() ? null : reasoning.toString())
+                .reasoningDurationMs(reasoning.isEmpty() ? null : reasoningDurationMs)
                 .parentToolCallId(projectedParentToolCallId(run, boundary))
                 .build();
         persistProjection(run, boundary, "assistant", message);
@@ -406,6 +415,18 @@ public class AgentMessageProjectionService {
 
     private String deltaValue(JsonNode payload) {
         return firstText(payload, "delta", "content", "reasoningContent");
+    }
+
+    private Long nonNegativeLong(JsonNode payload, String field) {
+        JsonNode value = payload.get(field);
+        if (value == null || value.isNull()) {
+            return null;
+        }
+        if (!value.canConvertToLong() || value.longValue() < 0) {
+            throw new IllegalStateException(
+                    "Projected Agent event field must be a non-negative integer: " + field);
+        }
+        return value.longValue();
     }
 
     private String firstText(JsonNode payload, String... fields) {

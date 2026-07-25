@@ -104,6 +104,7 @@ function AssistantTimelineBubble({
       <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md border border-border/20 bg-card/50 px-3.5 py-3">
         <MessageTimeline
           reasoningText={streaming ? runtime.pipeline.reasoningText : undefined}
+          reasoningStartTime={streaming ? runtime.pipeline.reasoningStartTime : undefined}
           reasoningDurationMs={streaming ? runtime.pipeline.reasoningDurationMs : undefined}
           timeline={timeline}
           scrollRef={scrollRef}

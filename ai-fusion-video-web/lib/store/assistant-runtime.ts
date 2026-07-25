@@ -44,15 +44,13 @@ export function makeRuntime(
   conversation: AgentConversation,
   drafts: Record<string, string>,
   runIds: Record<string, string>,
-  lastSequences: Record<string, number>,
 ): AssistantConversationRuntime {
   const conversationId = conversation.conversationId;
   const knownRunId = runIds[conversationId];
-  // A sequence without its run id is unsafe after a refresh. It is discarded
-  // here and the connection coordinator will confirm the current run first.
-  const lastSequence = knownRunId
-    ? Math.max(0, Math.floor(Number.isFinite(lastSequences[conversationId]) ? lastSequences[conversationId] : 0))
-    : 0;
+  // The event cursor is meaningful only together with the in-memory timeline.
+  // After a page refresh the timeline is empty, so replay from the journal
+  // origin to recover reasoning text and its original start timestamp.
+  const lastSequence = 0;
   return {
     conversation,
     messages: [],

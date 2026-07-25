@@ -151,7 +151,6 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
                 conversation,
                 drafts,
                 persisted.runIds ?? {},
-                persisted.lastSequences ?? {},
               );
             }
             const selected = state.selectedConversationId && conversationStates[state.selectedConversationId]
@@ -237,7 +236,6 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
                     conversation,
                     persisted.drafts ?? {},
                     persisted.runIds ?? {},
-                    persisted.lastSequences ?? {},
                   );
             }
             return {
@@ -326,7 +324,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
           status: "completed",
         };
         const runtime = {
-          ...makeRuntime(conversation, {}, {}, {}),
+          ...makeRuntime(conversation, {}, {}),
           // The optimistic conversation has no server history yet. Treat its
           // empty local transcript as loaded so connection recovery cannot
           // race the create request with a history lookup that must 404.

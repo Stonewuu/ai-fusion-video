@@ -19,7 +19,10 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -92,6 +95,8 @@ public final class AgentEventChunkCoalescer {
     private final class CoalescingSubscriber extends BaseSubscriber<AgentEventEnvelope> {
         private final Object monitor = new Object();
         private final Sinks.Many<AgentEventEnvelope> output;
+        private final Map<ReasoningContext, ReasoningTiming> activeReasoning = new HashMap<>();
+        private final Map<ReasoningContext, ReasoningTiming> completedReasoning = new HashMap<>();
         private DeltaAccumulator pending;
         private Disposable timer;
         private boolean done;
@@ -111,6 +116,7 @@ public final class AgentEventChunkCoalescer {
                 if (done) {
                     return;
                 }
+                event = addReasoningTiming(event);
                 DeltaIdentity identity = DeltaIdentity.of(event);
                 String delta = delta(event);
                 if (identity == null || delta == null) {
@@ -218,9 +224,123 @@ public final class AgentEventChunkCoalescer {
             synchronized (monitor) {
                 done = true;
                 pending = null;
+                activeReasoning.clear();
+                completedReasoning.clear();
                 cancelTimerLocked();
             }
             cancel();
+        }
+
+        private AgentEventEnvelope addReasoningTiming(AgentEventEnvelope event) {
+            ReasoningContext context = ReasoningContext.of(event);
+            return switch (event.rawEventType()) {
+                case "THINKING_BLOCK_START" -> {
+                    ReasoningTiming previous = completedReasoning.remove(context);
+                    activeReasoning.put(
+                            context,
+                            new ReasoningTiming(
+                                    previous == null ? event.createdAt() : previous.startedAt(),
+                                    null));
+                    yield event;
+                }
+                case "THINKING_BLOCK_DELTA" -> {
+                    ReasoningTiming timing = activeReasoning.computeIfAbsent(
+                            context,
+                            ignored -> new ReasoningTiming(event.createdAt(), null));
+                    yield withReasoningTiming(event, timing.startedAt(), null);
+                }
+                case "THINKING_BLOCK_END" -> {
+                    ReasoningTiming timing = activeReasoning.remove(context);
+                    if (timing != null) {
+                        completedReasoning.put(
+                                context,
+                                timing.completedAt(event.createdAt()));
+                    }
+                    yield event;
+                }
+                default -> attachCompletedReasoning(event, context);
+            };
+        }
+
+        private AgentEventEnvelope attachCompletedReasoning(
+                AgentEventEnvelope event,
+                ReasoningContext context) {
+            if ("TEXT_BLOCK_START".equals(event.rawEventType())) {
+                ReasoningTiming active = activeReasoning.remove(context);
+                if (active != null) {
+                    completedReasoning.put(context, active.completedAt(event.createdAt()));
+                }
+                return event;
+            }
+            if (event.outputType() == null || "REASONING".equals(event.outputType())) {
+                return event;
+            }
+
+            ReasoningTiming timing = completedReasoning.remove(context);
+            if (timing == null) {
+                ReasoningTiming active = activeReasoning.remove(context);
+                if (active != null) {
+                    timing = active.completedAt(event.createdAt());
+                }
+            }
+            return timing == null
+                    ? event
+                    : withReasoningTiming(event, null, timing.durationMs());
+        }
+    }
+
+    private AgentEventEnvelope withReasoningTiming(
+            AgentEventEnvelope event,
+            Instant startedAt,
+            Long durationMs) {
+        if (!event.payload().isObject()) {
+            throw new IllegalArgumentException("Agent event payload must be an object");
+        }
+        ObjectNode payload = ((ObjectNode) event.payload()).deepCopy();
+        if (startedAt != null) {
+            payload.put("reasoningStartTime", startedAt.toEpochMilli());
+        }
+        if (durationMs != null) {
+            payload.put("reasoningDurationMs", durationMs);
+        }
+        return new AgentEventEnvelope(
+                event.rawEventId(),
+                event.rawEventType(),
+                event.source(),
+                event.replyId(),
+                event.blockId(),
+                event.toolCallId(),
+                event.parentToolCallId(),
+                event.agentName(),
+                event.outputType(),
+                payload,
+                event.createdAt());
+    }
+
+    private record ReasoningContext(
+            String source,
+            String replyId,
+            String parentToolCallId,
+            String agentName) {
+
+        private static ReasoningContext of(AgentEventEnvelope event) {
+            return new ReasoningContext(
+                    event.source(),
+                    event.replyId(),
+                    event.parentToolCallId(),
+                    event.agentName());
+        }
+    }
+
+    private record ReasoningTiming(Instant startedAt, Long durationMs) {
+
+        private ReasoningTiming {
+            Objects.requireNonNull(startedAt, "startedAt must not be null");
+        }
+
+        private ReasoningTiming completedAt(Instant endedAt) {
+            long elapsed = Math.max(0L, Duration.between(startedAt, endedAt).toMillis());
+            return new ReasoningTiming(startedAt, elapsed);
         }
     }
 

@@ -171,6 +171,7 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
         ) : (
           <MessageTimeline
             reasoningText={task.state.reasoningText}
+            reasoningStartTime={task.state.reasoningStartTime}
             reasoningDurationMs={task.state.reasoningDurationMs}
             timeline={timeline}
             scrollRef={timelineRef}
@@ -304,7 +305,7 @@ function HistoryDetailPanel({
         ) : (
           <MessageTimeline
             reasoningText={firstAssistant?.reasoningContent || undefined}
-            reasoningDurationMs={firstAssistant?.reasoningDurationMs || undefined}
+            reasoningDurationMs={firstAssistant?.reasoningDurationMs ?? undefined}
             timeline={timeline}
             scrollRef={timelineRef}
             initialScrollToEnd

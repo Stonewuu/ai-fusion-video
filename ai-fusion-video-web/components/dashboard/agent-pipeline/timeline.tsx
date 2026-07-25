@@ -22,6 +22,62 @@ import {
 import { ToolResultDisplay } from "./results";
 import type { SubTimelineItem, TimelineItem } from "./types";
 
+function TimedReasoningThink({
+  titlePrefix,
+  text,
+  startedAtMs,
+  durationMs,
+  streaming,
+  compact,
+  maxHeight,
+}: {
+  titlePrefix: string;
+  text: string;
+  startedAtMs?: number;
+  durationMs?: number;
+  streaming: boolean;
+  compact?: boolean;
+  maxHeight?: number;
+}) {
+  const [now, setNow] = useState(() => Date.now());
+  const timerRunning = streaming && durationMs === undefined && startedAtMs !== undefined;
+
+  useEffect(() => {
+    if (!timerRunning) return;
+    const updateNow = () => setNow(Date.now());
+    updateNow();
+    const timer = window.setInterval(updateNow, 100);
+    window.addEventListener("focus", updateNow);
+    document.addEventListener("visibilitychange", updateNow);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("focus", updateNow);
+      document.removeEventListener("visibilitychange", updateNow);
+    };
+  }, [startedAtMs, timerRunning]);
+
+  const displayedDurationMs = durationMs !== undefined
+    ? durationMs
+    : timerRunning && startedAtMs !== undefined
+      ? Math.max(0, now - startedAtMs)
+      : undefined;
+  const title = displayedDurationMs !== undefined
+    ? `${titlePrefix} (${(displayedDurationMs / 1000).toFixed(1)}s)`
+    : streaming
+      ? `${titlePrefix}中`
+      : titlePrefix;
+
+  return (
+    <StreamThink
+      title={title}
+      content={text}
+      compact={compact}
+      maxHeight={maxHeight}
+      streaming={streaming && durationMs === undefined}
+    />
+  );
+}
+
 function SubTimelineToolItem({
   child,
 }: {
@@ -179,16 +235,13 @@ function ToolTimelineItem({
                         item.status === "calling" &&
                         childIndex === childCount - 1 &&
                         child.durationMs === undefined;
-                      const childTitle = child.durationMs !== undefined
-                        ? `子Agent 思考 (${(child.durationMs / 1000).toFixed(1)}s)`
-                        : childIsStreaming
-                          ? "子Agent 思考中"
-                          : "子Agent 思考";
                       return (
                         <div key={`sub-reasoning-${childIndex}`} className="text-xs">
-                          <StreamThink
-                            title={childTitle}
-                            content={child.text}
+                          <TimedReasoningThink
+                            titlePrefix="子Agent 思考"
+                            text={child.text}
+                            startedAtMs={child.startedAtMs}
+                            durationMs={child.durationMs}
                             compact
                             maxHeight={120}
                             streaming={childIsStreaming}
@@ -256,20 +309,17 @@ export function AgentPipelineTimeline({
             isActive &&
             index === timeline.length - 1 &&
             item.durationMs === undefined;
-          const title = item.durationMs !== undefined
-            ? `思考 (${(item.durationMs / 1000).toFixed(1)}s)`
-            : reasoningStreaming
-              ? "思考中"
-              : "思考";
           return (
             <motion.div
               key={`reasoning-${index}`}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
             >
-              <StreamThink
-                title={title}
-                content={item.text}
+              <TimedReasoningThink
+                titlePrefix="思考"
+                text={item.text}
+                startedAtMs={item.startedAtMs}
+                durationMs={item.durationMs}
                 streaming={reasoningStreaming}
               />
             </motion.div>

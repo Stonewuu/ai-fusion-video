@@ -279,6 +279,7 @@ export function createAssistantConnectionCoordinator(
                   conversationId,
                   lastSequence: afterSequence,
                   reasoningText: "",
+                  reasoningStartTime: undefined,
                   reasoningDurationMs: undefined,
                   error: undefined,
                 },

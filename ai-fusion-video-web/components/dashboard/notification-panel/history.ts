@@ -9,6 +9,12 @@ import type {
 import { persistedToolTimelineStatus } from "@/lib/store/pipeline-timeline";
 import { isSubAgentTool } from "./constants";
 
+function validDurationMs(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
 function pushReasoningToTimeline(
   timeline: TimelineItem[],
   text: string,
@@ -180,6 +186,7 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
   };
 
   for (const msg of messages) {
+    const reasoningDurationMs = validDurationMs(msg.reasoningDurationMs);
     if (msg.role === "tool") {
       const toolCallId = msg.toolCallId || `hist-tool-${msg.id}`;
 
@@ -262,20 +269,20 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
           pushReasoningToSubTimeline(
             children,
             msg.reasoningContent,
-            msg.reasoningDurationMs
+            reasoningDurationMs
           );
-        } else if (msg.reasoningDurationMs !== undefined) {
+        } else if (reasoningDurationMs !== undefined) {
           updateLastSubTimelineReasoningDuration(
             children,
-            msg.reasoningDurationMs
+            reasoningDurationMs
           );
         }
 
         if (msg.content) {
-          if (msg.reasoningDurationMs !== undefined) {
+          if (reasoningDurationMs !== undefined) {
             updateLastSubTimelineReasoningDuration(
               children,
-              msg.reasoningDurationMs
+              reasoningDurationMs
             );
           }
           pushContentToSubTimeline(children, msg.content);
@@ -288,15 +295,15 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
       pushReasoningToTimeline(
         timeline,
         msg.reasoningContent,
-        msg.reasoningDurationMs
+        reasoningDurationMs
       );
-    } else if (msg.reasoningDurationMs !== undefined) {
-      updateLastTimelineReasoningDuration(timeline, msg.reasoningDurationMs);
+    } else if (reasoningDurationMs !== undefined) {
+      updateLastTimelineReasoningDuration(timeline, reasoningDurationMs);
     }
 
     if (msg.content) {
-      if (msg.reasoningDurationMs !== undefined) {
-        updateLastTimelineReasoningDuration(timeline, msg.reasoningDurationMs);
+      if (reasoningDurationMs !== undefined) {
+        updateLastTimelineReasoningDuration(timeline, reasoningDurationMs);
       }
       pushContentToTimeline(timeline, msg.content);
     }

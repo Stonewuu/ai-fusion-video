@@ -98,7 +98,8 @@ class AgentProjectionRecoveryIT {
         append(run, "THINKING_BLOCK_DELTA", "REASONING", null,
                 objectPayload("delta", "先想"));
         append(run, "TEXT_BLOCK_DELTA", "CONTENT", null,
-                objectPayload("delta", "第一段"));
+                objectPayload("delta", "第一段")
+                        .put("reasoningDurationMs", 2500L));
         append(run, "TOOL_CALL_DELTA", null, "tool-1",
                 objectPayload("delta", "{\"city\":"));
         append(run, "TOOL_CALL_DELTA", null, "tool-1",
@@ -125,6 +126,7 @@ class AgentProjectionRecoveryIT {
         assertThat(projected).hasSize(4);
         assertThat(projected.get(0).getRole()).isEqualTo("assistant");
         assertThat(projected.get(0).getReasoningContent()).isEqualTo("先想");
+        assertThat(projected.get(0).getReasoningDurationMs()).isEqualTo(2500L);
         assertThat(projected.get(0).getContent()).isEqualTo("第一段");
         assertThat(projected.get(1).getRole()).isEqualTo("tool");
         assertThat(projected.get(1).getToolStatus()).isEqualTo("running");

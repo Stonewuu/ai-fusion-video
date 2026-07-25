@@ -30,17 +30,29 @@ export function createPendingPipelineState(): AgentPipelineState {
 
 function appendReasoningToSubTimeline(
   children: SubTimelineItem[],
-  reasoningContent: string
+  reasoningContent: string,
+  startedAtMs?: number
 ): SubTimelineItem[] {
   const last = children[children.length - 1];
   if (last && last.type === "reasoning") {
     return [
       ...children.slice(0, -1),
-      { ...last, text: last.text + reasoningContent },
+      {
+        ...last,
+        text: last.text + reasoningContent,
+        startedAtMs: last.startedAtMs ?? startedAtMs,
+      },
     ];
   }
 
-  return [...children, { type: "reasoning", text: reasoningContent }];
+  return [
+    ...children,
+    {
+      type: "reasoning",
+      text: reasoningContent,
+      ...(startedAtMs !== undefined ? { startedAtMs } : {}),
+    },
+  ];
 }
 
 function updateLastSubTimelineReasoningDuration(
@@ -63,17 +75,29 @@ function updateLastSubTimelineReasoningDuration(
 
 function appendReasoningToTimeline(
   timeline: TimelineItem[],
-  reasoningContent: string
+  reasoningContent: string,
+  startedAtMs?: number
 ): TimelineItem[] {
   const last = timeline[timeline.length - 1];
   if (last && last.type === "reasoning") {
     return [
       ...timeline.slice(0, -1),
-      { ...last, text: last.text + reasoningContent },
+      {
+        ...last,
+        text: last.text + reasoningContent,
+        startedAtMs: last.startedAtMs ?? startedAtMs,
+      },
     ];
   }
 
-  return [...timeline, { type: "reasoning", text: reasoningContent }];
+  return [
+    ...timeline,
+    {
+      type: "reasoning",
+      text: reasoningContent,
+      ...(startedAtMs !== undefined ? { startedAtMs } : {}),
+    },
+  ];
 }
 
 function updateLastTimelineReasoningDuration(
@@ -120,13 +144,9 @@ function appendToToolChildren(
 
 function appendContentToSubTimeline(
   children: SubTimelineItem[],
-  content: string,
-  reasoningDurationMs?: number
+  content: string
 ): SubTimelineItem[] {
-  let updated = [...children];
-  if (reasoningDurationMs) {
-    updated = updateLastSubTimelineReasoningDuration(updated, reasoningDurationMs);
-  }
+  const updated = [...children];
   const last = updated[updated.length - 1];
   if (last && last.type === "content") {
     return [
@@ -153,6 +173,18 @@ function appendContentToTimeline(
   return [...timeline, { type: "content", text: content }];
 }
 
+function validTimestamp(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value > 0
+    ? value
+    : undefined;
+}
+
+function validDuration(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
+
 export function reducePipelineEvent(
   prev: AgentPipelineState,
   event: AiChatStreamEvent
@@ -176,23 +208,58 @@ export function reducePipelineEvent(
   }
 
   const isSubAgent = !!event.parentToolCallId;
+  const eventReasoningDurationMs = validDuration(event.reasoningDurationMs);
+
+  if (eventReasoningDurationMs !== undefined) {
+    if (isSubAgent) {
+      next.timeline = appendToToolChildren(
+        next.timeline,
+        event.parentToolCallId!,
+        (children) =>
+          updateLastSubTimelineReasoningDuration(
+            children,
+            eventReasoningDurationMs
+          )
+      );
+    } else {
+      next.reasoningDurationMs = eventReasoningDurationMs;
+      next.timeline = updateLastTimelineReasoningDuration(
+        next.timeline,
+        eventReasoningDurationMs
+      );
+    }
+  }
 
   switch (event.outputType) {
     case "REASONING":
       if (event.reasoningContent) {
+        const reasoningStartTime = validTimestamp(event.reasoningStartTime);
         if (isSubAgent) {
           next.timeline = appendToToolChildren(
             next.timeline,
             event.parentToolCallId!,
             (children) =>
-              appendReasoningToSubTimeline(children, event.reasoningContent!)
+              appendReasoningToSubTimeline(
+                children,
+                event.reasoningContent!,
+                reasoningStartTime
+              )
           );
         } else {
           next.status = prev.status === "cancelling" ? "cancelling" : "reasoning";
+          const last = next.timeline[next.timeline.length - 1];
+          if (!last || last.type !== "reasoning") {
+            next.reasoningText = "";
+            next.reasoningDurationMs = undefined;
+            next.reasoningStartTime = reasoningStartTime;
+          } else if (next.reasoningStartTime === undefined) {
+            next.reasoningStartTime = reasoningStartTime;
+          }
           next.reasoningText += event.reasoningContent;
           next.timeline = appendReasoningToTimeline(
             next.timeline,
-            event.reasoningContent
+            event.reasoningContent,
+            reasoningStartTime
           );
         }
       }
@@ -200,13 +267,6 @@ export function reducePipelineEvent(
 
     case "CONTENT":
       next.status = prev.status === "cancelling" ? "cancelling" : "running";
-      if (event.reasoningDurationMs && !isSubAgent) {
-        next.reasoningDurationMs = event.reasoningDurationMs;
-        next.timeline = updateLastTimelineReasoningDuration(
-          next.timeline,
-          event.reasoningDurationMs
-        );
-      }
       if (event.content) {
         if (isSubAgent) {
           next.timeline = appendToToolChildren(
@@ -215,8 +275,7 @@ export function reducePipelineEvent(
             (children) =>
               appendContentToSubTimeline(
                 children,
-                event.content!,
-                event.reasoningDurationMs
+                event.content!
               )
           );
         } else {

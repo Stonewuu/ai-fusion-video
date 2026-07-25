@@ -51,8 +51,8 @@ export interface AiChatStreamEvent {
   outputType: OutputType;
   content?: string;
   reasoningContent?: string;
-  reasoningStartTime?: number;
-  reasoningDurationMs?: number;
+  reasoningStartTime?: number | null;
+  reasoningDurationMs?: number | null;
   toolCalls?: ToolCallInfo[];
   toolCallId?: string;
   toolName?: string;
@@ -259,7 +259,7 @@ export interface AgentMessage {
   /** 父级工具调用 ID（子 Agent 事件归属） */
   parentToolCallId?: string;
   reasoningContent?: string;
-  reasoningDurationMs?: number;
+  reasoningDurationMs?: number | null;
   messageOrder: number;
   createTime?: string;
 }

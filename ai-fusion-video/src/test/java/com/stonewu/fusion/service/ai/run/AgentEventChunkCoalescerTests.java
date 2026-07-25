@@ -67,6 +67,41 @@ class AgentEventChunkCoalescerTests {
                 .verifyComplete();
     }
 
+    @Test
+    void persistsReasoningStartAndFinalDurationAcrossTheReplayableEvents() {
+        AgentEventChunkCoalescer coalescer = coalescer(
+                VirtualTimeScheduler.create(), 1024);
+
+        StepVerifier.create(coalescer.coalesce(Flux.just(
+                        blockEvent("1", "THINKING_BLOCK_START", null,
+                                "2026-07-21T00:00:00Z"),
+                        reasoningDelta("2", "正在思考",
+                                "2026-07-21T00:00:00.200Z"),
+                        blockEvent("3", "THINKING_BLOCK_END", null,
+                                "2026-07-21T00:00:02.500Z"),
+                        blockEvent("4", "TEXT_BLOCK_START", null,
+                                "2026-07-21T00:00:02.600Z"),
+                        contentDelta("5", "回答",
+                                "2026-07-21T00:00:02.700Z"))))
+                .assertNext(event -> assertThat(event.rawEventType())
+                        .isEqualTo("THINKING_BLOCK_START"))
+                .assertNext(event -> {
+                    assertThat(event.rawEventType()).isEqualTo("THINKING_BLOCK_DELTA");
+                    assertThat(event.payload().path("reasoningStartTime").asLong())
+                            .isEqualTo(Instant.parse("2026-07-21T00:00:00Z").toEpochMilli());
+                })
+                .assertNext(event -> assertThat(event.rawEventType())
+                        .isEqualTo("THINKING_BLOCK_END"))
+                .assertNext(event -> assertThat(event.rawEventType())
+                        .isEqualTo("TEXT_BLOCK_START"))
+                .assertNext(event -> {
+                    assertThat(event.rawEventType()).isEqualTo("TEXT_BLOCK_DELTA");
+                    assertThat(event.payload().path("reasoningDurationMs").asLong())
+                            .isEqualTo(2500L);
+                })
+                .verifyComplete();
+    }
+
     private AgentEventChunkCoalescer coalescer(Scheduler scheduler, int maxChars) {
         return new AgentEventChunkCoalescer(
                 new ObjectMapper(),
@@ -89,6 +124,57 @@ class AgentEventChunkCoalescerTests {
                 "CONTENT",
                 JsonNodeFactory.instance.objectNode().put("delta", value),
                 Instant.parse("2026-07-21T00:00:00Z"));
+    }
+
+    private AgentEventEnvelope reasoningDelta(
+            String id, String value, String createdAt) {
+        return new AgentEventEnvelope(
+                id,
+                "THINKING_BLOCK_DELTA",
+                "main",
+                "reply",
+                "thinking-block",
+                null,
+                null,
+                null,
+                "REASONING",
+                JsonNodeFactory.instance.objectNode().put("delta", value),
+                Instant.parse(createdAt));
+    }
+
+    private AgentEventEnvelope contentDelta(
+            String id, String value, String createdAt) {
+        return new AgentEventEnvelope(
+                id,
+                "TEXT_BLOCK_DELTA",
+                "main",
+                "reply",
+                "text-block",
+                null,
+                null,
+                null,
+                "CONTENT",
+                JsonNodeFactory.instance.objectNode().put("delta", value),
+                Instant.parse(createdAt));
+    }
+
+    private AgentEventEnvelope blockEvent(
+            String id, String rawEventType, String outputType, String createdAt) {
+        String blockId = rawEventType.startsWith("THINKING")
+                ? "thinking-block"
+                : "text-block";
+        return new AgentEventEnvelope(
+                id,
+                rawEventType,
+                "main",
+                "reply",
+                blockId,
+                null,
+                null,
+                null,
+                outputType,
+                JsonNodeFactory.instance.objectNode(),
+                Instant.parse(createdAt));
     }
 
     private AgentEventEnvelope tool(String id) {

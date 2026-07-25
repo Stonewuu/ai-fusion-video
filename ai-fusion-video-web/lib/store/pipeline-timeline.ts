@@ -10,7 +10,12 @@ export type SubTimelineItem =
       result?: string;
     }
   | { type: "content"; text: string }
-  | { type: "reasoning"; text: string; durationMs?: number };
+  | {
+      type: "reasoning";
+      text: string;
+      startedAtMs?: number;
+      durationMs?: number;
+    };
 
 export type TimelineItem =
   | {
@@ -23,7 +28,12 @@ export type TimelineItem =
       agentName?: string;
       children?: SubTimelineItem[];
     }
-  | { type: "reasoning"; text: string; durationMs?: number }
+  | {
+      type: "reasoning";
+      text: string;
+      startedAtMs?: number;
+      durationMs?: number;
+    }
   | { type: "content"; text: string };
 
 function cancelCallingSubTimelineTools(
