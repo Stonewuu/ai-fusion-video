@@ -127,6 +127,9 @@ export function AssistantMessageList({
 
   const running = !!runtime && isRunning(runtime);
   const contentReady = !!runtime && (runtime.messagesLoaded || !!runtime.messagesError);
+  const contentVersion = runtime
+    ? `${runtime.messagesLoaded}:${runtime.messages.length}:${runtime.pipeline.lastSequence}`
+    : "pending";
   const showPipelineTimeline = !!runtime && (running || !runtime.messagesLoaded);
   const activeRunId = showPipelineTimeline
     ? runtime?.pipeline.runId ?? runtime?.knownRunId
@@ -148,11 +151,14 @@ export function AssistantMessageList({
     showBackToBottom,
     onViewportScroll,
     onWheel,
+    onKeyDown,
     onTouchStart,
     onTouchMove,
+    onScrollbarPointerDown,
     scrollToBottom,
   } = useAssistantMessageScroll({
     contentReady,
+    contentVersion,
     running,
     inputHeight,
   });
@@ -167,8 +173,10 @@ export function AssistantMessageList({
         className="h-full"
         viewportRef={viewportRef}
         onViewportWheel={onWheel}
+        onViewportKeyDown={onKeyDown}
         onViewportTouchStart={onTouchStart}
         onViewportTouchMove={onTouchMove}
+        onScrollbarPointerDown={onScrollbarPointerDown}
         viewportClassName="assistant-message-viewport"
         viewportStyle={{
           paddingBottom: inputHeight + 28,

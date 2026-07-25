@@ -3,6 +3,8 @@
 import type {
   ComponentPropsWithoutRef,
   CSSProperties,
+  KeyboardEventHandler,
+  PointerEventHandler,
   ReactNode,
   Ref,
   TouchEventHandler,
@@ -20,8 +22,10 @@ interface OverlayScrollAreaProps
   viewportRef?: Ref<HTMLDivElement>;
   onViewportScroll?: UIEventHandler<HTMLDivElement>;
   onViewportWheel?: WheelEventHandler<HTMLDivElement>;
+  onViewportKeyDown?: KeyboardEventHandler<HTMLDivElement>;
   onViewportTouchStart?: TouchEventHandler<HTMLDivElement>;
   onViewportTouchMove?: TouchEventHandler<HTMLDivElement>;
+  onScrollbarPointerDown?: PointerEventHandler<HTMLDivElement>;
   scrollbarClassName?: string;
 }
 
@@ -33,8 +37,10 @@ export function OverlayScrollArea({
   viewportRef,
   onViewportScroll,
   onViewportWheel,
+  onViewportKeyDown,
   onViewportTouchStart,
   onViewportTouchMove,
+  onScrollbarPointerDown,
   scrollbarClassName,
   ...rootProps
 }: OverlayScrollAreaProps) {
@@ -52,6 +58,7 @@ export function OverlayScrollArea({
         style={viewportStyle}
         onScroll={onViewportScroll}
         onWheel={onViewportWheel}
+        onKeyDown={onViewportKeyDown}
         onTouchStart={onViewportTouchStart}
         onTouchMove={onViewportTouchMove}
       >
@@ -60,6 +67,7 @@ export function OverlayScrollArea({
       <ScrollArea.Scrollbar
         data-slot="overlay-scrollbar"
         orientation="vertical"
+        onPointerDown={onScrollbarPointerDown}
         className={cn(
           "z-40 w-2 bg-transparent p-0.5 opacity-60 transition-opacity duration-150 hover:opacity-100 data-scrolling:opacity-100 motion-reduce:transition-none",
           scrollbarClassName,
