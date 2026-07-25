@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -29,6 +30,7 @@ public final class AgentScopeToolSchema {
                 throw new IllegalArgumentException(
                         "AgentScope tool schema root type must be object: " + toolName);
             }
+            validateSchemaNode(parsed, "$", toolName);
             Object additionalProperties = parsed.get("additionalProperties");
             if (Boolean.TRUE.equals(additionalProperties)) {
                 throw new IllegalArgumentException(
@@ -46,6 +48,22 @@ public final class AgentScopeToolSchema {
     public static PreparedSchema prepareSubAgent(
             ObjectMapper objectMapper, String schema, String toolName) {
         return prepare(objectMapper, schema, toolName);
+    }
+
+    private static void validateSchemaNode(Object node, String path, String toolName) {
+        if (node instanceof Map<?, ?> map) {
+            if ("array".equals(map.get("type")) && !map.containsKey("items")) {
+                throw new IllegalArgumentException(
+                        "AgentScope array schema must declare items: " + toolName + " at " + path);
+            }
+            for (Map.Entry<?, ?> entry : map.entrySet()) {
+                validateSchemaNode(entry.getValue(), path + "." + entry.getKey(), toolName);
+            }
+        } else if (node instanceof List<?> list) {
+            for (int index = 0; index < list.size(); index++) {
+                validateSchemaNode(list.get(index), path + '[' + index + ']', toolName);
+            }
+        }
     }
 
     private static String requireText(String value, String field) {

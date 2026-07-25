@@ -485,6 +485,7 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
         );
         const filtered = result.list.filter(
           (conversation) =>
+            conversation.category !== "assistant" &&
             conversation.status !== "running" &&
             !currentConversationIds.has(conversation.conversationId)
         );

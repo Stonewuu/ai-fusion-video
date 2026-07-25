@@ -232,7 +232,7 @@ export interface AgentConversation {
   id: number;
   conversationId: string;
   userId: number;
-  projectId: number;
+  projectId: number | null;
   contextType?: string;
   agentType?: string;
   category?: string;
@@ -247,6 +247,8 @@ export interface AgentConversation {
 export interface AgentMessage {
   id: number;
   conversationId: string;
+  runId?: string;
+  projectionKey?: string;
   role: string;
   content: string;
   referencesJson?: string;

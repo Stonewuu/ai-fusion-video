@@ -86,7 +86,7 @@ public class AssetCreateToolExecutor implements ToolExecutor {
                         "properties": {
                             "type": "object",
                             "additionalProperties": { "type": "string" },
-                            "description": "自定义属性键值对（可选），如 {\"appearance\": \"黑发高个\", \"age\": \"25\"}"
+                            "description": "自定义属性键值对（可选），例如 appearance=黑发高个、age=25"
                         },
                         "initialItem": {
                             "type": "object",

@@ -34,22 +34,38 @@ public class AgentConversationService {
                                             String contextType, Long contextId,
                                             String agentType, String title, String category) {
         AgentConversation existing = conversationMapper.selectOne(
-                new LambdaQueryWrapper<AgentConversation>().eq(AgentConversation::getConversationId, conversationId));
+                new LambdaQueryWrapper<AgentConversation>()
+                        .eq(AgentConversation::getConversationId, conversationId)
+                        .eq(AgentConversation::getDeleted, false));
         if (existing != null) {
             LocalDateTime updatedAt = LocalDateTime.now();
+            boolean assistantConversation = "assistant".equals(existing.getCategory())
+                    || "assistant".equals(category);
+            String existingTitle = existing.getTitle() == null
+                    ? null
+                    : existing.getTitle().trim();
+            boolean placeholderTitle = existingTitle == null
+                    || existingTitle.isBlank()
+                    || "新对话".equals(existingTitle);
+            boolean updateTitle = title != null && (!assistantConversation || placeholderTitle);
             LambdaUpdateWrapper<AgentConversation> metadataUpdate =
                     new LambdaUpdateWrapper<AgentConversation>()
                             .eq(AgentConversation::getConversationId, conversationId)
                             .eq(AgentConversation::getDeleted, false)
-                            .set(title != null, AgentConversation::getTitle, title)
+                            .set(updateTitle, AgentConversation::getTitle, title)
+                            .set(existing.getCategory() == null && category != null,
+                                    AgentConversation::getCategory, category)
                             .set(AgentConversation::getStatus, "running")
                             .set(AgentConversation::getUpdateTime, updatedAt);
             if (conversationMapper.update(null, metadataUpdate) != 1) {
                 throw new IllegalStateException("Agent conversation metadata update failed: "
                         + conversationId);
             }
-            if (title != null) {
+            if (updateTitle) {
                 existing.setTitle(title);
+            }
+            if (existing.getCategory() == null && category != null) {
+                existing.setCategory(category);
             }
             existing.setStatus("running");
             existing.setUpdateTime(updatedAt);
@@ -84,13 +100,29 @@ public class AgentConversationService {
 
     public AgentConversation getByConversationId(String conversationId) {
         return conversationMapper.selectOne(
-                new LambdaQueryWrapper<AgentConversation>().eq(AgentConversation::getConversationId, conversationId));
+                new LambdaQueryWrapper<AgentConversation>()
+                        .eq(AgentConversation::getConversationId, conversationId)
+                        .eq(AgentConversation::getDeleted, false));
+    }
+
+    /**
+     * Resolves a conversation only when it belongs to the supplied user.
+     *
+     * Conversation ids are exposed to the browser, so callers that return
+     * message/history data must never use the unscoped lookup above.
+     */
+    public AgentConversation getOwnedByConversationId(String conversationId, long userId) {
+        return conversationMapper.selectOne(new LambdaQueryWrapper<AgentConversation>()
+                .eq(AgentConversation::getConversationId, conversationId)
+                .eq(AgentConversation::getUserId, userId)
+                .eq(AgentConversation::getDeleted, false));
     }
 
     public PageResult<AgentConversation> listByUser(Long userId, int pageNo, int pageSize) {
         return PageResult.of(conversationMapper.selectPage(new Page<>(pageNo, pageSize),
                 new LambdaQueryWrapper<AgentConversation>()
                         .eq(AgentConversation::getUserId, userId)
+                        .eq(AgentConversation::getDeleted, false)
                         .orderByDesc(AgentConversation::getUpdateTime)));
     }
 
@@ -99,12 +131,14 @@ public class AgentConversationService {
                 new LambdaQueryWrapper<AgentConversation>()
                         .eq(AgentConversation::getUserId, userId)
                         .eq(AgentConversation::getCategory, category)
+                        .eq(AgentConversation::getDeleted, false)
                         .orderByDesc(AgentConversation::getUpdateTime)));
     }
 
     public List<AgentConversation> listByProject(Long projectId) {
         return conversationMapper.selectList(new LambdaQueryWrapper<AgentConversation>()
                 .eq(AgentConversation::getProjectId, projectId)
+                .eq(AgentConversation::getDeleted, false)
                 .orderByDesc(AgentConversation::getUpdateTime));
     }
 
@@ -115,6 +149,7 @@ public class AgentConversationService {
         return conversationMapper.selectList(new LambdaQueryWrapper<AgentConversation>()
                 .eq(AgentConversation::getUserId, userId)
                 .eq(AgentConversation::getStatus, "running")
+                .eq(AgentConversation::getDeleted, false)
                 .orderByDesc(AgentConversation::getUpdateTime));
     }
 
@@ -132,6 +167,7 @@ public class AgentConversationService {
     private LambdaQueryWrapper<AgentConversation> ownedConversation(long id, long userId) {
         return new LambdaQueryWrapper<AgentConversation>()
                 .eq(AgentConversation::getId, id)
-                .eq(AgentConversation::getUserId, userId);
+                .eq(AgentConversation::getUserId, userId)
+                .eq(AgentConversation::getDeleted, false);
     }
 }

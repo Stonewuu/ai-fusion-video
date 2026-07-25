@@ -77,7 +77,20 @@ public class ManageScriptSceneItemsToolExecutor implements ToolExecutor {
                                     "time_of_day": { "type": "string" },
                                     "int_ext": { "type": "string" },
                                     "scene_description": { "type": "string" },
-                                    "dialogues": { "type": "array" }
+                                    "dialogues": {
+                                        "type": "array",
+                                        "items": {
+                                            "type": "object",
+                                            "properties": {
+                                                "type": { "type": "number", "description": "1-对白 2-动作 3-VO 4-镜头指令 5-环境描写" },
+                                                "character_name": { "type": "string" },
+                                                "character_asset_id": { "type": "number" },
+                                                "parenthetical": { "type": "string" },
+                                                "content": { "type": "string" }
+                                            },
+                                            "required": ["type", "content"]
+                                        }
+                                    }
                                 },
                                 "required": ["scene_heading"]
                             }

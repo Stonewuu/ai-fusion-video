@@ -3,6 +3,7 @@ package com.stonewu.fusion.controller.ai;
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.common.PageParam;
 import com.stonewu.fusion.common.PageResult;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.service.ai.AgentConversationService;
@@ -53,6 +54,13 @@ public class AiAssistantController {
     @Operation(summary = "获取对话消息列表")
     @GetMapping("/conversations/{conversationId}/messages")
     public CommonResult<List<AgentMessage>> listMessages(@PathVariable String conversationId) {
+        long currentUserId = requireCurrentUserId();
+        if (conversationService.getOwnedByConversationId(conversationId, currentUserId) == null) {
+            // Return the same not-found response for an unknown id and an id
+            // owned by another user; this avoids turning the endpoint into an
+            // ownership oracle.
+            throw new BusinessException(404, "对话不存在");
+        }
         return CommonResult.success(messageService.listByConversation(conversationId));
     }
 

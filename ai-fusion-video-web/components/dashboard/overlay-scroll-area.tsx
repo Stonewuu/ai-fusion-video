@@ -1,6 +1,12 @@
 "use client";
 
-import type { ComponentPropsWithoutRef, CSSProperties, ReactNode } from "react";
+import type {
+  ComponentPropsWithoutRef,
+  CSSProperties,
+  ReactNode,
+  Ref,
+  UIEventHandler,
+} from "react";
 import { ScrollArea } from "@base-ui/react/scroll-area";
 import { cn } from "@/lib/utils";
 
@@ -9,6 +15,8 @@ interface OverlayScrollAreaProps
   children: ReactNode;
   viewportClassName?: string;
   viewportStyle?: CSSProperties;
+  viewportRef?: Ref<HTMLDivElement>;
+  onViewportScroll?: UIEventHandler<HTMLDivElement>;
   scrollbarClassName?: string;
 }
 
@@ -17,6 +25,8 @@ export function OverlayScrollArea({
   className,
   viewportClassName,
   viewportStyle,
+  viewportRef,
+  onViewportScroll,
   scrollbarClassName,
   ...rootProps
 }: OverlayScrollAreaProps) {
@@ -28,9 +38,11 @@ export function OverlayScrollArea({
     >
       <ScrollArea.Viewport
         data-slot="overlay-scroll-viewport"
+        ref={viewportRef}
         suppressHydrationWarning
         className={cn("h-full w-full overscroll-contain", viewportClassName)}
         style={viewportStyle}
+        onScroll={onViewportScroll}
       >
         {children}
       </ScrollArea.Viewport>

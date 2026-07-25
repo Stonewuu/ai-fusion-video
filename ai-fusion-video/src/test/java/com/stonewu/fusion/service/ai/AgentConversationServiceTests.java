@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.ai;
 
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.stonewu.fusion.config.AgentScopeRuntimeProperties;
 import com.stonewu.fusion.entity.ai.AgentConversation;
@@ -24,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
@@ -138,6 +140,37 @@ class AgentConversationServiceTests {
         verify(conversationMapper, never()).delete(any(LambdaQueryWrapper.class));
     }
 
+    @Test
+    void laterAssistantTurnsDoNotOverwriteTheFirstPromptTitle() {
+        AgentConversation conversation = AgentConversation.builder()
+                .id(17L)
+                .userId(42L)
+                .conversationId("conversation-7")
+                .category("assistant")
+                .title("第一条用户提示")
+                .status("completed")
+                .build();
+        when(conversationMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(conversation);
+        when(conversationMapper.update(isNull(), any(LambdaUpdateWrapper.class))).thenReturn(1);
+
+        AgentConversation updated = conversationService.createOrUpdate(
+                "conversation-7",
+                42L,
+                null,
+                null,
+                null,
+                "ai_assistant_agent",
+                "第二条用户提示",
+                "assistant");
+
+        assertThat(updated.getTitle()).isEqualTo("第一条用户提示");
+        ArgumentCaptor<LambdaUpdateWrapper<AgentConversation>> updateCaptor = updateWrapperCaptor();
+        verify(conversationMapper).update(isNull(), updateCaptor.capture());
+        assertThat(updateCaptor.getValue().getSqlSet())
+                .doesNotContain("title")
+                .contains("status");
+    }
+
     private static void assertOwnedRowPredicate(
             LambdaQueryWrapper<AgentConversation> wrapper, long id, long userId) {
         assertThat(wrapper.getSqlSegment())
@@ -149,6 +182,11 @@ class AgentConversationServiceTests {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static ArgumentCaptor<LambdaQueryWrapper<AgentConversation>> lambdaWrapperCaptor() {
         return ArgumentCaptor.forClass((Class) LambdaQueryWrapper.class);
+    }
+
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static ArgumentCaptor<LambdaUpdateWrapper<AgentConversation>> updateWrapperCaptor() {
+        return ArgumentCaptor.forClass((Class) LambdaUpdateWrapper.class);
     }
 
     private static void await(CountDownLatch latch) {

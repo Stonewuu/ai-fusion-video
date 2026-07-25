@@ -11,6 +11,7 @@ import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
 import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
+import { AssistantDockSlot } from "@/components/dashboard/assistant/dock-slot";
 
 const GLOBAL_SIDEBAR_COLLAPSED_STORAGE_KEY = "fusion-dashboard-sidebar-collapsed";
 
@@ -176,6 +177,7 @@ export default function DashboardLayout({
               </div>
             </OverlayScrollArea>
           </main>
+          {ready && <AssistantDockSlot projectId={currentProjectId} />}
         </motion.div>
       </div>
   );

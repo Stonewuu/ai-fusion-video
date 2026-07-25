@@ -349,6 +349,10 @@ public final class AgentScopePipelineRunService {
         if (title == null) {
             title = userContent;
         }
+        // Titles are generated once from the first visible user prompt. Keep
+        // whitespace deterministic so subsequent requests cannot produce a
+        // different title merely because of formatting in the prompt.
+        title = title.replaceAll("\\s+", " ").trim();
         return title.length() <= 50 ? title : title.substring(0, 50);
     }
 

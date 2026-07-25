@@ -200,6 +200,75 @@
   }
 }
 
+/* 融光助手内部导航按容器宽度切换，而不是读取 viewport breakpoint。 */
+.assistant-shell {
+  container-type: inline-size;
+  container-name: fusion-assistant;
+}
+
+/* Shared Base UI portals must stay above the floating/maximized assistant. */
+body[data-assistant-layer="true"] > [data-base-ui-portal] > * {
+  z-index: 80;
+}
+
+.assistant-wide-only {
+  display: none;
+}
+
+.assistant-narrow-only {
+  display: flex;
+}
+
+.assistant-navigation {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 20;
+  display: flex;
+  width: min(320px, 86%);
+  flex-direction: column;
+  transform: translateX(-102%);
+  border-right: 1px solid color-mix(in oklab, var(--border) 30%, transparent);
+  background: color-mix(in oklab, var(--card) 95%, transparent);
+  box-shadow: 0 20px 60px -30px color-mix(in oklab, var(--foreground) 40%, transparent);
+  transition: transform 220ms ease-out;
+}
+
+.assistant-navigation-open {
+  transform: translateX(0);
+}
+
+@container fusion-assistant (min-width: 880px) {
+  .assistant-wide-only {
+    display: flex;
+  }
+
+  .assistant-narrow-only {
+    display: none;
+  }
+
+  .assistant-navigation {
+    position: relative;
+    inset: auto;
+    z-index: auto;
+    width: 260px;
+    transform: none;
+    border-right: 1px solid color-mix(in oklab, var(--border) 20%, transparent);
+    background: color-mix(in oklab, var(--card) 20%, transparent);
+    box-shadow: none;
+    transition: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-shell * {
+    scroll-behavior: auto;
+  }
+
+  .assistant-navigation {
+    transition-duration: 0.01ms;
+  }
+}
+
 /*
  * Select 浮层自身承担毛玻璃，避免内部列表滚动时伪元素随内容移走。
  * 作用于所有共享 Select，业务页面无需重复覆盖。

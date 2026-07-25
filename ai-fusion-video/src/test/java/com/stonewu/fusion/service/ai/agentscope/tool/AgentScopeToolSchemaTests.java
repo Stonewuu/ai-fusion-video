@@ -41,6 +41,17 @@ class AgentScopeToolSchemaTests {
     }
 
     @Test
+    void rejectsArraySchemasWithoutAnItemDefinition() {
+        assertThatThrownBy(() -> AgentScopeToolSchema.prepare(
+                objectMapper,
+                "{\"type\":\"object\",\"properties\":{\"values\":{\"type\":\"array\"}}}",
+                "query"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("must declare items")
+                .hasMessageContaining("$.properties.values");
+    }
+
+    @Test
     void rejectsMissingSubAgentSchemaWithoutCreatingADefault() {
         assertThatThrownBy(() -> AgentScopeToolSchema.prepareSubAgent(
                 objectMapper, null, "child"))
