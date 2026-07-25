@@ -32,8 +32,8 @@ public class LocalStorageStrategy implements StorageStrategy {
     private static final String URL_PREFIX = "/media";
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(60, TimeUnit.SECONDS)
             .followRedirects(true)
             .build();

@@ -54,8 +54,8 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
     private final AiModelService aiModelService;
     private final MediaStorageService mediaStorageService;
     private final OkHttpClient okHttpClient = new OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(30, TimeUnit.SECONDS)
             .build();
 

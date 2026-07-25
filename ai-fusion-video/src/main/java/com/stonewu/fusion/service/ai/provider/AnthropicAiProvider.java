@@ -35,9 +35,9 @@ public class AnthropicAiProvider extends AbstractAiProvider {
 
         AnthropicApi.Builder apiBuilder = AnthropicApi.builder().apiKey(context.getApiKey());
         apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
-            context.getApiConfig(), 60 * 1000, 3 * 60 * 1000));
+            context.getApiConfig(), 60 * 1000, 25 * 60 * 1000));
         apiBuilder.webClientBuilder(AiProxySupport.webClientBuilder(
-            context.getApiConfig(), "anthropic-provider", Duration.ofSeconds(60)));
+            context.getApiConfig(), "anthropic-provider", Duration.ofMinutes(25)));
         String rootBaseUrl = resolveRootBaseUrl(context.getBaseUrl());
         if (StrUtil.isNotBlank(rootBaseUrl)) {
             apiBuilder.baseUrl(rootBaseUrl);

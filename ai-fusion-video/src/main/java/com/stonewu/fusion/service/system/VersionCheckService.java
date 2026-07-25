@@ -53,9 +53,9 @@ public class VersionCheckService {
     private final Environment environment;
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(10, TimeUnit.SECONDS)
-            .callTimeout(15, TimeUnit.SECONDS)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(25, TimeUnit.MINUTES)
+            .callTimeout(25, TimeUnit.MINUTES)
             .build();
 
     private volatile CachedVersionInfo cachedVersionInfo;

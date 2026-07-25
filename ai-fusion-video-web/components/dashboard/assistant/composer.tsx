@@ -121,7 +121,7 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
 
   return (
     <div ref={containerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-      <div className="pointer-events-auto mx-auto w-full max-w-3xl rounded-2xl border border-border/40 bg-popover/75 p-2 shadow-xl backdrop-blur-xl">
+      <div className="pointer-events-auto mx-auto w-full max-w-3xl rounded-2xl border border-border/20 bg-card/90 p-2 shadow-xl backdrop-blur-xl backdrop-saturate-150">
         {error || modelsError || runtimeMessagesError ? (
           <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-2.5 py-1.5 text-[11px] text-destructive">
             <span className="min-w-0 flex-1 truncate">{error || modelsError || runtimeMessagesError}</span>

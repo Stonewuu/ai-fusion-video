@@ -54,9 +54,9 @@ public class DashScopeAiProvider extends AbstractAiProvider {
                         .baseUrl(DashScopeGenerationSupport.resolveRootBaseUrl(context.getBaseUrl()))
                         .apiKey(apiKey)
                 .restClientBuilder(AiProxySupport.restClientBuilder(
-                    context.getApiConfig(), 60 * 1000, 3 * 60 * 1000))
+                    context.getApiConfig(), 60 * 1000, 25 * 60 * 1000))
                 .webClientBuilder(AiProxySupport.webClientBuilder(
-                    context.getApiConfig(), "dashscope-provider", Duration.ofSeconds(60)))
+                    context.getApiConfig(), "dashscope-provider", Duration.ofMinutes(25)))
                         .build())
                 .defaultOptions(options)
                 .build();

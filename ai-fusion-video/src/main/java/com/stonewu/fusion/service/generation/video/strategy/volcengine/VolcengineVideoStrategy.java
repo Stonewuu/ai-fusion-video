@@ -20,6 +20,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -285,7 +286,10 @@ public class VolcengineVideoStrategy implements VideoGenerationStrategy {
      * 构建 ArkService 实例
      */
     private ArkService buildArkService(ApiConfig apiConfig) {
-        ArkService.Builder builder = ArkService.builder().apiKey(apiConfig.getApiKey());
+        ArkService.Builder builder = ArkService.builder()
+                .apiKey(apiConfig.getApiKey())
+                .connectTimeout(Duration.ofMinutes(1))
+                .timeout(Duration.ofMinutes(25));
         if (StrUtil.isNotBlank(apiConfig.getApiUrl())) {
             builder.baseUrl(apiConfig.getApiUrl());
         } else {

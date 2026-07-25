@@ -56,9 +56,9 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
         OpenAiApi.Builder apiBuilder = OpenAiApi.builder().apiKey(apiKey);
         apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
-            context.getApiConfig(), 60 * 1000, 3 * 60 * 1000));
+            context.getApiConfig(), 60 * 1000, 25 * 60 * 1000));
         apiBuilder.webClientBuilder(AiProxySupport.webClientBuilder(
-            context.getApiConfig(), "openai-compatible-provider", Duration.ofSeconds(60)));
+            context.getApiConfig(), "openai-compatible-provider", Duration.ofMinutes(25)));
         if (StrUtil.isNotBlank(baseUrl)) {
             apiBuilder.baseUrl(baseUrl);
         }

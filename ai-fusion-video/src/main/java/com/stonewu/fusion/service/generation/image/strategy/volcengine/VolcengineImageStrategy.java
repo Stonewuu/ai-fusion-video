@@ -15,6 +15,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -39,7 +40,10 @@ public class VolcengineImageStrategy implements ImageGenerationStrategy {
     @Override
     public List<String> generate(String prompt, String modelCode, int width, int height, int count,
             List<String> imageUrls, ApiConfig apiConfig) {
-        ArkService.Builder builder = ArkService.builder().apiKey(apiConfig.getApiKey());
+        ArkService.Builder builder = ArkService.builder()
+                .apiKey(apiConfig.getApiKey())
+                .connectTimeout(Duration.ofMinutes(1))
+                .timeout(Duration.ofMinutes(25));
         if (StrUtil.isNotBlank(apiConfig.getApiUrl())) {
             builder.baseUrl(apiConfig.getApiUrl());
         }

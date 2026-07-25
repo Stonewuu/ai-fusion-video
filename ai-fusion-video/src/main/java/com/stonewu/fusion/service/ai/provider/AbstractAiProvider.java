@@ -32,8 +32,8 @@ public abstract class AbstractAiProvider implements AiProvider {
     private static final int RESPONSE_PREVIEW_LENGTH = 180;
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(25, TimeUnit.MINUTES)
             .build();
 
     protected String normalizeBaseUrl(String baseUrl) {

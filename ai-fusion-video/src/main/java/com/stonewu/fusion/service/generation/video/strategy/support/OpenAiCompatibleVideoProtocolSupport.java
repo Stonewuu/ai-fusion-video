@@ -58,8 +58,8 @@ public class OpenAiCompatibleVideoProtocolSupport {
     private final PresetArtStyleResourceResolver presetArtStyleResourceResolver;
 
     private final OkHttpClient resourceHttpClient = new OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(300, TimeUnit.SECONDS)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(60, TimeUnit.SECONDS)
             .build();
 

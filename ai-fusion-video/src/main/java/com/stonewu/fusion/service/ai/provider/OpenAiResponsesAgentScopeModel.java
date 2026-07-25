@@ -264,7 +264,7 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
         OpenAIOkHttpClient.Builder builder = OpenAIOkHttpClient.builder()
                 .apiKey(apiKey)
                 .baseUrl(resolveOpenAiJavaBaseUrl())
-                .timeout(Duration.ofMinutes(3))
+                .timeout(Duration.ofMinutes(25))
                 .maxRetries(2)
                 .responseValidation(false);
 

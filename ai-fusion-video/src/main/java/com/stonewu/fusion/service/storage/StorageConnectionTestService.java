@@ -35,8 +35,8 @@ public class StorageConnectionTestService {
     private final StorageUrlResolver storageUrlResolver;
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(10, TimeUnit.SECONDS)
-            .readTimeout(20, TimeUnit.SECONDS)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(25, TimeUnit.MINUTES)
             .followRedirects(true)
             .build();
 

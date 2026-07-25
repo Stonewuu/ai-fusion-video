@@ -14,6 +14,7 @@ import org.springframework.ai.ollama.api.OllamaChatOptions;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -39,8 +40,15 @@ public class OllamaAiProvider extends AbstractAiProvider {
         applyDouble(context.getConfig(), "temperature", optionsBuilder::temperature);
         applyDouble(context.getConfig(), "topP", optionsBuilder::topP);
 
+        OllamaApi ollamaApi = OllamaApi.builder()
+                .baseUrl(baseUrl)
+                .restClientBuilder(AiProxySupport.restClientBuilder(
+                        context.getApiConfig(), 60 * 1000, 25 * 60 * 1000))
+                .webClientBuilder(AiProxySupport.webClientBuilder(
+                        context.getApiConfig(), "ollama-provider", Duration.ofMinutes(25)))
+                .build();
         return org.springframework.ai.ollama.OllamaChatModel.builder()
-                .ollamaApi(OllamaApi.builder().baseUrl(baseUrl).build())
+                .ollamaApi(ollamaApi)
                 .defaultOptions(optionsBuilder.build())
                 .build();
     }

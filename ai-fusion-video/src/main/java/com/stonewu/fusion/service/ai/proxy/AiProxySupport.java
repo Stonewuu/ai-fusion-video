@@ -10,6 +10,7 @@ import io.agentscope.core.model.transport.HttpTransportConfig;
 import io.agentscope.core.model.transport.OkHttpTransport;
 import io.agentscope.core.model.transport.ProxyConfig;
 import io.agentscope.core.model.transport.ProxyType;
+import io.netty.channel.ChannelOption;
 import okhttp3.OkHttpClient;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
@@ -136,6 +137,7 @@ public final class AiProxySupport {
         HttpClient httpClient = HttpClient.create(provider)
                 .compress(true)
                 .keepAlive(true)
+                .option(ChannelOption.CONNECT_TIMEOUT_MILLIS, 60 * 1000)
                 .responseTimeout(responseTimeout);
         httpClient = applyToReactorNetty(httpClient, apiConfig);
         return WebClient.builder().clientConnector(new ReactorClientHttpConnector(httpClient));
@@ -188,15 +190,14 @@ public final class AiProxySupport {
 
     public static io.agentscope.core.model.transport.HttpTransport agentScopeHttpTransport(ApiConfig apiConfig) {
         ProxyConfig proxyConfig = agentScopeProxyConfig(apiConfig);
-        if (proxyConfig == null) {
-            return null;
+        HttpTransportConfig.Builder transportBuilder = HttpTransportConfig.builder()
+                .connectTimeout(Duration.ofMinutes(1))
+                .readTimeout(Duration.ofMinutes(25))
+                .writeTimeout(Duration.ofSeconds(60));
+        if (proxyConfig != null) {
+            transportBuilder.proxy(proxyConfig);
         }
-        HttpTransportConfig transportConfig = HttpTransportConfig.builder()
-                .connectTimeout(Duration.ofSeconds(60))
-                .readTimeout(Duration.ofMinutes(3))
-                .writeTimeout(Duration.ofSeconds(60))
-                .proxy(proxyConfig)
-                .build();
+        HttpTransportConfig transportConfig = transportBuilder.build();
         return OkHttpTransport.builder().config(transportConfig).build();
     }
 

@@ -11,17 +11,7 @@
 <table align="center" style="margin: 0 auto; display: table;">
   <tr>
     <td align="center">
-      <sub>⚡️ <b>特别赞助</b> ⚡️</sub>
-      <br />
-      <a href="https://doloffer.com" target="_blank"><font size="4"><b>doloffer</b></font></a>
-      <br />
-      <br />
-      <a href="https://doloffer.com" target="_blank">
-        <img width="539"  alt="image" src="https://github.com/user-attachments/assets/825cf226-0510-4c46-a9ad-a90d4de668b8" />
-      </a>
-      <br />
-      <sub>优惠价GPT  、claude、YouTube（含音乐）会员充值，正版订阅 售后无忧，https://doloffer.com 9折优惠码：AI8888 </sub>
-      <br />
+      想让你的品牌出现在这里？<a href="mailto:me@stonewu.com">联系我</a>
     </td>
   </tr>
 </table>
