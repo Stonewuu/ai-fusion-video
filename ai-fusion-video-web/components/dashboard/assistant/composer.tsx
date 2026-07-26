@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  startTransition,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -20,12 +21,38 @@ import { useAssistantStore } from "@/lib/store/assistant-store";
 
 interface AssistantComposerProps {
   active: boolean;
+  tooltipsEnabled: boolean;
   projectId?: number | null;
   inputRef?: RefObject<HTMLTextAreaElement | null>;
   onHeightChange: (height: number) => void;
 }
 
-export function AssistantComposer({ active, projectId, inputRef, onHeightChange }: AssistantComposerProps) {
+let cachedAssistantModels: AiModel[] | null = null;
+let cachedAssistantModelsAt = 0;
+let assistantModelsRequest: Promise<AiModel[]> | null = null;
+const ASSISTANT_MODELS_CACHE_TTL_MS = 30_000;
+
+function loadAssistantModels() {
+  if (cachedAssistantModels && Date.now() - cachedAssistantModelsAt < ASSISTANT_MODELS_CACHE_TTL_MS) {
+    return Promise.resolve(cachedAssistantModels);
+  }
+  if (!assistantModelsRequest) {
+    assistantModelsRequest = aiModelApi.listByType(1)
+      .then((result) => {
+        cachedAssistantModels = result;
+        cachedAssistantModelsAt = Date.now();
+        assistantModelsRequest = null;
+        return result;
+      })
+      .catch((error: unknown) => {
+        assistantModelsRequest = null;
+        throw error;
+      });
+  }
+  return assistantModelsRequest;
+}
+
+export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef, onHeightChange }: AssistantComposerProps) {
   const router = useRouter();
   const selectedConversationId = useAssistantStore((state) => state.selectedConversationId);
   const text = useAssistantStore((state) =>
@@ -49,9 +76,9 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
   const stopGeneration = useAssistantStore((state) => state.stopGeneration);
   const connectionConversationId = useAssistantStore((state) => state.connection?.conversationId);
   const [models, setModels] = useState<AiModel[]>([]);
-  const [modelsLoaded, setModelsLoaded] = useState(false);
-  const [modelsLoading, setModelsLoading] = useState(false);
+  const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
+  const [modelLoadAttempt, setModelLoadAttempt] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
@@ -65,23 +92,47 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
   const sendDisabled = !text.trim() || !selectedModelId || !models.length || submitting;
 
   useEffect(() => {
-    if (!active || modelsLoaded || modelsLoading) return;
-    setModelsLoading(true);
-    setModelsError(null);
-    void aiModelApi.listByType(1)
+    if (!active) return;
+    let cancelled = false;
+    let idleHandle: number | null = null;
+    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const beginLoad = () => {
+      if (cancelled) return;
+      void loadAssistantModels()
       .then((result) => {
-        setModels(result);
-        const preferred = selectedModelId && result.some((model) => model.id === selectedModelId)
-          ? selectedModelId
-          : result.find((model) => model.defaultModel)?.id ?? result[0]?.id ?? null;
-        if (preferred !== selectedModelId) setSelectedModelId(preferred);
+        if (cancelled) return;
+        startTransition(() => {
+          setModels(result);
+          const currentSelectedModelId = useAssistantStore.getState().selectedModelId;
+          const preferred = currentSelectedModelId && result.some((model) => model.id === currentSelectedModelId)
+            ? currentSelectedModelId
+            : result.find((model) => model.defaultModel)?.id ?? result[0]?.id ?? null;
+          if (preferred !== currentSelectedModelId) setSelectedModelId(preferred);
+          setModelsLoading(false);
+        });
       })
-      .catch((requestError: unknown) => setModelsError(requestError instanceof Error ? requestError.message : "模型加载失败"))
-      .finally(() => {
+      .catch((requestError: unknown) => {
+        if (cancelled) return;
+        setModelsError(requestError instanceof Error ? requestError.message : "模型加载失败");
         setModelsLoading(false);
-        setModelsLoaded(true);
       });
-  }, [active, modelsLoaded, modelsLoading, selectedModelId, setSelectedModelId]);
+    };
+
+    if (modelLoadAttempt > 0 || cachedAssistantModels) {
+      beginLoad();
+    } else if ("requestIdleCallback" in window) {
+      idleHandle = window.requestIdleCallback(beginLoad, { timeout: 1200 });
+    } else {
+      fallbackTimer = setTimeout(beginLoad, 250);
+    }
+
+    return () => {
+      cancelled = true;
+      if (idleHandle !== null) window.cancelIdleCallback(idleHandle);
+      if (fallbackTimer !== null) clearTimeout(fallbackTimer);
+    };
+  }, [active, modelLoadAttempt, setSelectedModelId]);
 
   useLayoutEffect(() => {
     const element = containerRef.current;
@@ -125,7 +176,7 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
         {error || modelsError || runtimeMessagesError ? (
           <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-2.5 py-1.5 text-[11px] text-destructive">
             <span className="min-w-0 flex-1 truncate">{error || modelsError || runtimeMessagesError}</span>
-            {modelsError ? <Button type="button" variant="destructive-ghost" size="xs" onClick={() => { setModels([]); setModelsError(null); setModelsLoaded(false); }}>重试</Button> : null}
+            {modelsError ? <Button type="button" variant="destructive-ghost" size="xs" onClick={() => { setModels([]); setModelsLoading(true); setModelsError(null); setModelLoadAttempt((attempt) => attempt + 1); }}>重试</Button> : null}
           </div>
         ) : null}
 
@@ -136,7 +187,7 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
           }}
           value={text}
           rows={3}
-          placeholder={models.length ? "发挥想象…" : "请先配置一个对话模型"}
+          placeholder="发挥想象…"
           disabled={!models.length || modelsLoading || submitting || running}
           data-assistant-interactive="true"
           className="min-h-20 max-h-40 border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0"
@@ -152,7 +203,6 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
 
         <div className="flex flex-wrap items-center gap-2 px-1 pt-1">
           <div className="flex min-w-0 items-center gap-2">
-            {modelsLoading ? <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none text-muted-foreground" /> : null}
             {models.length ? (
               <Select
                 items={selectItems}
@@ -199,6 +249,11 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
                   </SelectGroup>
                 </SelectContent>
               </Select>
+            ) : modelsLoading ? (
+              <div className="flex h-9 w-48 items-center gap-2 px-2 text-xs text-muted-foreground" aria-label="加载对话模型">
+                <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
+                <span>加载对话模型</span>
+              </div>
             ) : (
               <Button type="button" variant="link" size="xs" onClick={() => router.push("/settings/ai-models")}>
                 <Settings2 /> 模型设置
@@ -232,7 +287,7 @@ export function AssistantComposer({ active, projectId, inputRef, onHeightChange 
                 <Square /> 停止
               </Button>
             ) : (
-              <Tooltip>
+              <Tooltip disabled={!tooltipsEnabled}>
                 <TooltipTrigger
                   render={
                     <span

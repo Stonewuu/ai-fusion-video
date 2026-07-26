@@ -207,22 +207,83 @@
   container-type: inline-size;
 }
 
-.assistant-running-glow {
-  animation: assistant-running-halo 1.8s ease-out infinite;
-  will-change: box-shadow;
+[data-assistant-launcher-status="idle"] {
+  --assistant-launcher-accent: color-mix(in oklab, oklch(0.606 0.25 292.717) 36%, transparent);
+  border-color: var(--assistant-launcher-accent);
 }
 
-@keyframes assistant-running-halo {
+[data-assistant-launcher-status="running"] {
+  --assistant-launcher-accent: color-mix(in oklab, var(--primary) 64%, transparent);
+  border-color: var(--assistant-launcher-accent);
+}
+
+[data-assistant-launcher-status="completed"] {
+  --assistant-launcher-accent: color-mix(in oklab, oklch(0.696 0.17 162.48) 52%, transparent);
+  border-color: var(--assistant-launcher-accent);
+}
+
+.assistant-launcher-waves {
+  --assistant-wave-color: var(--assistant-launcher-accent);
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  animation: assistant-waves-enter 240ms ease-out 80ms both;
+}
+
+.assistant-launcher-wave {
+  position: absolute;
+  inset: 0;
+  border-color: var(--assistant-wave-color);
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 9999px;
+  opacity: 0;
+  animation: assistant-wave-breathe 3s linear infinite;
+  will-change: opacity, transform;
+}
+
+.assistant-launcher-wave:nth-child(2) {
+  animation-delay: -1s;
+}
+
+.assistant-launcher-wave:nth-child(3) {
+  animation-delay: -2s;
+}
+
+@keyframes assistant-wave-breathe {
   0% {
-    box-shadow:
-      0 0 0 0 color-mix(in oklab, var(--primary) 24%, transparent),
-      0 8px 24px -12px color-mix(in oklab, var(--foreground) 24%, transparent);
+    opacity: 0;
+    transform: scale(0.98);
   }
-  75%,
+
+  8% {
+    opacity: 0.18;
+    transform: scale(1);
+  }
+
+  18% {
+    opacity: 0.72;
+    transform: scale(1.1);
+  }
+
+  70% {
+    opacity: 0.28;
+  }
+
   100% {
-    box-shadow:
-      0 0 0 14px color-mix(in oklab, var(--primary) 0%, transparent),
-      0 8px 24px -12px color-mix(in oklab, var(--foreground) 24%, transparent);
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+@keyframes assistant-waves-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
   }
 }
 
@@ -280,11 +341,20 @@ body[data-assistant-layer="true"] > [data-base-ui-portal] > * {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .assistant-running-glow {
+  .assistant-launcher-waves {
     animation: none;
-    box-shadow:
-      0 0 0 4px color-mix(in oklab, var(--primary) 8%, transparent),
-      0 0 22px color-mix(in oklab, var(--primary) 16%, transparent);
+  }
+
+  .assistant-launcher-wave {
+    animation: none;
+    inset: -9px;
+    border-width: 1px;
+    opacity: 0.5;
+    will-change: auto;
+  }
+
+  .assistant-launcher-wave:not(:first-child) {
+    display: none;
   }
 
   .assistant-shell * {

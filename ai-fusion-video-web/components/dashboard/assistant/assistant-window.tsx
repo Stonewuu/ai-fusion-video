@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Loader2 } from "lucide-react";
 import { AssistantComposer } from "./composer";
 import { ConversationNavigation, AssistantEmptyState } from "./conversation-navigation";
 import { AssistantMessageList } from "./message-list";
@@ -23,6 +24,9 @@ interface AssistantWindowProps {
   onToggleMaximize: () => void;
   onClose: () => void;
   onRectPaint: (rect: AssistantRect) => void;
+  interactionGuardActive: boolean;
+  onInteractionGuardRelease: () => void;
+  contentActive: boolean;
   onDockResizeStart?: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }
 
@@ -51,6 +55,9 @@ export function AssistantWindow({
   onToggleMaximize,
   onClose,
   onRectPaint,
+  interactionGuardActive,
+  onInteractionGuardRelease,
+  contentActive,
   onDockResizeStart,
 }: AssistantWindowProps) {
   const selectedConversationId = useAssistantStore((state) => state.selectedConversationId);
@@ -194,18 +201,23 @@ export function AssistantWindow({
         <section className="relative flex min-w-0 flex-1 flex-col bg-background/20">
           {mode !== "collapsed"
             ? selectedConversationId
-              ? (
+              ? contentActive ? (
                   <AssistantMessageList
                     key={selectedConversationId}
                     conversationId={selectedConversationId}
                     inputHeight={inputHeight}
                   />
+                ) : (
+                  <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> 加载消息
+                  </div>
                 )
               : <AssistantEmptyState />
             : null}
           {mode !== "collapsed" ? (
             <AssistantComposer
-              active
+              active={contentActive}
+              tooltipsEnabled={!interactionGuardActive}
               projectId={projectId}
               inputRef={inputRef}
               onHeightChange={setInputHeight}
@@ -235,6 +247,15 @@ export function AssistantWindow({
           onPointerDown={(event) => startResize(handle.direction, event)}
         />
       )) : null}
+
+      {interactionGuardActive ? (
+        <div
+          aria-hidden="true"
+          className="absolute inset-0 z-60 cursor-default"
+          onPointerMove={onInteractionGuardRelease}
+          onPointerDown={onInteractionGuardRelease}
+        />
+      ) : null}
     </div>
   );
 }

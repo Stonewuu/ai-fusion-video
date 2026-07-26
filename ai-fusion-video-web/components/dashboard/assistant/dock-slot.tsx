@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  startTransition,
   useCallback,
   useEffect,
   useRef,
@@ -8,7 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useMotionValue, useReducedMotion } from "framer-motion";
-import { AssistantLauncher } from "./launcher";
+import { AssistantLauncher, type AssistantLauncherStatus } from "./launcher";
 import { AssistantWindow } from "./assistant-window";
 import { useAssistantDockLayout } from "./use-assistant-dock-layout";
 import {
@@ -31,7 +32,8 @@ type DockTransition =
   | { phase: "overlay-out" }
   | { phase: "dock-in" }
   | { phase: "dock-out"; target: OverlayMode }
-  | { phase: "overlay-in" };
+  | { phase: "overlay-in" }
+  | { phase: "overlay-resize" };
 
 const PAGE_EASE = [0.65, 0, 0.35, 1] as const;
 
@@ -85,13 +87,22 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
   const dockWidth = useAssistantStore((state) => state.dockWidth);
   const normalRect = useAssistantStore((state) => state.normalRect);
   const launcherPosition = useAssistantStore((state) => state.launcherPosition);
-  const hasRunning = useAssistantStore((state) =>
-    Object.values(state.conversationStates).some((runtime) => isRunningStatus(runtime.status)),
-  );
+  const launcherStatus = useAssistantStore((state): AssistantLauncherStatus => {
+    const runtimes = Object.values(state.conversationStates);
+    if (runtimes.some((runtime) => isRunningStatus(runtime.status))) return "running";
+    if (runtimes.some((runtime) => runtime.unread)) return "completed";
+    return "idle";
+  });
   const initializeForUser = useAssistantStore((state) => state.initializeForUser);
   const resetForUser = useAssistantStore((state) => state.resetForUser);
   const closeAssistant = useAssistantStore((state) => state.closeAssistant);
   const [dockTransition, setDockTransition] = useState<DockTransition>({ phase: "idle" });
+  const [contentReadyUserId, setContentReadyUserId] = useState<number | null>(null);
+  const [overlayContentReady, setOverlayContentReady] = useState(mode !== "collapsed");
+  const [heavyContentReady, setHeavyContentReady] = useState(false);
+  const [launcherWavesVisible, setLauncherWavesVisible] = useState(mode === "collapsed");
+  const [pointerReady, setPointerReady] = useState(true);
+  const overlayContentRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousModeRef = useRef(mode);
   const {
     canDock,
@@ -126,11 +137,20 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
 
   const beginDockExit = useCallback((target: OverlayMode) => {
     if (dockTransition.phase !== "idle") return;
+    setHeavyContentReady(false);
     setDockTransition({ phase: "dock-out", target });
   }, [dockTransition.phase]);
 
-  const openAssistantWindow = useCallback(() => {
+  const openAssistantWindow = useCallback((openedByPointer: boolean) => {
     if (dockTransition.phase !== "idle") return;
+    if (overlayContentRevealTimerRef.current !== null) {
+      clearTimeout(overlayContentRevealTimerRef.current);
+      overlayContentRevealTimerRef.current = null;
+    }
+    setOverlayContentReady(false);
+    setHeavyContentReady(false);
+    setLauncherWavesVisible(false);
+    setPointerReady(!openedByPointer);
     const state = useAssistantStore.getState();
     const desired = mobileViewport
       ? "maximized"
@@ -142,18 +162,42 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
     else {
       setDockTransition({ phase: "overlay-morph-in" });
       state.openAssistant(canDock);
+      if (reducedMotion) {
+        startTransition(() => setOverlayContentReady(true));
+      } else {
+        overlayContentRevealTimerRef.current = setTimeout(() => {
+          overlayContentRevealTimerRef.current = null;
+          startTransition(() => setOverlayContentReady(true));
+        }, 32);
+      }
     }
-  }, [canDock, dockTransition.phase, mobileViewport]);
+  }, [canDock, dockTransition.phase, mobileViewport, reducedMotion]);
 
   const closeAssistantWindow = useCallback(() => {
+    if (overlayContentRevealTimerRef.current !== null) {
+      clearTimeout(overlayContentRevealTimerRef.current);
+      overlayContentRevealTimerRef.current = null;
+    }
+    setOverlayContentReady(false);
+    setHeavyContentReady(false);
+    setLauncherWavesVisible(false);
+    setPointerReady(true);
     if (mode === "docked") beginDockExit("collapsed");
     else closeAssistant();
   }, [beginDockExit, closeAssistant, mode]);
 
+  const releaseInteractionGuard = useCallback(() => {
+    if (dockTransition.phase !== "idle") return;
+    setPointerReady(true);
+  }, [dockTransition.phase]);
+
   const toggleDock = useCallback(() => {
     if (dockTransition.phase !== "idle") return;
     if (mode === "docked") beginDockExit("floating");
-    else if (canDock) setDockTransition({ phase: "overlay-out" });
+    else if (canDock) {
+      setHeavyContentReady(false);
+      setDockTransition({ phase: "overlay-out" });
+    }
   }, [beginDockExit, canDock, dockTransition.phase, mode]);
 
   const toggleMaximize = useCallback(() => {
@@ -163,25 +207,39 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
     if (mode === "docked") {
       beginDockExit("maximized");
     } else if (mode === "maximized" && state.restoreMode === "docked" && canDock) {
+      setHeavyContentReady(false);
       setDockTransition({ phase: "overlay-out" });
     } else if (mode === "maximized") {
+      setHeavyContentReady(false);
+      setDockTransition({ phase: "overlay-resize" });
       state.setMode(state.restoreMode, canDock);
     } else {
+      setHeavyContentReady(false);
+      setDockTransition({ phase: "overlay-resize" });
       state.setMode("maximized", canDock);
     }
   }, [beginDockExit, canDock, dockTransition.phase, mobileViewport, mode]);
 
   const finishOverlayAnimation = useCallback(() => {
+    if (mode === "collapsed") setLauncherWavesVisible(true);
     if (dockTransition.phase === "overlay-out") {
       setDockTransition({ phase: "dock-in" });
       useAssistantStore.getState().setMode("docked", canDock);
     } else if (
       dockTransition.phase === "overlay-in"
       || dockTransition.phase === "overlay-morph-in"
+      || dockTransition.phase === "overlay-resize"
     ) {
-      setDockTransition({ phase: "idle" });
+      if (overlayContentRevealTimerRef.current !== null) {
+        clearTimeout(overlayContentRevealTimerRef.current);
+        overlayContentRevealTimerRef.current = null;
+      }
+      startTransition(() => {
+        setOverlayContentReady(true);
+        setDockTransition({ phase: "idle" });
+      });
     }
-  }, [canDock, dockTransition.phase]);
+  }, [canDock, dockTransition.phase, mode]);
 
   const finishDockAnimation = useCallback(() => {
     if (dockTransition.phase === "dock-in") {
@@ -202,13 +260,74 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
   }, []);
 
   useEffect(() => {
-    if (userId) initializeForUser(userId);
-    else if (initialized) resetForUser();
+    if (!userId) {
+      if (initialized) resetForUser();
+      return;
+    }
+
+    initializeForUser(userId);
+    let idleHandle: number | null = null;
+    const frame = requestAnimationFrame(() => {
+      const restoredMode = useAssistantStore.getState().mode;
+      const markReady = () => {
+        startTransition(() => {
+          setContentReadyUserId(userId);
+          if (restoredMode !== "collapsed" && restoredMode !== "docked") {
+            setOverlayContentReady(true);
+          }
+        });
+      };
+      if (restoredMode !== "collapsed" && "requestIdleCallback" in window) {
+        idleHandle = window.requestIdleCallback(markReady, { timeout: 300 });
+      } else {
+        markReady();
+      }
+    });
+
+    return () => {
+      cancelAnimationFrame(frame);
+      if (idleHandle !== null) window.cancelIdleCallback(idleHandle);
+    };
   }, [initialized, initializeForUser, resetForUser, userId]);
 
   useEffect(() => () => {
+    if (overlayContentRevealTimerRef.current !== null) {
+      clearTimeout(overlayContentRevealTimerRef.current);
+    }
     useAssistantStore.getState().resetForUser();
   }, []);
+
+  useEffect(() => {
+    if (mode !== "maximized") return;
+    const previousOverflow = document.body.style.overflow;
+    const previousOverscrollBehavior = document.body.style.overscrollBehavior;
+    document.body.style.overflow = "hidden";
+    document.body.style.overscrollBehavior = "none";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      document.body.style.overscrollBehavior = previousOverscrollBehavior;
+    };
+  }, [mode]);
+
+  useEffect(() => {
+    if (
+      heavyContentReady
+      || contentReadyUserId !== userId
+      || mode === "collapsed"
+      || dockTransition.phase !== "idle"
+    ) return;
+
+    let secondFrame: number | null = null;
+    const firstFrame = requestAnimationFrame(() => {
+      secondFrame = requestAnimationFrame(() => {
+        startTransition(() => setHeavyContentReady(true));
+      });
+    });
+    return () => {
+      cancelAnimationFrame(firstFrame);
+      if (secondFrame !== null) cancelAnimationFrame(secondFrame);
+    };
+  }, [contentReadyUserId, dockTransition.phase, heavyContentReady, mode, userId]);
 
   useEffect(() => {
     const previousMode = previousModeRef.current;
@@ -238,6 +357,12 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
     : null;
   const overlayTransitioning = dockTransition.phase === "overlay-out" || dockTransition.phase === "overlay-in";
   const dockVisible = mode === "docked" && dockTransition.phase !== "dock-out";
+  const contentHydrated = contentReadyUserId === userId;
+  const dockContentVisible = contentHydrated;
+  const overlayContentVisible = contentHydrated && overlayContentReady;
+  const conversationContentActive = heavyContentReady && dockTransition.phase === "idle";
+  const interactionGuardActive = mode !== "collapsed"
+    && (dockTransition.phase !== "idle" || !pointerReady);
   if (!initialized || !userId) return null;
 
   return (
@@ -266,24 +391,47 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
           }}
           className="h-full w-full overflow-hidden border-l border-border/30 bg-background"
         >
-          <AssistantWindow
-            mode="docked"
-            canDock={canDock}
-            mobileViewport={mobileViewport}
-            showLeadingIcon
-            projectId={projectId}
-            onToggleDock={toggleDock}
-            onToggleMaximize={toggleMaximize}
-            onClose={closeAssistantWindow}
-            onRectPaint={paintWindowRect}
-            onDockResizeStart={startDockResize}
-          />
+          {dockContentVisible ? (
+            <AssistantWindow
+              mode="docked"
+              canDock={canDock}
+              mobileViewport={mobileViewport}
+              showLeadingIcon
+              projectId={projectId}
+              onToggleDock={toggleDock}
+              onToggleMaximize={toggleMaximize}
+              onClose={closeAssistantWindow}
+              onRectPaint={paintWindowRect}
+              interactionGuardActive={interactionGuardActive}
+              onInteractionGuardRelease={releaseInteractionGuard}
+              contentActive={conversationContentActive}
+              onDockResizeStart={startDockResize}
+            />
+          ) : null}
         </motion.section>
       ) : null}
 
       {overlayMode && overlayTarget && typeof document !== "undefined" ? createPortal(
-        <motion.section
+        <>
+          <AnimatePresence initial={false}>
+            {overlayMode === "maximized" ? (
+              <motion.div
+                key="assistant-maximized-backdrop"
+                data-assistant-backdrop
+                aria-hidden="true"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: reducedMotion ? 0.01 : 0.2, ease: "easeOut" }}
+                className="modal-overlay fixed inset-0 z-60 touch-none overscroll-none"
+              />
+            ) : null}
+          </AnimatePresence>
+          <motion.section
           data-assistant-surface
+          data-assistant-launcher-status={overlayMode === "collapsed" ? launcherStatus : undefined}
+          data-assistant-transition={dockTransition.phase}
+          data-assistant-content-active={conversationContentActive ? "true" : "false"}
           initial={dockTransition.phase === "overlay-in" ? { opacity: 0 } : false}
           animate={{
             ...overlayTarget,
@@ -315,33 +463,42 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
           }}
           onAnimationComplete={finishOverlayAnimation}
           className={cn(
-            "fixed z-65 overflow-hidden border backdrop-blur-xl backdrop-saturate-150",
+            "fixed z-65 border backdrop-blur-xl backdrop-saturate-150",
             overlayMode === "collapsed"
-              ? "border-border/40 bg-background/75 shadow-lg"
-              : "border-border/40 bg-popover/80 shadow-xl",
-            overlayMode === "collapsed" && hasRunning && "assistant-running-glow",
+              ? "overflow-visible bg-background/75 shadow-lg"
+              : "overflow-hidden border-border/40 bg-popover/80 shadow-xl",
           )}
         >
           <AssistantLauncher
             collapsed={overlayMode === "collapsed"}
+            wavesVisible={launcherWavesVisible}
+            status={launcherStatus}
             onOpen={openAssistantWindow}
             onPositionPaint={paintLauncherPosition}
           />
           <AnimatePresence initial={false}>
-            {overlayMode !== "collapsed" ? (
+            {overlayMode !== "collapsed" && overlayContentVisible ? (
               <motion.div
                 key="assistant-window-content"
-                initial={dockTransition.phase === "overlay-in" ? false : { opacity: 0 }}
+                initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{
                   opacity: 0,
                   transition: { duration: reducedMotion ? 0.01 : 0.1, delay: 0 },
                 }}
                 transition={{
-                  duration: reducedMotion ? 0.01 : 0.12,
-                  delay: reducedMotion || dockTransition.phase === "overlay-in" ? 0 : 0.38,
+                  duration: reducedMotion ? 0.01 : 0.14,
+                  delay: 0,
                 }}
-                className="absolute inset-0 overflow-hidden"
+                style={dockTransition.phase === "overlay-morph-in" ? {
+                  width: overlayTarget.width,
+                  height: overlayTarget.height,
+                } : undefined}
+                className={cn(
+                  "absolute overflow-hidden",
+                  dockTransition.phase === "overlay-morph-in" ? "left-0 top-0" : "inset-0",
+                  dockTransition.phase !== "idle" && "pointer-events-none",
+                )}
               >
                 <AssistantWindow
                   mode={overlayMode}
@@ -353,11 +510,15 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
                   onToggleMaximize={toggleMaximize}
                   onClose={closeAssistantWindow}
                   onRectPaint={paintWindowRect}
+                  interactionGuardActive={interactionGuardActive}
+                  onInteractionGuardRelease={releaseInteractionGuard}
+                  contentActive={conversationContentActive}
                 />
               </motion.div>
             ) : null}
           </AnimatePresence>
-        </motion.section>,
+          </motion.section>
+        </>,
         document.body,
       ) : null}
     </motion.div>

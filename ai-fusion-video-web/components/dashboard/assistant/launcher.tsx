@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { Bot } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ASSISTANT_LAUNCHER_SIZE,
@@ -13,12 +12,18 @@ import { useAssistantStore } from "@/lib/store/assistant-store";
 
 interface AssistantLauncherProps {
   collapsed: boolean;
-  onOpen: () => void;
+  wavesVisible: boolean;
+  status: AssistantLauncherStatus;
+  onOpen: (openedByPointer: boolean) => void;
   onPositionPaint: (position: AssistantPoint) => void;
 }
 
+export type AssistantLauncherStatus = "idle" | "running" | "completed";
+
 export function AssistantLauncher({
   collapsed,
+  wavesVisible,
+  status,
   onOpen,
   onPositionPaint,
 }: AssistantLauncherProps) {
@@ -97,20 +102,32 @@ export function AssistantLauncher({
   return (
     <div
       aria-hidden={!collapsed}
-      className="absolute left-0 top-0 z-20"
+      data-assistant-launcher
+      className={collapsed && wavesVisible
+        ? "absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2"
+        : "absolute left-0 top-0 z-20"}
       style={{
         width: ASSISTANT_LAUNCHER_SIZE,
         height: ASSISTANT_LAUNCHER_SIZE,
         pointerEvents: collapsed ? "auto" : "none",
       }}
     >
+      {collapsed && wavesVisible ? (
+        <span
+          aria-hidden="true"
+          data-status={status}
+          className="assistant-launcher-waves"
+        >
+          <span className="assistant-launcher-wave" />
+          <span className="assistant-launcher-wave" />
+          <span className="assistant-launcher-wave" />
+        </span>
+      ) : null}
       <Tooltip>
         <TooltipTrigger
           render={
-          <Button
+          <button
             type="button"
-            variant="ghost"
-            size="icon-lg"
             aria-label="打开融光助手"
             tabIndex={collapsed ? 0 : -1}
             onPointerDown={handlePointerDown}
@@ -124,15 +141,15 @@ export function AssistantLauncher({
                 draggedRef.current = false;
                 return;
               }
-              if (collapsed) onOpen();
+              if (collapsed) onOpen(event.detail > 0);
             }}
             style={{ touchAction: "none" }}
-            className="relative size-full rounded-full text-primary"
+            className="relative z-10 flex size-full cursor-pointer items-center justify-center rounded-full bg-transparent text-primary outline-none transition-colors hover:bg-transparent focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-transparent"
           >
             <span className="flex items-center justify-center">
               <Bot className="size-7" />
             </span>
-          </Button>
+          </button>
           }
         />
         <TooltipContent>融光助手</TooltipContent>

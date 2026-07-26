@@ -2,6 +2,7 @@
 
 import {
   Fragment,
+  memo,
   useMemo,
   type RefObject,
 } from "react";
@@ -13,6 +14,7 @@ import { messagesToTimeline } from "@/components/dashboard/notification-panel/hi
 import type { AgentMessage } from "@/lib/api/ai-assistant";
 import type { TimelineItem } from "@/lib/store/pipeline-store";
 import { useAssistantStore, type AssistantConversationRuntime } from "@/lib/store/assistant-store";
+import { cn } from "@/lib/utils";
 import { useAssistantMessageScroll } from "./use-assistant-message-scroll";
 
 interface AssistantMessageListProps {
@@ -24,6 +26,10 @@ interface MessageSegment {
   key: string;
   user?: AgentMessage;
   assistant: AgentMessage[];
+}
+
+interface RenderableMessageSegment extends MessageSegment {
+  timeline: TimelineItem[];
 }
 
 const EMPTY_TIMELINE: TimelineItem[] = [];
@@ -65,7 +71,7 @@ function buildSegments(messages: AgentMessage[], activeRunId?: string): MessageS
   return segments;
 }
 
-function UserBubble({ message }: { message: AgentMessage }) {
+const UserBubble = memo(function UserBubble({ message }: { message: AgentMessage }) {
   return (
     <div className="flex justify-end gap-2">
       <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground shadow-sm">
@@ -79,17 +85,21 @@ function UserBubble({ message }: { message: AgentMessage }) {
       </span>
     </div>
   );
-}
+});
 
-function AssistantTimelineBubble({
+const AssistantTimelineBubble = memo(function AssistantTimelineBubble({
   timeline,
   scrollRef,
-  runtime,
+  reasoningText,
+  reasoningStartTime,
+  reasoningDurationMs,
   streaming = false,
 }: {
   timeline: TimelineItem[];
   scrollRef: RefObject<HTMLDivElement | null>;
-  runtime: AssistantConversationRuntime;
+  reasoningText?: string;
+  reasoningStartTime?: number;
+  reasoningDurationMs?: number;
   streaming?: boolean;
 }) {
   if (timeline.length === 0) return null;
@@ -103,9 +113,9 @@ function AssistantTimelineBubble({
       </span>
       <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md border border-border/20 bg-card/50 px-3.5 py-3">
         <MessageTimeline
-          reasoningText={streaming ? runtime.pipeline.reasoningText : undefined}
-          reasoningStartTime={streaming ? runtime.pipeline.reasoningStartTime : undefined}
-          reasoningDurationMs={streaming ? runtime.pipeline.reasoningDurationMs : undefined}
+          reasoningText={reasoningText}
+          reasoningStartTime={reasoningStartTime}
+          reasoningDurationMs={reasoningDurationMs}
           timeline={timeline}
           scrollRef={scrollRef}
           initialScrollToEnd={false}
@@ -115,7 +125,7 @@ function AssistantTimelineBubble({
       </div>
     </div>
   );
-}
+});
 
 export function AssistantMessageList({
   conversationId,
@@ -135,8 +145,11 @@ export function AssistantMessageList({
     ? runtime?.pipeline.runId ?? runtime?.knownRunId
     : undefined;
   const messages = runtime?.messages;
-  const segments = useMemo(
-    () => buildSegments(messages ?? [], activeRunId),
+  const segments = useMemo<RenderableMessageSegment[]>(
+    () => buildSegments(messages ?? [], activeRunId).map((segment) => ({
+      ...segment,
+      timeline: messagesToTimeline(segment.assistant),
+    })),
     [activeRunId, messages],
   );
   const liveTimeline = runtime && showPipelineTimeline
@@ -170,7 +183,12 @@ export function AssistantMessageList({
   return (
     <div className="relative min-h-0 flex-1">
       <OverlayScrollArea
-        className="h-full"
+        data-assistant-message-content
+        data-ready={viewportReady ? "true" : "false"}
+        className={cn(
+          "h-full transition-opacity duration-[400ms] ease-out motion-reduce:transition-none",
+          viewportReady ? "opacity-100" : "opacity-0",
+        )}
         viewportRef={viewportRef}
         onViewportWheel={onWheel}
         onViewportKeyDown={onKeyDown}
@@ -181,7 +199,6 @@ export function AssistantMessageList({
         viewportStyle={{
           paddingBottom: inputHeight + 28,
           scrollPaddingBottom: inputHeight + 28,
-          visibility: viewportReady ? "visible" : "hidden",
         }}
         onViewportScroll={onViewportScroll}
       >
@@ -205,24 +222,22 @@ export function AssistantMessageList({
             </div>
           ) : null}
 
-          {segments.map((segment) => {
-            const timeline = messagesToTimeline(segment.assistant);
-            return (
-              <Fragment key={segment.key}>
-                {segment.user ? <UserBubble message={segment.user} /> : null}
-                <AssistantTimelineBubble
-                  timeline={timeline}
-                  scrollRef={viewportRef}
-                  runtime={runtime}
-                />
-              </Fragment>
-            );
-          })}
+          {segments.map((segment) => (
+            <Fragment key={segment.key}>
+              {segment.user ? <UserBubble message={segment.user} /> : null}
+              <AssistantTimelineBubble
+                timeline={segment.timeline}
+                scrollRef={viewportRef}
+              />
+            </Fragment>
+          ))}
 
           <AssistantTimelineBubble
             timeline={liveTimeline}
             scrollRef={viewportRef}
-            runtime={runtime}
+            reasoningText={running ? runtime.pipeline.reasoningText : undefined}
+            reasoningStartTime={running ? runtime.pipeline.reasoningStartTime : undefined}
+            reasoningDurationMs={running ? runtime.pipeline.reasoningDurationMs : undefined}
             streaming={running}
           />
 
@@ -251,6 +266,16 @@ export function AssistantMessageList({
           ) : null}
         </div>
       </OverlayScrollArea>
+
+      <div
+        aria-hidden={viewportReady}
+        className={cn(
+          "pointer-events-none absolute inset-0 z-20 flex items-center justify-center gap-2 text-xs text-muted-foreground transition-opacity duration-150 ease-in motion-reduce:transition-none",
+          viewportReady ? "opacity-0" : "opacity-100",
+        )}
+      >
+        <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> 加载消息
+      </div>
 
       {showBackToBottom ? (
         <Button

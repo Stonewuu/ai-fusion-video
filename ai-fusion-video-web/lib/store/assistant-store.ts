@@ -514,14 +514,24 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         set({ mode: "collapsed", drawerOpen: false });
         connectionCoordinator.scheduleStatusPolling();
       } else {
-        set((state) => ({
-          mode: nextMode,
-          lastOpenMode: nextMode === "maximized" ? state.lastOpenMode : nextMode,
-          restoreMode: nextMode === "maximized"
-            ? (current === "docked" ? "docked" : "floating")
-            : state.restoreMode,
-          drawerOpen: false,
-        }));
+        set((state) => {
+          const selectedId = current === "collapsed" ? state.selectedConversationId : null;
+          const selectedRuntime = selectedId ? state.conversationStates[selectedId] : undefined;
+          return {
+            mode: nextMode,
+            lastOpenMode: nextMode === "maximized" ? state.lastOpenMode : nextMode,
+            restoreMode: nextMode === "maximized"
+              ? (current === "docked" ? "docked" : "floating")
+              : state.restoreMode,
+            drawerOpen: false,
+            conversationStates: selectedId && selectedRuntime?.unread
+              ? {
+                  ...state.conversationStates,
+                  [selectedId]: { ...selectedRuntime, unread: false },
+                }
+              : state.conversationStates,
+          };
+        });
         if (current === "collapsed") {
           const selectedId = get().selectedConversationId;
           if (selectedId) {
