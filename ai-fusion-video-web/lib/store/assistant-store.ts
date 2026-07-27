@@ -300,7 +300,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       persist();
     },
 
-    sendMessage: async (message, modelId, projectId) => {
+    sendMessage: async (message, modelId, projectId, references) => {
       const content = message.trim();
       if (!content) return;
       const state = get();
@@ -351,11 +351,36 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         runtime = get().conversationStates[conversationId] ?? runtime;
       }
 
+      const conversationProjectId = projectId !== undefined
+        ? projectId
+        : runtime.conversation.projectId ?? null;
+      const activeContext: Record<string, unknown> = {};
+      if (references?.skills.length) {
+        activeContext.activeSkillReferences = references.skills
+          .map((skill) => `${skill.id} (${skill.name})`)
+          .join("\n");
+      }
+      if (references?.mcpTools.length) {
+        activeContext.activeMcpReferences = references.mcpTools
+          .map((tool) => `${tool.serverName}/${tool.toolName}`)
+          .join("\n");
+      }
+      const serializedReferences = references
+        && (conversationProjectId !== null
+          || references.skills.length > 0
+          || references.mcpTools.length > 0)
+        ? JSON.stringify({
+            projectId: conversationProjectId,
+            skills: references.skills,
+            mcpTools: references.mcpTools,
+          })
+        : undefined;
       const optimisticMessage: AgentMessage = {
         id: -Date.now(),
         conversationId,
         role: "user",
         content,
+        referencesJson: serializedReferences,
         messageOrder: Math.max(0, ...runtime.messages.map((item) => item.messageOrder ?? 0)) + 1,
       };
       const pendingPipeline = {
@@ -365,9 +390,6 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         timeline: runtime.messagesLoaded ? [] : runtime.pipeline.timeline,
       };
       const conversationTitle = runtime.conversation.title === "新对话" ? title : runtime.conversation.title;
-      const conversationProjectId = selectedId
-        ? runtime.conversation.projectId
-        : runtime.conversation.projectId ?? projectId ?? null;
       updateRuntime(conversationId, (current) => ({
         ...current,
         messages: [...current.messages, optimisticMessage],
@@ -399,6 +421,9 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         category: ASSISTANT_CATEGORY,
         title: shouldSetTitle ? title : undefined,
         projectId: conversationProjectId ?? undefined,
+        context: Object.keys(activeContext).length ? activeContext : undefined,
+        enabledMcpTools: references?.mcpTools.map((tool) => tool.toolName),
+        referencesJson: serializedReferences,
       };
       connectionCoordinator.startConnection(conversationId, request);
       connectionCoordinator.scheduleStatusPolling();
@@ -478,19 +503,12 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
     deleteConversation: async (conversationId, id) => {
       const runtime = get().conversationStates[conversationId];
       if (runtime && statusIsRunning(runtime.status)) throw new Error("运行中的会话不能删除");
-      const { deleteConversation } = await import("@/lib/api/ai-assistant");
-      let persistedId = id;
+      const assistantApi = await import("@/lib/api/ai-assistant");
       if (id < 0) {
-        const result = await listConversations({
-          pageNo: 1,
-          pageSize: PAGE_SIZE,
-          category: ASSISTANT_CATEGORY,
-        });
-        const persisted = result.list.find((item) => item.conversationId === conversationId);
-        if (!persisted) throw new Error("会话尚未同步，请稍后重试");
-        persistedId = persisted.id;
+        await assistantApi.deleteConversationByConversationId(conversationId);
+      } else {
+        await assistantApi.deleteConversation(id);
       }
-      await deleteConversation(persistedId);
       if (get().selectedConversationId === conversationId) connectionCoordinator.invalidateConnection();
       set((state) => {
         const conversationStates = { ...state.conversationStates };

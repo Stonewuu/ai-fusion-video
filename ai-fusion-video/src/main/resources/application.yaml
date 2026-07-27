@@ -69,3 +69,14 @@ fusion:
         owner-lease: 30s
         run-timeout: 30m
         max-iters: 999
+      skills:
+        enabled: true
+        fail-fast: true
+        repositories:
+          bundled:
+            location: classpath:agentscope/skills
+            lazy: false
+      mcp:
+        enabled: ${AGENTSCOPE_MCP_ENABLED:false}
+        fail-fast: true
+        servers: {}

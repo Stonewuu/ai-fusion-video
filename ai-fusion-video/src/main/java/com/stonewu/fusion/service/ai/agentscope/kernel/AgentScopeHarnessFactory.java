@@ -1,13 +1,16 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
+import com.stonewu.fusion.config.AgentScopeV2Properties;
+import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeShutdownRecoveryBridge;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreGuardedChatModel;
-import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeShutdownRecoveryBridge;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.ToolkitConfig;
 import io.agentscope.harness.agent.HarnessAgent;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.HashSet;
@@ -15,13 +18,62 @@ import java.util.Objects;
 import java.util.Set;
 
 @Component
-@RequiredArgsConstructor
 public final class AgentScopeHarnessFactory {
     private final AgentKernelModelFactory modelFactory;
     private final AgentKernelToolRegistry toolRegistry;
     private final AgentStateStore stateStore;
     private final StateStoreFailureGuard failures;
     private final AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge;
+    private final AgentScopeSkillRegistry skillRegistry;
+
+    @Autowired
+    public AgentScopeHarnessFactory(
+            AgentKernelModelFactory modelFactory,
+            AgentKernelToolRegistry toolRegistry,
+            AgentStateStore stateStore,
+            StateStoreFailureGuard failures,
+            AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
+            ObjectProvider<AgentScopeSkillRegistry> skillRegistries) {
+        this(
+                modelFactory,
+                toolRegistry,
+                stateStore,
+                failures,
+                shutdownRecoveryBridge,
+                skillRegistries.getIfAvailable(AgentScopeHarnessFactory::disabledSkillRegistry));
+    }
+
+    AgentScopeHarnessFactory(
+            AgentKernelModelFactory modelFactory,
+            AgentKernelToolRegistry toolRegistry,
+            AgentStateStore stateStore,
+            StateStoreFailureGuard failures,
+            AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
+            AgentScopeSkillRegistry skillRegistry) {
+        this.modelFactory = Objects.requireNonNull(modelFactory, "modelFactory must not be null");
+        this.toolRegistry = Objects.requireNonNull(toolRegistry, "toolRegistry must not be null");
+        this.stateStore = Objects.requireNonNull(stateStore, "stateStore must not be null");
+        this.failures = Objects.requireNonNull(failures, "failures must not be null");
+        this.shutdownRecoveryBridge = Objects.requireNonNull(
+                shutdownRecoveryBridge, "shutdownRecoveryBridge must not be null");
+        this.skillRegistry = Objects.requireNonNull(
+                skillRegistry, "skillRegistry must not be null");
+    }
+
+    public AgentScopeHarnessFactory(
+            AgentKernelModelFactory modelFactory,
+            AgentKernelToolRegistry toolRegistry,
+            AgentStateStore stateStore,
+            StateStoreFailureGuard failures,
+            AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge) {
+        this(
+                modelFactory,
+                toolRegistry,
+                stateStore,
+                failures,
+                shutdownRecoveryBridge,
+                disabledSkillRegistry());
+    }
 
     public AgentKernelResource create(AgentKernelSpec spec) {
         Objects.requireNonNull(spec, "spec must not be null");
@@ -40,7 +92,7 @@ public final class AgentScopeHarnessFactory {
                         "Tool registry result does not match kernel whitelist: registered="
                                 + toolkit.getToolNames() + ", expected=" + spec.toolWhitelist());
             }
-            agent = HarnessAgent.builder()
+            HarnessAgent.Builder builder = HarnessAgent.builder()
                     .agentId(spec.agentDefinitionStableKey())
                     .name(spec.agentName())
                     .description(spec.description())
@@ -60,12 +112,15 @@ public final class AgentScopeHarnessFactory {
                     .disableSubagents()
                     .disableDynamicSubagents()
                     .disableDefaultWorkspaceSkills()
-                    .disableToolsConfig()
-                    .disableCompaction()
-                    .disableToolResultEviction()
-                    .disableDynamicSkills()
-                    .skillsEnabled(false)
-                    .build();
+                    .disableToolsConfig();
+            if (skillRegistry.enabled()) {
+                builder.skillRepositories(skillRegistry.repositories())
+                        .skillsEnabled(true);
+            } else {
+                builder.disableDynamicSkills()
+                        .skillsEnabled(false);
+            }
+            agent = builder.build();
             removeUnlistedHarnessTools(agent.getToolkit(), spec.toolWhitelist());
             return new AgentKernelResource(agent, ownedModel, toolResources);
         } catch (Throwable failure) {
@@ -93,5 +148,9 @@ public final class AgentScopeHarnessFactory {
                     "Harness toolkit does not match kernel whitelist after built-in removal: actual="
                             + toolkit.getToolNames() + ", expected=" + whitelist);
         }
+    }
+
+    private static AgentScopeSkillRegistry disabledSkillRegistry() {
+        return new AgentScopeSkillRegistry(new AgentScopeV2Properties());
     }
 }

@@ -4,10 +4,14 @@ import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.common.PageParam;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.controller.ai.vo.AssistantReferenceOptionsRespVO;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.AgentMessageService;
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
+import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -31,8 +35,30 @@ public class AiAssistantController {
 
     private final AgentConversationService conversationService;
     private final AgentMessageService messageService;
+    private final AgentScopeSkillRegistry skillRegistry;
+    private final AgentScopeMcpRegistry mcpRegistry;
 
     // ========== 对话管理 ==========
+
+    @Operation(summary = "获取助手可主动引用的 Skill 与 MCP 工具")
+    @GetMapping("/reference-options")
+    public CommonResult<AssistantReferenceOptionsRespVO> referenceOptions() {
+        requireCurrentUserId();
+        List<AssistantReferenceOptionsRespVO.SkillOption> skills = skillRegistry.catalog().stream()
+                .map(skill -> new AssistantReferenceOptionsRespVO.SkillOption(
+                        skill.id(), skill.name(), skill.description(), skill.source()))
+                .toList();
+        List<AssistantReferenceOptionsRespVO.McpToolOption> mcpTools = mcpRegistry
+                .catalogForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY)
+                .stream()
+                .map(tool -> new AssistantReferenceOptionsRespVO.McpToolOption(
+                        tool.serverName(),
+                        tool.toolName(),
+                        tool.description(),
+                        tool.readOnly()))
+                .toList();
+        return CommonResult.success(new AssistantReferenceOptionsRespVO(skills, mcpTools));
+    }
 
     @Operation(summary = "获取对话列表（当前用户）")
     @GetMapping("/conversations")
@@ -69,6 +95,16 @@ public class AiAssistantController {
     public Mono<CommonResult<Boolean>> deleteConversation(@PathVariable Long id) {
         long currentUserId = requireCurrentUserId();
         return conversationService.deleteConversation(id, currentUserId)
+                .thenReturn(CommonResult.success(true));
+    }
+
+    @Operation(summary = "按会话标识删除对话")
+    @DeleteMapping("/conversations/by-conversation-id/{conversationId}")
+    public Mono<CommonResult<Boolean>> deleteConversationByConversationId(
+            @PathVariable String conversationId) {
+        long currentUserId = requireCurrentUserId();
+        return conversationService.deleteConversationByConversationId(
+                        conversationId, currentUserId)
                 .thenReturn(CommonResult.success(true));
     }
 }

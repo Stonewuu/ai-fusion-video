@@ -25,7 +25,7 @@ export function MainContentFrame({
   return (
     <div
       className={cn(
-        "w-full px-5 pb-20 lg:px-8 lg:pb-3",
+        "w-full px-5 pb-20 lg:px-6 lg:pb-3",
         fullHeight
           ? "flex min-h-0 grow basis-0 flex-col"
           : "min-h-full shrink-0",

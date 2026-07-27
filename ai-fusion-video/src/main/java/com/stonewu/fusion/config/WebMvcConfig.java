@@ -2,10 +2,12 @@ package com.stonewu.fusion.config;
 
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.storage.StorageConfigService;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.AsyncTaskExecutor;
+import org.springframework.web.servlet.config.annotation.AsyncSupportConfigurer;
 import org.springframework.web.servlet.config.annotation.ResourceHandlerRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
@@ -19,7 +21,6 @@ import java.nio.file.Paths;
  * 使前端和后端都可以通过统一 URL 访问这些资源。
  */
 @Configuration
-@RequiredArgsConstructor
 @Slf4j
 public class WebMvcConfig implements WebMvcConfigurer {
 
@@ -27,6 +28,19 @@ public class WebMvcConfig implements WebMvcConfigurer {
     private String localBasePath;
 
     private final StorageConfigService storageConfigService;
+    private final AsyncTaskExecutor mvcAsyncExecutor;
+
+    public WebMvcConfig(
+            StorageConfigService storageConfigService,
+            @Qualifier("mvcAsyncExecutor") AsyncTaskExecutor mvcAsyncExecutor) {
+        this.storageConfigService = storageConfigService;
+        this.mvcAsyncExecutor = mvcAsyncExecutor;
+    }
+
+    @Override
+    public void configureAsyncSupport(AsyncSupportConfigurer configurer) {
+        configurer.setTaskExecutor(mvcAsyncExecutor);
+    }
 
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {

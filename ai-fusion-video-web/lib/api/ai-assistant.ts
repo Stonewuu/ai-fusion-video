@@ -15,7 +15,9 @@ export interface AiChatReq {
   systemPrompt?: string;
   instruction?: string;
   enabledTools?: string[];
+  enabledMcpTools?: string[];
   enableParallelTools?: boolean;
+  referencesJson?: string;
   /** 当前页面上下文引用（type + id），用于模板变量替换 */
   autoReferences?: Array<{ type: string; id: number }>;
 }
@@ -269,6 +271,29 @@ export interface PageResult<T> {
   total: number;
 }
 
+export interface AssistantSkillReferenceOption {
+  id: string;
+  name: string;
+  description: string;
+  source: string;
+}
+
+export interface AssistantMcpToolReferenceOption {
+  serverName: string;
+  toolName: string;
+  description: string;
+  readOnly: boolean;
+}
+
+export interface AssistantReferenceOptions {
+  skills: AssistantSkillReferenceOption[];
+  mcpTools: AssistantMcpToolReferenceOption[];
+}
+
+export async function getAssistantReferenceOptions(): Promise<AssistantReferenceOptions> {
+  return http.get("/api/ai/assistant/reference-options");
+}
+
 /**
  * 获取对话列表（分页）
  */
@@ -303,5 +328,16 @@ export async function listMessages(
  */
 export async function deleteConversation(id: number): Promise<void> {
   await http.delete(`/api/ai/assistant/conversations/${id}`);
+}
+
+/**
+ * 按稳定会话标识幂等删除，兼容尚未同步数据库 ID 的乐观会话。
+ */
+export async function deleteConversationByConversationId(
+  conversationId: string
+): Promise<void> {
+  await http.delete(
+    `/api/ai/assistant/conversations/by-conversation-id/${encodeURIComponent(conversationId)}`
+  );
 }
 

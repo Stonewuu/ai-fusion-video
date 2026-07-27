@@ -16,6 +16,7 @@ import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Agent 对话索引服务
@@ -154,12 +155,26 @@ public class AgentConversationService {
     }
 
     public Mono<Void> deleteConversation(long id, long currentUserId) {
-        return Mono.fromCallable(() -> conversationMapper.selectOne(ownedConversation(id, currentUserId)))
+        return deleteOwnedConversation(
+                () -> ownedConversation(id, currentUserId), currentUserId);
+    }
+
+    public Mono<Void> deleteConversationByConversationId(
+            String conversationId,
+            long currentUserId) {
+        return deleteOwnedConversation(
+                () -> ownedConversation(conversationId, currentUserId), currentUserId);
+    }
+
+    private Mono<Void> deleteOwnedConversation(
+            Supplier<LambdaQueryWrapper<AgentConversation>> ownedConversation,
+            long currentUserId) {
+        return Mono.fromCallable(() -> conversationMapper.selectOne(ownedConversation.get()))
                 .subscribeOn(schedulers.journal())
                 .flatMap(conversation -> statePreflight.deleteConversationSessions(
                                 String.valueOf(currentUserId), conversation.getConversationId())
                         .then(Mono.fromRunnable(() -> conversationMapper.delete(
-                                        ownedConversation(id, currentUserId)))
+                                        ownedConversation.get()))
                                 .subscribeOn(schedulers.journal())))
                 .then();
     }
@@ -167,6 +182,15 @@ public class AgentConversationService {
     private LambdaQueryWrapper<AgentConversation> ownedConversation(long id, long userId) {
         return new LambdaQueryWrapper<AgentConversation>()
                 .eq(AgentConversation::getId, id)
+                .eq(AgentConversation::getUserId, userId)
+                .eq(AgentConversation::getDeleted, false);
+    }
+
+    private LambdaQueryWrapper<AgentConversation> ownedConversation(
+            String conversationId,
+            long userId) {
+        return new LambdaQueryWrapper<AgentConversation>()
+                .eq(AgentConversation::getConversationId, conversationId)
                 .eq(AgentConversation::getUserId, userId)
                 .eq(AgentConversation::getDeleted, false);
     }

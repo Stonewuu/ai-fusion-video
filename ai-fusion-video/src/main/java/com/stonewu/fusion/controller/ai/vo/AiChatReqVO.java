@@ -49,6 +49,9 @@ public class AiChatReqVO {
     /** 前端指定的启用工具列表（与 Agent 白名单取交集） */
     private List<String> enabledTools;
 
+    /** 用户在输入区主动引用的 MCP 工具；仅筛选 MCP，不影响平台工具。 */
+    private List<String> enabledMcpTools;
+
     /** 自动引用（当前页面上下文，包含 type + id） */
     private List<AiReferenceVO> autoReferences;
 

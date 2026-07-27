@@ -1,4 +1,9 @@
-import type { AgentConversation, AgentMessage } from "@/lib/api/ai-assistant";
+import type {
+  AgentConversation,
+  AgentMessage,
+  AssistantMcpToolReferenceOption,
+  AssistantSkillReferenceOption,
+} from "@/lib/api/ai-assistant";
 import type { AiChatReq, AiChatStreamEvent } from "@/lib/api/ai-pipeline";
 import type { AgentPipelineState } from "@/components/dashboard/agent-pipeline/types";
 import type { AssistantPoint, AssistantRect } from "@/components/dashboard/assistant/geometry";
@@ -8,6 +13,11 @@ export const NEW_ASSISTANT_DRAFT_KEY = "__new__";
 
 export type AssistantMode = "collapsed" | "floating" | "docked" | "maximized";
 export type AssistantConnectionMode = "start" | "reconnect";
+
+export interface AssistantMessageReferences {
+  skills: AssistantSkillReferenceOption[];
+  mcpTools: AssistantMcpToolReferenceOption[];
+}
 
 export interface AssistantConnection {
   conversationId: string;
@@ -82,7 +92,12 @@ export interface AssistantStoreState {
   startNewConversation: () => void;
   setDraft: (conversationId: string | null, draft: string) => void;
   setSelectedModelId: (modelId: number | null) => void;
-  sendMessage: (message: string, modelId: number | null, projectId?: number | null) => Promise<void>;
+  sendMessage: (
+    message: string,
+    modelId: number | null,
+    projectId?: number | null,
+    references?: AssistantMessageReferences,
+  ) => Promise<void>;
   stopGeneration: () => Promise<void>;
   markConversationRead: (conversationId: string) => void;
   deleteConversation: (conversationId: string, id: number) => Promise<void>;

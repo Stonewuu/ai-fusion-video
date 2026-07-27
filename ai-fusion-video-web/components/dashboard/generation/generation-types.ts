@@ -32,9 +32,28 @@ export interface GenerationFormState {
   referenceAudios: string[];
 }
 
+export type SimpleAttachmentKind =
+  | "firstFrame"
+  | "lastFrame"
+  | "referenceImage"
+  | "referenceVideo"
+  | "referenceAudio";
+
+export type SimpleAttachmentMediaType = "image" | "video" | "audio";
+
 export interface SimpleAttachment {
   url: string;
   label: string;
+  kind: SimpleAttachmentKind;
+  mediaType: SimpleAttachmentMediaType;
+}
+
+export interface SimpleAttachmentUploadOption {
+  kind: SimpleAttachmentKind;
+  label: string;
+  mediaType: SimpleAttachmentMediaType;
+  remaining: number;
+  disabledReason?: string;
 }
 
 export interface GenerationAssetTarget {

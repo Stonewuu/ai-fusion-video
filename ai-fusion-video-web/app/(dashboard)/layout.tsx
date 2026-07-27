@@ -110,10 +110,10 @@ export default function DashboardLayout({
           {ready && (
             <div
               className={cn(
-                "hidden lg:block shrink-0 pt-1 self-start transition-[width,padding] duration-200 ease-out",
+                "hidden lg:block shrink-0 pt-1.5 self-start transition-[width,padding] duration-200 ease-out",
                 isGlobalSidebarCollapsed
                   ? "w-20 px-3"
-                  : "w-[clamp(272px,23vw,332px)] px-4"
+                  : "w-[clamp(272px,23vw,332px)] px-3"
               )}
             >
               <SidebarNav

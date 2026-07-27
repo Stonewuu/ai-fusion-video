@@ -198,7 +198,7 @@ export function AssistantWindow({
 
       <div className="relative flex min-h-0 flex-1">
         {mode !== "collapsed" ? <ConversationNavigation /> : null}
-        <section className="relative flex min-w-0 flex-1 flex-col bg-background/20">
+        <section className="assistant-content relative flex min-w-0 flex-1 flex-col bg-background/20">
           {mode !== "collapsed"
             ? selectedConversationId
               ? contentActive ? (
@@ -212,7 +212,7 @@ export function AssistantWindow({
                     <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> 加载消息
                   </div>
                 )
-              : <AssistantEmptyState />
+              : <AssistantEmptyState inputRef={inputRef} bottomInset={inputHeight} />
             : null}
           {mode !== "collapsed" ? (
             <AssistantComposer

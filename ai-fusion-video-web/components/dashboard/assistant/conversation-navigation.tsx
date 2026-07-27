@@ -1,15 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type RefObject } from "react";
 import {
   Ban,
+  Bot,
   CheckCircle2,
   CircleAlert,
-  Clock3,
+  Clapperboard,
+  Images,
+  Lightbulb,
   Loader2,
   MessageSquarePlus,
   MoreHorizontal,
   Trash2,
+  WandSparkles,
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -272,16 +276,77 @@ export function ConversationNavigation({ onSelected }: { onSelected?: () => void
   );
 }
 
-export function AssistantEmptyState() {
-  const startNewConversation = useAssistantStore((state) => state.startNewConversation);
+const STARTER_PROMPTS = [
+  {
+    prompt: "怎么把创意整理成视频脚本？",
+    icon: Clapperboard,
+    iconClassName: "text-sky-500",
+  },
+  {
+    prompt: "能帮我设计一组连贯分镜吗？",
+    icon: Images,
+    iconClassName: "text-violet-500",
+  },
+  {
+    prompt: "如何统一画面提示词的风格？",
+    icon: WandSparkles,
+    iconClassName: "text-emerald-500",
+  },
+  {
+    prompt: "有哪些适合短视频的创意方向？",
+    icon: Lightbulb,
+    iconClassName: "text-orange-500",
+  },
+] as const;
+
+export function AssistantEmptyState({
+  inputRef,
+  bottomInset,
+}: {
+  inputRef: RefObject<HTMLTextAreaElement | null>;
+  bottomInset: number;
+}) {
+  const setDraft = useAssistantStore((state) => state.setDraft);
+
+  const selectPrompt = (prompt: string) => {
+    setDraft(null, prompt);
+    requestAnimationFrame(() => {
+      inputRef.current?.focus({ preventScroll: true });
+      inputRef.current?.setSelectionRange(prompt.length, prompt.length);
+    });
+  };
+
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-muted-foreground">
-      <Clock3 className="size-8 opacity-30" />
-      <p className="text-sm">选择一个会话，或开始新的对话</p>
-      <Button type="button" variant="ai" onClick={startNewConversation}>
-        <MessageSquarePlus />
-        新建对话
-      </Button>
-    </div>
+    <OverlayScrollArea
+      className="min-h-0 flex-1"
+      viewportStyle={{
+        paddingBottom: bottomInset,
+        scrollPaddingBottom: bottomInset,
+      }}
+    >
+      <div className="flex min-h-full w-full flex-col p-6">
+        <div className="my-auto flex w-full flex-col items-center gap-10">
+          <div className="space-y-6 text-center">
+            <Bot className="mx-auto size-12 text-muted-foreground/40" strokeWidth={1.5} />
+            <h2 className="text-2xl font-medium tracking-tight text-foreground">
+              今天想创作什么？
+            </h2>
+          </div>
+          <div className="assistant-starter-prompts grid w-full max-w-5xl gap-3">
+            {STARTER_PROMPTS.map(({ prompt, icon: Icon, iconClassName }) => (
+              <button
+                key={prompt}
+                type="button"
+                className="flex min-h-32 flex-col justify-between rounded-xl border border-border/30 bg-card p-4 text-left shadow-sm outline-none focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-ring/50"
+                onClick={() => selectPrompt(prompt)}
+              >
+                <Icon className={cn("size-5", iconClassName)} strokeWidth={1.8} />
+                <span className="text-sm font-medium leading-6 text-foreground">{prompt}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </OverlayScrollArea>
   );
 }

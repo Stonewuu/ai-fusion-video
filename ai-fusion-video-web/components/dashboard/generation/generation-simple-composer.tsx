@@ -3,9 +3,10 @@
 import { useRef, useState, type ClipboardEvent, type DragEvent } from "react";
 import {
   CircleAlert,
+  FileVideo2,
   ImagePlus,
   Loader2,
-  Paperclip,
+  Music2,
   SlidersHorizontal,
   Sparkles,
   X,
@@ -21,9 +22,22 @@ import { cn } from "@/lib/utils";
 import type {
   GenerationFormState,
   SimpleAttachment,
+  SimpleAttachmentKind,
+  SimpleAttachmentMediaType,
+  SimpleAttachmentUploadOption,
   WorkbenchMode,
 } from "./generation-types";
+import { GenerationAttachmentUploadMenu } from "./generation-attachment-upload-menu";
 import { GenerationQuickSettings } from "./generation-quick-settings";
+
+const MEDIA_UPLOAD_CONFIG: Record<
+  SimpleAttachmentMediaType,
+  { accept: string; folder: string }
+> = {
+  image: { accept: "image/*", folder: "generation-references" },
+  video: { accept: "video/*", folder: "generation-video-references" },
+  audio: { accept: "audio/*", folder: "generation-audio-references" },
+};
 
 interface GenerationSimpleComposerProps {
   mode: WorkbenchMode;
@@ -33,12 +47,14 @@ interface GenerationSimpleComposerProps {
   capabilities: GenerationCapabilities | null;
   form: GenerationFormState;
   attachments: SimpleAttachment[];
-  maxAttachments: number;
+  attachmentOptions: SimpleAttachmentUploadOption[];
+  maxImageAttachments: number;
+  attachmentCapacity: number;
   minAttachments: number;
   submitting: boolean;
   onModelChange: (modelId: number) => void;
   onFormChange: (patch: Partial<GenerationFormState>) => void;
-  onAddAttachments: (urls: string[]) => void;
+  onAddAttachments: (urls: string[], kind?: SimpleAttachmentKind) => void;
   onRemoveAttachment: (url: string) => void;
   onSubmit: () => void;
   onAdvanced: () => void;
@@ -53,7 +69,9 @@ export function GenerationSimpleComposer({
   capabilities,
   form,
   attachments,
-  maxAttachments,
+  attachmentOptions,
+  maxImageAttachments,
+  attachmentCapacity,
   minAttachments,
   submitting,
   onModelChange,
@@ -65,12 +83,21 @@ export function GenerationSimpleComposer({
   attachmentDisabledReason = "",
 }: GenerationSimpleComposerProps) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const selectedUploadOptionRef = useRef<SimpleAttachmentUploadOption | null>(null);
   const [uploading, setUploading] = useState(false);
   const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
   const prompt = form.prompt;
-  const canAttach = maxAttachments > 0 && attachments.length < maxAttachments;
-  const missingRequiredAttachments = attachments.length < minAttachments;
+  const imageAttachmentCount = attachments.filter(
+    (attachment) => attachment.mediaType === "image",
+  ).length;
+  const canPasteImages = attachmentOptions.some(
+    (option) =>
+      option.mediaType === "image" &&
+      option.remaining > 0 &&
+      !option.disabledReason,
+  );
+  const missingRequiredAttachments = imageAttachmentCount < minAttachments;
   const canSubmit = Boolean(
     modelId &&
     prompt.trim() &&
@@ -79,10 +106,18 @@ export function GenerationSimpleComposer({
     !uploading,
   );
 
-  const uploadFiles = async (files: File[]) => {
-    const remaining = Math.max(0, maxAttachments - attachments.length);
+  const uploadFiles = async (
+    files: File[],
+    option?: SimpleAttachmentUploadOption,
+  ) => {
+    const mediaType = option?.mediaType || "image";
+    const config = MEDIA_UPLOAD_CONFIG[mediaType];
+    const remaining = option?.remaining ?? Math.max(
+      0,
+      maxImageAttachments - imageAttachmentCount,
+    );
     const selected = files
-      .filter((file) => file.type.startsWith("image/"))
+      .filter((file) => file.type.startsWith(`${mediaType}/`))
       .slice(0, remaining);
     if (!selected.length) return;
 
@@ -90,15 +125,26 @@ export function GenerationSimpleComposer({
     setError("");
     try {
       const urls = await Promise.all(
-        selected.map((file) => uploadFile(file, "generation-references")),
+        selected.map((file) => uploadFile(file, config.folder)),
       );
-      onAddAttachments(urls);
+      onAddAttachments(urls, option?.kind);
     } catch {
-      setError("图片上传失败");
+      setError(`${option?.label || "图片"}上传失败`);
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";
+      selectedUploadOptionRef.current = null;
     }
+  };
+
+  const handleSelectUpload = (option: SimpleAttachmentUploadOption) => {
+    const input = inputRef.current;
+    if (!input) return;
+    const config = MEDIA_UPLOAD_CONFIG[option.mediaType];
+    selectedUploadOptionRef.current = option;
+    input.accept = config.accept;
+    input.multiple = option.remaining > 1;
+    input.click();
   };
 
   const handlePaste = (event: ClipboardEvent<HTMLTextAreaElement>) => {
@@ -106,7 +152,7 @@ export function GenerationSimpleComposer({
       .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
       .map((item) => item.getAsFile())
       .filter((file): file is File => Boolean(file));
-    if (!imageFiles.length || !canAttach) return;
+    if (!imageFiles.length || !canPasteImages) return;
     event.preventDefault();
     void uploadFiles(imageFiles);
   };
@@ -114,7 +160,7 @@ export function GenerationSimpleComposer({
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
     event.preventDefault();
     setDragging(false);
-    if (!canAttach) return;
+    if (!canPasteImages) return;
     void uploadFiles(Array.from(event.dataTransfer.files));
   };
 
@@ -123,7 +169,7 @@ export function GenerationSimpleComposer({
       <div
         onDragEnter={(event) => {
           event.preventDefault();
-          if (canAttach) setDragging(true);
+          if (canPasteImages) setDragging(true);
         }}
         onDragOver={(event) => event.preventDefault()}
         onDragLeave={() => setDragging(false)}
@@ -158,22 +204,28 @@ export function GenerationSimpleComposer({
             {attachments.map((attachment) => (
               <div
                 key={`${attachment.label}-${attachment.url}`}
-                className="group relative h-16 w-16 shrink-0 overflow-hidden rounded-2xl border border-border/50 bg-muted/30"
+                className="group relative grid h-16 w-16 shrink-0 place-items-center overflow-hidden rounded-2xl border border-border/50 bg-muted/30"
               >
-                <SafeImage
-                  src={resolveMediaUrl(attachment.url) || undefined}
-                  alt={attachment.label}
-                  className="h-full w-full object-cover"
-                  fallbackType="image"
-                />
+                {attachment.mediaType === "image" ? (
+                  <SafeImage
+                    src={resolveMediaUrl(attachment.url) || undefined}
+                    alt={attachment.label}
+                    className="h-full w-full object-cover"
+                    fallbackType="image"
+                  />
+                ) : attachment.mediaType === "video" ? (
+                  <FileVideo2 className="size-6 text-cyan-500/70" />
+                ) : (
+                  <Music2 className="size-6 text-violet-500/70" />
+                )}
                 <span className="absolute inset-x-1 bottom-1 truncate rounded-md bg-black/55 px-1 py-0.5 text-center text-[9px] text-white backdrop-blur-sm">
                   {attachment.label}
                 </span>
                 <button
                   type="button"
                   onClick={() => onRemoveAttachment(attachment.url)}
-                  title="移除图片"
-                  aria-label="移除图片"
+                  title={`移除${attachment.label}`}
+                  aria-label={`移除${attachment.label}`}
                   className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
                 >
                   <X className="h-3 w-3" />
@@ -209,25 +261,12 @@ export function GenerationSimpleComposer({
 
         <div className="mx-2 mb-2 flex flex-wrap items-center justify-between gap-2 rounded-2xl border border-white/15 bg-background/42 p-1.5 shadow-sm backdrop-blur-xl dark:border-white/6">
           <div className="flex min-w-0 flex-wrap items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              disabled={!canAttach || uploading}
-              onClick={() => inputRef.current?.click()}
-              title={
-                attachmentDisabledReason ||
-                (maxAttachments > 0
-                  ? `上传图片，最多 ${maxAttachments} 张`
-                  : "当前模型不支持图片输入")
-              }
-              aria-label="上传参考图片"
-            >
-              {uploading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Paperclip className="h-4 w-4" />
-              )}
-            </Button>
+            <GenerationAttachmentUploadMenu
+              options={attachmentOptions}
+              uploading={uploading}
+              disabledReason={attachmentDisabledReason}
+              onSelect={handleSelectUpload}
+            />
             <GenerationQuickSettings
               mode={mode}
               models={models}
@@ -238,11 +277,11 @@ export function GenerationSimpleComposer({
               onModelChange={onModelChange}
               onFormChange={onFormChange}
             />
-            {maxAttachments > 0 && (
+            {attachmentCapacity > 0 && (
               <span className="hidden text-[10px] text-muted-foreground sm:inline">
                 {missingRequiredAttachments
                   ? `至少 ${minAttachments} 张图片`
-                  : `${attachments.length}/${maxAttachments}`}
+                  : `${attachments.length}/${attachmentCapacity}`}
               </span>
             )}
           </div>
@@ -288,7 +327,7 @@ export function GenerationSimpleComposer({
           <div className="pointer-events-none absolute inset-0 grid place-items-center bg-background/88 backdrop-blur-sm">
             <div className="flex items-center gap-2 text-sm font-medium text-primary">
               <ImagePlus className="h-4 w-4" />
-              松开即可添加参考图
+              松开即可添加图片
             </div>
           </div>
         )}
@@ -297,10 +336,14 @@ export function GenerationSimpleComposer({
       <input
         ref={inputRef}
         hidden
-        multiple
         type="file"
-        accept="image/*"
-        onChange={(event) => void uploadFiles(Array.from(event.target.files || []))}
+        accept="image/*,video/*,audio/*"
+        onChange={(event) =>
+          void uploadFiles(
+            Array.from(event.target.files || []),
+            selectedUploadOptionRef.current || undefined,
+          )
+        }
       />
     </div>
   );

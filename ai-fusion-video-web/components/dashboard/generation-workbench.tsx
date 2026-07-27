@@ -26,6 +26,8 @@ import {
   type GenerationHistoryEntry,
   type GenerationResultItem,
   type SimpleAttachment,
+  type SimpleAttachmentKind,
+  type SimpleAttachmentUploadOption,
   type WorkbenchMode,
 } from "./generation/generation-types";
 import {
@@ -274,14 +276,47 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
 
   const simpleAttachments = useMemo<SimpleAttachment[]>(
     () => [
-      ...form.firstFrame.map((url) => ({ url, label: "首帧" })),
-      ...form.lastFrame.map((url) => ({ url, label: "尾帧" })),
-      ...form.referenceImages.map((url) => ({ url, label: "参考图" })),
+      ...form.firstFrame.map((url) => ({
+        url,
+        label: "首帧",
+        kind: "firstFrame" as const,
+        mediaType: "image" as const,
+      })),
+      ...form.lastFrame.map((url) => ({
+        url,
+        label: "尾帧",
+        kind: "lastFrame" as const,
+        mediaType: "image" as const,
+      })),
+      ...form.referenceImages.map((url) => ({
+        url,
+        label: "参考图",
+        kind: "referenceImage" as const,
+        mediaType: "image" as const,
+      })),
+      ...form.referenceVideos.map((url) => ({
+        url,
+        label: "参考视频",
+        kind: "referenceVideo" as const,
+        mediaType: "video" as const,
+      })),
+      ...form.referenceAudios.map((url) => ({
+        url,
+        label: "参考音频",
+        kind: "referenceAudio" as const,
+        mediaType: "audio" as const,
+      })),
     ],
-    [form.firstFrame, form.lastFrame, form.referenceImages],
+    [
+      form.firstFrame,
+      form.lastFrame,
+      form.referenceAudios,
+      form.referenceImages,
+      form.referenceVideos,
+    ],
   );
 
-  const maxSimpleAttachments = useMemo(() => {
+  const maxSimpleImageAttachments = useMemo(() => {
     if (!capabilities) return 0;
     if (!referenceImageUploadAvailability.supported) return 0;
     if (mode === "image") {
@@ -300,19 +335,187 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
       : slots;
   }, [capabilities, mode, referenceImageUploadAvailability.supported]);
 
-  const addSimpleAttachments = (urls: string[]) => {
+  const simpleAttachmentCapacity = useMemo(() => {
+    if (!capabilities) return 0;
+    const imageCapacity = maxSimpleImageAttachments;
+    if (mode === "image") return imageCapacity;
+    return (
+      imageCapacity +
+      (capabilities.supportsReferenceVideos
+        ? parseLimit(capabilities.maxReferenceVideos, 3)
+        : 0) +
+      (capabilities.supportsReferenceAudios
+        ? parseLimit(capabilities.maxReferenceAudios, 3)
+        : 0)
+    );
+  }, [capabilities, maxSimpleImageAttachments, mode]);
+
+  const simpleAttachmentOptions = useMemo<SimpleAttachmentUploadOption[]>(() => {
+    if (!capabilities) return [];
+
+    const options: SimpleAttachmentUploadOption[] = [];
+    const imageInputCount =
+      form.firstFrame.length +
+      form.lastFrame.length +
+      form.referenceImages.length;
+    const sharedImageRemaining =
+      mode === "video" && capabilities.maxImageInputs > 0
+        ? Math.max(0, capabilities.maxImageInputs - imageInputCount)
+        : Number.POSITIVE_INFINITY;
+    const imageDisabledReason = referenceImageUploadAvailability.supported
+      ? undefined
+      : referenceImageUploadAvailability.reason;
+    const addImageOption = (
+      kind: SimpleAttachmentKind,
+      label: string,
+      typeRemaining: number,
+    ) => {
+      const remaining = Math.min(typeRemaining, sharedImageRemaining);
+      if (remaining > 0) {
+        options.push({
+          kind,
+          label,
+          mediaType: "image",
+          remaining,
+          disabledReason: imageDisabledReason,
+        });
+      }
+    };
+
+    if (mode === "image") {
+      if (capabilities.supportsReferenceImages) {
+        addImageOption(
+          "referenceImage",
+          "参考图片",
+          Math.max(
+            0,
+            parseLimit(capabilities.maxReferenceImages, 1) -
+              form.referenceImages.length,
+          ),
+        );
+      }
+      return options;
+    }
+
+    if (capabilities.supportsFirstFrame) {
+      addImageOption("firstFrame", "首帧图片", form.firstFrame.length ? 0 : 1);
+    }
+    if (capabilities.supportsLastFrame) {
+      addImageOption("lastFrame", "尾帧图片", form.lastFrame.length ? 0 : 1);
+    }
+    if (capabilities.supportsReferenceImages) {
+      addImageOption(
+        "referenceImage",
+        "参考图片",
+        Math.max(
+          0,
+          parseLimit(capabilities.maxReferenceImages, 1) -
+            form.referenceImages.length,
+        ),
+      );
+    }
+    if (capabilities.supportsReferenceVideos) {
+      const remaining = Math.max(
+        0,
+        parseLimit(capabilities.maxReferenceVideos, 3) -
+          form.referenceVideos.length,
+      );
+      if (remaining > 0) {
+        options.push({
+          kind: "referenceVideo",
+          label: "参考视频",
+          mediaType: "video",
+          remaining,
+        });
+      }
+    }
+    if (capabilities.supportsReferenceAudios) {
+      const remaining = Math.max(
+        0,
+        parseLimit(capabilities.maxReferenceAudios, 3) -
+          form.referenceAudios.length,
+      );
+      if (remaining > 0) {
+        options.push({
+          kind: "referenceAudio",
+          label: "参考音频",
+          mediaType: "audio",
+          remaining,
+        });
+      }
+    }
+    return options;
+  }, [capabilities, form, mode, referenceImageUploadAvailability]);
+
+  const simpleAttachmentDisabledReason = useMemo(() => {
+    if (!capabilities) return "请选择支持附件输入的模型";
+    const supportsAnyAttachment =
+      capabilities.supportsFirstFrame ||
+      capabilities.supportsLastFrame ||
+      capabilities.supportsReferenceImages ||
+      (mode === "video" &&
+        (capabilities.supportsReferenceVideos ||
+          capabilities.supportsReferenceAudios));
+    if (!supportsAnyAttachment) return "当前模型不支持附件输入";
+    if (simpleAttachmentOptions.length === 0) return "附件数量已达上限";
+    return "";
+  }, [capabilities, mode, simpleAttachmentOptions.length]);
+
+  const addSimpleAttachments = (
+    urls: string[],
+    kind?: SimpleAttachmentKind,
+  ) => {
     if (!capabilities || !urls.length) return;
-    if (!referenceImageUploadAvailability.supported) {
+    const imageKind =
+      !kind ||
+      kind === "firstFrame" ||
+      kind === "lastFrame" ||
+      kind === "referenceImage";
+    if (imageKind && !referenceImageUploadAvailability.supported) {
       toast.error(referenceImageUploadAvailability.reason);
       return;
     }
     setForm((current) => {
+      if (kind === "referenceVideo") {
+        return {
+          ...current,
+          referenceVideos: [...current.referenceVideos, ...urls].slice(
+            0,
+            parseLimit(capabilities.maxReferenceVideos, 3),
+          ),
+        };
+      }
+      if (kind === "referenceAudio") {
+        return {
+          ...current,
+          referenceAudios: [...current.referenceAudios, ...urls].slice(
+            0,
+            parseLimit(capabilities.maxReferenceAudios, 3),
+          ),
+        };
+      }
       if (mode === "image") {
         return {
           ...current,
           referenceImages: [...current.referenceImages, ...urls].slice(
             0,
-            maxSimpleAttachments,
+            maxSimpleImageAttachments,
+          ),
+        };
+      }
+
+      if (kind === "firstFrame") {
+        return { ...current, firstFrame: urls.slice(0, 1) };
+      }
+      if (kind === "lastFrame") {
+        return { ...current, lastFrame: urls.slice(0, 1) };
+      }
+      if (kind === "referenceImage") {
+        return {
+          ...current,
+          referenceImages: [...current.referenceImages, ...urls].slice(
+            0,
+            parseLimit(capabilities.maxReferenceImages, 1),
           ),
         };
       }
@@ -347,6 +550,8 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
       firstFrame: current.firstFrame.filter((value) => value !== url),
       lastFrame: current.lastFrame.filter((value) => value !== url),
       referenceImages: current.referenceImages.filter((value) => value !== url),
+      referenceVideos: current.referenceVideos.filter((value) => value !== url),
+      referenceAudios: current.referenceAudios.filter((value) => value !== url),
     }));
   };
 
@@ -534,7 +739,7 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
           className={cn(
             "relative h-full min-h-0",
             advancedMode &&
-              "grid w-full gap-4 overflow-y-auto xl:grid-cols-[minmax(400px,460px)_minmax(0,1fr)] xl:overflow-hidden",
+              "grid w-full gap-4 overflow-y-auto xl:grid-cols-[minmax(400px,460px)_minmax(0,1fr)] xl:overflow-visible",
           )}
         >
           <AnimatePresence initial={false} mode="popLayout">
@@ -681,7 +886,9 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
                   capabilities={capabilities}
                   form={form}
                   attachments={simpleAttachments}
-                  maxAttachments={maxSimpleAttachments}
+                  attachmentOptions={simpleAttachmentOptions}
+                  maxImageAttachments={maxSimpleImageAttachments}
+                  attachmentCapacity={simpleAttachmentCapacity}
                   minAttachments={
                     mode === "video" ? capabilities?.minImageInputs || 0 : 0
                   }
@@ -692,11 +899,7 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
                   onRemoveAttachment={removeSimpleAttachment}
                   onSubmit={() => void submit()}
                   onAdvanced={() => setComposerMode("advanced")}
-                  attachmentDisabledReason={
-                    !referenceImageUploadAvailability.supported
-                      ? `无法使用${mode === "image" ? "参考图" : "参考图/视频"}：${referenceImageUploadAvailability.reason}`
-                      : ""
-                  }
+                  attachmentDisabledReason={simpleAttachmentDisabledReason}
                 />
               </div>
             </div>

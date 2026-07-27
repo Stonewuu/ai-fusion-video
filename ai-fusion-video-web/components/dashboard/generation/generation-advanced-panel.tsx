@@ -89,7 +89,7 @@ export function GenerationAdvancedPanel({
   };
 
   return (
-    <section className="flex h-full min-h-[520px] max-h-[72vh] flex-col overflow-hidden rounded-[26px] border border-border/55 bg-card/97 shadow-[0_26px_90px_-44px_rgba(15,23,42,.52)] backdrop-blur-xl xl:min-h-0 xl:max-h-none">
+    <section className="flex h-full min-h-[520px] max-h-[72vh] flex-col overflow-hidden rounded-[26px] border border-border/55 bg-card/97 shadow-[0_8px_16px_-12px_rgba(15,23,42,.48)] backdrop-blur-xl xl:min-h-0 xl:max-h-none">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border/35 bg-card/94 px-4 py-3 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <span className="grid h-9 w-9 place-items-center rounded-xl border border-primary/10 bg-primary/[0.065] text-primary shadow-sm">

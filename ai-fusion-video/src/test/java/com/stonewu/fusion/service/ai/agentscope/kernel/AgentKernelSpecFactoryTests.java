@@ -10,6 +10,7 @@ import com.stonewu.fusion.service.ai.AiAgentService;
 import com.stonewu.fusion.service.ai.AiToolConfigService;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
+import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
 
 class AgentKernelSpecFactoryTests {
 
@@ -30,6 +32,7 @@ class AgentKernelSpecFactoryTests {
     private AiAgentRegistry registry;
     private AgentKernelSpecFactory factory;
     private AiModel model;
+    private AgentScopeMcpRegistry mcp;
 
     @BeforeEach
     void setUp() {
@@ -46,8 +49,90 @@ class AgentKernelSpecFactoryTests {
                 .config("{}")
                 .build();
         when(models.modelConfigFingerprint(model)).thenReturn("a".repeat(64));
+        mcp = mock(AgentScopeMcpRegistry.class);
+        when(mcp.manifestsForAgent(anyString())).thenReturn(List.of());
         factory = new AgentKernelSpecFactory(
-                agents, tools, models, new AgentScopeV2Properties(), new ObjectMapper());
+                agents,
+                tools,
+                models,
+                new AgentScopeV2Properties(),
+                new ObjectMapper(),
+                mcp);
+    }
+
+    @Test
+    void includesDiscoveredMcpToolsInTheImmutableRootKernel() {
+        AgentKernelToolManifest manifest = new AgentKernelToolManifest(
+                "search_assets",
+                AgentKernelToolManifest.schemaSha256("{}"),
+                true,
+                false);
+        when(mcp.manifestsForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY))
+                .thenReturn(List.of(manifest));
+
+        AgentKernelSpec spec = factory.createRoot(
+                new AiChatReqVO(), model, "root prompt");
+
+        assertThat(spec.toolWhitelist()).containsExactly("search_assets");
+        assertThat(spec.toolManifest()).containsExactly(manifest);
+        assertThat(spec.key().toolManifestFingerprint())
+                .isEqualTo(AgentKernelKey.manifestFingerprint(List.of(manifest)));
+    }
+
+    @Test
+    void activeMcpReferencesFilterOnlyMcpTools() {
+        AgentKernelToolManifest search = new AgentKernelToolManifest(
+                "search_assets",
+                AgentKernelToolManifest.schemaSha256("{}"),
+                true,
+                false);
+        AgentKernelToolManifest inspect = new AgentKernelToolManifest(
+                "inspect_media",
+                AgentKernelToolManifest.schemaSha256("{}"),
+                true,
+                false);
+        when(mcp.manifestsForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY))
+                .thenReturn(List.of(search, inspect));
+
+        AgentKernelSpec spec = factory.createRoot(
+                new AiChatReqVO().setEnabledMcpTools(List.of("inspect_media")),
+                model,
+                "root prompt");
+
+        assertThat(spec.toolWhitelist()).containsExactly("inspect_media");
+        assertThat(spec.toolManifest()).containsExactly(inspect);
+    }
+
+    @Test
+    void explicitEmptyMcpReferencesDisableMcpTools() {
+        AgentKernelToolManifest search = new AgentKernelToolManifest(
+                "search_assets",
+                AgentKernelToolManifest.schemaSha256("{}"),
+                true,
+                false);
+        when(mcp.manifestsForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY))
+                .thenReturn(List.of(search));
+
+        AgentKernelSpec spec = factory.createRoot(
+                new AiChatReqVO().setEnabledMcpTools(List.of()),
+                model,
+                "root prompt");
+
+        assertThat(spec.toolWhitelist()).isEmpty();
+        assertThat(spec.toolManifest()).isEmpty();
+    }
+
+    @Test
+    void activeReferenceContextUsesSupportedPromptVariableNames() {
+        AiChatReqVO request = new AiChatReqVO().setContext(Map.of(
+                "activeSkillReferences", "fusion-video-workflow",
+                "activeMcpReferences", "assets/search_assets"));
+
+        AgentKernelSpec spec = factory.createRoot(request, model, "root prompt");
+
+        assertThat(spec.promptVariables())
+                .containsEntry("activeSkillReferences", "fusion-video-workflow")
+                .containsEntry("activeMcpReferences", "assets/search_assets");
     }
 
     @Test

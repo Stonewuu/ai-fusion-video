@@ -18,6 +18,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { aiModelApi, type AiModel } from "@/lib/api/ai-model";
 import { getModelDisplayParts } from "@/lib/model-display";
 import { useAssistantStore } from "@/lib/store/assistant-store";
+import { AssistantReferenceContext } from "./reference-context";
+import { AssistantReferencePicker } from "./reference-picker";
+import { useAssistantReferences } from "./use-assistant-references";
 
 interface AssistantComposerProps {
   active: boolean;
@@ -32,9 +35,10 @@ let cachedAssistantModelsAt = 0;
 let assistantModelsRequest: Promise<AiModel[]> | null = null;
 const ASSISTANT_MODELS_CACHE_TTL_MS = 30_000;
 
-function loadAssistantModels() {
-  if (cachedAssistantModels && Date.now() - cachedAssistantModelsAt < ASSISTANT_MODELS_CACHE_TTL_MS) {
-    return Promise.resolve(cachedAssistantModels);
+function loadAssistantModels(): Promise<AiModel[]> {
+  const cached = cachedAssistantModels;
+  if (cached && Date.now() - cachedAssistantModelsAt < ASSISTANT_MODELS_CACHE_TTL_MS) {
+    return Promise.resolve(cached);
   }
   if (!assistantModelsRequest) {
     assistantModelsRequest = aiModelApi.listByType(1)
@@ -72,6 +76,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
   const selectedModelId = useAssistantStore((state) => state.selectedModelId);
   const setDraft = useAssistantStore((state) => state.setDraft);
   const setSelectedModelId = useAssistantStore((state) => state.setSelectedModelId);
+  const startNewConversation = useAssistantStore((state) => state.startNewConversation);
   const sendMessage = useAssistantStore((state) => state.sendMessage);
   const stopGeneration = useAssistantStore((state) => state.stopGeneration);
   const connectionConversationId = useAssistantStore((state) => state.connection?.conversationId);
@@ -83,6 +88,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
   const [error, setError] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const composerSurfaceRef = useRef<HTMLDivElement>(null);
   const localInputRef = useRef<HTMLTextAreaElement>(null);
   const cancelling = runtimeStatus === "CANCEL_REQUESTED";
   const running = !!runtimeStatus && ["running", "pending", "RUNNING", "WAITING_CONFIRMATION", "WAITING_EXTERNAL", "CANCEL_REQUESTED"].includes(runtimeStatus);
@@ -90,6 +96,15 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
   const effectiveProjectId = selectedConversationId ? conversationProjectId : projectId;
   const selectedModel = models.find((model) => model.id === selectedModelId) ?? null;
   const sendDisabled = !text.trim() || !selectedModelId || !models.length || submitting;
+  const updateText = (value: string) => setDraft(selectedConversationId, value);
+  const references = useAssistantReferences({
+    active,
+    text,
+    selectedConversationId,
+    effectiveProjectId,
+    inputRef: localInputRef,
+    updateText,
+  });
 
   useEffect(() => {
     if (!active) return;
@@ -152,15 +167,28 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
     return undefined;
   }, [active, inputRef]);
 
-  const updateText = (value: string) => setDraft(selectedConversationId, value);
-
   const submit = async () => {
     if (!text.trim() || submitting || running || !selectedModelId || !models.length) return;
     setSubmitting(true);
     setError(null);
     try {
-      await sendMessage(text, selectedModelId, projectId);
+      const referencedProjectId = references.selectedProject?.id ?? null;
+      if (selectedConversationId
+        && referencedProjectId !== (conversationProjectId ?? null)) {
+        setDraft(null, text);
+        startNewConversation();
+      }
+      await sendMessage(
+        text,
+        selectedModelId,
+        referencedProjectId,
+        {
+          skills: references.selectedSkills,
+          mcpTools: references.selectedMcpTools,
+        },
+      );
       updateText("");
+      references.clearTransientReferences();
     } catch (submitError: unknown) {
       setError(submitError instanceof Error ? submitError.message : "发送失败，请重试");
     } finally {
@@ -180,26 +208,47 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
           </div>
         ) : null}
 
-        <Textarea
-          ref={(element) => {
-            localInputRef.current = element;
-            if (inputRef) inputRef.current = element;
-          }}
-          value={text}
-          rows={3}
-          placeholder="发挥想象…"
-          disabled={!models.length || modelsLoading || submitting || running}
+        <div
+          ref={composerSurfaceRef}
+          className="min-w-0"
           data-assistant-interactive="true"
-          className="min-h-20 max-h-40 border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0"
-          onChange={(event) => updateText(event.target.value)}
-          onCompositionStart={() => setComposing(true)}
-          onCompositionEnd={() => setComposing(false)}
-          onKeyDown={(event) => {
-            if (event.key !== "Enter" || !event.ctrlKey || composing) return;
-            event.preventDefault();
-            void submit();
-          }}
-        />
+        >
+          <AssistantReferenceContext
+            project={references.selectedProject}
+            skills={references.selectedSkills}
+            mcpTools={references.selectedMcpTools}
+            onRemoveProject={references.removeProject}
+            onRemoveSkill={references.removeSkill}
+            onRemoveMcpTool={references.removeMcpTool}
+          />
+          <Textarea
+            ref={(element) => {
+              localInputRef.current = element;
+              if (inputRef) inputRef.current = element;
+            }}
+            value={text}
+            rows={3}
+            placeholder="发挥想象…"
+            disabled={!models.length || modelsLoading || submitting || running}
+            data-assistant-interactive="true"
+            aria-expanded={!!references.picker}
+            aria-label="助手消息；输入 @ 引用项目，输入 / 引用 Skill 或 MCP"
+            className="min-h-20 max-h-40 border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0"
+            onChange={(event) => references.updateTextWithTrigger(
+              event.target.value,
+              event.target.selectionStart ?? event.target.value.length,
+            )}
+            onCompositionStart={() => setComposing(true)}
+            onCompositionEnd={() => setComposing(false)}
+            onBlur={references.closePicker}
+            onKeyDown={(event) => {
+              if (references.handlePickerKeyDown(event)) return;
+              if (event.key !== "Enter" || !event.ctrlKey || composing) return;
+              event.preventDefault();
+              void submit();
+            }}
+          />
+        </div>
 
         <div className="flex flex-wrap items-center gap-2 px-1 pt-1">
           <div className="flex min-w-0 items-center gap-2">
@@ -259,7 +308,6 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
                 <Settings2 /> 模型设置
               </Button>
             )}
-            {effectiveProjectId ? <span className="max-w-32 truncate rounded-full bg-muted px-2 py-1 text-[10px] text-muted-foreground" title={`当前项目 #${effectiveProjectId}`}>项目上下文</span> : null}
           </div>
 
           <div className="ml-auto flex items-center gap-2">
@@ -316,6 +364,20 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
           </div>
         </div>
       </div>
+      {references.picker ? (
+        <AssistantReferencePicker
+          anchorRef={composerSurfaceRef}
+          mode={references.picker.mode}
+          query={references.picker.query}
+          items={references.pickerItems}
+          activeIndex={references.activeIndex}
+          loading={references.pickerLoading}
+          error={references.pickerError}
+          selectedKeys={references.selectedKeys}
+          onActiveIndexChange={references.setActiveIndex}
+          onSelect={references.selectPickerItem}
+        />
+      ) : null}
     </div>
   );
 }

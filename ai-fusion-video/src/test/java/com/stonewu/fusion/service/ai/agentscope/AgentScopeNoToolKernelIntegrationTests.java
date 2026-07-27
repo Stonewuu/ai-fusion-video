@@ -300,6 +300,10 @@ class AgentScopeNoToolKernelIntegrationTests {
                     assertThat(properties.getState().getMode())
                             .isEqualTo(AgentScopeV2Properties.Mode.IN_MEMORY);
                     assertThat(properties.getState().getKeyPrefix()).isEqualTo("afv:agentscope:v2:");
+                    assertThat(properties.getSkills().isEnabled()).isTrue();
+                    assertThat(properties.getSkills().getRepositories())
+                            .containsKey("bundled");
+                    assertThat(properties.getMcp().isEnabled()).isFalse();
 
                     RuntimeContext runtime = context("7", "afv:v2:spring-wiring:no-tool");
                     StepVerifier.create(context.getBean(DefaultAgentScopeHarnessInvoker.class).call(

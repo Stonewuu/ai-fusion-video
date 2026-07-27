@@ -1,8 +1,10 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeShutdownRecoveryBridge;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
@@ -122,6 +124,7 @@ class AgentScopeHarnessFactoryTests {
         assertThat(registryCalls).hasValue(1);
         assertThat(resource.agent().getToolkit().getToolNames()).containsExactly("test_tool");
         assertThat(resource.agent().getStateStore()).isSameAs(store);
+        assertThat(resource.agent().getCompactionHook()).isNotNull();
 
         resource.close();
         resource.close();
@@ -129,6 +132,37 @@ class AgentScopeHarnessFactoryTests {
         assertThat(resourceCloses).hasValue(1);
         assertThat(delegate.closeCount).isOne();
         verify(store, never()).close();
+    }
+
+    @Test
+    void attachesConfiguredNativeSkillRepositories() {
+        AgentScopeV2Properties properties = new AgentScopeV2Properties();
+        properties.getSkills().setEnabled(true);
+        AgentScopeV2Properties.SkillRepository bundled =
+                new AgentScopeV2Properties.SkillRepository();
+        bundled.setLocation("classpath:agentscope/skills");
+        properties.getSkills().setRepositories(Map.of("bundled", bundled));
+        AgentScopeSkillRegistry skills = new AgentScopeSkillRegistry(properties);
+        AgentScopeHarnessFactory factory = new AgentScopeHarnessFactory(
+                ignored -> OwnedChatModel.owned(new CloseableModel()),
+                (ignored, toolkit) -> AgentKernelToolkitResources.none(),
+                mock(AgentStateStore.class),
+                mock(StateStoreFailureGuard.class),
+                recoveryBridge(),
+                skills);
+        AgentKernelKey key = AgentKernelKey.create(
+                "writer", "model-a", "prompt-v1", List.of(), "afv-tools-v1");
+
+        try (AgentKernelResource resource = factory.create(
+                spec(key, List.of(), Set.of(), "afv-tools-v1"))) {
+            assertThat(resource.agent().getSkillRepositories())
+                    .hasSize(1)
+                    .allSatisfy(repository -> assertThat(repository.getAllSkillNames())
+                            .contains("fusion-video-workflow"));
+            assertThat(resource.agent().getCompactionHook()).isNotNull();
+        } finally {
+            skills.destroy();
+        }
     }
 
     @Test

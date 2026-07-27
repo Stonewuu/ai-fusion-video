@@ -6,6 +6,8 @@ import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.security.SecurityUserDetails;
 import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.AgentMessageService;
+import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -28,8 +30,11 @@ class AiAssistantControllerTests {
 
     private final AgentConversationService conversationService = mock(AgentConversationService.class);
     private final AgentMessageService messageService = mock(AgentMessageService.class);
+    private final AgentScopeSkillRegistry skillRegistry = mock(AgentScopeSkillRegistry.class);
+    private final AgentScopeMcpRegistry mcpRegistry = mock(AgentScopeMcpRegistry.class);
     private final AiAssistantController controller =
-            new AiAssistantController(conversationService, messageService);
+            new AiAssistantController(
+                    conversationService, messageService, skillRegistry, mcpRegistry);
 
     @AfterEach
     void clearSecurityContext() {
@@ -61,6 +66,47 @@ class AiAssistantControllerTests {
                     assertThat(result.getData()).isTrue();
                 })
                 .verifyComplete();
+    }
+
+    @Test
+    void deleteByConversationIdUsesCurrentSecurityUser() {
+        SecurityUserDetails user = new SecurityUserDetails(42L, "owner", "secret", 1, null, List.of());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+        when(conversationService.deleteConversationByConversationId(
+                "optimistic-conversation", 42L)).thenReturn(Mono.empty());
+
+        StepVerifier.create(controller.deleteConversationByConversationId(
+                        "optimistic-conversation"))
+                .assertNext(result -> {
+                    assertThat(result.getCode()).isZero();
+                    assertThat(result.getData()).isTrue();
+                })
+                .verifyComplete();
+
+        verify(conversationService).deleteConversationByConversationId(
+                "optimistic-conversation", 42L);
+    }
+
+    @Test
+    void referenceOptionsReturnConfiguredSkillAndMcpCatalogs() {
+        SecurityUserDetails user = new SecurityUserDetails(42L, "owner", "secret", 1, null, List.of());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+        when(skillRegistry.catalog()).thenReturn(List.of(
+                new AgentScopeSkillRegistry.SkillReference(
+                        "fusion-video-workflow_bundled",
+                        "fusion-video-workflow",
+                        "融光视频工作流",
+                        "bundled")));
+        when(mcpRegistry.catalogForAgent("ai_assistant_agent")).thenReturn(List.of(
+                new AgentScopeMcpRegistry.McpToolReference(
+                        "assets", "search_assets", "搜索素材", true)));
+
+        CommonResult<?> result = controller.referenceOptions();
+
+        assertThat(result.getCode()).isZero();
+        assertThat(result.getData()).isNotNull();
     }
 
     @Test

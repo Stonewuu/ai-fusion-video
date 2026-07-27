@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.stonewu.fusion.config.ai.AiAgentDefinition;
 import com.stonewu.fusion.service.ai.AiAgentService;
 import com.stonewu.fusion.service.ai.AiToolConfigService;
@@ -8,10 +9,13 @@ import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.ToolExecutorRegistry;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeSubAgentToolAdapter;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeToolAdapter;
+import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
 import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRunPort;
 import com.stonewu.fusion.service.ai.run.RunLeaseGuard;
+import io.agentscope.core.tool.AgentTool;
+import io.agentscope.core.tool.ToolBase;
 import io.agentscope.core.tool.Toolkit;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
@@ -33,6 +37,7 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
     private final AgentRuntimeSchedulers schedulers;
     private final RunLeaseGuard leaseGuard;
     private final ObjectMapper objectMapper;
+    private final AgentScopeMcpRegistry mcpRegistry;
 
     public PlatformAgentKernelToolRegistry(
             ToolExecutorRegistry executors,
@@ -42,7 +47,8 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
             ObjectProvider<PlatformSubAgentRunPort> childRuns,
             AgentRuntimeSchedulers schedulers,
             RunLeaseGuard leaseGuard,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AgentScopeMcpRegistry mcpRegistry) {
         this.executors = Objects.requireNonNull(executors, "executors must not be null");
         this.toolConfigService = Objects.requireNonNull(
                 toolConfigService, "toolConfigService must not be null");
@@ -52,6 +58,7 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
         this.schedulers = Objects.requireNonNull(schedulers, "schedulers must not be null");
         this.leaseGuard = Objects.requireNonNull(leaseGuard, "leaseGuard must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.mcpRegistry = Objects.requireNonNull(mcpRegistry, "mcpRegistry must not be null");
     }
 
     @Override
@@ -62,11 +69,18 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
         Map<String, AiAgentDefinition.SubAgentToolDef> children =
                 subAgentTools(spec.agentDefinitionStableKey());
         Map<String, AgentKernelToolManifest> manifest = manifest(spec);
+        mcpRegistry.register(
+                spec.agentDefinitionStableKey(), spec.toolWhitelist(), toolkit);
 
         for (String toolName : spec.toolWhitelist()) {
             ToolExecutor executor = direct.get(toolName);
             AiAgentDefinition.SubAgentToolDef child = children.get(toolName);
-            if (executor != null && child != null) {
+            boolean mcpTool = mcpRegistry.isMcpTool(
+                    toolName, spec.agentDefinitionStableKey());
+            int matches = (executor == null ? 0 : 1)
+                    + (child == null ? 0 : 1)
+                    + (mcpTool ? 1 : 0);
+            if (matches > 1) {
                 throw new IllegalStateException(
                         "AgentScope tool name is ambiguous in kernel whitelist: " + toolName);
             }
@@ -90,12 +104,40 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
                         childRuns::getIfAvailable,
                         leaseGuard,
                         objectMapper));
+            } else if (mcpTool) {
+                AgentTool registered = Objects.requireNonNull(
+                        toolkit.getTool(toolName),
+                        "MCP registry did not register tool: " + toolName);
+                AgentScopeToolSchema.PreparedSchema schema = prepareMcpSchema(
+                        registered, toolName);
+                boolean concurrencySafe = registered instanceof ToolBase toolBase
+                        && toolBase.isConcurrencySafe();
+                requireManifest(
+                        expected,
+                        schema,
+                        registered.isReadOnly(),
+                        concurrencySafe);
             } else {
                 throw new IllegalStateException(
                         "AgentScope kernel references an unavailable platform tool: " + toolName);
             }
         }
         return AgentKernelToolkitResources.none();
+    }
+
+    private AgentScopeToolSchema.PreparedSchema prepareMcpSchema(
+            AgentTool tool,
+            String toolName) {
+        try {
+            return AgentScopeToolSchema.prepare(
+                    objectMapper,
+                    objectMapper.writeValueAsString(tool.getParameters()),
+                    toolName);
+        } catch (JsonProcessingException failure) {
+            throw new IllegalStateException(
+                    "Failed to canonicalize registered MCP tool schema: " + toolName,
+                    failure);
+        }
     }
 
     private Map<String, ToolExecutor> directTools(String definitionKey) {

@@ -10,7 +10,9 @@ import com.stonewu.fusion.service.ai.AiToolConfigService;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
+import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -32,6 +34,24 @@ public final class AgentKernelSpecFactory {
     private final AgentScopeModelFactory modelFactory;
     private final AgentScopeV2Properties properties;
     private final ObjectMapper objectMapper;
+    private final AgentScopeMcpRegistry mcpRegistry;
+
+    @Autowired
+    public AgentKernelSpecFactory(
+            AiAgentService agentService,
+            AiToolConfigService toolConfigService,
+            AgentScopeModelFactory modelFactory,
+            AgentScopeV2Properties properties,
+            ObjectMapper objectMapper,
+            AgentScopeMcpRegistry mcpRegistry) {
+        this.agentService = Objects.requireNonNull(agentService, "agentService must not be null");
+        this.toolConfigService = Objects.requireNonNull(
+                toolConfigService, "toolConfigService must not be null");
+        this.modelFactory = Objects.requireNonNull(modelFactory, "modelFactory must not be null");
+        this.properties = Objects.requireNonNull(properties, "properties must not be null");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.mcpRegistry = Objects.requireNonNull(mcpRegistry, "mcpRegistry must not be null");
+    }
 
     public AgentKernelSpecFactory(
             AiAgentService agentService,
@@ -39,12 +59,13 @@ public final class AgentKernelSpecFactory {
             AgentScopeModelFactory modelFactory,
             AgentScopeV2Properties properties,
             ObjectMapper objectMapper) {
-        this.agentService = Objects.requireNonNull(agentService, "agentService must not be null");
-        this.toolConfigService = Objects.requireNonNull(
-                toolConfigService, "toolConfigService must not be null");
-        this.modelFactory = Objects.requireNonNull(modelFactory, "modelFactory must not be null");
-        this.properties = Objects.requireNonNull(properties, "properties must not be null");
-        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this(
+                agentService,
+                toolConfigService,
+                modelFactory,
+                properties,
+                objectMapper,
+                new AgentScopeMcpRegistry(properties, objectMapper));
     }
 
     public AgentKernelSpec createRoot(AiChatReqVO request, AiModel model, String systemPrompt) {
@@ -57,7 +78,10 @@ public final class AgentKernelSpecFactory {
         String agentName = definition == null
                 ? DEFAULT_AGENT_KEY
                 : requireText(definition.getName(), "agent.name");
-        ToolSelection tools = selectTools(requestedType, request.getEnabledTools());
+        ToolSelection tools = selectTools(
+                requestedType,
+                request.getEnabledTools(),
+                request.getEnabledMcpTools());
         Map<String, String> promptVariables = AgentPromptVariables.fromRequest(request);
         return create(
                 model,
@@ -93,7 +117,7 @@ public final class AgentKernelSpecFactory {
         if (instruction != null) {
             prompt = prompt + "\n\n" + AgentPromptVariables.render(instruction, variables);
         }
-        ToolSelection tools = selectTools(childType, null);
+        ToolSelection tools = selectTools(childType, null, null);
         String agentName = normalize(subAgent.getToolName());
         if (agentName == null) {
             agentName = requireText(definition.getName(), "subAgent.name");
@@ -139,15 +163,20 @@ public final class AgentKernelSpecFactory {
                 TOOL_WHITELIST_VERSION);
     }
 
-    private ToolSelection selectTools(String agentType, List<String> requestedTools) {
+    private ToolSelection selectTools(
+            String agentType,
+            List<String> requestedTools,
+            List<String> requestedMcpTools) {
         Set<String> requested = requestedTools == null || requestedTools.isEmpty()
                 ? null
                 : Set.copyOf(requestedTools);
+        Set<String> requestedMcp = requestedMcpTools == null
+                ? null
+                : Set.copyOf(requestedMcpTools);
         AiAgentDefinition definition = agentType == null ? null : agentService.getRequiredByType(agentType);
         if (definition != null && !Integer.valueOf(1).equals(definition.getEnableTools())) {
-            if (requested != null) {
-                throw new IllegalArgumentException(
-                        "Agent does not enable the requested tools: " + requested);
+            if (requested != null || requestedMcp != null) {
+                throw new IllegalArgumentException("Agent does not enable the requested tools");
             }
             return ToolSelection.empty();
         }
@@ -188,6 +217,24 @@ public final class AgentKernelSpecFactory {
             unavailable.removeAll(whitelist);
             throw new IllegalArgumentException(
                     "Requested AgentScope tools are unavailable: " + unavailable);
+        }
+        String definitionKey = agentType == null ? DEFAULT_AGENT_KEY : agentType;
+        List<AgentKernelToolManifest> availableMcpTools =
+                mcpRegistry.manifestsForAgent(definitionKey);
+        if (requestedMcp != null) {
+            Set<String> availableMcpNames = new LinkedHashSet<>();
+            availableMcpTools.forEach(tool -> availableMcpNames.add(tool.toolName()));
+            Set<String> unavailableMcp = new LinkedHashSet<>(requestedMcp);
+            unavailableMcp.removeAll(availableMcpNames);
+            if (!unavailableMcp.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "Requested AgentScope MCP tools are unavailable: " + unavailableMcp);
+            }
+        }
+        for (AgentKernelToolManifest mcpTool : availableMcpTools) {
+            if (requestedMcp == null || requestedMcp.contains(mcpTool.toolName())) {
+                add(manifest, whitelist, mcpTool);
+            }
         }
         return new ToolSelection(manifest, whitelist);
     }

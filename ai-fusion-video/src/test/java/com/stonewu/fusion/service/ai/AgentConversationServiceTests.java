@@ -141,6 +141,34 @@ class AgentConversationServiceTests {
     }
 
     @Test
+    void deletesOwnedConversationByStableConversationId() {
+        AgentConversation conversation = AgentConversation.builder()
+                .id(17L)
+                .userId(42L)
+                .conversationId("optimistic-conversation")
+                .build();
+        when(conversationMapper.selectOne(any(LambdaQueryWrapper.class))).thenReturn(conversation);
+        when(statePreflight.deleteConversationSessions("42", "optimistic-conversation"))
+                .thenReturn(Mono.empty());
+
+        StepVerifier.create(conversationService.deleteConversationByConversationId(
+                        "optimistic-conversation", 42L))
+                .verifyComplete();
+
+        ArgumentCaptor<LambdaQueryWrapper<AgentConversation>> selectCaptor = lambdaWrapperCaptor();
+        ArgumentCaptor<LambdaQueryWrapper<AgentConversation>> deleteCaptor = lambdaWrapperCaptor();
+        InOrder ordered = inOrder(conversationMapper, statePreflight);
+        ordered.verify(conversationMapper).selectOne(selectCaptor.capture());
+        ordered.verify(statePreflight).deleteConversationSessions(
+                "42", "optimistic-conversation");
+        ordered.verify(conversationMapper).delete(deleteCaptor.capture());
+        assertOwnedConversationPredicate(
+                selectCaptor.getValue(), "optimistic-conversation", 42L);
+        assertOwnedConversationPredicate(
+                deleteCaptor.getValue(), "optimistic-conversation", 42L);
+    }
+
+    @Test
     void laterAssistantTurnsDoNotOverwriteTheFirstPromptTitle() {
         AgentConversation conversation = AgentConversation.builder()
                 .id(17L)
@@ -177,6 +205,17 @@ class AgentConversationServiceTests {
                 .containsPattern("(?i)(^|\\W)id\\s*=")
                 .containsPattern("(?i)(^|\\W)user_id\\s*=");
         assertThat(wrapper.getParamNameValuePairs().values()).contains(id, userId);
+    }
+
+    private static void assertOwnedConversationPredicate(
+            LambdaQueryWrapper<AgentConversation> wrapper,
+            String conversationId,
+            long userId) {
+        assertThat(wrapper.getSqlSegment())
+                .containsPattern("(?i)(^|\\W)conversation_id\\s*=")
+                .containsPattern("(?i)(^|\\W)user_id\\s*=");
+        assertThat(wrapper.getParamNameValuePairs().values())
+                .contains(conversationId, userId);
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})

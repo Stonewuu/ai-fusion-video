@@ -3,7 +3,13 @@ package com.stonewu.fusion.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 @ConfigurationProperties(prefix = "fusion.agentscope.v2")
 public class AgentScopeV2Properties {
@@ -12,6 +18,8 @@ public class AgentScopeV2Properties {
     private State state = new State();
     private Ingress ingress = new Ingress();
     private Execution execution = new Execution();
+    private Skills skills = new Skills();
+    private Mcp mcp = new Mcp();
 
     public Cache getCache() {
         return cache;
@@ -43,6 +51,22 @@ public class AgentScopeV2Properties {
 
     public void setExecution(Execution execution) {
         this.execution = Objects.requireNonNull(execution, "execution must not be null");
+    }
+
+    public Skills getSkills() {
+        return skills;
+    }
+
+    public void setSkills(Skills skills) {
+        this.skills = Objects.requireNonNull(skills, "skills must not be null");
+    }
+
+    public Mcp getMcp() {
+        return mcp;
+    }
+
+    public void setMcp(Mcp mcp) {
+        this.mcp = Objects.requireNonNull(mcp, "mcp must not be null");
     }
 
     public static final class Cache {
@@ -194,6 +218,226 @@ public class AgentScopeV2Properties {
         }
     }
 
+    public static final class Skills {
+        private boolean enabled;
+        private boolean failFast = true;
+        private Map<String, SkillRepository> repositories = new LinkedHashMap<>();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public boolean isFailFast() {
+            return failFast;
+        }
+
+        public void setFailFast(boolean failFast) {
+            this.failFast = failFast;
+        }
+
+        public Map<String, SkillRepository> getRepositories() {
+            return repositories;
+        }
+
+        public void setRepositories(Map<String, SkillRepository> repositories) {
+            this.repositories = repositories == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(repositories);
+        }
+    }
+
+    public static final class SkillRepository {
+        private boolean enabled = true;
+        private String location;
+        private boolean lazy;
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getLocation() {
+            return location;
+        }
+
+        public void setLocation(String location) {
+            this.location = normalize(location);
+        }
+
+        public boolean isLazy() {
+            return lazy;
+        }
+
+        public void setLazy(boolean lazy) {
+            this.lazy = lazy;
+        }
+    }
+
+    public static final class Mcp {
+        private boolean enabled;
+        private boolean failFast = true;
+        private Map<String, McpServer> servers = new LinkedHashMap<>();
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public boolean isFailFast() {
+            return failFast;
+        }
+
+        public void setFailFast(boolean failFast) {
+            this.failFast = failFast;
+        }
+
+        public Map<String, McpServer> getServers() {
+            return servers;
+        }
+
+        public void setServers(Map<String, McpServer> servers) {
+            this.servers = servers == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(servers);
+        }
+    }
+
+    public static final class McpServer {
+        private boolean enabled = true;
+        private String transport;
+        private String command;
+        private List<String> args = new ArrayList<>();
+        private Map<String, String> env = new LinkedHashMap<>();
+        private String url;
+        private Map<String, String> headers = new LinkedHashMap<>();
+        private Map<String, String> queryParams = new LinkedHashMap<>();
+        private List<String> enabledTools = new ArrayList<>();
+        private Set<String> agentTypes = new LinkedHashSet<>();
+        private List<String> protocolVersions = new ArrayList<>();
+        private Duration timeout = Duration.ofSeconds(120);
+        private Duration initializationTimeout = Duration.ofSeconds(30);
+
+        public boolean isEnabled() {
+            return enabled;
+        }
+
+        public void setEnabled(boolean enabled) {
+            this.enabled = enabled;
+        }
+
+        public String getTransport() {
+            return transport;
+        }
+
+        public void setTransport(String transport) {
+            this.transport = normalize(transport);
+        }
+
+        public String getCommand() {
+            return command;
+        }
+
+        public void setCommand(String command) {
+            this.command = normalize(command);
+        }
+
+        public List<String> getArgs() {
+            return args;
+        }
+
+        public void setArgs(List<String> args) {
+            this.args = args == null ? new ArrayList<>() : new ArrayList<>(args);
+        }
+
+        public Map<String, String> getEnv() {
+            return env;
+        }
+
+        public void setEnv(Map<String, String> env) {
+            this.env = env == null ? new LinkedHashMap<>() : new LinkedHashMap<>(env);
+        }
+
+        public String getUrl() {
+            return url;
+        }
+
+        public void setUrl(String url) {
+            this.url = normalize(url);
+        }
+
+        public Map<String, String> getHeaders() {
+            return headers;
+        }
+
+        public void setHeaders(Map<String, String> headers) {
+            this.headers = headers == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(headers);
+        }
+
+        public Map<String, String> getQueryParams() {
+            return queryParams;
+        }
+
+        public void setQueryParams(Map<String, String> queryParams) {
+            this.queryParams = queryParams == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(queryParams);
+        }
+
+        public List<String> getEnabledTools() {
+            return enabledTools;
+        }
+
+        public void setEnabledTools(List<String> enabledTools) {
+            this.enabledTools = normalizedList(enabledTools);
+        }
+
+        public Set<String> getAgentTypes() {
+            return agentTypes;
+        }
+
+        public void setAgentTypes(Set<String> agentTypes) {
+            this.agentTypes = new LinkedHashSet<>(normalizedList(
+                    agentTypes == null ? List.of() : new ArrayList<>(agentTypes)));
+        }
+
+        public List<String> getProtocolVersions() {
+            return protocolVersions;
+        }
+
+        public void setProtocolVersions(List<String> protocolVersions) {
+            this.protocolVersions = normalizedList(protocolVersions);
+        }
+
+        public Duration getTimeout() {
+            return timeout;
+        }
+
+        public void setTimeout(Duration timeout) {
+            this.timeout = requirePositive(timeout, "mcp server timeout");
+        }
+
+        public Duration getInitializationTimeout() {
+            return initializationTimeout;
+        }
+
+        public void setInitializationTimeout(Duration initializationTimeout) {
+            this.initializationTimeout = requirePositive(
+                    initializationTimeout, "mcp server initializationTimeout");
+        }
+    }
+
     public enum Mode {
         IN_MEMORY,
         REDIS
@@ -205,5 +449,23 @@ public class AgentScopeV2Properties {
             throw new IllegalArgumentException(name + " must be greater than zero");
         }
         return value;
+    }
+
+    private static String normalize(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static List<String> normalizedList(List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return new ArrayList<>();
+        }
+        List<String> normalized = new ArrayList<>(values.size());
+        for (String value : values) {
+            String item = normalize(value);
+            if (item != null && !normalized.contains(item)) {
+                normalized.add(item);
+            }
+        }
+        return normalized;
     }
 }
