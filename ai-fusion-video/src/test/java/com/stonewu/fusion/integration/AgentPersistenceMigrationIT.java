@@ -64,6 +64,17 @@ class AgentPersistenceMigrationIT {
     @Test
     void createsRunEventUsageAndOrderingConstraints() {
         assertThat(tableCount(
+                "afv_agent_workspace_config",
+                "afv_agent_workspace_entry",
+                "afv_agent_workspace_migration",
+                "afv_agent_workspace_migration_item",
+                "afv_agent_mcp_server"))
+                .isEqualTo(5);
+        assertThat(jdbc.queryForObject(
+                "SELECT backend_type FROM afv_agent_workspace_config WHERE id = 1",
+                String.class))
+                .isEqualTo("database");
+        assertThat(tableCount(
                 "afv_agent_run", "afv_agent_event", "afv_agent_model_call_usage"))
                 .isEqualTo(3);
         assertThat(indexColumns("afv_agent_message", "uk_agent_message_conv_order"))

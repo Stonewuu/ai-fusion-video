@@ -20,6 +20,8 @@ import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentPromptVariables;
 import com.stonewu.fusion.service.ai.agentscope.message.AgentScopeMessageMapper;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
 import com.stonewu.fusion.service.ai.run.AgentExecutionRuntimeContextRequests;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
@@ -31,6 +33,7 @@ import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.run.model.StartAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
+import io.agentscope.core.skill.AgentSkill;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -38,12 +41,17 @@ import reactor.core.publisher.Mono;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 /** The only production entry point for starting a root AgentScope Harness run. */
 @Service
 public final class AgentScopePipelineRunService {
+
+    private static final int MAX_ACTIVE_SKILLS = 8;
+    private static final int MAX_ACTIVE_SKILL_CONTENT_LENGTH = 128 * 1024;
 
     private static final String DEFAULT_SYSTEM_PROMPT = """
             你是一个专业的 AI 视频创作助手，专注于帮助用户进行剧本编辑和分镜设计。
@@ -75,6 +83,8 @@ public final class AgentScopePipelineRunService {
     private final AgentScopeV2Properties properties;
     private final AgentRuntimeSchedulers schedulers;
     private final ObjectMapper objectMapper;
+    private final AgentScopeSkillRegistry skillRegistry;
+    private final AgentUserSkillService userSkillService;
 
     public AgentScopePipelineRunService(
             AiModelService modelService,
@@ -91,7 +101,9 @@ public final class AgentScopePipelineRunService {
             AgentRuntimeInstanceIdentity instanceIdentity,
             AgentScopeV2Properties properties,
             AgentRuntimeSchedulers schedulers,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AgentScopeSkillRegistry skillRegistry,
+            AgentUserSkillService userSkillService) {
         this.modelService = Objects.requireNonNull(modelService, "modelService must not be null");
         this.agentService = Objects.requireNonNull(agentService, "agentService must not be null");
         this.conversations = Objects.requireNonNull(conversations, "conversations must not be null");
@@ -109,6 +121,9 @@ public final class AgentScopePipelineRunService {
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.schedulers = Objects.requireNonNull(schedulers, "schedulers must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.skillRegistry = Objects.requireNonNull(skillRegistry, "skillRegistry must not be null");
+        this.userSkillService = Objects.requireNonNull(
+                userSkillService, "userSkillService must not be null");
     }
 
     public Flux<AiChatStreamRespVO> stream(AiChatReqVO request, long userId) {
@@ -147,12 +162,14 @@ public final class AgentScopePipelineRunService {
             request.setConversationId(conversationId);
         }
         AiAgentDefinition definition = definition(request.getAgentType());
+        List<ActiveSkill> activeSkills = resolveActiveSkills(request.getEnabledSkills(), userId);
+        request.setEnabledSkills(activeSkills.stream().map(ActiveSkill::name).toList());
         Map<String, String> promptVariables = AgentPromptVariables.fromRequest(request);
         String visibleUserContent = userContent(request, definition, promptVariables);
         String input = input(request, visibleUserContent);
-        String systemPrompt = systemPrompt(request, definition, promptVariables);
+        String systemPrompt = systemPrompt(request, definition, promptVariables, activeSkills);
         AiModel model = model(request.getModelId());
-        AgentKernelSpec spec = specFactory.createRoot(request, model, systemPrompt);
+        AgentKernelSpec spec = specFactory.createRoot(request, model, systemPrompt, userId);
         AgentKernelSnapshot snapshot = snapshots.build(spec);
         Instant deadline = Instant.now()
                 .plus(properties.getExecution().getRunTimeout())
@@ -214,7 +231,8 @@ public final class AgentScopePipelineRunService {
     private String systemPrompt(
             AiChatReqVO request,
             AiAgentDefinition definition,
-            Map<String, String> promptVariables) {
+            Map<String, String> promptVariables,
+            List<ActiveSkill> activeSkills) {
         String prompt = normalize(request.getSystemPrompt());
         if (prompt == null) {
             prompt = definition == null
@@ -229,7 +247,71 @@ public final class AgentScopePipelineRunService {
             prompt = prompt + "\n\n" + AgentPromptVariables.render(
                     instruction, promptVariables);
         }
+        if (!activeSkills.isEmpty()) {
+            prompt = prompt + "\n\n" + activeSkillsPrompt(activeSkills);
+        }
         return prompt;
+    }
+
+    private List<ActiveSkill> resolveActiveSkills(List<String> requestedNames, long userId) {
+        if (requestedNames == null || requestedNames.isEmpty()) {
+            return List.of();
+        }
+        LinkedHashSet<String> names = new LinkedHashSet<>();
+        for (String requestedName : requestedNames) {
+            String name = normalize(requestedName);
+            if (name == null) {
+                throw new BusinessException("Skill 名称不能为空");
+            }
+            names.add(name);
+        }
+        if (names.size() > MAX_ACTIVE_SKILLS) {
+            throw new BusinessException("每次最多主动引用 8 个 Skill");
+        }
+
+        Map<String, ActiveSkill> available = new LinkedHashMap<>();
+        for (AgentSkill skill : skillRegistry.skills()) {
+            available.put(skill.getName(), new ActiveSkill(
+                    skill.getName(),
+                    skill.getDescription(),
+                    skill.getSkillContent(),
+                    skill.getSource()));
+        }
+        for (AgentUserSkillService.UserSkill skill : userSkillService.list(userId)) {
+            available.put(skill.name(), new ActiveSkill(
+                    skill.name(), skill.description(), skill.content(), skill.source()));
+        }
+
+        List<ActiveSkill> activeSkills = names.stream().map(name -> {
+            ActiveSkill skill = available.get(name);
+            if (skill == null) {
+                throw new BusinessException("Skill 不可用: " + name);
+            }
+            return skill;
+        }).toList();
+        int contentLength = activeSkills.stream()
+                .mapToInt(skill -> skill.content().length())
+                .sum();
+        if (contentLength > MAX_ACTIVE_SKILL_CONTENT_LENGTH) {
+            throw new BusinessException("主动引用的 Skill 正文总长度不能超过 128 KB");
+        }
+        return activeSkills;
+    }
+
+    private String activeSkillsPrompt(List<ActiveSkill> activeSkills) {
+        StringBuilder prompt = new StringBuilder("""
+                ## 已主动激活的 Skills
+
+                用户为当前请求明确选择了以下 Skill。你必须先理解并遵循这些 Skill 的正文要求，
+                不得声称它们不可用；如多个 Skill 之间存在冲突，请指出冲突并请求用户确认。
+                """);
+        for (ActiveSkill skill : activeSkills) {
+            prompt.append("\n### Skill: ").append(skill.name())
+                    .append("\n描述：").append(skill.description())
+                    .append("\n来源：").append(skill.source())
+                    .append("\n\n").append(skill.content()).append('\n');
+        }
+        return prompt.toString().strip();
     }
 
     private String userContent(
@@ -383,6 +465,19 @@ public final class AgentScopePipelineRunService {
             Objects.requireNonNull(snapshot, "snapshot must not be null");
             Objects.requireNonNull(admission, "admission must not be null");
             requireText(input, "input");
+        }
+    }
+
+    private record ActiveSkill(
+            String name,
+            String description,
+            String content,
+            String source) {
+        private ActiveSkill {
+            name = requireText(name, "activeSkill.name");
+            description = requireText(description, "activeSkill.description");
+            content = requireText(content, "activeSkill.content");
+            source = requireText(source, "activeSkill.source");
         }
     }
 }

@@ -57,6 +57,7 @@ services:
       JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1024m}
     volumes:
       - media_data:/app/data/media
+      - agent_workspace_data:/app/data/agent-workspace
     depends_on:
       mysql:
         condition: service_healthy
@@ -95,3 +96,4 @@ volumes:
   mysql_data:
   redis_data:
   media_data:
+  agent_workspace_data:

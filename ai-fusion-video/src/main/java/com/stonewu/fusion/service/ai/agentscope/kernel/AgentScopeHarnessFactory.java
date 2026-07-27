@@ -5,10 +5,14 @@ import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeShutdownRecovery
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreGuardedChatModel;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
+import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceBaseStore;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.ToolkitConfig;
 import io.agentscope.harness.agent.HarnessAgent;
+import io.agentscope.harness.agent.IsolationScope;
+import io.agentscope.harness.agent.filesystem.remote.store.BaseStore;
+import io.agentscope.harness.agent.filesystem.spec.RemoteFilesystemSpec;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -25,6 +29,7 @@ public final class AgentScopeHarnessFactory {
     private final StateStoreFailureGuard failures;
     private final AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge;
     private final AgentScopeSkillRegistry skillRegistry;
+    private final BaseStore workspaceStore;
 
     @Autowired
     public AgentScopeHarnessFactory(
@@ -33,14 +38,16 @@ public final class AgentScopeHarnessFactory {
             AgentStateStore stateStore,
             StateStoreFailureGuard failures,
             AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
-            ObjectProvider<AgentScopeSkillRegistry> skillRegistries) {
+            ObjectProvider<AgentScopeSkillRegistry> skillRegistries,
+            ObjectProvider<AgentWorkspaceBaseStore> workspaceStores) {
         this(
                 modelFactory,
                 toolRegistry,
                 stateStore,
                 failures,
                 shutdownRecoveryBridge,
-                skillRegistries.getIfAvailable(AgentScopeHarnessFactory::disabledSkillRegistry));
+                skillRegistries.getIfAvailable(AgentScopeHarnessFactory::disabledSkillRegistry),
+                workspaceStores.getIfAvailable());
     }
 
     AgentScopeHarnessFactory(
@@ -50,6 +57,18 @@ public final class AgentScopeHarnessFactory {
             StateStoreFailureGuard failures,
             AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
             AgentScopeSkillRegistry skillRegistry) {
+        this(modelFactory, toolRegistry, stateStore, failures, shutdownRecoveryBridge,
+                skillRegistry, null);
+    }
+
+    AgentScopeHarnessFactory(
+            AgentKernelModelFactory modelFactory,
+            AgentKernelToolRegistry toolRegistry,
+            AgentStateStore stateStore,
+            StateStoreFailureGuard failures,
+            AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
+            AgentScopeSkillRegistry skillRegistry,
+            BaseStore workspaceStore) {
         this.modelFactory = Objects.requireNonNull(modelFactory, "modelFactory must not be null");
         this.toolRegistry = Objects.requireNonNull(toolRegistry, "toolRegistry must not be null");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore must not be null");
@@ -58,6 +77,7 @@ public final class AgentScopeHarnessFactory {
                 shutdownRecoveryBridge, "shutdownRecoveryBridge must not be null");
         this.skillRegistry = Objects.requireNonNull(
                 skillRegistry, "skillRegistry must not be null");
+        this.workspaceStore = workspaceStore;
     }
 
     public AgentScopeHarnessFactory(
@@ -72,7 +92,8 @@ public final class AgentScopeHarnessFactory {
                 stateStore,
                 failures,
                 shutdownRecoveryBridge,
-                disabledSkillRegistry());
+                disabledSkillRegistry(),
+                null);
     }
 
     public AgentKernelResource create(AgentKernelSpec spec) {
@@ -111,11 +132,18 @@ public final class AgentScopeHarnessFactory {
                     .disableAtPathExpansion()
                     .disableSubagents()
                     .disableDynamicSubagents()
-                    .disableDefaultWorkspaceSkills()
                     .disableToolsConfig();
+            if (workspaceStore != null) {
+                builder.filesystem(new RemoteFilesystemSpec(workspaceStore)
+                        .isolationScope(IsolationScope.USER));
+            } else {
+                builder.disableDefaultWorkspaceSkills();
+            }
             if (skillRegistry.enabled()) {
-                builder.skillRepositories(skillRegistry.repositories())
-                        .skillsEnabled(true);
+                builder.skillRepositories(skillRegistry.repositories());
+            }
+            if (workspaceStore != null || skillRegistry.enabled()) {
+                builder.skillsEnabled(true);
             } else {
                 builder.disableDynamicSkills()
                         .skillsEnabled(false);

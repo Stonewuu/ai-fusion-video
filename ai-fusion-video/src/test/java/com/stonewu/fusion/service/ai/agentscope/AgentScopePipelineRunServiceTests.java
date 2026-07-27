@@ -14,6 +14,8 @@ import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
 import com.stonewu.fusion.service.ai.agentscope.message.AgentScopeMessageMapper;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
 import com.stonewu.fusion.service.ai.run.AgentExecutionRuntimeContextRequests;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
@@ -58,6 +60,8 @@ class AgentScopePipelineRunServiceTests {
     void startsOnlyTheDurableHarnessExecutionWithStrongMessages() {
         AiModelService models = mock(AiModelService.class);
         AiAgentService agents = mock(AiAgentService.class);
+        AgentScopeSkillRegistry skillRegistry = mock(AgentScopeSkillRegistry.class);
+        AgentUserSkillService userSkillService = mock(AgentUserSkillService.class);
         AgentConversationService conversations = mock(AgentConversationService.class);
         AgentKernelSpecFactory specs = mock(AgentKernelSpecFactory.class);
         AgentKernelSnapshotBuilder snapshots = mock(AgentKernelSnapshotBuilder.class);
@@ -79,7 +83,15 @@ class AgentScopePipelineRunServiceTests {
         AgentKernelSnapshot snapshot = snapshot();
 
         when(models.getDefaultByType(1)).thenReturn(model);
-        when(specs.createRoot(any(AiChatReqVO.class), eq(model), any(String.class)))
+        when(skillRegistry.skills()).thenReturn(List.of());
+        when(userSkillService.list(42L)).thenReturn(List.of(
+                new AgentUserSkillService.UserSkill(
+                        "story-review_workspace:user",
+                        "story-review",
+                        "检查故事结构",
+                        "# 工作方式\n\n先检查冲突与节奏。",
+                        "workspace:user")));
+        when(specs.createRoot(any(AiChatReqVO.class), eq(model), any(String.class), eq(42L)))
                 .thenReturn(spec);
         when(spec.agentDefinitionStableKey()).thenReturn("ai_assistant_agent");
         when(snapshots.build(spec)).thenReturn(snapshot);
@@ -117,10 +129,13 @@ class AgentScopePipelineRunServiceTests {
                 identity,
                 properties,
                 schedulers,
-                new ObjectMapper());
+                new ObjectMapper(),
+                skillRegistry,
+                userSkillService);
         AiChatReqVO request = new AiChatReqVO()
                 .setConversationId("conversation-1")
-                .setMessage("hello harness");
+                .setMessage("hello harness")
+                .setEnabledSkills(List.of("story-review"));
 
         StepVerifier.create(service.start(request, 42L))
                 .assertNext(started -> assertThat(started.runId()).isNotBlank())
@@ -133,6 +148,11 @@ class AgentScopePipelineRunServiceTests {
         assertThat(admission.getValue().agentStateSessionId())
                 .isEqualTo("afv:v2:conversation-1:ai_assistant_agent");
         assertThat(admission.getValue().userContent()).isEqualTo("hello harness");
+
+        ArgumentCaptor<String> systemPrompt = ArgumentCaptor.forClass(String.class);
+        verify(specs).createRoot(any(AiChatReqVO.class), eq(model), systemPrompt.capture(), eq(42L));
+        assertThat(systemPrompt.getValue())
+                .contains("已主动激活的 Skills", "story-review", "先检查冲突与节奏");
 
         ArgumentCaptor<StartAgentExecutionCommand> execution =
                 ArgumentCaptor.forClass(StartAgentExecutionCommand.class);

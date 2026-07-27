@@ -38,6 +38,9 @@ public final class AgentPromptVariables {
                 }
             }
         }
+        if (safeRequest.getEnabledSkills() != null && !safeRequest.getEnabledSkills().isEmpty()) {
+            putScalar(variables, "activeSkillNames", String.join("\n", safeRequest.getEnabledSkills()));
+        }
         putScalar(variables, "projectId", safeRequest.getProjectId());
         return immutable(variables);
     }

@@ -26,6 +26,7 @@ import java.util.concurrent.Executor;
 public class AsyncConfig {
 
     private static final int MVC_ASYNC_QUEUE_CAPACITY = 512;
+    private static final int AGENT_WORKSPACE_MIGRATION_QUEUE_CAPACITY = 8;
 
     /**
      * ffmpeg 合成任务最大并发数。
@@ -72,6 +73,17 @@ public class AsyncConfig {
 
         log.info("[AsyncConfig] MVC 异步执行器: corePoolSize={}, maxPoolSize={}, queueCapacity={}",
                 corePoolSize, maxPoolSize, MVC_ASYNC_QUEUE_CAPACITY);
+        return executor;
+    }
+
+    @Bean(name = "agentWorkspaceMigrationExecutor")
+    public ThreadPoolTaskExecutor agentWorkspaceMigrationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(AGENT_WORKSPACE_MIGRATION_QUEUE_CAPACITY);
+        executor.setThreadNamePrefix("agent-workspace-migration-");
+        executor.setWaitForTasksToCompleteOnShutdown(false);
         return executor;
     }
 

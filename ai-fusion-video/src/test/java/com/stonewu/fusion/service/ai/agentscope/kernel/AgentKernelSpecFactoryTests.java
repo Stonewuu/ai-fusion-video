@@ -80,6 +80,43 @@ class AgentKernelSpecFactoryTests {
     }
 
     @Test
+    void userMcpKernelIsBoundToTheAuthenticatedUser() {
+        AgentKernelToolManifest manifest = new AgentKernelToolManifest(
+                "private_search",
+                AgentKernelToolManifest.schemaSha256("{}"),
+                true,
+                false);
+        when(mcp.manifestsForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY, 42L))
+                .thenReturn(List.of(manifest));
+        when(mcp.manifestsForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY, 43L))
+                .thenReturn(List.of(manifest));
+
+        AgentKernelSpec first = factory.createRoot(
+                new AiChatReqVO(), model, "root prompt", 42L);
+        AgentKernelSpec second = factory.createRoot(
+                new AiChatReqVO(), model, "root prompt", 43L);
+
+        assertThat(AgentKernelSpecFactory.ownerUserId(first)).isEqualTo(42L);
+        assertThat(first.toolWhitelist()).containsExactly("private_search");
+        assertThat(first.key()).isNotEqualTo(second.key());
+    }
+
+    @Test
+    void changingUserMcpConfigurationRotatesTheKernelKey() {
+        when(mcp.manifestsForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY, 42L))
+                .thenReturn(List.of());
+        when(mcp.userConfigurationFingerprint(42L))
+                .thenReturn("a".repeat(64), "b".repeat(64));
+
+        AgentKernelSpec first = factory.createRoot(
+                new AiChatReqVO(), model, "root prompt", 42L);
+        AgentKernelSpec second = factory.createRoot(
+                new AiChatReqVO(), model, "root prompt", 42L);
+
+        assertThat(first.key()).isNotEqualTo(second.key());
+    }
+
+    @Test
     void activeMcpReferencesFilterOnlyMcpTools() {
         AgentKernelToolManifest search = new AgentKernelToolManifest(
                 "search_assets",

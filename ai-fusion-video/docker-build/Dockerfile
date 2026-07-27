@@ -17,7 +17,7 @@ RUN set -eux; \
 
 COPY app.jar app.jar
 
-RUN mkdir -p /app/data/media
+RUN mkdir -p /app/data/media /app/data/agent-workspace
 
 EXPOSE 18080
 

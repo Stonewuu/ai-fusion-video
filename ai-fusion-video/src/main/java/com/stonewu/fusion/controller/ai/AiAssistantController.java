@@ -12,6 +12,7 @@ import com.stonewu.fusion.service.ai.AgentMessageService;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,9 @@ import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Comparator;
 
 import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 
@@ -37,19 +41,27 @@ public class AiAssistantController {
     private final AgentMessageService messageService;
     private final AgentScopeSkillRegistry skillRegistry;
     private final AgentScopeMcpRegistry mcpRegistry;
+    private final AgentUserSkillService userSkillService;
 
     // ========== 对话管理 ==========
 
     @Operation(summary = "获取助手可主动引用的 Skill 与 MCP 工具")
     @GetMapping("/reference-options")
     public CommonResult<AssistantReferenceOptionsRespVO> referenceOptions() {
-        requireCurrentUserId();
-        List<AssistantReferenceOptionsRespVO.SkillOption> skills = skillRegistry.catalog().stream()
-                .map(skill -> new AssistantReferenceOptionsRespVO.SkillOption(
-                        skill.id(), skill.name(), skill.description(), skill.source()))
+        long userId = requireCurrentUserId();
+        Map<String, AssistantReferenceOptionsRespVO.SkillOption> skillOptions = new LinkedHashMap<>();
+        skillRegistry.catalog().forEach(skill -> skillOptions.put(skill.name(),
+                new AssistantReferenceOptionsRespVO.SkillOption(
+                        skill.id(), skill.name(), skill.description(), skill.source())));
+        userSkillService.catalog(userId).forEach(skill -> skillOptions.put(skill.name(),
+                new AssistantReferenceOptionsRespVO.SkillOption(
+                        skill.id(), skill.name(), skill.description(), skill.source())));
+        List<AssistantReferenceOptionsRespVO.SkillOption> skills = skillOptions.values().stream()
+                .sorted(Comparator.comparing(
+                        AssistantReferenceOptionsRespVO.SkillOption::name))
                 .toList();
         List<AssistantReferenceOptionsRespVO.McpToolOption> mcpTools = mcpRegistry
-                .catalogForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY)
+                .catalogForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY, userId)
                 .stream()
                 .map(tool -> new AssistantReferenceOptionsRespVO.McpToolOption(
                         tool.serverName(),

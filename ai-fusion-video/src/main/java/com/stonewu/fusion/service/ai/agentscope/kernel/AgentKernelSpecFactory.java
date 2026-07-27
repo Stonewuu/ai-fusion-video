@@ -29,6 +29,8 @@ public final class AgentKernelSpecFactory {
 
     public static final String DEFAULT_AGENT_KEY = "ai_assistant_agent";
     public static final String TOOL_WHITELIST_VERSION = "afv-tools-v2";
+    public static final String OWNER_USER_ID_VARIABLE = "agentWorkspaceUserId";
+    public static final String MCP_CONFIG_FINGERPRINT_VARIABLE = "agentMcpConfigFingerprint";
     private final AiAgentService agentService;
     private final AiToolConfigService toolConfigService;
     private final AgentScopeModelFactory modelFactory;
@@ -69,6 +71,14 @@ public final class AgentKernelSpecFactory {
     }
 
     public AgentKernelSpec createRoot(AiChatReqVO request, AiModel model, String systemPrompt) {
+        return createRoot(request, model, systemPrompt, null);
+    }
+
+    public AgentKernelSpec createRoot(
+            AiChatReqVO request,
+            AiModel model,
+            String systemPrompt,
+            Long ownerUserId) {
         Objects.requireNonNull(request, "request must not be null");
         String requestedType = normalize(request.getAgentType());
         String definitionKey = requestedType == null ? DEFAULT_AGENT_KEY : requestedType;
@@ -81,8 +91,17 @@ public final class AgentKernelSpecFactory {
         ToolSelection tools = selectTools(
                 requestedType,
                 request.getEnabledTools(),
-                request.getEnabledMcpTools());
-        Map<String, String> promptVariables = AgentPromptVariables.fromRequest(request);
+                request.getEnabledMcpTools(),
+                ownerUserId);
+        Map<String, String> promptVariables = new LinkedHashMap<>(
+                AgentPromptVariables.fromRequest(request));
+        if (ownerUserId != null) {
+            promptVariables.put(OWNER_USER_ID_VARIABLE, String.valueOf(ownerUserId));
+            String mcpFingerprint = mcpRegistry.userConfigurationFingerprint(ownerUserId);
+            if (mcpFingerprint != null && !mcpFingerprint.isBlank()) {
+                promptVariables.put(MCP_CONFIG_FINGERPRINT_VARIABLE, mcpFingerprint);
+            }
+        }
         return create(
                 model,
                 definitionKey,
@@ -117,7 +136,7 @@ public final class AgentKernelSpecFactory {
         if (instruction != null) {
             prompt = prompt + "\n\n" + AgentPromptVariables.render(instruction, variables);
         }
-        ToolSelection tools = selectTools(childType, null, null);
+        ToolSelection tools = selectTools(childType, null, null, ownerUserId(parent));
         String agentName = normalize(subAgent.getToolName());
         if (agentName == null) {
             agentName = requireText(definition.getName(), "subAgent.name");
@@ -166,7 +185,8 @@ public final class AgentKernelSpecFactory {
     private ToolSelection selectTools(
             String agentType,
             List<String> requestedTools,
-            List<String> requestedMcpTools) {
+            List<String> requestedMcpTools,
+            Long ownerUserId) {
         Set<String> requested = requestedTools == null || requestedTools.isEmpty()
                 ? null
                 : Set.copyOf(requestedTools);
@@ -219,8 +239,9 @@ public final class AgentKernelSpecFactory {
                     "Requested AgentScope tools are unavailable: " + unavailable);
         }
         String definitionKey = agentType == null ? DEFAULT_AGENT_KEY : agentType;
-        List<AgentKernelToolManifest> availableMcpTools =
-                mcpRegistry.manifestsForAgent(definitionKey);
+        List<AgentKernelToolManifest> availableMcpTools = ownerUserId == null
+                ? mcpRegistry.manifestsForAgent(definitionKey)
+                : mcpRegistry.manifestsForAgent(definitionKey, ownerUserId);
         if (requestedMcp != null) {
             Set<String> availableMcpNames = new LinkedHashSet<>();
             availableMcpTools.forEach(tool -> availableMcpNames.add(tool.toolName()));
@@ -251,6 +272,18 @@ public final class AgentKernelSpecFactory {
 
     private static String normalize(String value) {
         return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    public static Long ownerUserId(AgentKernelSpec spec) {
+        String value = spec.promptVariables().get(OWNER_USER_ID_VARIABLE);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException failure) {
+            throw new IllegalArgumentException("Invalid AgentScope kernel owner user id", failure);
+        }
     }
 
     private static String requireText(String value, String field) {

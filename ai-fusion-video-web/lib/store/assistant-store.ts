@@ -355,11 +355,6 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         ? projectId
         : runtime.conversation.projectId ?? null;
       const activeContext: Record<string, unknown> = {};
-      if (references?.skills.length) {
-        activeContext.activeSkillReferences = references.skills
-          .map((skill) => `${skill.id} (${skill.name})`)
-          .join("\n");
-      }
       if (references?.mcpTools.length) {
         activeContext.activeMcpReferences = references.mcpTools
           .map((tool) => `${tool.serverName}/${tool.toolName}`)
@@ -422,6 +417,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         title: shouldSetTitle ? title : undefined,
         projectId: conversationProjectId ?? undefined,
         context: Object.keys(activeContext).length ? activeContext : undefined,
+        enabledSkills: references?.skills.map((skill) => skill.name),
         enabledMcpTools: references?.mcpTools.map((tool) => tool.toolName),
         referencesJson: serializedReferences,
       };

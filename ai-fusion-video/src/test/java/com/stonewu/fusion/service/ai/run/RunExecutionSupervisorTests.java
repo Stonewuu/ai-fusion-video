@@ -451,6 +451,7 @@ class RunExecutionSupervisorTests {
         RunLeaseGuard leases = mock(RunLeaseGuard.class);
         AgentRunRedisSignalService signals = mock(AgentRunRedisSignalService.class);
         when(signals.cancellations(anyString())).thenReturn(Flux.never());
+        when(signals.publishWakeup(anyString(), anyLong())).thenReturn(Mono.empty());
         OwnedExecutionRegistry registry = new OwnedExecutionRegistry(
                 objectMapper, maxEvents, 1024 * 1024,
                 Schedulers.parallel(), Clock.systemUTC());

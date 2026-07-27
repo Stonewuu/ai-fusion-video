@@ -8,6 +8,7 @@ import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.AgentMessageService;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -32,9 +33,10 @@ class AiAssistantControllerTests {
     private final AgentMessageService messageService = mock(AgentMessageService.class);
     private final AgentScopeSkillRegistry skillRegistry = mock(AgentScopeSkillRegistry.class);
     private final AgentScopeMcpRegistry mcpRegistry = mock(AgentScopeMcpRegistry.class);
+    private final AgentUserSkillService userSkillService = mock(AgentUserSkillService.class);
     private final AiAssistantController controller =
             new AiAssistantController(
-                    conversationService, messageService, skillRegistry, mcpRegistry);
+                    conversationService, messageService, skillRegistry, mcpRegistry, userSkillService);
 
     @AfterEach
     void clearSecurityContext() {

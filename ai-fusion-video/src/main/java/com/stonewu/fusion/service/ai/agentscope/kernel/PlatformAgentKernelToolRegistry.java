@@ -69,60 +69,86 @@ public final class PlatformAgentKernelToolRegistry implements AgentKernelToolReg
         Map<String, AiAgentDefinition.SubAgentToolDef> children =
                 subAgentTools(spec.agentDefinitionStableKey());
         Map<String, AgentKernelToolManifest> manifest = manifest(spec);
-        mcpRegistry.register(
-                spec.agentDefinitionStableKey(), spec.toolWhitelist(), toolkit);
-
-        for (String toolName : spec.toolWhitelist()) {
-            ToolExecutor executor = direct.get(toolName);
-            AiAgentDefinition.SubAgentToolDef child = children.get(toolName);
-            boolean mcpTool = mcpRegistry.isMcpTool(
-                    toolName, spec.agentDefinitionStableKey());
-            int matches = (executor == null ? 0 : 1)
-                    + (child == null ? 0 : 1)
-                    + (mcpTool ? 1 : 0);
-            if (matches > 1) {
-                throw new IllegalStateException(
-                        "AgentScope tool name is ambiguous in kernel whitelist: " + toolName);
-            }
-            AgentKernelToolManifest expected = Objects.requireNonNull(
-                    manifest.get(toolName), "Missing kernel tool manifest: " + toolName);
-            if (executor != null) {
-                AgentScopeToolSchema.PreparedSchema schema = AgentScopeToolSchema.prepare(
-                        objectMapper, executor.getParametersSchema(), toolName);
-                requireManifest(expected, schema, executor.isReadOnly(), executor.isConcurrencySafe());
-                toolkit.registerAgentTool(new AgentScopeToolAdapter(
-                        executor, schema, schedulers.toolBlocking(), leaseGuard, objectMapper));
-            } else if (child != null) {
-                AgentScopeToolSchema.PreparedSchema schema = AgentScopeToolSchema.prepareSubAgent(
-                        objectMapper, child.getParametersSchema(), toolName);
-                requireManifest(expected, schema, false, true);
-                toolkit.registerAgentTool(new AgentScopeSubAgentToolAdapter(
-                        child,
-                        spec,
-                        schema,
-                        specFactory,
-                        childRuns::getIfAvailable,
-                        leaseGuard,
-                        objectMapper));
-            } else if (mcpTool) {
-                AgentTool registered = Objects.requireNonNull(
-                        toolkit.getTool(toolName),
-                        "MCP registry did not register tool: " + toolName);
-                AgentScopeToolSchema.PreparedSchema schema = prepareMcpSchema(
-                        registered, toolName);
-                boolean concurrencySafe = registered instanceof ToolBase toolBase
-                        && toolBase.isConcurrencySafe();
-                requireManifest(
-                        expected,
-                        schema,
-                        registered.isReadOnly(),
-                        concurrencySafe);
-            } else {
-                throw new IllegalStateException(
-                        "AgentScope kernel references an unavailable platform tool: " + toolName);
-            }
+        Long ownerUserId = AgentKernelSpecFactory.ownerUserId(spec);
+        AgentKernelToolkitResources mcpResources = AgentKernelToolkitResources.none();
+        if (ownerUserId == null) {
+            mcpRegistry.register(
+                    spec.agentDefinitionStableKey(), spec.toolWhitelist(), toolkit);
+        } else {
+            mcpResources = mcpRegistry.register(
+                    spec.agentDefinitionStableKey(), ownerUserId, spec.toolWhitelist(), toolkit);
         }
-        return AgentKernelToolkitResources.none();
+
+        try {
+            for (String toolName : spec.toolWhitelist()) {
+                ToolExecutor executor = direct.get(toolName);
+                AiAgentDefinition.SubAgentToolDef child = children.get(toolName);
+                boolean mcpTool = ownerUserId == null
+                        ? mcpRegistry.isMcpTool(toolName, spec.agentDefinitionStableKey())
+                        : mcpRegistry.isMcpTool(
+                                toolName, spec.agentDefinitionStableKey(), ownerUserId);
+                int matches = (executor == null ? 0 : 1)
+                        + (child == null ? 0 : 1)
+                        + (mcpTool ? 1 : 0);
+                if (matches > 1) {
+                    throw new IllegalStateException(
+                            "AgentScope tool name is ambiguous in kernel whitelist: " + toolName);
+                }
+                AgentKernelToolManifest expected = Objects.requireNonNull(
+                        manifest.get(toolName), "Missing kernel tool manifest: " + toolName);
+                if (executor != null) {
+                    AgentScopeToolSchema.PreparedSchema schema = AgentScopeToolSchema.prepare(
+                            objectMapper, executor.getParametersSchema(), toolName);
+                    requireManifest(
+                            expected, schema, executor.isReadOnly(), executor.isConcurrencySafe());
+                    toolkit.registerAgentTool(new AgentScopeToolAdapter(
+                            executor, schema, schedulers.toolBlocking(), leaseGuard, objectMapper));
+                } else if (child != null) {
+                    AgentScopeToolSchema.PreparedSchema schema =
+                            AgentScopeToolSchema.prepareSubAgent(
+                                    objectMapper, child.getParametersSchema(), toolName);
+                    requireManifest(expected, schema, false, true);
+                    toolkit.registerAgentTool(new AgentScopeSubAgentToolAdapter(
+                            child,
+                            spec,
+                            schema,
+                            specFactory,
+                            childRuns::getIfAvailable,
+                            leaseGuard,
+                            objectMapper));
+                } else if (mcpTool) {
+                    AgentTool registered = Objects.requireNonNull(
+                            toolkit.getTool(toolName),
+                            "MCP registry did not register tool: " + toolName);
+                    AgentScopeToolSchema.PreparedSchema schema = prepareMcpSchema(
+                            registered, toolName);
+                    boolean concurrencySafe = registered instanceof ToolBase toolBase
+                            && toolBase.isConcurrencySafe();
+                    requireManifest(
+                            expected,
+                            schema,
+                            registered.isReadOnly(),
+                            concurrencySafe);
+                } else {
+                    throw new IllegalStateException(
+                            "AgentScope kernel references an unavailable platform tool: " + toolName);
+                }
+            }
+            return mcpResources;
+        } catch (Throwable failure) {
+            try {
+                mcpResources.close();
+            } catch (Throwable closeFailure) {
+                failure.addSuppressed(closeFailure);
+            }
+            if (failure instanceof RuntimeException runtimeFailure) {
+                throw runtimeFailure;
+            }
+            if (failure instanceof Error error) {
+                throw error;
+            }
+            throw new IllegalStateException("AgentScope tool registration failed", failure);
+        }
     }
 
     private AgentScopeToolSchema.PreparedSchema prepareMcpSchema(

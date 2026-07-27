@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelToolManifest;
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelToolkitResources;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.mcp.McpClientBuilder;
@@ -14,6 +15,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -39,19 +41,37 @@ public final class AgentScopeMcpRegistry implements DisposableBean {
     private final ObjectMapper objectMapper;
     private final Map<String, RegisteredServer> servers;
     private final Map<String, McpToolDescriptor> tools;
+    private final AgentUserMcpRuntimeRegistry userRegistry;
 
     @Autowired
     public AgentScopeMcpRegistry(
             AgentScopeV2Properties properties,
+            ObjectMapper objectMapper,
+            ObjectProvider<AgentUserMcpRuntimeRegistry> userRegistries) {
+        this(properties, objectMapper, AgentScopeMcpRegistry::createClient,
+                userRegistries.getIfAvailable());
+    }
+
+    public AgentScopeMcpRegistry(
+            AgentScopeV2Properties properties,
             ObjectMapper objectMapper) {
-        this(properties, objectMapper, AgentScopeMcpRegistry::createClient);
+        this(properties, objectMapper, AgentScopeMcpRegistry::createClient, null);
     }
 
     AgentScopeMcpRegistry(
             AgentScopeV2Properties properties,
             ObjectMapper objectMapper,
             McpClientFactory clientFactory) {
+        this(properties, objectMapper, clientFactory, null);
+    }
+
+    private AgentScopeMcpRegistry(
+            AgentScopeV2Properties properties,
+            ObjectMapper objectMapper,
+            McpClientFactory clientFactory,
+            AgentUserMcpRuntimeRegistry userRegistry) {
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.userRegistry = userRegistry;
         AgentScopeV2Properties.Mcp config = Objects.requireNonNull(
                 properties, "properties must not be null").getMcp();
         RegistrySnapshot snapshot = config.isEnabled()
@@ -73,9 +93,37 @@ public final class AgentScopeMcpRegistry implements DisposableBean {
         return List.copyOf(manifests);
     }
 
+    public List<AgentKernelToolManifest> manifestsForAgent(
+            String agentDefinitionStableKey,
+            Long userId) {
+        List<AgentKernelToolManifest> manifests = new ArrayList<>(
+                manifestsForAgent(agentDefinitionStableKey));
+        if (userRegistry == null || userId == null) {
+            return List.copyOf(manifests);
+        }
+        Set<String> names = new LinkedHashSet<>();
+        manifests.forEach(manifest -> names.add(manifest.toolName()));
+        for (AgentKernelToolManifest manifest : userRegistry.manifests(userId)) {
+            if (!names.add(manifest.toolName())) {
+                throw new IllegalArgumentException(
+                        "用户 MCP 工具与系统 MCP 工具重名: " + manifest.toolName());
+            }
+            manifests.add(manifest);
+        }
+        return List.copyOf(manifests);
+    }
+
     public boolean isMcpTool(String toolName, String agentDefinitionStableKey) {
         McpToolDescriptor descriptor = tools.get(toolName);
         return descriptor != null && descriptor.availableTo(agentDefinitionStableKey);
+    }
+
+    public boolean isMcpTool(
+            String toolName,
+            String agentDefinitionStableKey,
+            Long userId) {
+        return isMcpTool(toolName, agentDefinitionStableKey)
+                || (userRegistry != null && userId != null && userRegistry.isTool(userId, toolName));
     }
 
     public List<McpToolReference> catalogForAgent(String agentDefinitionStableKey) {
@@ -93,6 +141,27 @@ public final class AgentScopeMcpRegistry implements DisposableBean {
         catalog.sort(Comparator
                 .comparing(McpToolReference::serverName)
                 .thenComparing(McpToolReference::toolName));
+        return List.copyOf(catalog);
+    }
+
+    public List<McpToolReference> catalogForAgent(
+            String agentDefinitionStableKey,
+            Long userId) {
+        List<McpToolReference> catalog = new ArrayList<>(catalogForAgent(agentDefinitionStableKey));
+        if (userRegistry != null && userId != null) {
+            Set<String> names = new LinkedHashSet<>();
+            catalog.forEach(tool -> names.add(tool.toolName()));
+            for (McpToolReference tool : userRegistry.catalog(userId)) {
+                if (!names.add(tool.toolName())) {
+                    throw new IllegalArgumentException(
+                            "用户 MCP 工具与系统 MCP 工具重名: " + tool.toolName());
+                }
+                catalog.add(tool);
+            }
+            catalog.sort(Comparator
+                    .comparing(McpToolReference::serverName)
+                    .thenComparing(McpToolReference::toolName));
+        }
         return List.copyOf(catalog);
     }
 
@@ -128,6 +197,24 @@ public final class AgentScopeMcpRegistry implements DisposableBean {
                 }
             }
         }
+    }
+
+    public AgentKernelToolkitResources register(
+            String agentDefinitionStableKey,
+            Long userId,
+            Set<String> kernelWhitelist,
+            Toolkit toolkit) {
+        register(agentDefinitionStableKey, kernelWhitelist, toolkit);
+        if (userRegistry != null && userId != null) {
+            return userRegistry.register(userId, kernelWhitelist, toolkit);
+        }
+        return AgentKernelToolkitResources.none();
+    }
+
+    public String userConfigurationFingerprint(Long userId) {
+        return userRegistry == null || userId == null
+                ? AgentKernelToolManifest.schemaSha256("")
+                : userRegistry.configurationFingerprint(userId);
     }
 
     @Override

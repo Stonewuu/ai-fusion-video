@@ -47,18 +47,25 @@ public final class AgentScopeSkillRegistry implements DisposableBean {
 
     /** Returns the effective low-to-high precedence catalog exposed by AgentScope. */
     public List<SkillReference> catalog() {
-        Map<String, SkillReference> merged = new LinkedHashMap<>();
+        return skills().stream()
+                .map(skill -> new SkillReference(
+                        skill.getSkillId(),
+                        skill.getName(),
+                        skill.getDescription(),
+                        skill.getSource()))
+                .toList();
+    }
+
+    /** Returns the effective Skill documents using the same precedence as the Harness runtime. */
+    public List<AgentSkill> skills() {
+        Map<String, AgentSkill> merged = new LinkedHashMap<>();
         for (AgentSkillRepository repository : repositories) {
             try {
                 for (AgentSkill skill : repository.getAllSkills()) {
                     if (skill == null) {
                         continue;
                     }
-                    merged.put(skill.getName(), new SkillReference(
-                            skill.getSkillId(),
-                            skill.getName(),
-                            skill.getDescription(),
-                            skill.getSource()));
+                    merged.put(skill.getName(), skill);
                 }
             } catch (RuntimeException failure) {
                 log.warn("Failed to read AgentScope skill catalog from '{}': {}",
@@ -66,7 +73,7 @@ public final class AgentScopeSkillRegistry implements DisposableBean {
             }
         }
         return merged.values().stream()
-                .sorted(Comparator.comparing(SkillReference::name))
+                .sorted(Comparator.comparing(AgentSkill::getName))
                 .toList();
     }
 

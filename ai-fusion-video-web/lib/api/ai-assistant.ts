@@ -15,6 +15,8 @@ export interface AiChatReq {
   systemPrompt?: string;
   instruction?: string;
   enabledTools?: string[];
+  /** 用户在输入区显式激活的 Skill 名称。 */
+  enabledSkills?: string[];
   enabledMcpTools?: string[];
   enableParallelTools?: boolean;
   referencesJson?: string;
