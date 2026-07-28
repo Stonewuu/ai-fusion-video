@@ -6,6 +6,7 @@
  */
 
 import { API_BASE_URL, http } from "./client";
+import { readApiResponseError } from "./api-error";
 import {
   authenticatedFetch,
   type AiChatReq,
@@ -239,16 +240,7 @@ async function consumePipelineResponse(
   cursor: StreamCursor
 ) {
   if (!response.ok) {
-    let detail = response.statusText;
-    try {
-      const payload = await response.json() as { msg?: unknown; message?: unknown };
-      if (typeof payload.msg === "string" && payload.msg.trim()) detail = payload.msg.trim();
-      else if (typeof payload.message === "string" && payload.message.trim()) detail = payload.message.trim();
-    } catch {
-      // Some proxies return an empty or non-JSON error body. The status still
-      // provides a deterministic fallback for the connection state machine.
-    }
-    throw new Error(detail ? `HTTP ${response.status}: ${detail}` : `HTTP ${response.status}`);
+    throw new Error(await readApiResponseError(response));
   }
   const reader = response.body?.getReader();
   if (!reader) {

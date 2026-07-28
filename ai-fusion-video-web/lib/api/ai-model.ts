@@ -1,5 +1,9 @@
 import { http } from "./client";
 
+export type MultimodalInputType = "image" | "video" | "audio" | "file";
+export type MultimodalInputTransport = "url" | "base64";
+export type MultimodalInputTransports = Partial<Record<MultimodalInputType, MultimodalInputTransport[]>>;
+
 // ========== 类型定义 ==========
 
 /** AI 模型 */
@@ -18,6 +22,8 @@ export interface AiModel {
   maxConcurrency: number | null;
   defaultModel: boolean;
   supportVision: boolean;
+  multimodalInputTypes: MultimodalInputType[];
+  multimodalInputTransports: MultimodalInputTransports;
   supportReasoning: boolean;
   contextWindow: number | null;
   apiConfigId: number | null;
@@ -48,6 +54,8 @@ export interface AiModelCreateReq {
   maxConcurrency?: number;
   defaultModel?: boolean;
   supportVision?: boolean;
+  multimodalInputTypes: MultimodalInputType[];
+  multimodalInputTransports: MultimodalInputTransports;
   supportReasoning?: boolean;
   contextWindow?: number;
   apiConfigId?: number;
@@ -69,6 +77,8 @@ export interface AiModelUpdateReq {
   maxConcurrency?: number;
   defaultModel?: boolean;
   supportVision?: boolean;
+  multimodalInputTypes?: MultimodalInputType[];
+  multimodalInputTransports?: MultimodalInputTransports;
   supportReasoning?: boolean;
   contextWindow?: number;
   apiConfigId?: number;
@@ -83,6 +93,10 @@ export interface ModelPreset {
   modelProtocol?: string | null;
   modelType: number;
   description: string;
+  supportReasoning?: boolean;
+  contextWindow?: number;
+  multimodalInputTypes?: MultimodalInputType[];
+  multimodalInputTransports?: MultimodalInputTransports;
   config: Record<string, unknown>;
 }
 

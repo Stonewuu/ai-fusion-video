@@ -55,6 +55,9 @@ public class AiChatReqVO {
     /** 用户在输入区主动引用的 MCP 工具；仅筛选 MCP，不影响平台工具。 */
     private List<String> enabledMcpTools;
 
+    /** 用户随本轮消息提交的图片、视频、音频或文件输入。 */
+    private List<AiMultimodalInputVO> multimodalInputs;
+
     /** 自动引用（当前页面上下文，包含 type + id） */
     private List<AiReferenceVO> autoReferences;
 

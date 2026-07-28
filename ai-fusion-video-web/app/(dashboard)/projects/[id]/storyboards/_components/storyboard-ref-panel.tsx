@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import {
   Info,
   Camera,
@@ -581,7 +582,10 @@ function SceneAssetPanel({
 
       // 批量获取子资产详情
       const results = await Promise.all(
-        allItemIds.map((id) => assetApi.getItem(id).catch(() => null))
+        allItemIds.map((id) => assetApi.getItem(id).catch((error) => {
+          toastApiError(error, "加载资产项失败");
+          return null;
+        }))
       );
 
       // 收集主资产ID用于查名称
@@ -595,7 +599,10 @@ function SceneAssetPanel({
 
       // 批量获取主资产（用于获取名称和类型做辅助标注）
       const parentAssets = await Promise.all(
-        Array.from(parentAssetIds).map((id) => assetApi.get(id).catch(() => null))
+        Array.from(parentAssetIds).map((id) => assetApi.get(id).catch((error) => {
+          toastApiError(error, "加载父级资产失败");
+          return null;
+        }))
       );
       const parentInfoMap = new Map<number, { name: string; type: string }>();
       for (const a of parentAssets) {
@@ -625,6 +632,7 @@ function SceneAssetPanel({
       });
     } catch (err) {
       console.error("加载场次资产失败:", err);
+      toastApiError(err, "加载场次资产失败");
     } finally {
       setLoading(false);
     }
@@ -981,7 +989,10 @@ function ItemDetail({
     try {
       // 批量获取子资产详情
       const items = await Promise.all(
-        allItemIds.map((id) => assetApi.getItem(id).catch(() => null))
+        allItemIds.map((id) => assetApi.getItem(id).catch((error) => {
+          toastApiError(error, "加载镜头关联资产项失败");
+          return null;
+        }))
       );
 
       // 收集主资产 ID（去重）
@@ -1024,6 +1035,7 @@ function ItemDetail({
       });
     } catch (err) {
       console.error("加载镜头关联资产失败:", err);
+      toastApiError(err, "加载镜头关联资产失败");
     } finally {
       setAssetsLoading(false);
     }

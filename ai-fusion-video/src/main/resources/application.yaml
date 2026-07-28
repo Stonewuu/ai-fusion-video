@@ -40,9 +40,13 @@ springdoc:
 
 server:
   port: 18080
+  forward-headers-strategy: framework
 
 # 应用配置
 app:
+  cors:
+    # 一体化/统一网关部署保持为空；分域部署通过 CORS_ALLOWED_ORIGIN_PATTERNS 配置前端来源。
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:}
   storage:
     local-base-path: ./data/media
   agent-workspace:
@@ -74,6 +78,8 @@ fusion:
       skills:
         enabled: true
         fail-fast: true
+        display-names:
+          fusion-video-workflow: 融光视频工作流
         repositories:
           bundled:
             location: classpath:agentscope/skills

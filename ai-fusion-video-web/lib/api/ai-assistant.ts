@@ -1,4 +1,21 @@
 import { http, API_BASE_URL } from "./client";
+import { getApiPayloadMessage, readApiResponseError, toApiError } from "./api-error";
+
+export type AiMultimodalInputType = "image" | "video" | "audio" | "file";
+export type AiMultimodalInputTransport = "url" | "base64";
+
+export interface AiMultimodalInput {
+  id: string;
+  name: string;
+  inputType: AiMultimodalInputType;
+  mimeType: string;
+  transport: AiMultimodalInputTransport;
+  url?: string;
+  data?: string;
+  /** 应用存储中的持久化地址，用于用户消息回显，不发送给模型。 */
+  resourceUrl?: string;
+  size: number;
+}
 
 // ========== 类型定义 ==========
 
@@ -18,6 +35,7 @@ export interface AiChatReq {
   /** 用户在输入区显式激活的 Skill 名称。 */
   enabledSkills?: string[];
   enabledMcpTools?: string[];
+  multimodalInputs?: AiMultimodalInput[];
   enableParallelTools?: boolean;
   referencesJson?: string;
   /** 当前页面上下文引用（type + id），用于模板变量替换 */
@@ -157,13 +175,14 @@ async function refreshTokenForSSE(): Promise<string | null> {
       body: JSON.stringify({ refreshToken }),
     });
     if (!resp.ok) {
-      processSseQueue(new Error("刷新失败"), null);
+      processSseQueue(new Error(await readApiResponseError(resp)), null);
       return null;
     }
 
     const result = await resp.json();
     if (result.code !== 0 || !result.data) {
-      processSseQueue(new Error("刷新失败"), null);
+      const message = getApiPayloadMessage(result);
+      processSseQueue(new Error(message || "请求失败"), null);
       return null;
     }
 
@@ -187,8 +206,8 @@ async function refreshTokenForSSE(): Promise<string | null> {
 
     processSseQueue(null, accessToken);
     return accessToken;
-  } catch {
-    processSseQueue(new Error("刷新失败"), null);
+  } catch (error) {
+    processSseQueue(toApiError(error), null);
     return null;
   } finally {
     isRefreshingForSSE = false;
@@ -276,6 +295,7 @@ export interface PageResult<T> {
 export interface AssistantSkillReferenceOption {
   id: string;
   name: string;
+  displayName: string;
   description: string;
   source: string;
 }

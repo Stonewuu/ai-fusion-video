@@ -14,6 +14,7 @@ import {
 import type { AssetItem } from "@/lib/api/asset";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { uploadFile } from "@/lib/api/storage";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SafeImage } from "@/components/ui/safe-image";
@@ -93,8 +94,8 @@ export function AssetItemWorkspace({
     setError("");
     try {
       setImageUrl(await uploadFile(file, "assets"));
-    } catch {
-      setError("图片上传失败");
+    } catch (cause) {
+      setError(getApiErrorMessage(cause));
     } finally {
       setUploading(false);
     }

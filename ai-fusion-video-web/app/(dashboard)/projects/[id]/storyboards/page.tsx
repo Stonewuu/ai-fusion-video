@@ -21,6 +21,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { scriptApi, type ScriptEpisode } from "@/lib/api/script";
 import {
   storyboardApi,
@@ -101,6 +102,7 @@ export default function StoryboardTabPage() {
       setAssetLookup(lookup);
     } catch (err) {
       console.error("加载资产失败:", err);
+      toastApiError(err, "加载资产失败");
     }
   }, [projectId]);
 
@@ -187,6 +189,7 @@ export default function StoryboardTabPage() {
       setCurrentEpisode(ep);
     } catch (err) {
       console.error("加载集详情失败:", err);
+      toastApiError(err, "加载集详情失败");
     }
   }, [currentEpisodeId]);
 
@@ -250,6 +253,7 @@ export default function StoryboardTabPage() {
       }
     } catch (err) {
       console.error("加载分镜失败:", err);
+      toastApiError(err, "加载分镜失败");
     } finally {
       setLoading(false);
     }
@@ -303,7 +307,7 @@ export default function StoryboardTabPage() {
       await loadStoryboard();
     } catch (err) {
       console.error("创建分镜记录失败:", err);
-      alert("创建分镜记录失败，请重试");
+      toastApiError(err, "创建分镜记录失败，请重试");
     }
   }, [
     addPipeline,
@@ -358,6 +362,7 @@ export default function StoryboardTabPage() {
       setSceneGroups(groups);
     } catch (err) {
       console.error("完整刷新分镜页数据失败:", err);
+      toastApiError(err, "刷新分镜页数据失败");
     }
   }, [projectId, storyboard, loadProjectAssets, refreshCurrentEpisode]);
 
@@ -412,7 +417,7 @@ export default function StoryboardTabPage() {
       setExpandedTaskId(pipelineId);
     } catch (err) {
       console.error("启动单集分镜生成失败:", err);
-      alert(err instanceof Error ? err.message : "启动单集分镜生成失败，请重试");
+      toastApiError(err, "启动单集分镜生成失败，请重试");
     }
   }, [
     addPipeline,
@@ -458,6 +463,7 @@ export default function StoryboardTabPage() {
         setSceneGroups(groups);
       } catch (err) {
         console.error("加载场次失败:", err);
+        toastApiError(err, "加载场次失败");
       } finally {
         setLoadingScenes(false);
       }
@@ -627,6 +633,7 @@ export default function StoryboardTabPage() {
       setSelectedItemId(newItem.id);
     } catch (err) {
       console.error("添加新分镜条目失败:", err);
+      toastApiError(err, "添加新分镜条目失败");
     }
   };
 
@@ -643,6 +650,7 @@ export default function StoryboardTabPage() {
       return true;
     } catch (err) {
       console.error("删除分集失败:", err);
+      toastApiError(err, "删除分集失败");
       return false;
     }
   };
@@ -658,6 +666,7 @@ export default function StoryboardTabPage() {
       return true;
     } catch (err) {
       console.error("删除分镜头报错", err);
+      toastApiError(err, "删除分镜头失败");
       return false;
     }
   };
@@ -695,6 +704,7 @@ export default function StoryboardTabPage() {
       if (frameDialogItemId === itemId) setFrameDialogItemId(null);
     } catch (err) {
       console.error("删除条目失败:", err);
+      toastApiError(err, "删除条目失败");
     }
   };
 
@@ -716,6 +726,7 @@ export default function StoryboardTabPage() {
       );
     } catch (err) {
       console.error("更新条目失败:", err);
+      toastApiError(err, "更新条目失败");
     }
   };
 
@@ -922,6 +933,7 @@ export default function StoryboardTabPage() {
       );
     } catch (err) {
       console.error("更新排序失败:", err);
+      toastApiError(err, "更新排序失败");
     }
   };
 
@@ -973,6 +985,7 @@ export default function StoryboardTabPage() {
       void refreshCurrentEpisode();
     } catch (err) {
       console.error("提交合成任务失败:", err);
+      toastApiError(err, "提交合成任务失败");
       setSubmittingComposeEpisodeIds((prev) =>
         prev.filter((id) => id !== currentEpisodeId)
       );
@@ -1473,7 +1486,7 @@ export default function StoryboardTabPage() {
             setEditingItem(null);
           } catch (err) {
             console.error("更新关联资产失败:", err);
-            alert("保存资产关联失败，请重试");
+            toastApiError(err, "保存资产关联失败，请重试");
           }
         }}
       />

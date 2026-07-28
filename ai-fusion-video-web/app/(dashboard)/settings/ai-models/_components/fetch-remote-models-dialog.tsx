@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Check, Loader2, Search } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { getModelDisplayParts } from "@/lib/model-display";
 import {
   aiModelApi,
@@ -119,14 +120,24 @@ export function FetchRemoteModelsDialog({
     if (selectedIds.size === 0) return;
     setAdding(true);
     try {
+      const presets = await aiModelApi.presets();
       for (const modelId of selectedIds) {
         const remoteModel = remoteModels.find(model => model.id === modelId);
+        const preset = remoteModel?.capabilityPresetCode
+          ? presets.find(item => item.code === remoteModel.capabilityPresetCode)
+          : undefined;
         await aiModelApi.create({
           name: remoteModel?.displayName || modelId,
           code: modelId,
           capabilityPresetCode: remoteModel?.capabilityPresetCode || undefined,
-          modelProtocol: remoteModel?.modelProtocol || undefined,
+          modelProtocol: remoteModel?.modelProtocol || preset?.modelProtocol || undefined,
           modelType: remoteModel?.modelType ?? modelType,
+          description: preset?.description,
+          supportVision: preset?.multimodalInputTypes?.includes("image") ?? false,
+          multimodalInputTypes: preset?.multimodalInputTypes ?? [],
+          multimodalInputTransports: preset?.multimodalInputTransports ?? {},
+          supportReasoning: preset?.supportReasoning ?? false,
+          contextWindow: preset?.contextWindow,
           apiConfigId: apiConfig.id,
         });
       }
@@ -134,6 +145,7 @@ export function FetchRemoteModelsDialog({
       onOpenChange(false);
     } catch (err) {
       console.error("添加模型失败:", err);
+      toastApiError(err, "添加模型失败");
     } finally {
       setAdding(false);
     }

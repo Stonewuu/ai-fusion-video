@@ -25,6 +25,7 @@ import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { useProject } from "../project-context";
+import { toastApiError } from "@/lib/api/toast-api-error";
 
 const SCRIPT_SIDEBAR_COLLAPSED_STORAGE_KEY = "fusion-script-sidebar-collapsed";
 
@@ -114,6 +115,7 @@ export default function ScriptTabPage() {
       setEpisodeScenes((prev) => ({ ...prev, [episodeId]: scenes }));
     } catch (err) {
       console.error("加载场次失败:", err);
+      toastApiError(err, "加载场次失败");
     } finally {
       setLoadingEpisodes((prev) => {
         const s = new Set(prev);
@@ -159,6 +161,7 @@ export default function ScriptTabPage() {
       }
     } catch (err) {
       console.error("加载剧本失败:", err);
+      toastApiError(err, "加载剧本失败");
     } finally {
       setLoading(false);
     }
@@ -199,6 +202,7 @@ export default function ScriptTabPage() {
                   newEpisodeScenes[e.id] = scenes;
                 } catch (err) {
                   console.error(`刷新分集 ${e.id} 场次失败:`, err);
+                  toastApiError(err, `刷新分集 ${e.id} 场次失败`);
                 }
               }
             })
@@ -214,6 +218,7 @@ export default function ScriptTabPage() {
       }
     } catch (err) {
       console.error("刷新剧本数据失败:", err);
+      toastApiError(err, "刷新剧本数据失败");
     }
   }, [loadStoryboardForScript, projectId]);
 
@@ -330,6 +335,7 @@ export default function ScriptTabPage() {
       setActiveEpisodeId(ep.id);
     } catch (err) {
       console.error("添加分集失败:", err);
+      toastApiError(err, "添加分集失败");
     }
   };
 
@@ -351,6 +357,7 @@ export default function ScriptTabPage() {
       }
     } catch (err) {
       console.error("删除分集失败:", err);
+      toastApiError(err, "删除分集失败");
     }
   };
 
@@ -375,6 +382,7 @@ export default function ScriptTabPage() {
       setTimeout(() => scrollToScene(scene.id), 100);
     } catch (err) {
       console.error("添加场次失败:", err);
+      toastApiError(err, "添加场次失败");
     }
   };
 
@@ -407,6 +415,7 @@ export default function ScriptTabPage() {
       );
     } catch (err) {
       console.error("插入场次失败:", err);
+      toastApiError(err, "插入场次失败");
     }
   };
 
@@ -423,6 +432,7 @@ export default function ScriptTabPage() {
       }
     } catch (err) {
       console.error("删除场次失败:", err);
+      toastApiError(err, "删除场次失败");
     }
   };
 
@@ -452,6 +462,7 @@ export default function ScriptTabPage() {
       );
     } catch (err) {
       console.error("排序保存失败，已回滚:", err);
+      toastApiError(err, "排序保存失败，已回滚");
       // 回滚
       setEpisodeScenes((prev) => ({ ...prev, [episodeId]: prevScenes }));
     }
@@ -495,6 +506,7 @@ export default function ScriptTabPage() {
       setExpandedTaskId(pipelineId);
     } catch (err) {
       console.error("启动分集解析失败:", err);
+      toastApiError(err, "启动分集解析失败");
     }
   };
 
@@ -571,7 +583,7 @@ export default function ScriptTabPage() {
       setExpandedTaskId(pipelineId);
     } catch (err) {
       console.error("启动单集分镜生成失败:", err);
-      alert(err instanceof Error ? err.message : "启动单集分镜生成失败，请重试");
+      toastApiError(err, "启动单集分镜生成失败，请重试");
     }
   };
 
@@ -583,6 +595,7 @@ export default function ScriptTabPage() {
       setEpisodeScenes((prev) => ({ ...prev, [episodeId]: scenes }));
     } catch (err) {
       console.error("重新加载场次失败:", err);
+      toastApiError(err, "重新加载场次失败");
     } finally {
       setLoadingEpisodes((prev) => {
         const s = new Set(prev);

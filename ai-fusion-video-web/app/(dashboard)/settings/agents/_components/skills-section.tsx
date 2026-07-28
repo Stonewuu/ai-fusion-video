@@ -23,7 +23,7 @@ interface SkillsSectionProps {
   onRefresh: () => Promise<void>;
 }
 
-const EMPTY_FORM = { name: "", description: "", content: "" };
+const EMPTY_FORM = { name: "", displayName: "", description: "", content: "" };
 
 export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
   const [open, setOpen] = useState(false);
@@ -36,6 +36,7 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
     setEditing(skill || null);
     setForm(skill ? {
       name: skill.name,
+      displayName: skill.displayName === null ? "" : skill.displayName,
       description: skill.description,
       content: skill.content,
     } : EMPTY_FORM);
@@ -43,8 +44,8 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
   };
 
   const save = async () => {
-    if (!form.name.trim() || !form.description.trim() || !form.content.trim()) {
-      toast.error("请完整填写 Skill 名称、描述和内容");
+    if (!form.name.trim() || !form.displayName.trim() || !form.description.trim() || !form.content.trim()) {
+      toast.error("请完整填写 Skill 调用名称、显示名称、描述和内容");
       return;
     }
     setSaving(true);
@@ -52,6 +53,7 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
       await agentConfigApi.saveSkill({
         originalName: editing?.name,
         name: form.name,
+        displayName: form.displayName,
         description: form.description,
         content: form.content,
       });
@@ -111,9 +113,14 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
           >
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
-                <span className="truncate font-medium">{skill.name}</span>
+                {skill.displayName === null ? (
+                  <span className="truncate font-medium text-destructive">未设置显示名称</span>
+                ) : (
+                  <span className="truncate font-medium">{skill.displayName}</span>
+                )}
                 <Badge variant="outline">SKILL.md</Badge>
               </div>
+              <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{skill.name}</div>
               <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">{skill.description}</div>
             </div>
             <div className="flex shrink-0 gap-2">
@@ -139,18 +146,28 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
         <DialogContent className="max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden rounded-2xl sm:max-w-2xl">
           <DialogHeader className="shrink-0 pr-8">
             <DialogTitle>{editing ? "编辑 Skill" : "新建 Skill"}</DialogTitle>
-            <DialogDescription>名称用于引用匹配；正文写清触发条件、步骤、限制和输出要求。</DialogDescription>
+            <DialogDescription>显示名称面向用户，调用名称用于 AgentScope；正文写清触发条件、步骤、限制和输出要求。</DialogDescription>
           </DialogHeader>
           <div className="-mx-1 min-h-0 overflow-y-auto px-1 py-1">
             <div className="space-y-5">
               <div className="space-y-1.5">
-                <Label htmlFor="skill-name">名称</Label>
-              <Input
-                id="skill-name"
-                value={form.name}
-                onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))}
-                placeholder="storyboard-review"
-              />
+                <Label htmlFor="skill-display-name">显示名称</Label>
+                <Input
+                  id="skill-display-name"
+                  value={form.displayName}
+                  onChange={(event) => setForm((value) => ({ ...value, displayName: event.target.value }))}
+                  placeholder="分镜连续性检查"
+                />
+                <p className="text-xs text-muted-foreground">显示在引用选择器、输入区标签和历史消息中。</p>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="skill-name">调用名称</Label>
+                <Input
+                  id="skill-name"
+                  value={form.name}
+                  onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))}
+                  placeholder="storyboard-review"
+                />
                 <p className="text-xs text-muted-foreground">使用小写字母、数字、下划线或短横线，最长 64 位。</p>
               </div>
               <div className="space-y-1.5">

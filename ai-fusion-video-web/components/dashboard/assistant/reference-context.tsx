@@ -1,6 +1,6 @@
 "use client";
 
-import { AtSign, FolderKanban, PlugZap, Sparkles, X } from "lucide-react";
+import { FolderKanban, PlugZap, Sparkles, X } from "lucide-react";
 import type { ReactNode } from "react";
 import type {
   AssistantMcpToolReferenceOption,
@@ -54,46 +54,37 @@ export function AssistantReferenceContext({
   onRemoveMcpTool,
 }: AssistantReferenceContextProps) {
   const hasReferences = !!project || skills.length > 0 || mcpTools.length > 0;
+  if (!hasReferences) return null;
 
   return (
     <div className="flex min-h-9 flex-wrap items-center gap-1.5 border-b border-border/20 px-2 py-1.5">
-      {hasReferences ? (
-        <>
-          <span className="mr-0.5 text-[10px] font-medium text-muted-foreground">引用</span>
-          {project ? (
-            <ReferenceChip
-              label={project.name}
-              title={`项目 · ${project.name} · #${project.id}`}
-              icon={<FolderKanban className="size-3.5" />}
-              onRemove={onRemoveProject}
-            />
-          ) : null}
-          {skills.map((skill) => (
-            <ReferenceChip
-              key={skill.id}
-              label={skill.name}
-              title={`Skill · ${skill.description}`}
-              icon={<Sparkles className="size-3.5" />}
-              onRemove={() => onRemoveSkill(skill.id)}
-            />
-          ))}
-          {mcpTools.map((tool) => (
-            <ReferenceChip
-              key={`${tool.serverName}:${tool.toolName}`}
-              label={tool.toolName}
-              title={`MCP · ${tool.serverName} · ${tool.description || tool.toolName}`}
-              icon={<PlugZap className="size-3.5" />}
-              onRemove={() => onRemoveMcpTool(tool.serverName, tool.toolName)}
-            />
-          ))}
-        </>
-      ) : (
-        <span className="inline-flex items-center gap-1.5 text-[10px] text-muted-foreground/80">
-          <AtSign className="size-3" /> 项目
-          <span aria-hidden="true">·</span>
-          <span className="font-mono text-[11px]">/</span> Skill 或 MCP
-        </span>
-      )}
+      <span className="mr-0.5 text-[10px] font-medium text-muted-foreground">引用</span>
+      {project ? (
+        <ReferenceChip
+          label={project.name}
+          title={`项目 · ${project.name} · #${project.id}`}
+          icon={<FolderKanban className="size-3.5" />}
+          onRemove={onRemoveProject}
+        />
+      ) : null}
+      {skills.map((skill) => (
+        <ReferenceChip
+          key={skill.id}
+          label={skill.displayName}
+          title={`Skill · ${skill.name} · ${skill.description}`}
+          icon={<Sparkles className="size-3.5" />}
+          onRemove={() => onRemoveSkill(skill.id)}
+        />
+      ))}
+      {mcpTools.map((tool) => (
+        <ReferenceChip
+          key={`${tool.serverName}:${tool.toolName}`}
+          label={tool.toolName}
+          title={`MCP · ${tool.serverName} · ${tool.description || tool.toolName}`}
+          icon={<PlugZap className="size-3.5" />}
+          onRemove={() => onRemoveMcpTool(tool.serverName, tool.toolName)}
+        />
+      ))}
     </div>
   );
 }

@@ -11,6 +11,7 @@ import {
   type AgentUserSkill,
   type AgentWorkspaceConfig,
 } from "@/lib/api/agent-config";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { McpServersSection } from "./_components/mcp-servers-section";
 import { SkillsSection } from "./_components/skills-section";
@@ -68,7 +69,9 @@ export default function AgentSettingsPage() {
   useEffect(() => {
     if (!workspace || !["copying", "verifying", "cutover"].includes(workspace.migrationStatus)) return;
     const timer = window.setInterval(() => {
-      loadWorkspace().catch(() => undefined);
+      loadWorkspace().catch((error) => {
+        toastApiError(error, "刷新工作空间迁移状态失败");
+      });
     }, 2000);
     return () => window.clearInterval(timer);
   }, [loadWorkspace, workspace]);

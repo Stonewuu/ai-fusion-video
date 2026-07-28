@@ -6,6 +6,7 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { userApi } from "@/lib/api/user";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import type { UserRespVO } from "@/lib/api/types";
 import { containerVariants, itemVariants } from "../_shared";
 
@@ -50,6 +51,7 @@ export default function SettingsUsersPage() {
       .catch((err) => {
         if (!cancelled) {
           console.error("加载用户列表失败:", err);
+          toastApiError(err, "加载用户列表失败");
           setUsers([]);
           setTotal(0);
         }

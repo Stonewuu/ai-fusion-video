@@ -33,4 +33,4 @@ build/
 .vscode/
 
 ### AgentScope ###
-/.agentscope/workspace/.index/
+/.agentscope/workspace/

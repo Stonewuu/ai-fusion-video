@@ -22,6 +22,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { useAuthStore } from "@/lib/store/auth-store";
 
 // ========== 各模块的二级菜单配置 ==========
@@ -125,7 +126,9 @@ export function SidebarNav({
           setProjectLocalState({ id: projectId, project: projectData });
         }
       })
-      .catch(() => { });
+      .catch((error) => {
+        if (!cancelled) toastApiError(error, "加载项目信息失败");
+      });
 
     return () => {
       cancelled = true;

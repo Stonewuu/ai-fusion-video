@@ -52,13 +52,15 @@ public class AiAssistantController {
         Map<String, AssistantReferenceOptionsRespVO.SkillOption> skillOptions = new LinkedHashMap<>();
         skillRegistry.catalog().forEach(skill -> skillOptions.put(skill.name(),
                 new AssistantReferenceOptionsRespVO.SkillOption(
-                        skill.id(), skill.name(), skill.description(), skill.source())));
+                        skill.id(), skill.name(), skill.displayName(),
+                        skill.description(), skill.source())));
         userSkillService.catalog(userId).forEach(skill -> skillOptions.put(skill.name(),
                 new AssistantReferenceOptionsRespVO.SkillOption(
-                        skill.id(), skill.name(), skill.description(), skill.source())));
+                        skill.id(), skill.name(), skill.displayName(),
+                        skill.description(), skill.source())));
         List<AssistantReferenceOptionsRespVO.SkillOption> skills = skillOptions.values().stream()
                 .sorted(Comparator.comparing(
-                        AssistantReferenceOptionsRespVO.SkillOption::name))
+                        AssistantReferenceOptionsRespVO.SkillOption::displayName))
                 .toList();
         List<AssistantReferenceOptionsRespVO.McpToolOption> mcpTools = mcpRegistry
                 .catalogForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY, userId)

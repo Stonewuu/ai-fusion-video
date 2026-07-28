@@ -1,0 +1,28 @@
+[
+  {
+    "code": "deepseek-chat",
+    "name": "DeepSeek Chat",
+    "platform": "deepseek",
+    "modelProtocol": "deepseek",
+    "modelType": 1,
+    "description": "DeepSeek 官方对话模型。当前官方对话接口按纯文本输入配置。",
+    "capabilities": ["文本对话", "工具调用"],
+    "supportReasoning": false,
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "config": {}
+  },
+  {
+    "code": "deepseek-reasoner",
+    "name": "DeepSeek Reasoner",
+    "platform": "deepseek",
+    "modelProtocol": "deepseek",
+    "modelType": 1,
+    "description": "DeepSeek 官方推理模型。当前官方对话接口按纯文本输入配置。",
+    "capabilities": ["文本对话", "深度推理"],
+    "supportReasoning": true,
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "config": {}
+  }
+]

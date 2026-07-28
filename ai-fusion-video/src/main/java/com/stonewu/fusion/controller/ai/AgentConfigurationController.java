@@ -114,6 +114,7 @@ public class AgentConfigurationController {
                 requireCurrentUserId(),
                 request.originalName(),
                 request.name(),
+                request.displayName(),
                 request.description(),
                 request.content()));
     }

@@ -129,6 +129,7 @@ class AiModelServiceTests {
                 null,
                 null,
                 null,
+                null,
                 null
         );
 

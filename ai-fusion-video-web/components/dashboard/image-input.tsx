@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import { toast } from "sonner";
 import { Upload, Link, Images, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { uploadFile } from "@/lib/api/storage";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { cn } from "@/lib/utils";
 
 interface ImageInputProps {
@@ -50,6 +52,7 @@ export default function ImageInput({
       onChange(uploadedUrl);
     } catch (error) {
       console.error("图片上传失败:", error);
+      toast.error(getApiErrorMessage(error));
     } finally {
       setUploading(false);
     }

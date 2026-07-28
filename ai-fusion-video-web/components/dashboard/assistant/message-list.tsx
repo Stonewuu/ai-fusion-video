@@ -6,7 +6,7 @@ import {
   useMemo,
   type RefObject,
 } from "react";
-import { ArrowDown, Bot, Loader2, RefreshCw, User } from "lucide-react";
+import { ArrowDown, Bot, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
 import { MessageTimeline } from "@/components/dashboard/notification-panel/timeline";
@@ -16,6 +16,7 @@ import type { TimelineItem } from "@/lib/store/pipeline-store";
 import { useAssistantStore, type AssistantConversationRuntime } from "@/lib/store/assistant-store";
 import { cn } from "@/lib/utils";
 import { useAssistantMessageScroll } from "./use-assistant-message-scroll";
+import { UserMessageBubble } from "./user-message-bubble";
 
 interface AssistantMessageListProps {
   conversationId: string;
@@ -70,22 +71,6 @@ function buildSegments(messages: AgentMessage[], activeRunId?: string): MessageS
   pushCurrent();
   return segments;
 }
-
-const UserBubble = memo(function UserBubble({ message }: { message: AgentMessage }) {
-  return (
-    <div className="flex justify-end gap-2">
-      <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground shadow-sm">
-        <p className="whitespace-pre-wrap break-words">{message.content}</p>
-      </div>
-      <span
-        className="mt-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground"
-        aria-hidden="true"
-      >
-        <User className="size-3.5" />
-      </span>
-    </div>
-  );
-});
 
 const AssistantTimelineBubble = memo(function AssistantTimelineBubble({
   timeline,
@@ -224,7 +209,7 @@ export function AssistantMessageList({
 
           {segments.map((segment) => (
             <Fragment key={segment.key}>
-              {segment.user ? <UserBubble message={segment.user} /> : null}
+              {segment.user ? <UserMessageBubble message={segment.user} /> : null}
               <AssistantTimelineBubble
                 timeline={segment.timeline}
                 scrollRef={viewportRef}

@@ -28,6 +28,7 @@ import {
   type AgentMessage,
 } from "@/lib/api/ai-assistant";
 import { PIPELINE_AGENT_TYPES } from "@/lib/api/ai-pipeline";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { Button } from "@/components/ui/button";
 import {
   usePipelineStore,
@@ -148,9 +149,10 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
               void usePipelineStore
                 .getState()
                 .cancelPipeline(task.id)
-                .catch((error) =>
-                  console.error("[Pipeline] 取消请求失败:", error)
-                );
+                .catch((error) => {
+                  console.error("[Pipeline] 取消请求失败:", error);
+                  toastApiError(error, "取消工作流失败");
+                });
             }}
             aria-label={cancelling ? "正在取消工作流" : "停止工作流"}
           >
@@ -229,6 +231,7 @@ function HistoryDetailPanel({
       })
       .catch((err) => {
         console.error(err);
+        toastApiError(err, "加载对话消息失败");
         if (!cancelled) {
           setMessageState({
             conversationId: conversation.conversationId,
@@ -531,6 +534,7 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
         setHistoryPage(page);
       } catch (err) {
         console.error("加载历史对话失败:", err);
+        toastApiError(err, "加载历史对话失败");
       } finally {
         setHistoryLoading(false);
       }

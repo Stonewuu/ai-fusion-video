@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { resolveMediaUrl } from "@/lib/api/client";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
 import { SafeImage } from "@/components/ui/safe-image";
@@ -108,6 +109,7 @@ export default function DashboardPage() {
         setAssetData(assets);
       } catch (err) {
         console.error("加载仪表盘数据失败:", err);
+        toastApiError(err, "加载仪表盘数据失败");
       } finally {
         setLoading(false);
       }

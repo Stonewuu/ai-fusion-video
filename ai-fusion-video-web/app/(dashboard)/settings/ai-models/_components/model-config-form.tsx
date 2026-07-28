@@ -327,7 +327,7 @@ export function ModelConfigForm({
                     <ToggleSettingCard
                       checked={supportsReferenceImageUrlInput}
                       title="允许 URL 传递"
-                      description="有公网对象存储或项目访问域名时，参考图直接以 URL 传给上游。"
+                      description="有公网对象存储或后端资源公网地址时，参考图直接以 URL 传给上游。"
                       disabled={!supportsImageReferenceInputs}
                       onToggle={() => updateReferenceImageInputFormat("url", !supportsReferenceImageUrlInput)}
                     />
@@ -455,7 +455,7 @@ export function ModelConfigForm({
                       <ToggleSettingCard
                         checked={supportsReferenceImageUrlInput}
                         title="允许 URL 传递"
-                        description="有公网对象存储或项目访问域名时，直接传递图片 URL。"
+                        description="有公网对象存储或后端资源公网地址时，直接传递图片 URL。"
                         disabled={!supportsAnyVideoImageInput}
                         onToggle={() => updateReferenceImageInputFormat("url", !supportsReferenceImageUrlInput)}
                       />

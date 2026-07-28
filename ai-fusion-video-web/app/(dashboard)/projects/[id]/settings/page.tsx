@@ -17,12 +17,14 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useProject } from "../project-context";
 import { projectApi } from "@/lib/api/project";
 import { artStyleApi } from "@/lib/api/art-style";
 import type { ArtStylePreset } from "@/lib/api/art-style";
 import { storageConfigApi, uploadFile } from "@/lib/api/storage";
+import { getApiErrorMessage, readApiResponseError } from "@/lib/api/api-error";
 import { resolveMediaUrl, http } from "@/lib/api/client";
 import { SafeImage } from "@/components/ui/safe-image";
 
@@ -79,7 +81,10 @@ export default function ProjectSettingsPage() {
 
   // 加载预设画风
   useEffect(() => {
-    artStyleApi.getPresets().then(setPresets).catch(console.error);
+    artStyleApi.getPresets().then(setPresets).catch((error) => {
+      console.error("加载画风预设失败:", error);
+      toast.error(getApiErrorMessage(error));
+    });
   }, []);
 
   // 当后端数据变化时，同步到本地
@@ -158,12 +163,13 @@ export default function ProjectSettingsPage() {
       setArtStyleImageUrl(url);
     } catch (err) {
       console.error("上传画风图片失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setUploading(false);
     }
   }, []);
 
-  // 外网访问能力（site_base_url 或公有云存储）
+  // 外网访问能力（后端资源公网地址或公有云存储）
   const [hasExternalAccess, setHasExternalAccess] = useState(false);
   const [hasStorage, setHasStorage] = useState(false);
 
@@ -176,10 +182,18 @@ export default function ProjectSettingsPage() {
         .then((list) => {
           const map: Record<string, string> = {};
           list.forEach((c) => { map[c.configKey] = c.configValue || ""; });
-          setHasExternalAccess(hasPublicStorage || !!map.site_base_url);
+          setHasExternalAccess(
+            hasPublicStorage || !!map.resource_base_url,
+          );
         })
-        .catch(console.error);
-    }).catch(console.error);
+        .catch((error) => {
+          console.error("加载系统配置失败:", error);
+          toast.error(getApiErrorMessage(error));
+        });
+    }).catch((error) => {
+      console.error("加载存储配置失败:", error);
+      toast.error(getApiErrorMessage(error));
+    });
   }, []);
 
   // 上传预设参考图到存储（保存到全局系统配置）
@@ -193,6 +207,7 @@ export default function ProjectSettingsPage() {
       const imgUrl = resolveMediaUrl(preset.referenceImagePath);
       if (!imgUrl) return;
       const resp = await fetch(imgUrl);
+      if (!resp.ok) throw new Error(await readApiResponseError(resp));
       const blob = await resp.blob();
       const file = new File([blob], `${preset.key}.png`, { type: blob.type || "image/png" });
       const url = await uploadFile(file, "art-styles");
@@ -203,6 +218,7 @@ export default function ProjectSettingsPage() {
       setPresets(updatedPresets);
     } catch (err) {
       console.error("上传预设参考图失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setUploadingPreset(null);
     }
@@ -221,6 +237,7 @@ export default function ProjectSettingsPage() {
       router.push("/projects");
     } catch (err) {
       console.error("删除项目失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setDeleting(false);
     }
@@ -243,6 +260,7 @@ export default function ProjectSettingsPage() {
       await refresh();
     } catch (err) {
       console.error("保存设置失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -557,7 +575,7 @@ export default function ProjectSettingsPage() {
               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
               <p className="text-xs text-muted-foreground leading-relaxed">
                 参考图需要通过网络地址传递给 AI API 生成图片。
-                如果您使用本地存储，请在<strong>系统设置 → 通用</strong>中配置项目访问域名，
+                如果您使用本地存储，请在<strong>系统设置 → 通用</strong>中配置后端资源公网地址，
                 或使用对象存储（OSS）自动获得公网 URL。
               </p>
             </div>

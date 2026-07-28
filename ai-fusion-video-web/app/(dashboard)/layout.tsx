@@ -11,6 +11,7 @@ import { SidebarNav } from "@/components/dashboard/sidebar-nav";
 import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
 import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { AssistantDockSlot } from "@/components/dashboard/assistant/dock-slot";
 
 const GLOBAL_SIDEBAR_COLLAPSED_STORAGE_KEY = "fusion-dashboard-sidebar-collapsed";
@@ -68,7 +69,9 @@ export default function DashboardLayout({
           setProjectState({ id: currentProjectId, project });
         }
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (!cancelled) toastApiError(error, "加载项目信息失败");
+      });
 
     return () => {
       cancelled = true;

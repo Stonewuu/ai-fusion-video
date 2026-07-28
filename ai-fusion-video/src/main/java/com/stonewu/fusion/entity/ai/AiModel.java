@@ -1,10 +1,15 @@
 package com.stonewu.fusion.entity.ai;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.stonewu.fusion.common.BaseEntity;
 import lombok.*;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * AI 模型实体
@@ -12,7 +17,7 @@ import lombok.*;
  * 对应数据库表：afv_ai_model
  * 管理系统中可用的 AI 模型配置，包括文本模型和图片模型。
  */
-@TableName("afv_ai_model")
+@TableName(value = "afv_ai_model", autoResultMap = true)
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
@@ -73,6 +78,16 @@ public class AiModel extends BaseEntity {
     /** 是否支持视觉理解（传图片） */
     @Builder.Default
     private Boolean supportVision = false;
+
+    /** 支持的多模态输入类型：image、video、audio、file。 */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    @Builder.Default
+    private List<String> multimodalInputTypes = List.of();
+
+    /** 每种多模态输入支持的传输形式：url、base64。 */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    @Builder.Default
+    private Map<String, List<String>> multimodalInputTransports = Map.of();
 
     /** 是否支持深度思考（reasoning） */
     @Builder.Default

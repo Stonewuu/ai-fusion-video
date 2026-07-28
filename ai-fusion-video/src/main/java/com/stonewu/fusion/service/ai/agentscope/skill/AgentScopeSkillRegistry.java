@@ -27,12 +27,14 @@ public final class AgentScopeSkillRegistry implements DisposableBean {
     private static final String FILE_PREFIX = "file:";
 
     private final List<AgentSkillRepository> repositories;
+    private final Map<String, String> displayNames;
 
     public AgentScopeSkillRegistry(AgentScopeV2Properties properties) {
         AgentScopeV2Properties.Skills config = properties.getSkills();
         this.repositories = config.isEnabled()
                 ? loadRepositories(config)
                 : List.of();
+        this.displayNames = Map.copyOf(config.getDisplayNames());
         log.info("AgentScope skills initialized [enabled={}, repositories={}]",
                 enabled(), repositories.size());
     }
@@ -48,11 +50,17 @@ public final class AgentScopeSkillRegistry implements DisposableBean {
     /** Returns the effective low-to-high precedence catalog exposed by AgentScope. */
     public List<SkillReference> catalog() {
         return skills().stream()
-                .map(skill -> new SkillReference(
-                        skill.getSkillId(),
-                        skill.getName(),
-                        skill.getDescription(),
-                        skill.getSource()))
+                .map(skill -> {
+                    String displayName = requireText(
+                            displayNames.get(skill.getName()),
+                            "display name for skill " + skill.getName());
+                    return new SkillReference(
+                            skill.getSkillId(),
+                            skill.getName(),
+                            displayName,
+                            skill.getDescription(),
+                            skill.getSource());
+                })
                 .toList();
     }
 
@@ -171,6 +179,7 @@ public final class AgentScopeSkillRegistry implements DisposableBean {
     public record SkillReference(
             String id,
             String name,
+            String displayName,
             String description,
             String source) {
     }

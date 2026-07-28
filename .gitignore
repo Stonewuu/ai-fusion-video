@@ -36,3 +36,5 @@ ai-fusion-video/data/
 .codegraph/
 .worktrees/
 .superpowers/
+.gemini/
+

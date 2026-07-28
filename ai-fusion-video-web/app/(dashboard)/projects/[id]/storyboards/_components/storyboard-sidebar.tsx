@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import {
   Film,
   ChevronRight,
@@ -187,7 +188,8 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       sorted.splice(newIndex, 0, moved);
       setScenesMap((prev) => ({ ...prev, [episodeId]: sorted }));
       
-      props.onReorderScenes(episodeId, sorted).catch(() => {
+      props.onReorderScenes(episodeId, sorted).catch((error) => {
+        toastApiError(error, "更新场次排序失败");
         setScenesMap((prev) => ({ ...prev, [episodeId]: prevScenes }));
       });
     }
@@ -209,6 +211,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
               newScenesMap[e.id] = scenes;
             } catch (err) {
               console.error(`加载分集 ${e.id} 的场次失败:`, err);
+              toastApiError(err, `加载分集 ${e.id} 的场次失败`);
             }
           })
         );
@@ -219,6 +222,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       }
     } catch (err) {
       console.error("加载分镜集失败:", err);
+      toastApiError(err, "加载分镜集失败");
     } finally {
       setLoading(false);
     }
@@ -244,6 +248,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       setScenesMap((prev) => ({ ...prev, [episodeId]: scenes }));
     } catch (err) {
       console.error("加载场次失败:", err);
+      toastApiError(err, "加载场次失败");
     }
   };
 
@@ -274,6 +279,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       onSelect({ type: "episode", episodeId: ep.id });
     } catch (err) {
       console.error("创建分镜集失败:", err);
+      toastApiError(err, "创建分镜集失败");
     }
   };
 
@@ -294,6 +300,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       onSelect({ type: "scene", episodeId, sceneId: scene.id });
     } catch (err) {
       console.error("创建场次失败:", err);
+      toastApiError(err, "创建场次失败");
     }
   };
 
@@ -310,7 +317,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       );
     } catch (err) {
       console.error("绑定剧本集失败:", err);
-      alert(err instanceof Error ? err.message : "绑定剧本集失败，请重试");
+      toastApiError(err, "绑定剧本集失败，请重试");
     } finally {
       setBindingEpisodeIds((prev) => {
         const next = new Set(prev);

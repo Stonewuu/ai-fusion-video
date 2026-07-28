@@ -18,6 +18,7 @@ class CacheConfigTests {
                 new AgentUserSkillService.UserSkillSummary(
                         "story-review_workspace:user",
                         "story-review",
+                        "故事结构检查",
                         "检查故事结构",
                         "workspace:user"));
         ArrayList<AgentUserSkillService.UserSkillSummary> concrete = new ArrayList<>(immutable);
@@ -28,7 +29,7 @@ class CacheConfigTests {
 
     @Test
     void cacheKeysCarryAnExplicitSerializationSchemaVersion() {
-        assertThat(CacheConfig.CACHE_SCHEMA_PREFIX).isEqualTo("afv:cache:v2:");
+        assertThat(CacheConfig.CACHE_SCHEMA_PREFIX).isEqualTo("afv:cache:v3:");
     }
 
     private Object roundTrip(

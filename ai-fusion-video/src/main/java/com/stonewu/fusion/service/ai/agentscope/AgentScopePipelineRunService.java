@@ -9,11 +9,13 @@ import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.config.ai.AiAgentDefinition;
 import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
+import com.stonewu.fusion.controller.ai.vo.AiMultimodalInputVO;
 import com.stonewu.fusion.controller.ai.vo.AiReferenceVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.AiAgentService;
 import com.stonewu.fusion.service.ai.AiModelService;
+import com.stonewu.fusion.service.ai.AiModelMultimodalCapabilities;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
@@ -148,7 +150,8 @@ public final class AgentScopePipelineRunService {
                                 .flatMap(runtime -> supervisor.start(
                                                 new StartAgentExecutionCommand(
                                                         started,
-                                                        messages.toUserMessages(prepared.input()),
+                                                        messages.toUserMessages(
+                                                                prepared.input(), prepared.multimodalInputs()),
                                                         prepared.snapshot(),
                                                         prepared.spec(),
                                                         runtime))
@@ -169,6 +172,7 @@ public final class AgentScopePipelineRunService {
         String input = input(request, visibleUserContent);
         String systemPrompt = systemPrompt(request, definition, promptVariables, activeSkills);
         AiModel model = model(request.getModelId());
+        AiModelMultimodalCapabilities.validateInputs(model, request.getMultimodalInputs());
         AgentKernelSpec spec = specFactory.createRoot(request, model, systemPrompt, userId);
         AgentKernelSnapshot snapshot = snapshots.build(spec);
         Instant deadline = Instant.now()
@@ -205,7 +209,10 @@ public final class AgentScopePipelineRunService {
         ProjectContext project = request.getProjectId() == null
                 ? null
                 : new ProjectContext(request.getProjectId());
-        return new PreparedRun(spec, snapshot, admission, input, project);
+        List<AiMultimodalInputVO> multimodalInputs = request.getMultimodalInputs() == null
+                ? List.of()
+                : List.copyOf(request.getMultimodalInputs());
+        return new PreparedRun(spec, snapshot, admission, input, multimodalInputs, project);
     }
 
     private AiModel model(Long modelId) {
@@ -321,6 +328,9 @@ public final class AgentScopePipelineRunService {
         String content = normalize(request.getMessage());
         if (content != null) {
             return request.getMessage();
+        }
+        if (request.getMultimodalInputs() != null && !request.getMultimodalInputs().isEmpty()) {
+            return "请分析这些附件。";
         }
         if (definition == null || normalize(definition.getDefaultUserMessage()) == null) {
             throw new BusinessException("Agent 请求缺少用户消息");
@@ -459,12 +469,14 @@ public final class AgentScopePipelineRunService {
             AgentKernelSnapshot snapshot,
             StartAgentRunCommand admission,
             String input,
+            List<AiMultimodalInputVO> multimodalInputs,
             ProjectContext project) {
         private PreparedRun {
             Objects.requireNonNull(spec, "spec must not be null");
             Objects.requireNonNull(snapshot, "snapshot must not be null");
             Objects.requireNonNull(admission, "admission must not be null");
             requireText(input, "input");
+            multimodalInputs = List.copyOf(multimodalInputs);
         }
     }
 

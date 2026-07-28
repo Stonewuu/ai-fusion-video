@@ -25,7 +25,7 @@ import java.time.Duration;
 @EnableCaching
 public class CacheConfig {
 
-    static final String CACHE_SCHEMA_PREFIX = "afv:cache:v2:";
+    static final String CACHE_SCHEMA_PREFIX = "afv:cache:v3:";
 
     @Bean
     public RedisCacheManager cacheManager(RedisConnectionFactory connectionFactory) {

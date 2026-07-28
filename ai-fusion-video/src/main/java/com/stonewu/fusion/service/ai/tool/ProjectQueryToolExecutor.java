@@ -151,7 +151,7 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
         info.set("referenceImageAvailable", publicUrl != null);
 
         if (publicUrl == null && StrUtil.isNotBlank(refImagePath)) {
-            info.set("referenceImageWarning", "参考图无法通过网络访问，请在系统设置中配置项目访问域名或启用对象存储");
+            info.set("referenceImageWarning", "参考图无法通过网络访问，请在系统设置中配置后端资源公网地址或启用对象存储");
         }
 
         return info;

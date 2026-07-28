@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { SceneItem, DialogueElement } from "@/lib/api/script";
 import { assetApi } from "@/lib/api/asset";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import type { Asset, AssetItem } from "@/lib/api/asset";
 import { parseDialogues, parseCharacters } from "./utils";
 import { SafeImage } from "@/components/ui/safe-image";
@@ -121,6 +122,7 @@ export function SceneDetail({
       });
     } catch (err) {
       console.error("加载场次关联资产失败:", err);
+      toastApiError(err, "加载场次关联资产失败");
     } finally {
       setAssetsLoading(false);
     }

@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { scriptApi, type Script } from "@/lib/api/script";
 import {
   storyboardApi,
@@ -110,7 +111,10 @@ export default function ProjectOverviewPage() {
   const [artPresets, setArtPresets] = useState<ArtStylePreset[]>([]);
 
   useEffect(() => {
-    artStyleApi.getPresets().then(setArtPresets).catch(console.error);
+    artStyleApi.getPresets().then(setArtPresets).catch((error) => {
+      console.error("加载画风预设失败:", error);
+      toastApiError(error, "加载画风预设失败");
+    });
   }, []);
 
   // 资产状态
@@ -127,6 +131,7 @@ export default function ProjectOverviewPage() {
       setScript(scripts.length > 0 ? scripts[0] : null);
     } catch (err) {
       console.error("加载剧本数据失败:", err);
+      toastApiError(err, "加载剧本数据失败");
     } finally {
       setLoading(false);
     }
@@ -158,6 +163,7 @@ export default function ProjectOverviewPage() {
       }
     } catch (err) {
       console.error("加载分镜数据失败:", err);
+      toastApiError(err, "加载分镜数据失败");
     } finally {
       setLoadingStoryboard(false);
     }
@@ -175,6 +181,7 @@ export default function ProjectOverviewPage() {
       setAssetCounts(counts);
     } catch (err) {
       console.error("加载资产数据失败:", err);
+      toastApiError(err, "加载资产数据失败");
     } finally {
       setLoadingAssets(false);
     }
@@ -193,6 +200,7 @@ export default function ProjectOverviewPage() {
       await loadAllData();
     } catch (err) {
       console.error("删除剧本失败:", err);
+      toastApiError(err, "删除剧本失败");
     } finally {
       setDeletingScript(false);
     }
@@ -207,6 +215,7 @@ export default function ProjectOverviewPage() {
       await loadAllData();
     } catch (err) {
       console.error("删除分镜失败:", err);
+      toastApiError(err, "删除分镜失败");
     } finally {
       setDeletingStoryboard(false);
     }
@@ -285,7 +294,7 @@ export default function ProjectOverviewPage() {
       router.push(`/projects/${projectId}/storyboards`);
     } catch (err) {
       console.error("创建分镜记录失败:", err);
-      alert("创建分镜记录失败，请重试");
+      toastApiError(err, "创建分镜记录失败，请重试");
     }
   };
 
@@ -456,6 +465,7 @@ export default function ProjectOverviewPage() {
                     setShowParseDialog(true);
                   } catch (err) {
                     console.error("删除旧剧本失败:", err);
+                    toastApiError(err, "删除旧剧本失败");
                   }
                 }}
                 className={cn(

@@ -14,6 +14,7 @@ public record AssistantReferenceOptionsRespVO(
     public record SkillOption(
             String id,
             String name,
+            String displayName,
             String description,
             String source) {
     }

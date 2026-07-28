@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { getModelDisplayParts } from "@/lib/model-display";
 import {
   aiModelApi,
@@ -97,6 +98,7 @@ export default function AiModelsPage() {
       setModels(data);
     } catch (err) {
       console.error("加载 AI 模型列表失败:", err);
+      toastApiError(err, "加载 AI 模型列表失败");
     }
   }, []);
 
@@ -107,6 +109,7 @@ export default function AiModelsPage() {
       setConfigs(data);
     } catch (err) {
       console.error("加载 API 配置列表失败:", err);
+      toastApiError(err, "加载 API 配置列表失败");
     } finally {
       setConfigsLoading(false);
     }
@@ -118,6 +121,7 @@ export default function AiModelsPage() {
       setModelPresets(data);
     } catch (err) {
       console.error("加载模型预设失败:", err);
+      toastApiError(err, "加载模型预设失败");
     }
   }, []);
 
@@ -173,6 +177,7 @@ export default function AiModelsPage() {
       await loadModels();
     } catch (err) {
       console.error("删除模型失败:", err);
+      toastApiError(err, "删除模型失败");
     }
   };
 
@@ -183,6 +188,7 @@ export default function AiModelsPage() {
       await loadConfigs();
     } catch (err) {
       console.error("删除配置失败:", err);
+      toastApiError(err, "删除配置失败");
     }
   };
 
@@ -268,6 +274,8 @@ export default function AiModelsPage() {
           maxConcurrency: source.maxConcurrency || undefined,
           defaultModel: false,
           supportVision: source.supportVision,
+          multimodalInputTypes: source.multimodalInputTypes,
+          multimodalInputTransports: source.multimodalInputTransports,
           supportReasoning: source.supportReasoning,
           contextWindow: source.contextWindow || undefined,
           apiConfigId,
@@ -500,9 +508,21 @@ export default function AiModelsPage() {
                               {model.supportReasoning && (
                                 <span className="px-1 py-0.5 rounded bg-sky-500/10 text-sky-500">思考</span>
                               )}
-                              {model.supportVision && (
-                                <span className="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-500">视觉</span>
-                              )}
+                              {model.multimodalInputTypes.map((inputType) => {
+                                const transportLabel = (model.multimodalInputTransports[inputType] ?? [])
+                                  .map((item) => item === "url" ? "URL" : "Base64")
+                                  .join("/");
+                                return (
+                                  <span
+                                    key={`${model.id}-${inputType}`}
+                                    className="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-500"
+                                    title={`${transportLabel} 输入`}
+                                  >
+                                    {{ image: "图片", video: "视频", audio: "音频", file: "文件" }[inputType]}
+                                    {transportLabel ? ` · ${transportLabel}` : ""}
+                                  </span>
+                                );
+                              })}
                               {model.contextWindow && model.contextWindow > 0 && (
                                 <span className="px-1 py-0.5 rounded bg-muted/50 text-muted-foreground">
                                   {model.contextWindow.toLocaleString()} ctx
@@ -564,6 +584,7 @@ export default function AiModelsPage() {
                                     await loadModels();
                                   } catch (err) {
                                     console.error("设置默认模型失败:", err);
+                                    toastApiError(err, "设置默认模型失败");
                                   }
                                 }}
                                 className={cn(

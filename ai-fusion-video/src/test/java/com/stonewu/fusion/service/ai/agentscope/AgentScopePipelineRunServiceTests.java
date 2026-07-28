@@ -88,6 +88,7 @@ class AgentScopePipelineRunServiceTests {
                 new AgentUserSkillService.UserSkill(
                         "story-review_workspace:user",
                         "story-review",
+                        "故事结构检查",
                         "检查故事结构",
                         "# 工作方式\n\n先检查冲突与节奏。",
                         "workspace:user")));
@@ -152,7 +153,8 @@ class AgentScopePipelineRunServiceTests {
         ArgumentCaptor<String> systemPrompt = ArgumentCaptor.forClass(String.class);
         verify(specs).createRoot(any(AiChatReqVO.class), eq(model), systemPrompt.capture(), eq(42L));
         assertThat(systemPrompt.getValue())
-                .contains("已主动激活的 Skills", "story-review", "先检查冲突与节奏");
+                .contains("已主动激活的 Skills", "story-review", "先检查冲突与节奏")
+                .doesNotContain("故事结构检查");
 
         ArgumentCaptor<StartAgentExecutionCommand> execution =
                 ArgumentCaptor.forClass(StartAgentExecutionCommand.class);

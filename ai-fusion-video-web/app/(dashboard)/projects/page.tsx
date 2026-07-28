@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { projectApi, type Project } from "@/lib/api/project";
 import { CreateProjectDialog } from "@/components/dashboard/create-project-dialog";
 import { MainContentFrame } from "@/components/dashboard/main-content-frame";
@@ -87,6 +88,7 @@ export default function ProjectsPage() {
       setProjects(data);
     } catch (err) {
       console.error("获取项目列表失败:", err);
+      toastApiError(err, "获取项目列表失败");
     } finally {
       setLoading(false);
     }
@@ -105,6 +107,7 @@ export default function ProjectsPage() {
       await fetchProjects();
     } catch (err) {
       console.error("删除项目失败:", err);
+      toastApiError(err, "删除项目失败");
     } finally {
       setDeletingId(null);
     }

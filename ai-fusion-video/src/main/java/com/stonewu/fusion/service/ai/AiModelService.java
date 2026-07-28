@@ -22,6 +22,7 @@ import cn.hutool.core.util.StrUtil;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -59,7 +60,8 @@ public class AiModelService {
                                String capabilityPresetCode, Integer modelType, String icon,
                                String description, Integer sort, Integer status,
                                String config, Boolean defaultModel, Long apiConfigId,
-                               Integer maxConcurrency, Boolean supportVision,
+                               Integer maxConcurrency, List<String> multimodalInputTypes,
+                               Map<String, List<String>> multimodalInputTransports,
                                Boolean supportReasoning, Integer contextWindow) {
         AiModel model = aiModelMapper.selectById(id);
         if (model == null) throw new BusinessException(404, "AI模型不存在");
@@ -79,7 +81,8 @@ public class AiModelService {
         if (config != null) model.setConfig(config);
         if (maxConcurrency != null) model.setMaxConcurrency(maxConcurrency > 0 ? maxConcurrency : 5);
         if (defaultModel != null) model.setDefaultModel(defaultModel);
-        if (supportVision != null) model.setSupportVision(supportVision);
+        if (multimodalInputTypes != null) model.setMultimodalInputTypes(multimodalInputTypes);
+        if (multimodalInputTransports != null) model.setMultimodalInputTransports(multimodalInputTransports);
         if (supportReasoning != null) model.setSupportReasoning(supportReasoning);
         if (contextWindow != null) model.setContextWindow(contextWindow > 0 ? contextWindow : null);
         if (apiConfigId != null) model.setApiConfigId(apiConfigId);
@@ -210,6 +213,7 @@ public class AiModelService {
         }
         model.setModelProtocol(aiModelMetadataResolver.normalizeProtocol(model.getModelProtocol()));
         model.setCapabilityPresetCode(normalizeCapabilityPresetCode(model.getCapabilityPresetCode()));
+        AiModelMultimodalCapabilities.normalizeModel(model);
     }
 
     private String normalizeCapabilityPresetCode(String code) {

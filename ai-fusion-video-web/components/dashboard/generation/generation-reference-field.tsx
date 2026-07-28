@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { toast } from "sonner";
 import {
   CircleHelp,
   FileVideo2,
@@ -12,6 +13,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { uploadFile } from "@/lib/api/storage";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +83,8 @@ export function GenerationReferenceField({
         selected.map((file) => uploadFile(file, config.folder)),
       );
       onChange([...values, ...urls]);
+    } catch (error) {
+      toast.error(getApiErrorMessage(error));
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";

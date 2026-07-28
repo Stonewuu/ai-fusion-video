@@ -301,7 +301,8 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
     },
 
     sendMessage: async (message, modelId, projectId, references) => {
-      const content = message.trim();
+      const multimodalInputs = references?.multimodalInputs ?? [];
+      const content = message.trim() || (multimodalInputs.length ? "请分析这些附件。" : "");
       if (!content) return;
       const state = get();
       if (state.connection) throw new Error("当前会话仍在生成中");
@@ -363,11 +364,31 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       const serializedReferences = references
         && (conversationProjectId !== null
           || references.skills.length > 0
-          || references.mcpTools.length > 0)
+          || references.mcpTools.length > 0
+          || multimodalInputs.length > 0)
         ? JSON.stringify({
+            version: 2,
             projectId: conversationProjectId,
+            project: references.project ?? null,
             skills: references.skills,
             mcpTools: references.mcpTools,
+            attachments: multimodalInputs.map(({
+              id,
+              name,
+              inputType,
+              mimeType,
+              transport,
+              resourceUrl,
+              size,
+            }) => ({
+              id,
+              name,
+              inputType,
+              mimeType,
+              transport,
+              resourceUrl,
+              size,
+            })),
           })
         : undefined;
       const optimisticMessage: AgentMessage = {
@@ -419,6 +440,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         context: Object.keys(activeContext).length ? activeContext : undefined,
         enabledSkills: references?.skills.map((skill) => skill.name),
         enabledMcpTools: references?.mcpTools.map((tool) => tool.toolName),
+        multimodalInputs,
         referencesJson: serializedReferences,
       };
       connectionCoordinator.startConnection(conversationId, request);

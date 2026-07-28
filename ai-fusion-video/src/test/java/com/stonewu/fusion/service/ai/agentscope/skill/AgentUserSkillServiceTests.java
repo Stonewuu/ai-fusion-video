@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.ai.agentscope.skill;
 
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceBaseStore;
 import io.agentscope.harness.agent.filesystem.remote.store.StoreItem;
 import io.agentscope.harness.agent.filesystem.remote.store.BaseStore;
@@ -18,10 +19,13 @@ import java.nio.file.Path;
 import java.util.AbstractMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyMap;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 class AgentUserSkillServiceTests {
@@ -39,18 +43,23 @@ class AgentUserSkillServiceTests {
                 42L,
                 null,
                 "story-review",
+                "故事结构检查",
                 "检查故事结构",
                 "# 步骤\n\n检查冲突与节奏。"
         );
 
         ArgumentCaptor<List<String>> namespace = ArgumentCaptor.forClass(List.class);
-        ArgumentCaptor<Map<String, Object>> value = ArgumentCaptor.forClass(Map.class);
-        verify(store).put(namespace.capture(), eq("/story-review/SKILL.md"), value.capture());
+        ArgumentCaptor<Map<String, Object>> skillValue = ArgumentCaptor.forClass(Map.class);
+        ArgumentCaptor<Map<String, Object>> metadataValue = ArgumentCaptor.forClass(Map.class);
+        verify(store).put(namespace.capture(), eq("/story-review/SKILL.md"), skillValue.capture());
+        verify(store).put(anyList(), eq("/story-review/.fusion-skill.json"), metadataValue.capture());
         assertThat(namespace.getValue()).containsExactly(
                 "agents", "ai_assistant_agent", "users", "42", "skills");
-        assertThat(value.getValue().get("content").toString())
+        assertThat(skillValue.getValue().get("content").toString())
                 .contains("name: story-review", "description: \"检查故事结构\"");
+        assertThat(metadataValue.getValue().get("display_name")).isEqualTo("故事结构检查");
         assertThat(saved.name()).isEqualTo("story-review");
+        assertThat(saved.displayName()).isEqualTo("故事结构检查");
     }
 
     @Test
@@ -69,13 +78,67 @@ class AgentUserSkillServiceTests {
                         """),
                 1L);
         when(store.search(anyList(), eq(100), eq(0))).thenReturn(List.of(item));
+        when(store.get(anyList(), eq("/story-review/.fusion-skill.json"))).thenReturn(
+                new StoreItem(
+                        "/story-review/.fusion-skill.json",
+                        Map.of("display_name", "故事结构检查"),
+                        1L));
 
         assertThat(service.list(42L))
                 .singleElement()
                 .satisfies(skill -> {
                     assertThat(skill.name()).isEqualTo("story-review");
+                    assertThat(skill.displayName()).isEqualTo("故事结构检查");
                     assertThat(skill.content()).contains("检查冲突与节奏");
                 });
+    }
+
+    @Test
+    void keepsLegacySkillVisibleForEditingButExcludesItFromReferenceCatalog() {
+        AgentWorkspaceBaseStore store = mock(AgentWorkspaceBaseStore.class);
+        AgentUserSkillService service = new AgentUserSkillService(store);
+        when(store.search(anyList(), eq(100), eq(0))).thenReturn(List.of(skillItem("story-review")));
+        when(store.get(anyList(), eq("/story-review/.fusion-skill.json"))).thenReturn(null);
+
+        assertThat(service.list(42L))
+                .singleElement()
+                .satisfies(skill -> {
+                    assertThat(skill.name()).isEqualTo("story-review");
+                    assertThat(skill.displayName()).isNull();
+                });
+        assertThat(service.catalog(42L)).isEmpty();
+    }
+
+    @Test
+    void renamingAndDeletingSkillAlsoMovesItsDisplayNameMetadata() {
+        AgentWorkspaceBaseStore store = mock(AgentWorkspaceBaseStore.class);
+        AgentUserSkillService service = new AgentUserSkillService(store);
+        when(store.get(anyList(), eq("/story-a/SKILL.md"))).thenReturn(null);
+        when(store.get(anyList(), eq("/story-b/SKILL.md"))).thenReturn(null);
+
+        service.save(42L, "story-a", "story-b", "故事检查", "检查故事", "# 步骤");
+
+        verify(store).put(anyList(), eq("/story-b/SKILL.md"), anyMap());
+        verify(store).put(anyList(), eq("/story-b/.fusion-skill.json"), anyMap());
+        verify(store).delete(anyList(), eq("/story-a/SKILL.md"));
+        verify(store).delete(anyList(), eq("/story-a/.fusion-skill.json"));
+
+        service.delete(42L, "story-b");
+
+        verify(store).delete(anyList(), eq("/story-b/SKILL.md"));
+        verify(store).delete(anyList(), eq("/story-b/.fusion-skill.json"));
+    }
+
+    @Test
+    void rejectsDisplayNameLongerThanSixtyFourCharacters() {
+        AgentWorkspaceBaseStore store = mock(AgentWorkspaceBaseStore.class);
+        AgentUserSkillService service = new AgentUserSkillService(store);
+
+        assertThatThrownBy(() -> service.save(
+                42L, null, "story-review", "中".repeat(65), "检查故事", "# 步骤"))
+                .isInstanceOf(BusinessException.class)
+                .hasMessage("Skill 显示名称不能超过 64 个字符");
+        verifyNoInteractions(store);
     }
 
     @Test
@@ -99,6 +162,20 @@ class AgentUserSkillServiceTests {
         assertThat(store.namespace).containsExactly(
                 "agents", "ai_assistant_agent", "users", "42", "skills");
         assertThat(store.key).isEqualTo("/story-review/SKILL.md");
+    }
+
+    private StoreItem skillItem(String name) {
+        return new StoreItem(
+                "/" + name + "/SKILL.md",
+                Map.of("content", """
+                        ---
+                        name: %s
+                        description: 检查故事结构
+                        ---
+                        # 步骤
+                        检查冲突与节奏。
+                        """.formatted(name)),
+                1L);
     }
 
     private static final class CapturingStore implements BaseStore {

@@ -100,6 +100,7 @@ class AiAssistantControllerTests {
                         "fusion-video-workflow_bundled",
                         "fusion-video-workflow",
                         "融光视频工作流",
+                        "融光视频工作流",
                         "bundled")));
         when(mcpRegistry.catalogForAgent("ai_assistant_agent")).thenReturn(List.of(
                 new AgentScopeMcpRegistry.McpToolReference(

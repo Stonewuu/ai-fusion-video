@@ -6,6 +6,7 @@ import ImageInput from "@/components/dashboard/image-input";
 import { SafeImage } from "@/components/ui/safe-image";
 import { Textarea } from "@/components/ui/textarea";
 import { resolveMediaUrl } from "@/lib/api/client";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/api/project";
 import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
@@ -215,7 +216,7 @@ export function FrameReferenceSection({
       await onUpdateFrame(item.id, frameType, nextUrl);
     } catch (err) {
       console.error(`更新${label}失败:`, err);
-      alert(`更新${label}失败，请重试`);
+      toastApiError(err, `更新${label}失败，请重试`);
     } finally {
       setUpdating(false);
     }
@@ -237,7 +238,7 @@ export function FrameReferenceSection({
       onGenerateSubmitted?.();
     } catch (err) {
       console.error(`提交${label}生成失败:`, err);
-      alert(`提交${label}生成失败，请重试`);
+      toastApiError(err, `提交${label}生成失败，请重试`);
       setSubmitting(false);
     }
   };

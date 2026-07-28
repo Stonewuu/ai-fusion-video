@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import {
   aiModelApi,
   PLATFORM_LABELS,
@@ -13,6 +14,8 @@ import {
   type AiModelCreateReq,
   type AiModelUpdateReq,
   type ModelPreset,
+  type MultimodalInputTransports,
+  type MultimodalInputType,
 } from "@/lib/api/ai-model";
 import {
   Dialog,
@@ -36,6 +39,7 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { CapabilityPresetSelect } from "./capability-preset-select";
 import { ModelConfigForm } from "./model-config-form";
+import { MultimodalCapabilityEditor } from "./multimodal-capability-editor";
 import {
   parseConfigJson,
   mergeConfigObjects,
@@ -78,6 +82,8 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
     modelType: 1,
     maxConcurrency: 5,
     supportVision: false,
+    multimodalInputTypes: [],
+    multimodalInputTransports: {},
     supportReasoning: false,
     contextWindow: 0,
   });
@@ -85,7 +91,10 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
 
   useEffect(() => {
     if (open) {
-      aiModelApi.presets().then(setPresets).catch(console.error);
+      aiModelApi.presets().then(setPresets).catch((error) => {
+        console.error("加载模型预设失败:", error);
+        toastApiError(error, "加载模型预设失败");
+      });
       if (editingModel) {
         setForm({
           id: editingModel.id,
@@ -99,6 +108,8 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           maxConcurrency: editingModel.maxConcurrency ?? 5,
           defaultModel: editingModel.defaultModel,
           supportVision: editingModel.supportVision,
+          multimodalInputTypes: editingModel.multimodalInputTypes,
+          multimodalInputTransports: editingModel.multimodalInputTransports,
           supportReasoning: editingModel.supportReasoning,
           contextWindow: editingModel.contextWindow ?? 0,
           apiConfigId: editingModel.apiConfigId ?? undefined,
@@ -114,6 +125,8 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           maxConcurrency: 5,
           defaultModel: false,
           supportVision: false,
+          multimodalInputTypes: [],
+          multimodalInputTransports: {},
           supportReasoning: false,
           contextWindow: 0,
           apiConfigId: defaultApiConfigId,
@@ -216,6 +229,11 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
       ...previous,
       capabilityPresetCode: preset.code,
       config: "",
+      supportReasoning: preset.supportReasoning ?? previous.supportReasoning,
+      contextWindow: preset.contextWindow ?? previous.contextWindow,
+      multimodalInputTypes: preset.multimodalInputTypes ?? previous.multimodalInputTypes,
+      multimodalInputTransports: preset.multimodalInputTransports ?? previous.multimodalInputTransports,
+      supportVision: (preset.multimodalInputTypes ?? previous.multimodalInputTypes)?.includes("image") ?? false,
     }));
   };
 
@@ -270,6 +288,8 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           maxConcurrency: form.maxConcurrency,
           defaultModel: form.defaultModel,
           supportVision: form.supportVision,
+          multimodalInputTypes: form.multimodalInputTypes,
+          multimodalInputTransports: form.multimodalInputTransports,
           supportReasoning: form.supportReasoning,
           contextWindow: form.contextWindow,
           apiConfigId: form.apiConfigId,
@@ -288,6 +308,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
       onOpenChange(false);
     } catch (err) {
       console.error("保存 AI 模型失败:", err);
+      toastApiError(err, "保存 AI 模型失败");
     } finally {
       setSaving(false);
     }
@@ -324,6 +345,11 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                         modelType: preset.modelType,
                         description: preset.description,
                         config: "",
+                        supportReasoning: preset.supportReasoning ?? false,
+                        contextWindow: preset.contextWindow ?? 0,
+                        multimodalInputTypes: preset.multimodalInputTypes ?? [],
+                        multimodalInputTransports: preset.multimodalInputTransports ?? {},
+                        supportVision: preset.multimodalInputTypes?.includes("image") ?? false,
                       }));
                     }}
                     className={cn(
@@ -378,6 +404,8 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                   let next: AiModelFormState = { ...prev, modelType: nextType };
                   if (nextType !== 1) {
                     next.supportVision = false;
+                    next.multimodalInputTypes = [];
+                    next.multimodalInputTransports = {};
                     next.supportReasoning = false;
                     next.contextWindow = 0;
                   }
@@ -662,11 +690,17 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                   }}
                 />
 
-                <ToggleSettingCard
-                  checked={!!form.supportVision}
-                  title="支持视觉输入"
-                  description="支持图片输入。"
-                  onToggle={() => updateField("supportVision", !form.supportVision)}
+                <MultimodalCapabilityEditor
+                  inputTypes={form.multimodalInputTypes ?? []}
+                  transports={form.multimodalInputTransports ?? {}}
+                  onChange={(inputTypes: MultimodalInputType[], transports: MultimodalInputTransports) => {
+                    setForm(previous => ({
+                      ...previous,
+                      supportVision: inputTypes.includes("image"),
+                      multimodalInputTypes: inputTypes,
+                      multimodalInputTransports: transports,
+                    }));
+                  }}
                 />
               </div>
             )}

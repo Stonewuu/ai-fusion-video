@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { http } from "@/lib/api/client";
 import { storageConfigApi } from "@/lib/api/storage";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import {
   resolveReferenceImageUploadAvailability,
   type GenerationCapabilities,
@@ -22,10 +23,10 @@ export function useReferenceImageUploadAvailability(
     let cancelled = false;
 
     Promise.all([
-      http.get<never, string | null>("/api/system/config/site_base_url"),
+      http.get<never, string | null>("/api/system/config/resource_base_url"),
       storageConfigApi.list(),
     ])
-      .then(([siteBaseUrl, storageConfigs]) => {
+      .then(([resourceBaseUrl, storageConfigs]) => {
         if (cancelled) return;
         const defaultStorage = storageConfigs.find(
           (config) => config.isDefault && config.status === 1,
@@ -37,11 +38,12 @@ export function useReferenceImageUploadAvailability(
         setRuntimeConfig({
           loaded: true,
           publicMediaAccessConfigured:
-            Boolean(siteBaseUrl?.trim()) || publicObjectStorage,
+            Boolean(resourceBaseUrl?.trim()) || publicObjectStorage,
         });
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
+          toastApiError(error, "加载参考图上传配置失败");
           setRuntimeConfig({
             loaded: true,
             publicMediaAccessConfigured: false,

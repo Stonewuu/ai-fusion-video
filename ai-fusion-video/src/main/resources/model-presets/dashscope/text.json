@@ -1,0 +1,35 @@
+[
+  {
+    "code": "qwen3.7-plus",
+    "name": "Qwen 3.7 Plus",
+    "platform": "dashscope",
+    "modelProtocol": "dashscope",
+    "modelType": 1,
+    "description": "阿里云百炼 2026 年图像与视频理解模型，支持文本、图片和视频输入。",
+    "capabilities": ["文本对话", "图片理解", "视频理解", "深度思考", "工具调用"],
+    "supportReasoning": true,
+    "multimodalInputTypes": ["image", "video"],
+    "multimodalInputTransports": {
+      "image": ["url", "base64"],
+      "video": ["url", "base64"]
+    },
+    "config": {}
+  },
+  {
+    "code": "qwen3.5-omni-plus",
+    "name": "Qwen 3.5 Omni Plus",
+    "platform": "dashscope",
+    "modelProtocol": "dashscope",
+    "modelType": 1,
+    "description": "阿里云百炼 2026 年全模态对话模型，支持图片、视频和音频理解。",
+    "capabilities": ["文本对话", "图片理解", "视频理解", "音频理解", "工具调用"],
+    "supportReasoning": true,
+    "multimodalInputTypes": ["image", "video", "audio"],
+    "multimodalInputTransports": {
+      "image": ["url", "base64"],
+      "video": ["url", "base64"],
+      "audio": ["url", "base64"]
+    },
+    "config": {}
+  }
+]

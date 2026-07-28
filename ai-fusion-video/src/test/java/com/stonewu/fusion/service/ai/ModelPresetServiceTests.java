@@ -5,6 +5,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -107,5 +108,46 @@ class ModelPresetServiceTests {
 
         var gptImage2 = service.getPreset("gpt-image-2").getJSONObject("config");
         assertFalse(gptImage2.containsKey("inputFidelity"));
+    }
+
+    @Test
+    void shouldExposeCurrentTextModelsWithConsistentMultimodalCapabilities() {
+        List.of(
+                "gpt-5.6-sol",
+                "gpt-5.6-terra",
+                "gpt-5.6-luna",
+                "gemini-3.6-flash",
+                "gemini-3.5-flash",
+                "gemini-3.5-flash-lite",
+                "claude-fable-5",
+                "claude-opus-5",
+                "claude-sonnet-5",
+                "claude-haiku-4-5-20251001",
+                "qwen3.7-plus",
+                "qwen3.5-omni-plus",
+                "doubao-seed-2-1-pro-260628",
+                "doubao-seed-2-1-turbo-260628",
+                "deepseek-chat",
+                "deepseek-reasoner"
+        ).forEach(code -> assertTrue(service.hasPreset(code), code));
+
+        service.getPresetsByType(1).forEach(preset -> {
+            var types = preset.getJSONArray("multimodalInputTypes");
+            var transports = preset.getJSONObject("multimodalInputTransports");
+            assertNotNull(types, preset.getStr("code"));
+            assertNotNull(transports, preset.getStr("code"));
+
+            Set<String> enabledTypes = Set.copyOf(JSONUtil.toList(types, String.class));
+            assertEquals(enabledTypes, transports.keySet(), preset.getStr("code"));
+            assertTrue(Set.of("image", "video", "audio", "file").containsAll(enabledTypes),
+                    preset.getStr("code"));
+            enabledTypes.forEach(type -> {
+                List<String> declaredTransports = JSONUtil.toList(
+                        transports.getJSONArray(type), String.class);
+                assertFalse(declaredTransports.isEmpty(), preset.getStr("code") + ":" + type);
+                assertTrue(Set.of("url", "base64").containsAll(declaredTransports),
+                        preset.getStr("code") + ":" + type);
+            });
+        });
     }
 }

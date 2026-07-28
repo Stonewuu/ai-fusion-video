@@ -54,6 +54,7 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
       AI_DASHSCOPE_API_KEY: ${AI_DASHSCOPE_API_KEY:-sk-placeholder}
+      CORS_ALLOWED_ORIGIN_PATTERNS: "${CORS_ALLOWED_ORIGIN_PATTERNS:-}"
       JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1024m}
     volumes:
       - media_data:/app/data/media
@@ -69,13 +70,12 @@ services:
     build:
       context: ./ai-fusion-video-web
       dockerfile: Dockerfile
-      args:
-        NEXT_PUBLIC_API_BASE_URL: ""
     image: ai-fusion-video-web:local
     container_name: fusion-frontend
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ""
+      # 留空表示由统一入口提供同源 /api；分域部署由覆盖文件传入完整地址。
+      PUBLIC_API_URL: "${PUBLIC_API_URL:-}"
     depends_on:
       - backend
 

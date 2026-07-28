@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 import { AuthLayout } from "@/components/ui/auth-layout";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { getInitStatus } from "@/lib/api/system-init";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { register as registerApi } from "@/lib/api/auth";
 
 export default function RegisterPage() {
@@ -32,8 +33,8 @@ export default function RegisterPage() {
         setAllowRegister(status.allowRegister);
         setInitReady(true);
       })
-      .catch(() => {
-        setError("无法连接到服务器");
+      .catch((error) => {
+        setError(getApiErrorMessage(error));
         setInitReady(true);
       });
   }, [router]);

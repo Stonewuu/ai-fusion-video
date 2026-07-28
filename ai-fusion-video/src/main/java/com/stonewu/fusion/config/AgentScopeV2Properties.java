@@ -222,6 +222,7 @@ public class AgentScopeV2Properties {
         private boolean enabled;
         private boolean failFast = true;
         private Map<String, SkillRepository> repositories = new LinkedHashMap<>();
+        private Map<String, String> displayNames = new LinkedHashMap<>();
 
         public boolean isEnabled() {
             return enabled;
@@ -247,6 +248,16 @@ public class AgentScopeV2Properties {
             this.repositories = repositories == null
                     ? new LinkedHashMap<>()
                     : new LinkedHashMap<>(repositories);
+        }
+
+        public Map<String, String> getDisplayNames() {
+            return displayNames;
+        }
+
+        public void setDisplayNames(Map<String, String> displayNames) {
+            this.displayNames = displayNames == null
+                    ? new LinkedHashMap<>()
+                    : new LinkedHashMap<>(displayNames);
         }
     }
 

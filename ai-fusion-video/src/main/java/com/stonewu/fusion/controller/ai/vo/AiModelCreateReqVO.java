@@ -6,6 +6,9 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Min;
 import lombok.Data;
 
+import java.util.List;
+import java.util.Map;
+
 @Schema(description = "创建AI模型请求")
 @Data
 public class AiModelCreateReqVO {
@@ -25,6 +28,10 @@ public class AiModelCreateReqVO {
     private Integer maxConcurrency;
     private Boolean defaultModel;
     private Boolean supportVision;
+    @NotNull(message = "多模态输入类型不能为空")
+    private List<String> multimodalInputTypes;
+    @NotNull(message = "多模态输入传输方式不能为空")
+    private Map<String, List<String>> multimodalInputTransports;
     private Boolean supportReasoning;
     @Min(value = 0, message = "上下文窗口不能小于 0")
     private Integer contextWindow;

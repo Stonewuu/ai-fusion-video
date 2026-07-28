@@ -9,6 +9,7 @@ import { AuthLayout } from "@/components/ui/auth-layout";
 import { useAuthStore } from "@/lib/store/auth-store";
 
 import { getInitStatus } from "@/lib/api/system-init";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 
 function LoginContent() {
   const searchParams = useSearchParams();
@@ -36,8 +37,9 @@ function LoginContent() {
           setInitReady(true);
         }
       })
-      .catch(() => {
+      .catch((error) => {
         // 后端不可用时仍显示登录页
+        setError(getApiErrorMessage(error));
         setInitReady(true);
       });
   }, [router]);

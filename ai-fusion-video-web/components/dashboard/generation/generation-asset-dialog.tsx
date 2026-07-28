@@ -6,6 +6,7 @@ import { toast } from "sonner";
 import { assetApi, type AssetWithItems } from "@/lib/api/asset";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { projectApi, type Project } from "@/lib/api/project";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -77,7 +78,8 @@ export function GenerationAssetDialog({
       setAssets(list);
       setAssetId(list[0]?.id ?? null);
       if (list.length === 0) setAttachMode("new");
-    } catch {
+    } catch (error) {
+      toastApiError(error, "加载资产失败");
       setAssets([]);
       setAssetId(null);
     } finally {
@@ -96,8 +98,9 @@ export function GenerationAssetDialog({
         setProjectId(firstProjectId);
         if (firstProjectId) void loadAssets(firstProjectId);
       })
-      .catch(() => {
+      .catch((error) => {
         if (!cancelled) {
+          toastApiError(error, "加载项目列表失败");
           setProjects([]);
           setProjectId(null);
         }

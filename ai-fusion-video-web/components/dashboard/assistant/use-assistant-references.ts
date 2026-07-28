@@ -108,7 +108,7 @@ function fuzzyScore(candidate: string, query: string) {
 
 function capabilitySearchText(item: AssistantCapabilityReference) {
   if (item.kind === "skill") {
-    return `${item.value.name} ${item.value.id} ${item.value.source} ${item.value.description}`;
+    return `${item.value.displayName} ${item.value.name} ${item.value.id} ${item.value.source} ${item.value.description}`;
   }
   return `${item.value.toolName} ${item.value.serverName} ${item.value.description}`;
 }

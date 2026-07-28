@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { X, Users, MapPin, Package, Check, Loader2, ZoomIn } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import type { AssetWithItems, AssetItem } from "@/lib/api/asset";
 import type { StoryboardItem } from "@/lib/api/storyboard";
 import { SafeImage } from "@/components/ui/safe-image";
@@ -131,6 +132,7 @@ export function EditItemAssetsDialog({
       onClose();
     } catch (err) {
       console.error("保存关联资产失败:", err);
+      toastApiError(err, "保存关联资产失败");
     } finally {
       setLoading(false);
     }

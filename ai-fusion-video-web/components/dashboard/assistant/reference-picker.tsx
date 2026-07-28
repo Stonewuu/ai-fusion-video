@@ -46,8 +46,8 @@ function itemPresentation(item: AssistantReferencePickerItem) {
   if (item.kind === "skill") {
     return {
       icon: <Sparkles className="size-4" />,
-      eyebrow: `Skill · ${item.value.source}`,
-      label: item.value.name,
+      eyebrow: `Skill · ${item.value.name}`,
+      label: item.value.displayName,
       description: item.value.description,
     };
   }

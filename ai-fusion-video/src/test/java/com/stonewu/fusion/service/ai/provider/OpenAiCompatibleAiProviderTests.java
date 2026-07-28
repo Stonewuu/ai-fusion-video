@@ -1,6 +1,11 @@
 package com.stonewu.fusion.service.ai.provider;
 
 import com.stonewu.fusion.entity.ai.ApiConfig;
+import io.agentscope.core.message.Base64Source;
+import io.agentscope.core.message.DataBlock;
+import io.agentscope.core.message.ImageBlock;
+import io.agentscope.core.message.TextBlock;
+import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.transport.OkHttpTransport;
@@ -8,6 +13,7 @@ import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -125,6 +131,63 @@ class OpenAiCompatibleAiProviderTests {
                 .reasoningEffort("medium")
                 .additionalBodyParam("include_reasoning", true)
                 .build())).isNotNull();
+    }
+
+    @Test
+    void responsesModelPreservesTypedImageBlocks() {
+        OpenAiResponsesAgentScopeModel model = new OpenAiResponsesAgentScopeModel(
+                ApiConfig.builder().platform("openai_compatible").apiUrl("https://api.openai.com").build(),
+                "test-key",
+                "https://api.openai.com",
+                "gpt-5.6-sol",
+                null);
+        UserMessage userMessage = new UserMessage(
+                TextBlock.builder().text("Describe this image").build(),
+                ImageBlock.builder()
+                        .source(Base64Source.builder()
+                                .mediaType("image/png")
+                                .data("aGVsbG8=")
+                                .build())
+                        .build());
+
+        var mapped = model.mapMessages(List.of(userMessage));
+
+        assertThat(mapped).singleElement().satisfies(item -> {
+            assertThat(item.isMessage()).isTrue();
+            assertThat(item.asMessage().content()).hasSize(2);
+            assertThat(item.asMessage().content().get(0).isInputText()).isTrue();
+            assertThat(item.asMessage().content().get(1).isInputImage()).isTrue();
+            assertThat(item.asMessage().content().get(1).asInputImage().imageUrl())
+                    .contains("data:image/png;base64,aGVsbG8=");
+        });
+    }
+
+    @Test
+    void responsesModelPreservesFileDataBlocks() {
+        OpenAiResponsesAgentScopeModel model = new OpenAiResponsesAgentScopeModel(
+                ApiConfig.builder().platform("openai_compatible").apiUrl("https://api.openai.com").build(),
+                "test-key",
+                "https://api.openai.com",
+                "gpt-5.6-sol",
+                null);
+        UserMessage userMessage = new UserMessage(
+                TextBlock.builder().text("Read this file").build(),
+                DataBlock.builder()
+                        .id("file-1")
+                        .name("sample.pdf")
+                        .source(Base64Source.builder()
+                                .mediaType("application/pdf")
+                                .data("aGVsbG8=")
+                                .build())
+                        .build());
+
+        var mapped = model.mapMessages(List.of(userMessage));
+
+        assertThat(mapped).singleElement().satisfies(item -> {
+            assertThat(item.isMessage()).isTrue();
+            assertThat(item.asMessage().content()).hasSize(2);
+            assertThat(item.asMessage().content().get(1).isInputFile()).isTrue();
+        });
     }
 
     private Object readField(Object target, String fieldName) throws ReflectiveOperationException {

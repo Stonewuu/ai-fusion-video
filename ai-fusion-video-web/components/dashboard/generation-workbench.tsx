@@ -11,6 +11,7 @@ import {
   type VideoGenerationItem,
 } from "@/lib/api/generation";
 import { resolveGenerationCapabilities } from "@/lib/generation-capabilities";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { GenerationAdvancedPanel } from "./generation/generation-advanced-panel";
@@ -84,8 +85,11 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
         setPresets(presetList);
         setModelId(enabled.find((model) => model.defaultModel)?.id ?? enabled[0]?.id);
       })
-      .catch(() => {
-        if (!cancelled) setModels([]);
+      .catch((error) => {
+        if (!cancelled) {
+          toastApiError(error, "加载生成模型失败");
+          setModels([]);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoadingModels(false);
@@ -136,7 +140,10 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
           const entries = await Promise.all(
             page.list.map(async (task) => ({
               task,
-              items: await generationApi.listImageItems(task.id).catch(() => []),
+              items: await generationApi.listImageItems(task.id).catch((error) => {
+                toastApiError(error, "加载图片生成结果失败");
+                return [];
+              }),
             })),
           );
           setHistory(entries);
@@ -146,13 +153,17 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
           const entries = await Promise.all(
             page.list.map(async (task) => ({
               task,
-              items: await generationApi.listVideoItems(task.id).catch(() => []),
+              items: await generationApi.listVideoItems(task.id).catch((error) => {
+                toastApiError(error, "加载视频生成结果失败");
+                return [];
+              }),
             })),
           );
           setHistory(entries);
           setHistoryTotal(page.total);
         }
-      } catch {
+      } catch (error) {
+        toastApiError(error, "加载生成历史失败");
         setHistory([]);
         setHistoryTotal(0);
       } finally {
@@ -185,7 +196,10 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
                   ? previousItems
                   : await generationApi
                       .listImageItems(task.id)
-                      .catch(() => previousItems);
+                      .catch((error) => {
+                        toastApiError(error, "刷新图片生成结果失败");
+                        return previousItems;
+                      });
               return {
                 id: task.id,
                 entry: { task, items } satisfies GenerationHistoryEntry,
@@ -201,7 +215,10 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
                 ? previousItems
                 : await generationApi
                     .listVideoItems(task.id)
-                    .catch(() => previousItems);
+                    .catch((error) => {
+                      toastApiError(error, "刷新视频生成结果失败");
+                      return previousItems;
+                    });
             return {
               id: task.id,
               entry: { task, items } satisfies GenerationHistoryEntry,

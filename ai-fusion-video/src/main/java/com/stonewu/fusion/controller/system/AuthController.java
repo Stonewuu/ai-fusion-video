@@ -212,7 +212,7 @@ public class AuthController {
             // 发送邮件
             String siteBaseUrl = systemConfigService.getSiteBaseUrl();
             if (StrUtil.isBlank(siteBaseUrl)) {
-                throw new BusinessException(500, "系统未配置项目访问域名，请联系管理员配置后再试");
+                throw new BusinessException(500, "系统未配置站点公网地址，请联系管理员配置后再试");
             }
 
             String resetUrl = siteBaseUrl + "/forgot-password?token=" + token + "&type=email";

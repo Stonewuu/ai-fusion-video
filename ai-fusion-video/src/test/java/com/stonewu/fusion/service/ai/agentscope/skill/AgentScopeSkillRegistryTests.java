@@ -18,6 +18,8 @@ class AgentScopeSkillRegistryTests {
                 new AgentScopeV2Properties.SkillRepository();
         bundled.setLocation("classpath:agentscope/skills");
         properties.getSkills().setRepositories(Map.of("bundled", bundled));
+        properties.getSkills().setDisplayNames(Map.of(
+                "fusion-video-workflow", "融光视频工作流"));
 
         AgentScopeSkillRegistry registry = new AgentScopeSkillRegistry(properties);
         try {
@@ -28,6 +30,10 @@ class AgentScopeSkillRegistryTests {
             assertThat(skill.getName()).isEqualTo("fusion-video-workflow");
             assertThat(skill.getDescription()).contains("融光");
             assertThat(skill.getSource()).isEqualTo("bundled");
+            assertThat(registry.catalog()).singleElement().satisfies(reference -> {
+                assertThat(reference.name()).isEqualTo("fusion-video-workflow");
+                assertThat(reference.displayName()).isEqualTo("融光视频工作流");
+            });
         } finally {
             registry.destroy();
         }

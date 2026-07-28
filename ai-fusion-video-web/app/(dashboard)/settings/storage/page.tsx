@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { cn } from "@/lib/utils";
 import {
   getStorageProviderOption,
@@ -251,6 +252,7 @@ function StorageConfigDialog({ open, onOpenChange, editingConfig, onSaved }: Sto
       onOpenChange(false);
     } catch (err) {
       console.error("保存存储配置失败:", err);
+      toastApiError(err, "保存存储配置失败");
     } finally {
       setSaving(false);
     }
@@ -606,6 +608,7 @@ export default function StoragePage() {
       setStorageConfigs(data);
     } catch (err) {
       console.error("加载存储配置列表失败:", err);
+      toastApiError(err, "加载存储配置列表失败");
     } finally {
       setStorageLoading(false);
     }
@@ -622,6 +625,7 @@ export default function StoragePage() {
       await loadStorageConfigs();
     } catch (err) {
       console.error("删除存储配置失败:", err);
+      toastApiError(err, "删除存储配置失败");
     }
   };
 
@@ -631,6 +635,7 @@ export default function StoragePage() {
       await loadStorageConfigs();
     } catch (err) {
       console.error("设置默认存储失败:", err);
+      toastApiError(err, "设置默认存储失败");
     }
   };
 

@@ -39,6 +39,7 @@ export interface AgentWorkspaceTarget {
 export interface AgentUserSkill {
   id: string;
   name: string;
+  displayName: string | null;
   description: string;
   content: string;
   source: string;
@@ -47,6 +48,7 @@ export interface AgentUserSkill {
 export interface AgentSkillSaveRequest {
   originalName?: string | null;
   name: string;
+  displayName: string;
   description: string;
   content: string;
 }

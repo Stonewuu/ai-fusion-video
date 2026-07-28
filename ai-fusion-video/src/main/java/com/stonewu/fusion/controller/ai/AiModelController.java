@@ -46,6 +46,8 @@ public class AiModelController {
                 ? reqVO.getMaxConcurrency() : 5)
                 .defaultModel(reqVO.getDefaultModel() != null ? reqVO.getDefaultModel() : false)
             .supportVision(Boolean.TRUE.equals(reqVO.getSupportVision()))
+            .multimodalInputTypes(reqVO.getMultimodalInputTypes())
+            .multimodalInputTransports(reqVO.getMultimodalInputTransports())
             .supportReasoning(Boolean.TRUE.equals(reqVO.getSupportReasoning()))
             .contextWindow(reqVO.getContextWindow() != null && reqVO.getContextWindow() > 0
                 ? reqVO.getContextWindow() : null)
@@ -62,7 +64,8 @@ public class AiModelController {
                 reqVO.getModelProtocol(), reqVO.getCapabilityPresetCode(), reqVO.getModelType(),
                 reqVO.getIcon(), reqVO.getDescription(),
                 reqVO.getSort(), reqVO.getStatus(), reqVO.getConfig(), reqVO.getDefaultModel(),
-                reqVO.getApiConfigId(), reqVO.getMaxConcurrency(), reqVO.getSupportVision(),
+                reqVO.getApiConfigId(), reqVO.getMaxConcurrency(), reqVO.getMultimodalInputTypes(),
+                reqVO.getMultimodalInputTransports(),
                 reqVO.getSupportReasoning(), reqVO.getContextWindow());
         return success(true);
     }

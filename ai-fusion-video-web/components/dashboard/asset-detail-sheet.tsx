@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
 import {
   Select,
   SelectContent,
@@ -38,6 +39,7 @@ import {
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { cn } from "@/lib/utils";
 import { uploadFile } from "@/lib/api/storage";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { resolveMediaUrl } from "@/lib/api/client";
 import {
   assetApi,
@@ -163,6 +165,7 @@ function CoverSelectorDialog({
         })
         .catch(err => {
           console.error(err);
+          toast.error(getApiErrorMessage(err));
           setAssets([]);
           setLoadedProjectId(projectId);
         });
@@ -358,6 +361,7 @@ function AssetItemEditPanel({
       onUpdated();
     } catch (err) {
       console.error("更新子资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -370,6 +374,7 @@ function AssetItemEditPanel({
       onDeleted();
     } catch (err) {
       console.error("删除子资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     }
   };
 
@@ -382,6 +387,7 @@ function AssetItemEditPanel({
       setDirty(true);
     } catch (err) {
       console.error("上传子资产图片失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setUploading(false);
     }
@@ -709,6 +715,7 @@ function AssetItemCreatePanel({
       onCreated();
     } catch (err) {
       console.error("创建子资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setCreating(false);
     }
@@ -930,6 +937,7 @@ export default function AssetDetailPanel(props: Props) {
       setDirty(true);
     } catch (err) {
       console.error("上传资产封面失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setCoverUploading(false);
     }
@@ -950,6 +958,7 @@ export default function AssetDetailPanel(props: Props) {
       onSaved();
     } catch (err) {
       console.error("保存资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -963,6 +972,7 @@ export default function AssetDetailPanel(props: Props) {
       props.onDeleted();
     } catch (err) {
       console.error("删除资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     }
   };
 
@@ -979,6 +989,7 @@ export default function AssetDetailPanel(props: Props) {
       props.onCreated(created);
     } catch (err) {
       console.error("创建资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setCreateSaving(false);
     }

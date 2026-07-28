@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getInitStatus } from "@/lib/api/system-init";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 
 // 根页面：仅检测初始化状态并重定向
 // 认证保护由 middleware 处理，已登录用户不会到达此页面
@@ -19,9 +20,9 @@ export default function Home() {
           router.replace("/login");
         }
       })
-      .catch(() => {
+      .catch((error) => {
         // 后端不可用时直接跳登录页
-        setError("无法连接到服务器");
+        setError(getApiErrorMessage(error));
         setTimeout(() => router.replace("/login"), 2000);
       });
   }, [router]);

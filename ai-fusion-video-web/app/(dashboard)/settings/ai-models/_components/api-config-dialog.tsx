@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import {
   apiConfigApi,
   PLATFORM_OPTIONS,
@@ -116,6 +117,7 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
       onOpenChange(false);
     } catch (err) {
       console.error("保存 API 配置失败:", err);
+      toastApiError(err, "保存 API 配置失败");
     } finally {
       setSaving(false);
     }

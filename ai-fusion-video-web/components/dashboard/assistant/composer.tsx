@@ -8,19 +8,18 @@ import {
   useState,
   type RefObject,
 } from "react";
-import { useRouter } from "next/navigation";
-import { Loader2, Send, Settings2, Square } from "lucide-react";
+import { Loader2, Send, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { aiModelApi, type AiModel } from "@/lib/api/ai-model";
-import { getModelDisplayParts } from "@/lib/model-display";
 import { useAssistantStore } from "@/lib/store/assistant-store";
 import { AssistantReferenceContext } from "./reference-context";
 import { AssistantReferencePicker } from "./reference-picker";
 import { useAssistantReferences } from "./use-assistant-references";
+import { AssistantAttachmentStrip } from "./attachment-strip";
+import { useAssistantAttachments } from "./use-assistant-attachments";
+import { AssistantModelControls } from "./model-controls";
 
 interface AssistantComposerProps {
   active: boolean;
@@ -57,7 +56,6 @@ function loadAssistantModels(): Promise<AiModel[]> {
 }
 
 export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef, onHeightChange }: AssistantComposerProps) {
-  const router = useRouter();
   const selectedConversationId = useAssistantStore((state) => state.selectedConversationId);
   const text = useAssistantStore((state) =>
     selectedConversationId
@@ -86,6 +84,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
   const [modelLoadAttempt, setModelLoadAttempt] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dismissedAlert, setDismissedAlert] = useState<string | null>(null);
   const [composing, setComposing] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const composerSurfaceRef = useRef<HTMLDivElement>(null);
@@ -95,7 +94,6 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
   const currentConnection = connectionConversationId === selectedConversationId;
   const effectiveProjectId = selectedConversationId ? conversationProjectId : projectId;
   const selectedModel = models.find((model) => model.id === selectedModelId) ?? null;
-  const sendDisabled = !text.trim() || !selectedModelId || !models.length || submitting;
   const updateText = (value: string) => setDraft(selectedConversationId, value);
   const references = useAssistantReferences({
     active,
@@ -105,6 +103,26 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
     inputRef: localInputRef,
     updateText,
   });
+  const attachments = useAssistantAttachments({
+    conversationId: selectedConversationId,
+    model: selectedModel,
+    onError: (attachmentError) => {
+      setDismissedAlert(null);
+      setError(attachmentError instanceof Error ? attachmentError.message : "添加附件失败");
+    },
+  });
+  const alertMessage = error || modelsError || runtimeMessagesError || attachments.compatibilityError;
+  const visibleAlertMessage = alertMessage !== dismissedAlert ? alertMessage : null;
+  const sendDisabled = (!text.trim() && !attachments.attachments.length)
+    || !selectedModelId
+    || !models.length
+    || submitting
+    || attachments.uploading
+    || !!attachments.compatibilityError;
+
+  useEffect(() => {
+    setDismissedAlert(null);
+  }, [alertMessage]);
 
   useEffect(() => {
     if (!active) return;
@@ -168,7 +186,13 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
   }, [active, inputRef]);
 
   const submit = async () => {
-    if (!text.trim() || submitting || running || !selectedModelId || !models.length) return;
+    if ((!text.trim() && !attachments.attachments.length)
+      || submitting
+      || running
+      || !selectedModelId
+      || !models.length
+      || attachments.uploading
+      || attachments.compatibilityError) return;
     setSubmitting(true);
     setError(null);
     try {
@@ -183,11 +207,24 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
         selectedModelId,
         referencedProjectId,
         {
+          project: references.selectedProject,
           skills: references.selectedSkills,
           mcpTools: references.selectedMcpTools,
+          multimodalInputs: attachments.attachments.map((attachment) => ({
+            id: attachment.id,
+            name: attachment.name,
+            inputType: attachment.inputType,
+            mimeType: attachment.mimeType,
+            transport: attachment.transport,
+            url: attachment.url,
+            data: attachment.data,
+            resourceUrl: attachment.resourceUrl,
+            size: attachment.size,
+          })),
         },
       );
       updateText("");
+      attachments.clearAttachments();
       references.clearTransientReferences();
     } catch (submitError: unknown) {
       setError(submitError instanceof Error ? submitError.message : "发送失败，请重试");
@@ -196,15 +233,25 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
     }
   };
 
-  const selectItems = models.map((model) => ({ value: String(model.id), label: model.name }));
-
   return (
     <div ref={containerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="pointer-events-auto mx-auto w-full max-w-3xl rounded-2xl border border-border/20 bg-card/90 p-2 shadow-xl backdrop-blur-xl backdrop-saturate-150">
-        {error || modelsError || runtimeMessagesError ? (
+        {visibleAlertMessage ? (
           <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-2.5 py-1.5 text-[11px] text-destructive">
-            <span className="min-w-0 flex-1 truncate">{error || modelsError || runtimeMessagesError}</span>
-            {modelsError ? <Button type="button" variant="destructive-ghost" size="xs" onClick={() => { setModels([]); setModelsLoading(true); setModelsError(null); setModelLoadAttempt((attempt) => attempt + 1); }}>重试</Button> : null}
+            <span className="min-w-0 flex-1 truncate">{visibleAlertMessage}</span>
+            <div className="flex shrink-0 items-center gap-2">
+              {modelsError ? <Button type="button" variant="destructive-ghost" size="xs" onClick={() => { setModels([]); setModelsLoading(true); setModelsError(null); setModelLoadAttempt((attempt) => attempt + 1); }}>重试</Button> : null}
+              <Button
+                type="button"
+                variant="destructive-ghost"
+                size="icon-xs"
+                aria-label="关闭错误提示"
+                title="关闭"
+                onClick={() => setDismissedAlert(visibleAlertMessage)}
+              >
+                <X />
+              </Button>
+            </div>
           </div>
         ) : null}
 
@@ -221,6 +268,11 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
             onRemoveSkill={references.removeSkill}
             onRemoveMcpTool={references.removeMcpTool}
           />
+          <AssistantAttachmentStrip
+            attachments={attachments.attachments}
+            disabled={submitting || running}
+            onRemove={attachments.removeAttachment}
+          />
           <Textarea
             ref={(element) => {
               localInputRef.current = element;
@@ -228,7 +280,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
             }}
             value={text}
             rows={3}
-            placeholder="发挥想象…"
+            placeholder="发挥想象… 使用 '@' 引用项目、'/' 引用 Skill"
             disabled={!models.length || modelsLoading || submitting || running}
             data-assistant-interactive="true"
             aria-expanded={!!references.picker}
@@ -240,6 +292,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
             )}
             onCompositionStart={() => setComposing(true)}
             onCompositionEnd={() => setComposing(false)}
+            onPaste={attachments.handlePaste}
             onBlur={references.closePicker}
             onKeyDown={(event) => {
               if (references.handlePickerKeyDown(event)) return;
@@ -251,64 +304,26 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
         </div>
 
         <div className="flex flex-wrap items-center gap-2 px-1 pt-1">
-          <div className="flex min-w-0 items-center gap-2">
-            {models.length ? (
-              <Select
-                items={selectItems}
-                value={selectedModelId ? String(selectedModelId) : null}
-                onValueChange={(value) => setSelectedModelId(value ? Number(value) : null)}
-              >
-                <SelectTrigger
-                  data-assistant-interactive="true"
-                  className="max-w-56 border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-0"
-                  aria-label="选择对话模型"
-                >
-                  <SelectValue className="sr-only" placeholder="选择模型" />
-                  {selectedModel ? (
-                    <>
-                      <ModelVendorIcon source={selectedModel} className="size-4" />
-                      <span className="min-w-0 flex-1 text-left leading-tight">
-                        <span className="block truncate text-[11px] font-medium">
-                          {getModelDisplayParts(selectedModel).name}
-                        </span>
-                        <span className="block truncate font-mono text-[9px] text-muted-foreground">
-                          {selectedModel.code}
-                        </span>
-                      </span>
-                    </>
-                  ) : null}
-                </SelectTrigger>
-                <SelectContent className="min-w-64 text-xs">
-                  <SelectGroup>
-                    {models.map((model) => (
-                      <SelectItem key={model.id} value={String(model.id)} className="min-h-11 py-2 text-xs">
-                        <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted/70">
-                          <ModelVendorIcon source={model} className="size-4" />
-                        </span>
-                        <span className="min-w-0 flex-1 leading-tight">
-                          <span className="block truncate text-xs font-medium">
-                            {getModelDisplayParts(model).name}
-                          </span>
-                          <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">
-                            {model.code}
-                          </span>
-                        </span>
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            ) : modelsLoading ? (
-              <div className="flex h-9 w-48 items-center gap-2 px-2 text-xs text-muted-foreground" aria-label="加载对话模型">
-                <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" />
-                <span>加载对话模型</span>
-              </div>
-            ) : (
-              <Button type="button" variant="link" size="xs" onClick={() => router.push("/settings/ai-models")}>
-                <Settings2 /> 模型设置
-              </Button>
-            )}
-          </div>
+          <AssistantModelControls
+            models={models}
+            modelsLoading={modelsLoading}
+            selectedModel={selectedModel}
+            selectedModelId={selectedModelId}
+            tooltipsEnabled={tooltipsEnabled}
+            fileInputRef={attachments.fileInputRef}
+            fileAccept={attachments.accept}
+            addingFiles={attachments.uploading}
+            canAddFiles={attachments.canAdd}
+            capabilitySummary={attachments.capabilitySummary}
+            disabled={submitting || running}
+            onModelChange={setSelectedModelId}
+            onFilesSelected={(files) => {
+              setError(null);
+              void attachments.addFiles(files).catch((uploadError: unknown) => setError(
+                uploadError instanceof Error ? uploadError.message : "添加附件失败",
+              ));
+            }}
+          />
 
           <div className="ml-auto flex items-center gap-2">
             {cancelling ? (

@@ -13,18 +13,29 @@ import com.openai.models.responses.EasyInputMessage;
 import com.openai.models.responses.FunctionTool;
 import com.openai.models.responses.ResponseCreateParams;
 import com.openai.models.responses.ResponseFunctionToolCall;
+import com.openai.models.responses.ResponseInputContent;
+import com.openai.models.responses.ResponseInputFile;
+import com.openai.models.responses.ResponseInputImage;
 import com.openai.models.responses.ResponseInputItem;
+import com.openai.models.responses.ResponseInputText;
 import com.openai.models.responses.ResponseOutputItem;
 import com.openai.models.responses.ResponseStreamEvent;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import io.agentscope.core.message.AudioBlock;
+import io.agentscope.core.message.Base64Source;
 import io.agentscope.core.message.ContentBlock;
+import io.agentscope.core.message.DataBlock;
+import io.agentscope.core.message.ImageBlock;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.MsgRole;
+import io.agentscope.core.message.Source;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.ThinkingBlock;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
+import io.agentscope.core.message.URLSource;
+import io.agentscope.core.message.VideoBlock;
 import io.agentscope.core.model.ChatResponse;
 import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.ChatUsage;
@@ -193,6 +204,11 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
                 continue;
             }
 
+            if (hasMultimodalContent(message)) {
+                appendMultimodalInputMessage(message, inputItems);
+                continue;
+            }
+
             String textContent = message.getTextContent();
             if (StrUtil.isNotBlank(textContent)) {
                 inputItems.add(ResponseInputItem.ofEasyInputMessage(EasyInputMessage.builder()
@@ -202,6 +218,105 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
             }
         }
         return inputItems;
+    }
+
+    private boolean hasMultimodalContent(Msg message) {
+        return message.getContent().stream().anyMatch(block -> block instanceof ImageBlock
+                || block instanceof VideoBlock
+                || block instanceof AudioBlock
+                || block instanceof DataBlock);
+    }
+
+    private void appendMultimodalInputMessage(Msg message, List<ResponseInputItem> inputItems) {
+        if (message.getRole() != MsgRole.USER) {
+            throw new IllegalArgumentException("Responses multimodal content is only valid in user messages");
+        }
+        ResponseInputItem.Message.Builder builder = ResponseInputItem.Message.builder()
+                .role(ResponseInputItem.Message.Role.USER);
+        int contentCount = 0;
+        for (ContentBlock block : message.getContent()) {
+            if (block instanceof TextBlock textBlock && StrUtil.isNotBlank(textBlock.getText())) {
+                builder.addContent(ResponseInputText.builder().text(textBlock.getText()).build());
+                contentCount++;
+            } else if (block instanceof ImageBlock imageBlock) {
+                builder.addContent(toResponsesInputImage(imageBlock.getSource()));
+                contentCount++;
+            } else if (block instanceof AudioBlock audioBlock) {
+                throw unsupportedResponsesMedia(audioBlock.getSource());
+            } else if (block instanceof VideoBlock videoBlock) {
+                throw unsupportedResponsesMedia(videoBlock.getSource());
+            } else if (block instanceof DataBlock dataBlock) {
+                builder.addContent(toResponsesInputContent(dataBlock));
+                contentCount++;
+            }
+        }
+        if (contentCount > 0) {
+            inputItems.add(ResponseInputItem.ofMessage(builder.build()));
+        }
+    }
+
+    private ResponseInputContent toResponsesInputContent(DataBlock block) {
+        Source source = block.getSource();
+        String mimeType = sourceMimeType(source);
+        if (mimeType.startsWith("image/")) {
+            return toResponsesInputImage(source);
+        }
+        if (mimeType.startsWith("audio/") || mimeType.startsWith("video/")) {
+            throw unsupportedResponsesMedia(source);
+        }
+
+        ResponseInputFile.Builder builder = ResponseInputFile.builder()
+                .filename(StrUtil.blankToDefault(block.getName(), "attachment"));
+        if (source instanceof URLSource urlSource) {
+            builder.fileUrl(urlSource.getUrl());
+        } else if (source instanceof Base64Source base64Source) {
+            builder.fileData("data:" + mimeType + ";base64," + base64Source.getData());
+        } else {
+            throw new IllegalArgumentException("Unsupported Responses input source: " + source.getClass());
+        }
+        return ResponseInputContent.ofInputFile(builder.build());
+    }
+
+    private ResponseInputContent toResponsesInputImage(Source source) {
+        String mimeType = sourceMimeType(source);
+        if (!mimeType.startsWith("image/")) {
+            throw new IllegalArgumentException("OpenAI Responses image input requires image MIME type: " + mimeType);
+        }
+        return ResponseInputContent.ofInputImage(ResponseInputImage.builder()
+                .detail(ResponseInputImage.Detail.AUTO)
+                .imageUrl(sourceUrlOrDataUrl(source, mimeType))
+                .build());
+    }
+
+    private IllegalArgumentException unsupportedResponsesMedia(Source source) {
+        return new IllegalArgumentException(
+                "OpenAI Responses API does not accept audio/video through this input path: "
+                        + sourceMimeType(source));
+    }
+
+    private String sourceMimeType(Source source) {
+        String mimeType;
+        if (source instanceof Base64Source base64Source) {
+            mimeType = base64Source.getMediaType();
+        } else if (source instanceof URLSource urlSource) {
+            mimeType = urlSource.getMimeType();
+        } else {
+            throw new IllegalArgumentException("Unsupported Responses input source: " + source.getClass());
+        }
+        if (StrUtil.isBlank(mimeType)) {
+            throw new IllegalArgumentException("Responses multimodal input requires an explicit MIME type");
+        }
+        return mimeType.toLowerCase(Locale.ROOT);
+    }
+
+    private String sourceUrlOrDataUrl(Source source, String mimeType) {
+        if (source instanceof URLSource urlSource) {
+            return urlSource.getUrl();
+        }
+        if (source instanceof Base64Source base64Source) {
+            return "data:" + mimeType + ";base64," + base64Source.getData();
+        }
+        throw new IllegalArgumentException("Unsupported Responses input source: " + source.getClass());
     }
 
     List<FunctionTool> mapTools(List<ToolSchema> tools) {

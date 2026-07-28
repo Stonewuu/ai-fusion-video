@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, type ClipboardEvent, type DragEvent } from "react";
+import { toast } from "sonner";
 import {
   CircleAlert,
   FileVideo2,
@@ -14,6 +15,7 @@ import {
 import type { AiModel } from "@/lib/api/ai-model";
 import type { GenerationCapabilities } from "@/lib/generation-capabilities";
 import { uploadFile } from "@/lib/api/storage";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { SafeImage } from "@/components/ui/safe-image";
@@ -128,8 +130,10 @@ export function GenerationSimpleComposer({
         selected.map((file) => uploadFile(file, config.folder)),
       );
       onAddAttachments(urls, option?.kind);
-    } catch {
-      setError(`${option?.label || "图片"}上传失败`);
+    } catch (error) {
+      const message = getApiErrorMessage(error);
+      setError(message);
+      toast.error(message);
     } finally {
       setUploading(false);
       if (inputRef.current) inputRef.current.value = "";

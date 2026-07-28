@@ -3,6 +3,7 @@ import type {
   AgentMessage,
   AssistantMcpToolReferenceOption,
   AssistantSkillReferenceOption,
+  AiMultimodalInput,
 } from "@/lib/api/ai-assistant";
 import type { AiChatReq, AiChatStreamEvent } from "@/lib/api/ai-pipeline";
 import type { AgentPipelineState } from "@/components/dashboard/agent-pipeline/types";
@@ -14,9 +15,17 @@ export const NEW_ASSISTANT_DRAFT_KEY = "__new__";
 export type AssistantMode = "collapsed" | "floating" | "docked" | "maximized";
 export type AssistantConnectionMode = "start" | "reconnect";
 
+export interface AssistantMessageProjectReference {
+  id: number;
+  name: string;
+  description?: string;
+}
+
 export interface AssistantMessageReferences {
+  project?: AssistantMessageProjectReference | null;
   skills: AssistantSkillReferenceOption[];
   mcpTools: AssistantMcpToolReferenceOption[];
+  multimodalInputs?: AiMultimodalInput[];
 }
 
 export interface AssistantConnection {

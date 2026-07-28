@@ -10,7 +10,7 @@ import lombok.*;
  * 系统配置实体
  * <p>
  * 对应数据库表：afv_system_config
- * 用于存储全局系统配置，如项目访问域名等。
+ * 用于存储全局系统配置，如站点和后端资源公网地址等。
  */
 @TableName("afv_system_config")
 @Data

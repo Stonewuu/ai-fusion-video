@@ -25,6 +25,9 @@ public class AgentUserSkillService {
 
     private static final int MAX_CONTENT_LENGTH = 256 * 1024;
     private static final int MAX_SKILLS_PER_USER = 64;
+    private static final int MAX_DISPLAY_NAME_LENGTH = 64;
+    private static final String DISPLAY_NAME_FIELD = "display_name";
+    private static final String METADATA_FILENAME = ".fusion-skill.json";
     private static final Pattern NAME_PATTERN = Pattern.compile("[a-z0-9][a-z0-9_-]{0,63}");
 
     private final AgentWorkspaceBaseStore workspaceStore;
@@ -44,6 +47,7 @@ public class AgentUserSkillService {
                     skills.add(new UserSkill(
                             skill.getSkillId(),
                             skill.getName(),
+                            displayName(userId, skill.getName()),
                             skill.getDescription(),
                             skill.getSkillContent(),
                             "workspace:user"));
@@ -62,8 +66,10 @@ public class AgentUserSkillService {
     @Cacheable(value = "agentUserSkillCatalog", key = "#userId")
     public ArrayList<UserSkillSummary> catalog(long userId) {
         return list(userId).stream()
+                .filter(skill -> skill.displayName() != null)
                 .map(skill -> new UserSkillSummary(
-                        skill.id(), skill.name(), skill.description(), skill.source()))
+                        skill.id(), skill.name(), skill.displayName(),
+                        skill.description(), skill.source()))
                 .collect(Collectors.toCollection(ArrayList::new));
     }
 
@@ -80,11 +86,16 @@ public class AgentUserSkillService {
             long userId,
             String originalName,
             String name,
+            String displayName,
             String description,
             String content) {
         String safeName = requireName(name);
+        String safeDisplayName = requireText(displayName, "Skill 显示名称");
         String safeDescription = requireText(description, "Skill 描述");
         String safeContent = requireText(content, "Skill 内容");
+        if (safeDisplayName.length() > MAX_DISPLAY_NAME_LENGTH) {
+            throw new BusinessException("Skill 显示名称不能超过 64 个字符");
+        }
         if (safeContent.length() > MAX_CONTENT_LENGTH) {
             throw new BusinessException("Skill 内容不能超过 256 KB");
         }
@@ -103,14 +114,18 @@ public class AgentUserSkillService {
         }
         workspaceStore.put(namespace(userId), skillKey(safeName), fileValue(
                 toMarkdown(safeName, safeDescription, safeContent)));
+        workspaceStore.put(namespace(userId), metadataKey(safeName),
+                metadataValue(safeDisplayName));
         if (oldName != null && !oldName.equals(safeName)) {
             workspaceStore.delete(namespace(userId), skillKey(oldName));
+            workspaceStore.delete(namespace(userId), metadataKey(oldName));
         }
         AgentSkill saved = new AgentSkill(
                 safeName, safeDescription, safeContent, Map.of(), "workspace:user");
         return new UserSkill(
                 saved.getSkillId(),
                 safeName,
+                safeDisplayName,
                 safeDescription,
                 safeContent,
                 "workspace:user");
@@ -120,6 +135,7 @@ public class AgentUserSkillService {
     public void delete(long userId, String name) {
         String safeName = requireName(name);
         workspaceStore.delete(namespace(userId), skillKey(safeName));
+        workspaceStore.delete(namespace(userId), metadataKey(safeName));
     }
 
     private boolean exists(long userId, String name) {
@@ -139,6 +155,10 @@ public class AgentUserSkillService {
         return "/" + name + "/SKILL.md";
     }
 
+    private String metadataKey(String name) {
+        return "/" + name + "/" + METADATA_FILENAME;
+    }
+
     private boolean isSkillDocument(String key) {
         return key != null && key.matches("^/?[^/]+/SKILL\\.md$");
     }
@@ -156,6 +176,27 @@ public class AgentUserSkillService {
         value.put("created_at", now);
         value.put("modified_at", now);
         return value;
+    }
+
+    private Map<String, Object> metadataValue(String displayName) {
+        Map<String, Object> value = new LinkedHashMap<>();
+        value.put(DISPLAY_NAME_FIELD, displayName);
+        String now = Instant.now().toString();
+        value.put("created_at", now);
+        value.put("modified_at", now);
+        return value;
+    }
+
+    private String displayName(long userId, String name) {
+        StoreItem metadata = workspaceStore.get(namespace(userId), metadataKey(name));
+        if (metadata == null) {
+            return null;
+        }
+        Object value = metadata.value().get(DISPLAY_NAME_FIELD);
+        if (!(value instanceof String text) || text.isBlank()) {
+            return null;
+        }
+        return text.trim();
     }
 
     private String toMarkdown(String name, String description, String content) {
@@ -188,6 +229,7 @@ public class AgentUserSkillService {
     public record UserSkill(
             String id,
             String name,
+            String displayName,
             String description,
             String content,
             String source) {
@@ -196,6 +238,7 @@ public class AgentUserSkillService {
     public record UserSkillSummary(
             String id,
             String name,
+            String displayName,
             String description,
             String source) {
     }

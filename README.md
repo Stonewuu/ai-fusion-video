@@ -104,6 +104,49 @@ docker compose -f docker-compose.build.yml up -d --build
 
 启动后访问 `http://localhost:8080` 即可使用（可在 `.env` 中通过 `APP_PORT` 修改端口）。
 
+一体化部署由 Nginx 提供统一入口：`/` 转发前端，`/api/**` 和 `/media/**` 转发后端。此模式下
+`PUBLIC_API_URL` 和 `CORS_ALLOWED_ORIGIN_PATTERNS` 必须保持为空。
+
+初始化完成后，“系统设置 → 通用”会根据当前浏览器地址和部署配置自动识别公网访问地址：
+
+- 统一入口只显示一个地址，确认后保存即可。
+- 检测到前后端分域时自动显示前端站点和后端资源两个地址，也可手动开启“前后端不同域名”。
+
+检测结果是待保存的明确配置：站点地址用于邮件和页面跳转，资源地址用于外部 AI 访问本地媒体与内置参考资源。
+
+#### 前后端分域部署
+
+当浏览器需要从 `https://app.example.com` 直接访问 `https://api.example.com` 时，复制环境变量文件并填写：
+
+```env
+PUBLIC_API_URL=https://api.example.com
+CORS_ALLOWED_ORIGIN_PATTERNS=https://app.example.com
+FRONTEND_PORT=3000
+BACKEND_PORT=18080
+```
+
+`PUBLIC_API_URL` 是后端根地址，不包含末尾 `/api`。多个前端来源使用英文逗号分隔。
+
+使用预构建镜像启动：
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.separated.yml up -d
+```
+
+从源码构建镜像：
+
+```bash
+docker compose -f docker-compose.build.yml -f docker-compose.separated.yml up -d --build
+```
+
+覆盖文件不会启动仓库内置 Nginx，并分别暴露前端和后端端口。生产环境应在两个服务前配置 HTTPS
+反向代理，然后在系统设置中确认自动识别的地址：
+
+```text
+站点公网地址：https://app.example.com
+后端资源公网地址：https://api.example.com
+```
+
 ### 方式二：源码开发
 
 **环境要求**：JDK 21+、Node.js 20+、pnpm 9+、Docker
@@ -122,7 +165,16 @@ pnpm install
 pnpm dev
 ```
 
-启动后访问 `http://localhost:3000`，后端 API 位于 `http://localhost:18080`。
+启动后访问 `http://localhost:3000`。前端始终请求同源 `/api/**` 和 `/media/**`，Next.js 开发服务器
+根据 `ai-fusion-video-web/.env.development` 将它们代理到 `http://localhost:18080`。后端地址不同的情况下，
+修改该文件或在 `.env.local` 中覆盖：
+
+```env
+DEV_BACKEND_URL=http://localhost:18081
+```
+
+本地需要把资源 URL 传给云端 AI 时，不能填写 `localhost` 或内网 IP；请使用公网对象存储或把后端
+资源端点暴露到临时公网隧道，然后填写“后端资源公网地址”。
 
 ### 数据库迁移开发规范
 
@@ -188,6 +240,18 @@ AI 模型可在系统设置页面动态管理，支持以下提供商：
 ### 存储
 
 支持通过系统设置页面配置 S3 兼容的对象存储（阿里云 OSS、腾讯 COS、MinIO 等），也支持本地文件存储。
+
+### 部署地址的职责
+
+| 配置 | 配置位置 | 用途 |
+| --- | --- | --- |
+| `PUBLIC_API_URL` | 前端容器环境变量 | 浏览器直连分域后端；统一入口时必须为空 |
+| `CORS_ALLOWED_ORIGIN_PATTERNS` | 后端环境变量 | 允许直接访问后端的前端来源；统一入口时必须为空 |
+| 站点公网地址 | 系统设置 | 密码重置邮件和前端页面链接 |
+| 后端资源公网地址 | 系统设置 | 外部 AI 拉取本地媒体和内置参考资源 |
+
+前端 Docker 镜像会在容器启动时生成 `runtime-config.js`，因此修改 `PUBLIC_API_URL` 后只需重建容器，
+不需要重新构建镜像。浏览器 API 地址属于部署配置，不在网页内提供修改入口。
 
 ---
 
