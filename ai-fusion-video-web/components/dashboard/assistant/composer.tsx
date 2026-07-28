@@ -82,6 +82,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
   const [modelsLoading, setModelsLoading] = useState(true);
   const [modelsError, setModelsError] = useState<string | null>(null);
   const [modelLoadAttempt, setModelLoadAttempt] = useState(0);
+  const [selectedReasoningEffort, setSelectedReasoningEffort] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dismissedAlert, setDismissedAlert] = useState<string | null>(null);
@@ -125,6 +126,13 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
   }, [alertMessage]);
 
   useEffect(() => {
+    const firstLevel = selectedModel?.supportReasoning
+      ? selectedModel.reasoningEffortLevels?.[0] ?? null
+      : null;
+    setSelectedReasoningEffort(firstLevel);
+  }, [selectedModel?.id, selectedModel?.supportReasoning, selectedModel?.reasoningEffortLevels]);
+
+  useEffect(() => {
     if (!active) return;
     let cancelled = false;
     let idleHandle: number | null = null;
@@ -133,23 +141,23 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
     const beginLoad = () => {
       if (cancelled) return;
       void loadAssistantModels()
-      .then((result) => {
-        if (cancelled) return;
-        startTransition(() => {
-          setModels(result);
-          const currentSelectedModelId = useAssistantStore.getState().selectedModelId;
-          const preferred = currentSelectedModelId && result.some((model) => model.id === currentSelectedModelId)
-            ? currentSelectedModelId
-            : result.find((model) => model.defaultModel)?.id ?? result[0]?.id ?? null;
-          if (preferred !== currentSelectedModelId) setSelectedModelId(preferred);
+        .then((result) => {
+          if (cancelled) return;
+          startTransition(() => {
+            setModels(result);
+            const currentSelectedModelId = useAssistantStore.getState().selectedModelId;
+            const preferred = currentSelectedModelId && result.some((model) => model.id === currentSelectedModelId)
+              ? currentSelectedModelId
+              : result.find((model) => model.defaultModel)?.id ?? result[0]?.id ?? null;
+            if (preferred !== currentSelectedModelId) setSelectedModelId(preferred);
+            setModelsLoading(false);
+          });
+        })
+        .catch((requestError: unknown) => {
+          if (cancelled) return;
+          setModelsError(requestError instanceof Error ? requestError.message : "模型加载失败");
           setModelsLoading(false);
         });
-      })
-      .catch((requestError: unknown) => {
-        if (cancelled) return;
-        setModelsError(requestError instanceof Error ? requestError.message : "模型加载失败");
-        setModelsLoading(false);
-      });
     };
 
     if (modelLoadAttempt > 0 || cachedAssistantModels) {
@@ -205,6 +213,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
       await sendMessage(
         text,
         selectedModelId,
+        selectedReasoningEffort,
         referencedProjectId,
         {
           project: references.selectedProject,
@@ -280,7 +289,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
             }}
             value={text}
             rows={3}
-            placeholder="发挥想象… 使用 '@' 引用项目、'/' 引用 Skill"
+            placeholder={"发挥想象…\n使用 '@' 引用项目、'/' 引用 Skill"}
             disabled={!models.length || modelsLoading || submitting || running}
             data-assistant-interactive="true"
             aria-expanded={!!references.picker}
@@ -303,12 +312,13 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 px-1 pt-1">
+        <div className="flex items-center gap-1 px-1 pt-1">
           <AssistantModelControls
             models={models}
             modelsLoading={modelsLoading}
             selectedModel={selectedModel}
             selectedModelId={selectedModelId}
+            selectedReasoningEffort={selectedReasoningEffort}
             tooltipsEnabled={tooltipsEnabled}
             fileInputRef={attachments.fileInputRef}
             fileAccept={attachments.accept}
@@ -317,6 +327,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
             capabilitySummary={attachments.capabilitySummary}
             disabled={submitting || running}
             onModelChange={setSelectedModelId}
+            onReasoningEffortChange={setSelectedReasoningEffort}
             onFilesSelected={(files) => {
               setError(null);
               void attachments.addFiles(files).catch((uploadError: unknown) => setError(
@@ -325,7 +336,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
             }}
           />
 
-          <div className="ml-auto flex items-center gap-2">
+          <div className="ml-auto flex shrink-0 items-center gap-2">
             {cancelling ? (
               <Button
                 type="button"

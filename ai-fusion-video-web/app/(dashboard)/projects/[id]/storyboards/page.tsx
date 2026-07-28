@@ -1408,6 +1408,7 @@ export default function StoryboardTabPage() {
                     onAddItem={() =>
                       handleAddItem(scene.id, scene.episodeId)
                     }
+                    onDeleteItem={handleDeleteItem}
                     onReorderItems={(reordered) =>
                       handleReorderItems(scene.id, reordered)
                     }

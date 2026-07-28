@@ -49,6 +49,7 @@ public class AiModelController {
             .multimodalInputTypes(reqVO.getMultimodalInputTypes())
             .multimodalInputTransports(reqVO.getMultimodalInputTransports())
             .supportReasoning(Boolean.TRUE.equals(reqVO.getSupportReasoning()))
+            .reasoningEffortLevels(reqVO.getReasoningEffortLevels())
             .contextWindow(reqVO.getContextWindow() != null && reqVO.getContextWindow() > 0
                 ? reqVO.getContextWindow() : null)
                 .apiConfigId(reqVO.getApiConfigId())
@@ -66,7 +67,8 @@ public class AiModelController {
                 reqVO.getSort(), reqVO.getStatus(), reqVO.getConfig(), reqVO.getDefaultModel(),
                 reqVO.getApiConfigId(), reqVO.getMaxConcurrency(), reqVO.getMultimodalInputTypes(),
                 reqVO.getMultimodalInputTransports(),
-                reqVO.getSupportReasoning(), reqVO.getContextWindow());
+                reqVO.getSupportReasoning(), reqVO.getReasoningEffortLevels(),
+                reqVO.getContextWindow());
         return success(true);
     }
 

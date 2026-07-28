@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.ai.provider;
 
+import com.anthropic.models.messages.MessageCreateParams;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import io.agentscope.core.model.ChatModelBase;
@@ -85,6 +86,22 @@ class AnthropicAiProviderTests {
         assertThat(proxyConfig.hasAuthentication()).isTrue();
         assertThat(proxyConfig.getUsername()).isEqualTo("proxy-user");
         assertThat(proxyConfig.getPassword()).isEqualTo("proxy-pass");
+    }
+
+    @Test
+    void agentScopeFormatterMapsReasoningEffortToOutputConfig() {
+        MessageCreateParams.Builder builder = MessageCreateParams.builder()
+                .maxTokens(1024)
+                .model("claude-sonnet-5")
+                .messages(java.util.List.of());
+
+        AnthropicAiProvider.agentScopeFormatter().applyOptions(
+                builder,
+                null,
+                GenerateOptions.builder().reasoningEffort("xhigh").build());
+
+        assertThat(builder.build().outputConfig().orElseThrow().effort().orElseThrow().asString())
+                .isEqualTo("xhigh");
     }
 
     private Object readField(Object target, String fieldName) throws ReflectiveOperationException {

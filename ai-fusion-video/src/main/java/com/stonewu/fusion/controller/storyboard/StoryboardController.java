@@ -21,6 +21,7 @@ import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.service.storyboard.StoryboardService;
 import com.stonewu.fusion.service.storyboard.VideoComposeService;
 import com.stonewu.fusion.service.storyboard.dto.StoryboardItemAssetsPatch;
+import com.stonewu.fusion.service.storyboard.dto.StoryboardStatistics;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -76,6 +77,12 @@ public class StoryboardController {
     public CommonResult<Boolean> delete(@PathVariable Long id) {
         storyboardService.delete(id);
         return CommonResult.success(true);
+    }
+
+    @Operation(summary = "获取分镜概览统计")
+    @GetMapping("/{storyboardId}/statistics")
+    public CommonResult<StoryboardStatistics> getStatistics(@PathVariable Long storyboardId) {
+        return CommonResult.success(storyboardService.getStatistics(storyboardId));
     }
 
     // ========== 分镜集 ==========

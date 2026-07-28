@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import {
   formatSemanticLabel,
   MODEL_PROTOCOL_LABELS,
@@ -137,6 +138,7 @@ export function FetchRemoteModelsDialog({
           multimodalInputTypes: preset?.multimodalInputTypes ?? [],
           multimodalInputTransports: preset?.multimodalInputTransports ?? {},
           supportReasoning: preset?.supportReasoning ?? false,
+          reasoningEffortLevels: preset?.reasoningEffortLevels ?? [],
           contextWindow: preset?.contextWindow,
           apiConfigId: apiConfig.id,
         });
@@ -285,6 +287,18 @@ export function FetchRemoteModelsDialog({
                           <Check className={cn("h-3 w-3", alreadyExists ? "text-muted-foreground" : "text-primary-foreground")} />
                         )}
                       </div>
+
+                      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted/60">
+                        <ModelVendorIcon
+                          source={{
+                            name: model.displayName,
+                            code: model.id,
+                            platform: model.providerPlatform || apiConfig.platform,
+                            capabilityPresetCode: model.capabilityPresetCode,
+                          }}
+                          className="size-4"
+                        />
+                      </span>
 
                       {/* 模型信息 */}
                       <div className="flex-1 min-w-0">

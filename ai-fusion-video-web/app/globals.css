@@ -309,8 +309,13 @@
   }
 }
 
-/* Shared Base UI portals must stay above the floating/maximized assistant. */
-body[data-assistant-layer="true"]>[data-base-ui-portal]>* {
+/*
+ * Keep each Base UI portal above the floating/maximized assistant without
+ * overriding the component's internal stacking order. Nested portals (for
+ * example, a Select inside a Dialog) can then layer above their parent popup.
+ */
+body[data-assistant-layer="true"] > [data-base-ui-portal] {
+  position: relative;
   z-index: 80;
 }
 

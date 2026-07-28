@@ -11,6 +11,9 @@ if (process.env.NODE_ENV === "development" && !developmentBackendUrl) {
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  // Development API rewrites proxy SSE through Next.js. Disable compression
+  // there so incremental events are flushed instead of buffered by gzip.
+  compress: process.env.NODE_ENV !== "development",
   async rewrites() {
     if (process.env.NODE_ENV !== "development") {
       return [];

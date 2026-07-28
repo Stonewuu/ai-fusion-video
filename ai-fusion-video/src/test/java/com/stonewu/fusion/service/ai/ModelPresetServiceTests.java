@@ -127,15 +127,23 @@ class ModelPresetServiceTests {
                 "qwen3.5-omni-plus",
                 "doubao-seed-2-1-pro-260628",
                 "doubao-seed-2-1-turbo-260628",
-                "deepseek-chat",
-                "deepseek-reasoner"
+                "deepseek-v4-flash",
+                "deepseek-v4-pro"
         ).forEach(code -> assertTrue(service.hasPreset(code), code));
+
+        assertFalse(service.hasPreset("deepseek-chat"));
+        assertFalse(service.hasPreset("deepseek-reasoner"));
 
         service.getPresetsByType(1).forEach(preset -> {
             var types = preset.getJSONArray("multimodalInputTypes");
             var transports = preset.getJSONObject("multimodalInputTransports");
+            Integer contextWindow = preset.getInt("contextWindow");
+            var reasoningEffortLevels = preset.getJSONArray("reasoningEffortLevels");
             assertNotNull(types, preset.getStr("code"));
             assertNotNull(transports, preset.getStr("code"));
+            assertNotNull(contextWindow, preset.getStr("code"));
+            assertNotNull(reasoningEffortLevels, preset.getStr("code"));
+            assertTrue(contextWindow > 0, preset.getStr("code"));
 
             Set<String> enabledTypes = Set.copyOf(JSONUtil.toList(types, String.class));
             assertEquals(enabledTypes, transports.keySet(), preset.getStr("code"));
@@ -149,5 +157,17 @@ class ModelPresetServiceTests {
                         preset.getStr("code") + ":" + type);
             });
         });
+
+        assertEquals(List.of("max", "xhigh", "high", "medium", "low", "none"),
+                JSONUtil.toList(service.getPreset("gpt-5.6-sol")
+                        .getJSONArray("reasoningEffortLevels"), String.class));
+        assertEquals(List.of("max", "high"),
+                JSONUtil.toList(service.getPreset("deepseek-v4-pro")
+                        .getJSONArray("reasoningEffortLevels"), String.class));
+        assertEquals(List.of("high", "medium", "low", "minimal"),
+                JSONUtil.toList(service.getPreset("gemini-3.6-flash")
+                        .getJSONArray("reasoningEffortLevels"), String.class));
+        assertTrue(service.getPreset("qwen3.7-plus")
+                .getJSONArray("reasoningEffortLevels").isEmpty());
     }
 }

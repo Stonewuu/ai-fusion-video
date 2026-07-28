@@ -210,6 +210,13 @@ public abstract class AbstractAiProvider implements AiProvider {
             hasOptions = true;
         }
 
+        String reasoningEffort = getConfigString(
+                context.getConfig(), "reasoningEffort", "reasoning_effort");
+        if (StrUtil.isNotBlank(reasoningEffort)) {
+            builder.reasoningEffort(reasoningEffort);
+            hasOptions = true;
+        }
+
         Double temperature = getConfigDouble(context.getConfig(), "temperature");
         if (temperature != null) {
             builder.temperature(temperature);

@@ -6,6 +6,7 @@ import com.google.genai.types.FunctionCallingConfig;
 import com.google.genai.types.FunctionCallingConfigMode;
 import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.Part;
+import com.google.genai.types.ThinkingLevel;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import io.agentscope.core.formatter.Formatter;
@@ -78,6 +79,22 @@ class GeminiAiProviderTests {
         FunctionCallingConfig specific = applyToolChoice(formatter, new ToolChoice.Specific("get_project"));
         assertThat(specific.mode().orElseThrow().knownEnum()).isEqualTo(FunctionCallingConfigMode.Known.ANY);
         assertThat(specific.allowedFunctionNames()).contains(List.of("get_project"));
+    }
+
+    @Test
+    void agentScopeFormatterMapsReasoningEffortToThinkingLevel() {
+        Formatter<Content, ?, GenerateContentConfig.Builder> formatter = GeminiAiProvider.agentScopeFormatter();
+        GenerateContentConfig.Builder builder = GenerateContentConfig.builder();
+
+        formatter.applyOptions(
+                builder,
+                null,
+                GenerateOptions.builder().reasoningEffort("minimal").build());
+
+        var thinking = builder.build().thinkingConfig().orElseThrow();
+        assertThat(thinking.includeThoughts()).contains(true);
+        assertThat(thinking.thinkingLevel().orElseThrow().knownEnum())
+                .isEqualTo(ThinkingLevel.Known.MINIMAL);
     }
 
     @Test

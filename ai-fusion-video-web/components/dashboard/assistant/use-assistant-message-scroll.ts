@@ -15,6 +15,7 @@ import {
 } from "react";
 
 const AT_BOTTOM_THRESHOLD_PX = 30;
+const FOLLOW_SCROLL_DURATION_MS = 100;
 
 interface UseAssistantMessageScrollOptions {
   contentReady: boolean;
@@ -44,13 +45,64 @@ export function useAssistantMessageScroll({
   const [viewportReady, setViewportReady] = useState(false);
   const [showBackToBottom, setShowBackToBottom] = useState(false);
 
+  const cancelFollowAnimation = useCallback(() => {
+    if (followFrameRef.current !== null) {
+      cancelAnimationFrame(followFrameRef.current);
+      followFrameRef.current = null;
+    }
+    isScrollingToBottomRef.current = false;
+  }, []);
+
   const pinToBottom = useCallback(() => {
     const element = viewportRef.current;
     if (!element) return;
-    isScrollingToBottomRef.current = false;
+    cancelFollowAnimation();
     element.scrollTop = element.scrollHeight;
     lastScrollTopRef.current = element.scrollTop;
-  }, []);
+  }, [cancelFollowAnimation]);
+
+  const animateToBottom = useCallback(() => {
+    const element = viewportRef.current;
+    if (!element || isDetachedRef.current) return;
+
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reducedMotion) {
+      pinToBottom();
+      return;
+    }
+
+    if (followFrameRef.current !== null) return;
+
+    const startTop = element.scrollTop;
+    const startedAt = performance.now();
+    isScrollingToBottomRef.current = true;
+
+    const step = (now: number) => {
+      if (isDetachedRef.current) {
+        followFrameRef.current = null;
+        isScrollingToBottomRef.current = false;
+        return;
+      }
+
+      const targetTop = Math.max(0, element.scrollHeight - element.clientHeight);
+      const progress = Math.min((now - startedAt) / FOLLOW_SCROLL_DURATION_MS, 1);
+      const easedProgress = 1 - Math.pow(1 - progress, 3);
+      element.scrollTop = startTop + (targetTop - startTop) * easedProgress;
+      lastScrollTopRef.current = element.scrollTop;
+
+      if (progress < 1) {
+        followFrameRef.current = requestAnimationFrame(step);
+        return;
+      }
+
+      element.scrollTop = targetTop;
+      lastScrollTopRef.current = element.scrollTop;
+      followFrameRef.current = null;
+      isScrollingToBottomRef.current = false;
+    };
+
+    followFrameRef.current = requestAnimationFrame(step);
+  }, [pinToBottom]);
 
   const scheduleFollow = useCallback(() => {
     if (
@@ -58,13 +110,8 @@ export function useAssistantMessageScroll({
       || isDetachedRef.current
       || (!running && !isInitializingRef.current)
     ) return;
-    followFrameRef.current = requestAnimationFrame(() => {
-      followFrameRef.current = null;
-      if (!isDetachedRef.current && (running || isInitializingRef.current)) {
-        pinToBottom();
-      }
-    });
-  }, [pinToBottom, running]);
+    animateToBottom();
+  }, [animateToBottom, running]);
 
   // Initial render & conversation switch positioning:
   // Pin to bottom while invisible (viewportReady = false), then reveal.
@@ -108,25 +155,25 @@ export function useAssistantMessageScroll({
       isDetachedRef.current = false;
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setShowBackToBottom(false);
-      pinToBottom();
+      animateToBottom();
     }
-  }, [pinToBottom, running]);
+  }, [animateToBottom, running]);
 
   // Re-pin when inputHeight changes if auto-following
   useLayoutEffect(() => {
     if (viewportReady && running && !isDetachedRef.current) {
-      pinToBottom();
+      animateToBottom();
     }
-  }, [inputHeight, pinToBottom, running, viewportReady]);
+  }, [animateToBottom, inputHeight, running, viewportReady]);
 
   // Reconnect replay and history restoration arrive in independent batches.
   // Follow each committed content batch before paint instead of relying only
   // on the initial ready signal or the asynchronous ResizeObserver callback.
   useLayoutEffect(() => {
     if (viewportReady && running && !isDetachedRef.current) {
-      pinToBottom();
+      animateToBottom();
     }
-  }, [contentVersion, pinToBottom, running, viewportReady]);
+  }, [animateToBottom, contentVersion, running, viewportReady]);
 
   // Observe content & viewport resizes for continuous scroll following
   useEffect(() => {
@@ -142,21 +189,17 @@ export function useAssistantMessageScroll({
   }, [scheduleFollow]);
 
   // Cleanup pending rAF
-  useEffect(() => () => {
-    if (followFrameRef.current !== null) {
-      cancelAnimationFrame(followFrameRef.current);
-    }
-  }, []);
+  useEffect(() => cancelFollowAnimation, [cancelFollowAnimation]);
 
   const detachFromBottom = useCallback(() => {
     if (isDetachedRef.current) return;
     isDetachedRef.current = true;
-    isScrollingToBottomRef.current = false;
+    cancelFollowAnimation();
     const element = viewportRef.current;
     if (element) {
       setShowBackToBottom(element.scrollHeight > element.clientHeight + 20);
     }
-  }, []);
+  }, [cancelFollowAnimation]);
 
   const onViewportScroll = useCallback((event: UIEvent<HTMLDivElement>) => {
     if (isInitializingRef.current) return;
@@ -172,7 +215,7 @@ export function useAssistantMessageScroll({
       setShowBackToBottom(false);
     } else if (isDetachedRef.current) {
       setShowBackToBottom(element.scrollHeight > element.clientHeight + 20);
-    } else if (running && isScrollbarDraggingRef.current) {
+    } else if (isScrollbarDraggingRef.current) {
       detachFromBottom();
     } else if (running && !isScrollingToBottomRef.current) {
       // Browser scroll restoration and reconnect layout changes can move the
@@ -246,13 +289,8 @@ export function useAssistantMessageScroll({
     if (!element) return;
     isDetachedRef.current = false;
     setShowBackToBottom(false);
-    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    isScrollingToBottomRef.current = !reducedMotion;
-    element.scrollTo({
-      top: element.scrollHeight,
-      behavior: reducedMotion ? "auto" : "smooth",
-    });
-  }, []);
+    animateToBottom();
+  }, [animateToBottom]);
 
   return {
     viewportRef: viewportRef as RefObject<HTMLDivElement | null>,

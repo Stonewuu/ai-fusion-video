@@ -37,11 +37,13 @@ export function parseTaskContent(content: string): {
       }
 
       return strippedLine.replace(/[·:：\s-]+$/g, "").trimEnd();
-    })
-    .filter((line) => line.trim().length > 0);
+    });
 
   return {
-    markdownContent: markdownLines.join("\n\n"),
+    markdownContent: markdownLines
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim(),
     mediaLinks,
   };
 }

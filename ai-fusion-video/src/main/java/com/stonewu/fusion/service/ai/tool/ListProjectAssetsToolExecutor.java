@@ -10,6 +10,7 @@ import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.asset.AssetService;
 import com.stonewu.fusion.service.project.ProjectService;
+import com.stonewu.fusion.service.system.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -26,6 +27,7 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
 
     private final AssetService assetService;
     private final ProjectService projectService;
+    private final SystemConfigService systemConfigService;
 
     @Override
     public String getToolName() {
@@ -101,8 +103,8 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
                             .set("id", item.getId())
                             .set("itemType", item.getItemType())
                             .set("name", item.getName())
-                            .set("imageUrl", item.getImageUrl())
-                            .set("thumbnailUrl", item.getThumbnailUrl()));
+                            .set("imageUrl", resolvePublicUrl(item.getImageUrl()))
+                            .set("thumbnailUrl", resolvePublicUrl(item.getThumbnailUrl())));
                 }
 
                 resultArray.add(JSONUtil.createObj()
@@ -110,7 +112,7 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
                         .set("name", asset.getName())
                         .set("type", asset.getType())
                         .set("description", asset.getDescription())
-                        .set("coverUrl", asset.getCoverUrl())
+                        .set("coverUrl", resolvePublicUrl(asset.getCoverUrl()))
                         .set("itemCount", items.size())
                         .set("items", itemsArray));
             }
@@ -123,5 +125,13 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
             log.error("查询资产列表失败", e);
             return JSONUtil.createObj().set("status", "error").set("message", "查询失败: " + e.getMessage()).toString();
         }
+    }
+
+    private String resolvePublicUrl(String resourceUrl) {
+        if (resourceUrl == null || resourceUrl.isBlank()) {
+            return null;
+        }
+        String publicUrl = systemConfigService.resolvePublicUrl(resourceUrl);
+        return publicUrl != null ? publicUrl : resourceUrl;
     }
 }

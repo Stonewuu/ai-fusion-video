@@ -25,21 +25,6 @@ export const itemVariants = {
   },
 };
 
-// ---------- 平台图标颜色映射 ----------
-
-export const platformIconColors: Record<string, { color: string; bg: string }> = {
-  openai_compatible: { color: "text-emerald-400", bg: "bg-emerald-500/10" },
-  deepseek: { color: "text-indigo-400", bg: "bg-indigo-500/10" },
-  newapi: { color: "text-lime-400", bg: "bg-lime-500/10" },
-  volcengine: { color: "text-sky-400", bg: "bg-sky-500/10" },
-  vertex_ai: { color: "text-blue-400", bg: "bg-blue-500/10" },
-  gemini: { color: "text-teal-400", bg: "bg-teal-500/10" },
-  GoogleFlowReverseApi: { color: "text-cyan-400", bg: "bg-cyan-500/10" },
-  dashscope: { color: "text-orange-400", bg: "bg-orange-500/10" },
-  anthropic: { color: "text-amber-400", bg: "bg-amber-500/10" },
-  ollama: { color: "text-violet-400", bg: "bg-violet-500/10" },
-};
-
 // ---------- 密钥脱敏 ----------
 
 export function maskSecret(value: string | null | undefined): string {

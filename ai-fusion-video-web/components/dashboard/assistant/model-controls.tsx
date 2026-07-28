@@ -1,11 +1,19 @@
 "use client";
 
-import { Loader2, Plus, Settings2 } from "lucide-react";
+import { Brain, Loader2, Plus, Settings2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import type { RefObject } from "react";
 import { Button } from "@/components/ui/button";
 import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { AiModel } from "@/lib/api/ai-model";
 import { getModelDisplayParts } from "@/lib/model-display";
@@ -15,6 +23,7 @@ interface AssistantModelControlsProps {
   modelsLoading: boolean;
   selectedModel: AiModel | null;
   selectedModelId: number | null;
+  selectedReasoningEffort: string | null;
   tooltipsEnabled: boolean;
   fileInputRef: RefObject<HTMLInputElement | null>;
   fileAccept: string;
@@ -23,6 +32,7 @@ interface AssistantModelControlsProps {
   capabilitySummary: string;
   disabled: boolean;
   onModelChange: (modelId: number | null) => void;
+  onReasoningEffortChange: (effort: string | null) => void;
   onFilesSelected: (files: File[]) => void;
 }
 
@@ -31,6 +41,7 @@ export function AssistantModelControls({
   modelsLoading,
   selectedModel,
   selectedModelId,
+  selectedReasoningEffort,
   tooltipsEnabled,
   fileInputRef,
   fileAccept,
@@ -39,13 +50,18 @@ export function AssistantModelControls({
   capabilitySummary,
   disabled,
   onModelChange,
+  onReasoningEffortChange,
   onFilesSelected,
 }: AssistantModelControlsProps) {
   const router = useRouter();
   const selectItems = models.map((model) => ({ value: String(model.id), label: model.name }));
+  const reasoningEffortLevels = selectedModel?.supportReasoning
+    ? selectedModel.reasoningEffortLevels ?? []
+    : [];
+  const reasoningItems = reasoningEffortLevels.map((level) => ({ value: level, label: level }));
 
   return (
-    <div className="flex min-w-0 items-center gap-2">
+    <div className="flex min-w-0 flex-1 flex-nowrap items-center gap-1">
       <input
         ref={fileInputRef}
         type="file"
@@ -90,13 +106,8 @@ export function AssistantModelControls({
             {selectedModel ? (
               <>
                 <ModelVendorIcon source={selectedModel} className="size-4" />
-                <span className="min-w-0 flex-1 text-left leading-tight">
-                  <span className="block truncate text-[11px] font-medium">
-                    {getModelDisplayParts(selectedModel).name}
-                  </span>
-                  <span className="block truncate font-mono text-[9px] text-muted-foreground">
-                    {selectedModel.code}
-                  </span>
+                <span className="min-w-0 flex-1 truncate text-left text-[11px] font-medium">
+                  {getModelDisplayParts(selectedModel).name}
                 </span>
               </>
             ) : null}
@@ -131,6 +142,39 @@ export function AssistantModelControls({
           <Settings2 /> 模型设置
         </Button>
       )}
+
+      {reasoningEffortLevels.length ? (
+        <Select
+          items={reasoningItems}
+          value={selectedReasoningEffort}
+          onValueChange={(value) => onReasoningEffortChange(value ? String(value) : null)}
+        >
+          <SelectTrigger
+            data-assistant-interactive="true"
+            className="max-w-40 border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-0"
+            aria-label={`思考强度：${selectedReasoningEffort ?? "未选择"}`}
+            title="调整模型回答前的思考强度；强度越高，通常响应越慢"
+          >
+            <SelectValue className="sr-only" placeholder="选择思考强度" />
+            <Brain className="size-4 text-muted-foreground" />
+            <span className="truncate text-[11px] font-medium">
+              思考 · <span className="font-mono">{selectedReasoningEffort}</span>
+            </span>
+          </SelectTrigger>
+          <SelectContent className="text-xs">
+            <SelectGroup>
+              <SelectLabel className="px-2 pt-2 pb-1 font-medium  text-muted-foreground/70">
+                思考强度
+              </SelectLabel>
+              {reasoningEffortLevels.map((level) => (
+                <SelectItem key={level} value={level} className="text-xs">
+                  {level}
+                </SelectItem>
+              ))}
+            </SelectGroup>
+          </SelectContent>
+        </Select>
+      ) : null}
     </div>
   );
 }

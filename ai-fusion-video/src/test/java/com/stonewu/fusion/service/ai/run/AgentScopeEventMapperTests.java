@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.ai.run;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.BinaryNode;
+import com.fasterxml.jackson.databind.node.TextNode;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
 import io.agentscope.core.event.AgentEndEvent;
 import io.agentscope.core.event.AgentEvent;
@@ -189,6 +190,33 @@ class AgentScopeEventMapperTests {
                         "[SIGNED_URL_REDACTED]", "[FILE_PATH_REDACTED]", "preserved")
                 .doesNotContain("abcdefgh123456", "credential-value", "aGVsbG8=",
                         "X-Amz-Signature", "Users\\\\admin");
+    }
+
+    @Test
+    void preservesPublicMediaUrlsAndTheirPossibleStreamFragments() {
+        assertThat(List.of(
+                "http://localhost:3000",
+                "/media",
+                "/images",
+                "/6fd59b7ad74b42be9d87c823a78c615f.png",
+                "http://localhost:3000/media/images/6fd59b7ad74b42be9d87c823a78c615f.png"))
+                .allSatisfy(value -> assertThat(sanitizer.sanitize(TextNode.valueOf(value)).asText())
+                        .isEqualTo(value));
+
+        AgentEventEnvelope streamedFragment = mapper.map(
+                new TextBlockDeltaEvent("reply", "content", "/images"));
+        assertThat(streamedFragment.payload().path("delta").asText()).isEqualTo("/images");
+    }
+
+    @Test
+    void stillRedactsSensitiveUnixFileSystemPaths() {
+        assertThat(List.of(
+                "/etc/passwd",
+                "/home/app/.ssh/id_rsa",
+                "/Users/admin/.ssh/id_rsa",
+                "/workspace/private/secret.txt"))
+                .allSatisfy(value -> assertThat(sanitizer.sanitize(TextNode.valueOf(value)).asText())
+                        .isNotEqualTo(value));
     }
 
     @Test

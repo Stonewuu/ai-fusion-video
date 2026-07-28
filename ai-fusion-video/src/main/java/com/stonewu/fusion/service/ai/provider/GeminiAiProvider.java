@@ -6,6 +6,7 @@ import com.google.genai.types.Content;
 import com.google.genai.types.GenerateContentConfig;
 import com.google.genai.types.GenerateContentResponse;
 import com.google.genai.types.Part;
+import com.google.genai.types.ThinkingConfig;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
@@ -113,6 +114,13 @@ public class GeminiAiProvider extends AbstractAiProvider {
         public void applyOptions(GenerateContentConfig.Builder builder, GenerateOptions options,
                                  GenerateOptions defaultOptions) {
             delegate.applyOptions(builder, options, defaultOptions);
+            GenerateOptions merged = GenerateOptions.mergeOptions(options, defaultOptions);
+            if (merged != null && StrUtil.isNotBlank(merged.getReasoningEffort())) {
+                builder.thinkingConfig(ThinkingConfig.builder()
+                        .includeThoughts(true)
+                        .thinkingLevel(merged.getReasoningEffort().trim())
+                        .build());
+            }
         }
 
         @Override

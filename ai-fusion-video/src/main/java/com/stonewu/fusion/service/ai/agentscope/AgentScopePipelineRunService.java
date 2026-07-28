@@ -24,6 +24,7 @@ import com.stonewu.fusion.service.ai.agentscope.message.AgentScopeMessageMapper;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
+import com.stonewu.fusion.service.ai.model.AiModelRequestOptions;
 import com.stonewu.fusion.service.ai.run.AgentExecutionRuntimeContextRequests;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
@@ -171,7 +172,8 @@ public final class AgentScopePipelineRunService {
         String visibleUserContent = userContent(request, definition, promptVariables);
         String input = input(request, visibleUserContent);
         String systemPrompt = systemPrompt(request, definition, promptVariables, activeSkills);
-        AiModel model = model(request.getModelId());
+        AiModel model = AiModelRequestOptions.withReasoningEffort(
+                model(request.getModelId()), request.getReasoningEffort(), objectMapper);
         AiModelMultimodalCapabilities.validateInputs(model, request.getMultimodalInputs());
         AgentKernelSpec spec = specFactory.createRoot(request, model, systemPrompt, userId);
         AgentKernelSnapshot snapshot = snapshots.build(spec);

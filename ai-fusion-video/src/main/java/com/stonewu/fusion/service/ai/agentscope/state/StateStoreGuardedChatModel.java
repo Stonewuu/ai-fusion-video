@@ -20,11 +20,22 @@ public final class StateStoreGuardedChatModel extends ChatModelBase {
 
     private final ChatModelBase delegate;
     private final StateStoreFailureGuard failures;
+    private final int contextWindowSize;
 
     public StateStoreGuardedChatModel(
             ChatModelBase delegate, StateStoreFailureGuard failures) {
+        this(delegate, failures, null);
+    }
+
+    public StateStoreGuardedChatModel(
+            ChatModelBase delegate,
+            StateStoreFailureGuard failures,
+            Integer configuredContextWindow) {
         this.delegate = Objects.requireNonNull(delegate, "delegate must not be null");
         this.failures = Objects.requireNonNull(failures, "failures must not be null");
+        this.contextWindowSize = configuredContextWindow != null && configuredContextWindow > 0
+                ? configuredContextWindow
+                : delegate.getContextWindowSize();
     }
 
     @Override
@@ -34,7 +45,7 @@ public final class StateStoreGuardedChatModel extends ChatModelBase {
 
     @Override
     public int getContextWindowSize() {
-        return delegate.getContextWindowSize();
+        return contextWindowSize;
     }
 
     @Override

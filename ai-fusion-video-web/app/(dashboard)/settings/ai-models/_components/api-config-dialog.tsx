@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { ProviderVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import { getPlatformFields } from "../../_shared";
 import { getProtocolOptionsForModelType } from "./model-config-support";
 
@@ -170,7 +171,12 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
                 <SelectGroup>
                   {PLATFORM_OPTIONS.map(opt => (
                     <SelectItem key={opt.value} value={opt.value} className="text-sm">
-                      <div>
+                      <ProviderVendorIcon
+                        provider={opt.value}
+                        name={opt.label}
+                        className="size-4"
+                      />
+                      <div className="min-w-0">
                         <div>{opt.label}</div>
                         <div className="text-[10px] text-muted-foreground">{opt.description}</div>
                       </div>
@@ -218,8 +224,21 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
                         : "border-border/40 hover:border-primary/35 hover:bg-background/50"
                     )}
                   >
-                    <span className="text-xs font-medium">{provider.label}</span>
-                    <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">{provider.url}</span>
+                    <span className="flex items-center gap-2">
+                      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted/60">
+                        <ProviderVendorIcon
+                          provider={provider.platform}
+                          name={provider.label}
+                          className="size-4"
+                        />
+                      </span>
+                      <span className="min-w-0">
+                        <span className="block text-xs font-medium">{provider.label}</span>
+                        <span className="mt-0.5 block truncate text-[10px] text-muted-foreground">
+                          {provider.url}
+                        </span>
+                      </span>
+                    </span>
                   </button>
                 );
               })}

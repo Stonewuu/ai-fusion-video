@@ -25,6 +25,7 @@ export interface AiModel {
   multimodalInputTypes: MultimodalInputType[];
   multimodalInputTransports: MultimodalInputTransports;
   supportReasoning: boolean;
+  reasoningEffortLevels: string[];
   contextWindow: number | null;
   apiConfigId: number | null;
   createTime: string;
@@ -57,6 +58,7 @@ export interface AiModelCreateReq {
   multimodalInputTypes: MultimodalInputType[];
   multimodalInputTransports: MultimodalInputTransports;
   supportReasoning?: boolean;
+  reasoningEffortLevels?: string[];
   contextWindow?: number;
   apiConfigId?: number;
 }
@@ -80,6 +82,7 @@ export interface AiModelUpdateReq {
   multimodalInputTypes?: MultimodalInputType[];
   multimodalInputTransports?: MultimodalInputTransports;
   supportReasoning?: boolean;
+  reasoningEffortLevels?: string[];
   contextWindow?: number;
   apiConfigId?: number;
 }
@@ -94,6 +97,7 @@ export interface ModelPreset {
   modelType: number;
   description: string;
   supportReasoning?: boolean;
+  reasoningEffortLevels?: string[];
   contextWindow?: number;
   multimodalInputTypes?: MultimodalInputType[];
   multimodalInputTransports?: MultimodalInputTransports;

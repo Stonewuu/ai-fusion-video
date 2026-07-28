@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  Bot,
   ChevronRight,
   CloudDownload,
   Download,
@@ -41,9 +40,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import {
+  ModelVendorIcon,
+  ProviderVendorIcon,
+} from "@/components/dashboard/model-vendor-icon";
+import {
   containerVariants,
   itemVariants,
-  platformIconColors,
   maskSecret,
 } from "../_shared";
 import { AiModelDialog } from "./_components/ai-model-dialog";
@@ -277,6 +279,7 @@ export default function AiModelsPage() {
           multimodalInputTypes: source.multimodalInputTypes,
           multimodalInputTransports: source.multimodalInputTransports,
           supportReasoning: source.supportReasoning,
+          reasoningEffortLevels: source.reasoningEffortLevels ?? [],
           contextWindow: source.contextWindow || undefined,
           apiConfigId,
         });
@@ -291,7 +294,6 @@ export default function AiModelsPage() {
   };
 
   const renderConfigCard = (config: ApiConfig) => {
-    const pColor = platformIconColors[config.platform || ""] || { color: "text-green-400", bg: "bg-green-500/10" };
     const configModels = models.filter(m => m.apiConfigId === config.id);
     const collapsed = collapsedConfigIds.has(config.id);
 
@@ -334,8 +336,12 @@ export default function AiModelsPage() {
               !collapsed && "rotate-90"
             )} />
           </button>
-          <div className={cn("h-9 w-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5", pColor.bg)}>
-            <Settings2 className={cn("h-4.5 w-4.5", pColor.color)} />
+          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/60">
+            <ProviderVendorIcon
+              provider={config.platform}
+              name={config.name}
+              className="size-5"
+            />
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
@@ -456,8 +462,8 @@ export default function AiModelsPage() {
                           key={model.id}
                           className="flex items-start gap-3 px-3 py-2.5 rounded-lg group/model hover:bg-white/5 transition-colors"
                         >
-                          <div className="h-7 w-7 rounded-md bg-primary/8 flex items-center justify-center shrink-0 mt-0.5">
-                            <Bot className="h-3.5 w-3.5 text-primary/60" />
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/60">
+                            <ModelVendorIcon source={model} className="size-4" />
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
@@ -525,7 +531,7 @@ export default function AiModelsPage() {
                               })}
                               {model.contextWindow && model.contextWindow > 0 && (
                                 <span className="px-1 py-0.5 rounded bg-muted/50 text-muted-foreground">
-                                  {model.contextWindow.toLocaleString()} ctx
+                                  上下文：{model.contextWindow.toLocaleString()}
                                 </span>
                               )}
                             </div>

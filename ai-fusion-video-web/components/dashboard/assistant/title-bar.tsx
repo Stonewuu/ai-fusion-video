@@ -2,7 +2,6 @@
 
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
-  Bot,
   Maximize2,
   Minimize2,
   PanelRight,
@@ -14,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useAssistantStore, type AssistantMode } from "@/lib/store/assistant-store";
 import { cn } from "@/lib/utils";
+import { AssistantBrandIcon } from "./assistant-brand-icon";
 
 interface TitleBarProps {
   mode: AssistantMode;
@@ -94,8 +94,8 @@ export function AssistantTitleBar({
       }}
     >
       {showLeadingIcon ? (
-        <span className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <Bot className="size-4" />
+        <span className="flex size-8 shrink-0 items-center justify-center">
+          <AssistantBrandIcon className="size-7" />
         </span>
       ) : <span className="size-8 shrink-0" aria-hidden="true" />}
 

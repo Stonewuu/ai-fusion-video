@@ -3,7 +3,6 @@
 import { useState, type RefObject } from "react";
 import {
   Ban,
-  Bot,
   CheckCircle2,
   CircleAlert,
   Clapperboard,
@@ -18,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
+import { AssistantBrandIcon } from "./assistant-brand-icon";
 import {
   Dialog,
   DialogContent,
@@ -327,7 +327,7 @@ export function AssistantEmptyState({
       <div className="flex min-h-full w-full flex-col p-6">
         <div className="my-auto flex w-full flex-col items-center gap-10">
           <div className="space-y-6 text-center">
-            <Bot className="mx-auto size-12 text-muted-foreground/40" strokeWidth={1.5} />
+            <AssistantBrandIcon className="mx-auto size-12 opacity-50" />
             <h2 className="text-2xl font-medium tracking-tight text-foreground">
               今天想创作什么？
             </h2>

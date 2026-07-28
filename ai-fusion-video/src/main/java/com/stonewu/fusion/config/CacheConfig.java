@@ -16,6 +16,7 @@ import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSeriali
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
+import java.math.BigDecimal;
 import java.time.Duration;
 
 /**
@@ -47,6 +48,7 @@ public class CacheConfig {
         BasicPolymorphicTypeValidator typeValidator = BasicPolymorphicTypeValidator.builder()
                 .allowIfSubType("com.stonewu.fusion.")
                 .allowIfSubType("java.lang.")
+                .allowIfSubType(BigDecimal.class)
                 .allowIfSubType("java.time.")
                 .allowIfSubType("java.util.")
                 .build();

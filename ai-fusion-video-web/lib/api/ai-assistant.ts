@@ -23,6 +23,7 @@ export interface AiChatReq {
   message?: string;
   conversationId?: string;
   modelId?: number;
+  reasoningEffort?: string;
   agentType?: string;
   category?: string;
   /** 自定义对话标题（不传则使用消息前50字） */

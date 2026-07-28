@@ -33,7 +33,7 @@ public class AiModel extends BaseEntity {
     /** 模型显示名称 */
     private String name;
 
-    /** 模型代码标识，如 deepseek-chat、qwen-vl-max */
+    /** 模型代码标识，如 deepseek-v4-flash、qwen3.7-plus */
     private String code;
 
     /** 模型级请求协议覆盖；为空时继承 API 配置中对应能力类型的默认协议 */
@@ -92,6 +92,11 @@ public class AiModel extends BaseEntity {
     /** 是否支持深度思考（reasoning） */
     @Builder.Default
     private Boolean supportReasoning = false;
+
+    /** 可选的思考等级，按能力从高到低排序。 */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    @Builder.Default
+    private List<String> reasoningEffortLevels = List.of();
 
     /** 上下文窗口大小（token 数） */
     private Integer contextWindow;

@@ -135,6 +135,24 @@ class AgentScopeHarnessFactoryTests {
     }
 
     @Test
+    void configuresConversationCompactionAtEightyPercentOfTheModelWindow() {
+        var configured = AgentScopeHarnessFactory.compactionConfig(262_144);
+
+        assertThat(configured.getTriggerMessages()).isZero();
+        assertThat(configured.getTriggerTokens()).isEqualTo(209_715);
+
+        var fallback = AgentScopeHarnessFactory.compactionConfig(null);
+        assertThat(fallback.getTriggerMessages()).isEqualTo(50);
+        assertThat(fallback.getTriggerTokens()).isZero();
+
+        assertThat(AgentScopeHarnessFactory.resolveContextWindow(1_000_000, 8_192))
+                .isEqualTo(1_000_000);
+        assertThat(AgentScopeHarnessFactory.resolveContextWindow(null, 8_192))
+                .isEqualTo(8_192);
+        assertThat(AgentScopeHarnessFactory.resolveContextWindow(null, 0)).isNull();
+    }
+
+    @Test
     void attachesConfiguredNativeSkillRepositories() {
         AgentScopeV2Properties properties = new AgentScopeV2Properties();
         properties.getSkills().setEnabled(true);

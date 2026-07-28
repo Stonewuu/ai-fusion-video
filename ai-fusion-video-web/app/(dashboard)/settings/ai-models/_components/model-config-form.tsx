@@ -57,9 +57,6 @@ export function ModelConfigForm({
     : configObj.includeReasoning === false
       ? "false"
       : "auto";
-  const reasoningEffortValue = typeof configObj.reasoningEffort === "string"
-    ? configObj.reasoningEffort
-    : "__unset__";
 
   const emitChange = (next: Record<string, unknown>) => {
     const cleaned = Object.fromEntries(
@@ -552,34 +549,7 @@ export function ModelConfigForm({
                     </Select>
                   </div>
 
-                  <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
-                    <div className="space-y-1.5">
-                      <Label className="text-[11px] text-muted-foreground">Reasoning Effort</Label>
-                      <Select
-                        value={reasoningEffortValue}
-                        onValueChange={v => updateSelectField("reasoningEffort", String(v))}
-                        items={[
-                          { value: "__unset__", label: "自动" },
-                          { value: "low", label: "Low" },
-                          { value: "medium", label: "Medium" },
-                          { value: "high", label: "High" },
-                        ]}
-                      >
-                        <SelectTrigger className="w-full text-sm">
-                          <SelectValue placeholder="选择推理强度" />
-                        </SelectTrigger>
-                        <SelectContent className="text-sm">
-                          <SelectGroup>
-                            <SelectItem value="__unset__" className="text-sm">自动</SelectItem>
-                            <SelectItem value="low" className="text-sm">Low</SelectItem>
-                            <SelectItem value="medium" className="text-sm">Medium</SelectItem>
-                            <SelectItem value="high" className="text-sm">High</SelectItem>
-                          </SelectGroup>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-1.5">
+                  <div className="space-y-1.5">
                       <Label className="text-[11px] text-muted-foreground">Thinking Budget</Label>
                       <Input
                         type="number"
@@ -591,7 +561,6 @@ export function ModelConfigForm({
                         className="text-xs font-mono h-8"
                       />
                       <p className="text-[10px] text-muted-foreground/70">面向支持 reasoning budget 的 OpenAI 兼容接入。</p>
-                    </div>
                   </div>
                 </div>
               )}

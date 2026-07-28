@@ -97,6 +97,7 @@ public record AgentKernelKey(
                 model.getMaxConcurrency(),
                 model.getSupportVision(),
                 model.getSupportReasoning(),
+                model.getReasoningEffortLevels(),
                 model.getContextWindow());
     }
 

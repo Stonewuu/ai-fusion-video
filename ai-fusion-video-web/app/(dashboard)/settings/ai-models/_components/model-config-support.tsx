@@ -51,6 +51,8 @@ export const OPENAI_REASONING_PLATFORMS = new Set([
   "siliconflow",
 ]);
 
+const GEMINI_REASONING_PLATFORMS = new Set(["gemini", "vertex_ai", "vertexai"]);
+
 export function normalizePlatform(platform: string | null | undefined): string {
   const normalized = (platform || "").toLowerCase();
   return normalized === "openai" ? "openai_compatible" : normalized;
@@ -70,6 +72,10 @@ export function isAnthropicReasoningPlatform(platform: string | null | undefined
 
 export function isDashScopeReasoningPlatform(platform: string | null | undefined): boolean {
   return normalizePlatform(platform) === "dashscope";
+}
+
+export function isGeminiReasoningPlatform(platform: string | null | undefined): boolean {
+  return GEMINI_REASONING_PLATFORMS.has(normalizePlatform(platform));
 }
 
 export function formatSemanticLabel(value: string | null | undefined, labels: Record<string, string>): string {
@@ -193,7 +199,8 @@ export function supportsReasoningConfig(platform: string | null | undefined): bo
   return (
     isOpenAiReasoningPlatform(platform) ||
     isAnthropicReasoningPlatform(platform) ||
-    isDashScopeReasoningPlatform(platform)
+    isDashScopeReasoningPlatform(platform) ||
+    isGeminiReasoningPlatform(platform)
   );
 }
 export function supportsOpenAiResponsesMode(platform: string | null | undefined): boolean {

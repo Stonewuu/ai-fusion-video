@@ -14,6 +14,7 @@ import com.stonewu.fusion.mapper.storyboard.StoryboardItemMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardSceneMapper;
 import com.stonewu.fusion.service.storyboard.dto.StoryboardItemAssetsPatch;
+import com.stonewu.fusion.service.storyboard.dto.StoryboardStatistics;
 import com.stonewu.fusion.service.team.TeamService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -141,6 +142,20 @@ class StoryboardServiceTests {
 
         verify(itemMapper).delete(any(LambdaQueryWrapper.class));
         verify(sceneMapper).delete(any(LambdaQueryWrapper.class));
+    }
+
+    @Test
+    void getStatisticsUsesCountsInsteadOfLoadingStoryboardDetails() {
+        when(episodeMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(4L);
+        when(sceneMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(10L);
+        when(itemMapper.selectCount(any(LambdaQueryWrapper.class))).thenReturn(36L);
+
+        StoryboardStatistics statistics = storyboardService.getStatistics(21L);
+
+        assertThat(statistics).isEqualTo(new StoryboardStatistics(4L, 10L, 36L));
+        verify(episodeMapper, never()).selectList(any(LambdaQueryWrapper.class));
+        verify(sceneMapper, never()).selectList(any(LambdaQueryWrapper.class));
+        verify(itemMapper, never()).selectList(any(LambdaQueryWrapper.class));
     }
 
     @Test

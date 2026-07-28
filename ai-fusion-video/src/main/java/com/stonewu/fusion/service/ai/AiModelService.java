@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import cn.hutool.core.util.StrUtil;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -62,7 +63,8 @@ public class AiModelService {
                                String config, Boolean defaultModel, Long apiConfigId,
                                Integer maxConcurrency, List<String> multimodalInputTypes,
                                Map<String, List<String>> multimodalInputTransports,
-                               Boolean supportReasoning, Integer contextWindow) {
+                               Boolean supportReasoning, List<String> reasoningEffortLevels,
+                               Integer contextWindow) {
         AiModel model = aiModelMapper.selectById(id);
         if (model == null) throw new BusinessException(404, "AI模型不存在");
         Long nextApiConfigId = apiConfigId != null ? apiConfigId : model.getApiConfigId();
@@ -84,6 +86,7 @@ public class AiModelService {
         if (multimodalInputTypes != null) model.setMultimodalInputTypes(multimodalInputTypes);
         if (multimodalInputTransports != null) model.setMultimodalInputTransports(multimodalInputTransports);
         if (supportReasoning != null) model.setSupportReasoning(supportReasoning);
+        if (reasoningEffortLevels != null) model.setReasoningEffortLevels(reasoningEffortLevels);
         if (contextWindow != null) model.setContextWindow(contextWindow > 0 ? contextWindow : null);
         if (apiConfigId != null) model.setApiConfigId(apiConfigId);
         normalizeMetadata(model);
@@ -211,9 +214,25 @@ public class AiModelService {
         if (model == null) {
             return;
         }
+        normalizeReasoningEffortLevels(model);
         model.setModelProtocol(aiModelMetadataResolver.normalizeProtocol(model.getModelProtocol()));
         model.setCapabilityPresetCode(normalizeCapabilityPresetCode(model.getCapabilityPresetCode()));
         AiModelMultimodalCapabilities.normalizeModel(model);
+    }
+
+    private void normalizeReasoningEffortLevels(AiModel model) {
+        if (!Boolean.TRUE.equals(model.getSupportReasoning())) {
+            model.setReasoningEffortLevels(List.of());
+            return;
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        if (model.getReasoningEffortLevels() != null) {
+            model.getReasoningEffortLevels().stream()
+                    .filter(StrUtil::isNotBlank)
+                    .map(String::trim)
+                    .forEach(normalized::add);
+        }
+        model.setReasoningEffortLevels(List.copyOf(normalized));
     }
 
     private String normalizeCapabilityPresetCode(String code) {

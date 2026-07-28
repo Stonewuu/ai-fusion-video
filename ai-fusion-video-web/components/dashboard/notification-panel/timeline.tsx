@@ -301,7 +301,12 @@ const SubTimelineEntry = memo(function SubTimelineEntry({
   } else {
     content = (
       <div className="text-xs leading-relaxed text-muted-foreground/80">
-        <StreamMarkdown content={child.text} compact tone="muted" />
+        <StreamMarkdown
+          content={child.text}
+          compact
+          tone="muted"
+          streaming={streaming}
+        />
       </div>
     );
   }
@@ -495,7 +500,9 @@ const TimelineEntry = memo(function TimelineEntry({
     const { markdownContent, mediaLinks } = parseTaskContent(item.text);
     content = (
       <div className="space-y-3 text-sm leading-relaxed">
-        {markdownContent ? <StreamMarkdown content={markdownContent} /> : null}
+        {markdownContent ? (
+          <StreamMarkdown content={markdownContent} streaming={streaming} />
+        ) : null}
         <TaskMediaLinks mediaLinks={mediaLinks} />
       </div>
     );

@@ -19,6 +19,13 @@ export interface Storyboard {
   updateTime: string;
 }
 
+/** 分镜概览统计 */
+export interface StoryboardStatistics {
+  episodeCount: number;
+  sceneCount: number;
+  itemCount: number;
+}
+
 /** 分镜集合成状态: 0未开始 1合成中 2已完成 3失败 */
 export type EpisodeComposeStatus = 0 | 1 | 2 | 3;
 
@@ -252,6 +259,10 @@ export const storyboardApi = {
 
   /** 删除分镜 */
   delete: (id: number) => http.delete<never, boolean>(`/api/storyboard/${id}`),
+
+  /** 获取分镜概览统计 */
+  getStatistics: (storyboardId: number) =>
+    http.get<never, StoryboardStatistics>(`/api/storyboard/${storyboardId}/statistics`),
 
   // ========== 分镜集 ==========
 

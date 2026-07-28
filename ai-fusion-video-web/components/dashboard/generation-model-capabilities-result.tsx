@@ -1,6 +1,7 @@
 "use client";
 
 import { Clapperboard, Image as ImageIcon, Info, RefreshCcw } from "lucide-react";
+import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import { getModelDisplayParts } from "@/lib/model-display";
 
 type CapabilityResultRecord = Record<string, unknown>;
@@ -93,15 +94,21 @@ function ModelIdentity({
   }, fallback);
 
   return (
-    <div className="min-w-0">
-      <p className="truncate text-xs font-medium text-foreground">
-        {display.name}
-      </p>
-      {display.code && (
-        <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
-          {display.code}
+    <div className="flex min-w-0 items-center gap-2">
+      <ModelVendorIcon
+        source={{ name: display.name, code: display.code }}
+        className="size-4"
+      />
+      <div className="min-w-0">
+        <p className="truncate text-xs font-medium text-foreground">
+          {display.name}
         </p>
-      )}
+        {display.code && (
+          <p className="mt-0.5 truncate font-mono text-[10px] text-muted-foreground">
+            {display.code}
+          </p>
+        )}
+      </div>
     </div>
   );
 }

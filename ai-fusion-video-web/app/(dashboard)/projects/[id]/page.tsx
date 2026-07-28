@@ -29,7 +29,7 @@ import { scriptApi, type Script } from "@/lib/api/script";
 import {
   storyboardApi,
   type Storyboard,
-  type StoryboardEpisode,
+  type StoryboardStatistics,
 } from "@/lib/api/storyboard";
 import { assetApi, type Asset } from "@/lib/api/asset";
 import { artStyleApi, type ArtStylePreset } from "@/lib/api/art-style";
@@ -101,9 +101,11 @@ export default function ProjectOverviewPage() {
 
   // 分镜状态
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
-  const [storyboardEpisodes, setStoryboardEpisodes] = useState<StoryboardEpisode[]>([]);
-  const [storyboardSceneCount, setStoryboardSceneCount] = useState(0);
-  const [storyboardItemCount, setStoryboardItemCount] = useState(0);
+  const [storyboardStatistics, setStoryboardStatistics] = useState<StoryboardStatistics>({
+    episodeCount: 0,
+    sceneCount: 0,
+    itemCount: 0,
+  });
   const [loadingStoryboard, setLoadingStoryboard] = useState(true);
   const [deletingStoryboard, setDeletingStoryboard] = useState(false);
 
@@ -122,7 +124,7 @@ export default function ProjectOverviewPage() {
   const [assetCounts, setAssetCounts] = useState<Record<string, number>>({});
   const [loadingAssets, setLoadingAssets] = useState(true);
 
-  // 串行加载所有概览数据：剧本 → 分镜 → 集 → 场次/镜头 → 资产
+  // 串行加载概览数据：剧本 → 分镜统计 → 资产
   const loadAllData = useCallback(async () => {
     // 1. 加载剧本
     try {
@@ -144,22 +146,12 @@ export default function ProjectOverviewPage() {
         const sb = list[0];
         setStoryboard(sb);
 
-        // 3. 加载集
-        const episodes = await storyboardApi.listEpisodes(sb.id);
-        setStoryboardEpisodes(episodes);
-
-        // 4. 加载场次和镜头
-        const [scenes, items] = await Promise.all([
-          storyboardApi.listScenesByStoryboard(sb.id),
-          storyboardApi.listItems(sb.id),
-        ]);
-        setStoryboardSceneCount(scenes.length);
-        setStoryboardItemCount(items.length);
+        // 3. 只加载概览所需的聚合数量，避免下载完整分集、场次和镜头列表
+        const statistics = await storyboardApi.getStatistics(sb.id);
+        setStoryboardStatistics(statistics);
       } else {
         setStoryboard(null);
-        setStoryboardEpisodes([]);
-        setStoryboardSceneCount(0);
-        setStoryboardItemCount(0);
+        setStoryboardStatistics({ episodeCount: 0, sceneCount: 0, itemCount: 0 });
       }
     } catch (err) {
       console.error("加载分镜数据失败:", err);
@@ -602,11 +594,11 @@ export default function ProjectOverviewPage() {
 
             {/* 统计信息 */}
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              {storyboardEpisodes.length > 0 && (
-                <span>{storyboardEpisodes.length} 集</span>
+              {storyboardStatistics.episodeCount > 0 && (
+                <span>{storyboardStatistics.episodeCount} 集</span>
               )}
-              <span>{storyboardSceneCount} 场次</span>
-              <span>{storyboardItemCount} 镜头</span>
+              <span>{storyboardStatistics.sceneCount} 场次</span>
+              <span>{storyboardStatistics.itemCount} 镜头</span>
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 {formatTime(storyboard.updateTime)}

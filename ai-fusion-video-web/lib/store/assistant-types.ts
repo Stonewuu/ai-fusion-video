@@ -104,6 +104,7 @@ export interface AssistantStoreState {
   sendMessage: (
     message: string,
     modelId: number | null,
+    reasoningEffort: string | null,
     projectId?: number | null,
     references?: AssistantMessageReferences,
   ) => Promise<void>;

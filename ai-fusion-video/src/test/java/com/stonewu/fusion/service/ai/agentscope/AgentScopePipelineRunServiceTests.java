@@ -79,6 +79,8 @@ class AgentScopePipelineRunServiceTests {
                 .id(7L)
                 .code("model")
                 .status(1)
+                .supportReasoning(true)
+                .reasoningEffortLevels(List.of("high", "low"))
                 .build();
         AgentKernelSnapshot snapshot = snapshot();
 
@@ -92,7 +94,7 @@ class AgentScopePipelineRunServiceTests {
                         "检查故事结构",
                         "# 工作方式\n\n先检查冲突与节奏。",
                         "workspace:user")));
-        when(specs.createRoot(any(AiChatReqVO.class), eq(model), any(String.class), eq(42L)))
+        when(specs.createRoot(any(AiChatReqVO.class), any(AiModel.class), any(String.class), eq(42L)))
                 .thenReturn(spec);
         when(spec.agentDefinitionStableKey()).thenReturn("ai_assistant_agent");
         when(snapshots.build(spec)).thenReturn(snapshot);
@@ -136,6 +138,7 @@ class AgentScopePipelineRunServiceTests {
         AiChatReqVO request = new AiChatReqVO()
                 .setConversationId("conversation-1")
                 .setMessage("hello harness")
+                .setReasoningEffort("high")
                 .setEnabledSkills(List.of("story-review"));
 
         StepVerifier.create(service.start(request, 42L))
@@ -151,7 +154,11 @@ class AgentScopePipelineRunServiceTests {
         assertThat(admission.getValue().userContent()).isEqualTo("hello harness");
 
         ArgumentCaptor<String> systemPrompt = ArgumentCaptor.forClass(String.class);
-        verify(specs).createRoot(any(AiChatReqVO.class), eq(model), systemPrompt.capture(), eq(42L));
+        ArgumentCaptor<AiModel> effectiveModel = ArgumentCaptor.forClass(AiModel.class);
+        verify(specs).createRoot(
+                any(AiChatReqVO.class), effectiveModel.capture(), systemPrompt.capture(), eq(42L));
+        assertThat(effectiveModel.getValue().getConfig()).contains("\"reasoningEffort\":\"high\"");
+        assertThat(model.getConfig()).isNull();
         assertThat(systemPrompt.getValue())
                 .contains("已主动激活的 Skills", "story-review", "先检查冲突与节奏")
                 .doesNotContain("故事结构检查");

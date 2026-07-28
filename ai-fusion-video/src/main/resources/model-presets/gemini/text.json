@@ -8,6 +8,7 @@
     "description": "Google 2026 年稳定版多模态模型，支持文本、图片、视频、音频和 PDF 输入。",
     "capabilities": ["文本对话", "图片理解", "视频理解", "音频理解", "PDF 理解", "思考", "工具调用"],
     "supportReasoning": true,
+    "reasoningEffortLevels": ["high", "medium", "low", "minimal"],
     "contextWindow": 1048576,
     "multimodalInputTypes": ["image", "video", "audio", "file"],
     "multimodalInputTransports": {
@@ -27,6 +28,7 @@
     "description": "Google 2026 年稳定版高智能模型，支持文本、图片、视频、音频和 PDF 输入。",
     "capabilities": ["文本对话", "图片理解", "视频理解", "音频理解", "PDF 理解", "思考", "工具调用"],
     "supportReasoning": true,
+    "reasoningEffortLevels": ["high", "medium", "low", "minimal"],
     "contextWindow": 1048576,
     "multimodalInputTypes": ["image", "video", "audio", "file"],
     "multimodalInputTransports": {
@@ -46,6 +48,7 @@
     "description": "Google 2026 年稳定版高吞吐模型，支持文本、图片、视频、音频和 PDF 输入。",
     "capabilities": ["文本对话", "图片理解", "视频理解", "音频理解", "PDF 理解", "思考", "工具调用"],
     "supportReasoning": true,
+    "reasoningEffortLevels": ["high", "medium", "low", "minimal"],
     "contextWindow": 1048576,
     "multimodalInputTypes": ["image", "video", "audio", "file"],
     "multimodalInputTransports": {

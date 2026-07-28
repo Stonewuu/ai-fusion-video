@@ -130,7 +130,10 @@ public record AgentKernelSpec(
                 .apiConfigId(source.getApiConfigId())
                 .defaultModel(source.getDefaultModel())
                 .supportVision(source.getSupportVision())
+                .multimodalInputTypes(source.getMultimodalInputTypes())
+                .multimodalInputTransports(source.getMultimodalInputTransports())
                 .supportReasoning(source.getSupportReasoning())
+                .reasoningEffortLevels(source.getReasoningEffortLevels())
                 .contextWindow(source.getContextWindow())
                 .deletedId(source.getDeletedId())
                 .build();

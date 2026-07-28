@@ -40,6 +40,7 @@ import { Button } from "@/components/ui/button";
 import { CapabilityPresetSelect } from "./capability-preset-select";
 import { ModelConfigForm } from "./model-config-form";
 import { MultimodalCapabilityEditor } from "./multimodal-capability-editor";
+import { ReasoningEffortLevelsEditor } from "./reasoning-effort-levels-editor";
 import {
   parseConfigJson,
   mergeConfigObjects,
@@ -85,6 +86,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
     multimodalInputTypes: [],
     multimodalInputTransports: {},
     supportReasoning: false,
+    reasoningEffortLevels: [],
     contextWindow: 0,
   });
   const [presets, setPresets] = useState<ModelPreset[]>([]);
@@ -111,6 +113,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           multimodalInputTypes: editingModel.multimodalInputTypes,
           multimodalInputTransports: editingModel.multimodalInputTransports,
           supportReasoning: editingModel.supportReasoning,
+          reasoningEffortLevels: editingModel.reasoningEffortLevels ?? [],
           contextWindow: editingModel.contextWindow ?? 0,
           apiConfigId: editingModel.apiConfigId ?? undefined,
           status: editingModel.status,
@@ -128,6 +131,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           multimodalInputTypes: [],
           multimodalInputTransports: {},
           supportReasoning: false,
+          reasoningEffortLevels: [],
           contextWindow: 0,
           apiConfigId: defaultApiConfigId,
         });
@@ -230,6 +234,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
       capabilityPresetCode: preset.code,
       config: "",
       supportReasoning: preset.supportReasoning ?? previous.supportReasoning,
+      reasoningEffortLevels: preset.reasoningEffortLevels ?? previous.reasoningEffortLevels,
       contextWindow: preset.contextWindow ?? previous.contextWindow,
       multimodalInputTypes: preset.multimodalInputTypes ?? previous.multimodalInputTypes,
       multimodalInputTransports: preset.multimodalInputTransports ?? previous.multimodalInputTransports,
@@ -291,6 +296,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           multimodalInputTypes: form.multimodalInputTypes,
           multimodalInputTransports: form.multimodalInputTransports,
           supportReasoning: form.supportReasoning,
+          reasoningEffortLevels: form.reasoningEffortLevels,
           contextWindow: form.contextWindow,
           apiConfigId: form.apiConfigId,
           status: form.status,
@@ -346,6 +352,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                         description: preset.description,
                         config: "",
                         supportReasoning: preset.supportReasoning ?? false,
+                        reasoningEffortLevels: preset.reasoningEffortLevels ?? [],
                         contextWindow: preset.contextWindow ?? 0,
                         multimodalInputTypes: preset.multimodalInputTypes ?? [],
                         multimodalInputTransports: preset.multimodalInputTransports ?? {},
@@ -407,6 +414,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                     next.multimodalInputTypes = [];
                     next.multimodalInputTransports = {};
                     next.supportReasoning = false;
+                    next.reasoningEffortLevels = [];
                     next.contextWindow = 0;
                   }
                   if (nextType !== prev.modelType) {
@@ -452,6 +460,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                   let next: AiModelFormState = { ...prev, apiConfigId: nextApiConfigId };
                   if (!supportsReasoningConfig(nextPlatform)) {
                     next.supportReasoning = false;
+                    next.reasoningEffortLevels = [];
                   }
                   next = detachIncompatibleCapabilityPreset(prev, next, nextApiConfig);
                   next.config = sanitizeModelConfigJson({
@@ -684,11 +693,23 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                       return {
                         ...prev,
                         supportReasoning: nextSupportReasoning,
+                        reasoningEffortLevels: nextSupportReasoning
+                          ? prev.reasoningEffortLevels?.length
+                            ? prev.reasoningEffortLevels
+                            : selectedCapabilityPreset?.reasoningEffortLevels ?? []
+                          : [],
                         config: nextSupportReasoning ? prev.config : stripReasoningConfig(prev.config),
                       };
                     });
                   }}
                 />
+
+                {form.supportReasoning ? (
+                  <ReasoningEffortLevelsEditor
+                    levels={form.reasoningEffortLevels ?? []}
+                    onChange={(levels) => updateField("reasoningEffortLevels", levels)}
+                  />
+                ) : null}
 
                 <MultimodalCapabilityEditor
                   inputTypes={form.multimodalInputTypes ?? []}

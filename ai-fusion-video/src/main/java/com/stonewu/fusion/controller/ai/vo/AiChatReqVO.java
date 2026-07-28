@@ -22,6 +22,9 @@ public class AiChatReqVO {
     /** AI 模型 ID */
     private Long modelId;
 
+    /** 本次请求使用的思考等级。 */
+    private String reasoningEffort;
+
     /** Agent 类型 */
     private String agentType;
 

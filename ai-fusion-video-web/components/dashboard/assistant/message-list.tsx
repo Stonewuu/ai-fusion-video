@@ -6,7 +6,7 @@ import {
   useMemo,
   type RefObject,
 } from "react";
-import { ArrowDown, Bot, Loader2, RefreshCw } from "lucide-react";
+import { ArrowDown, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
 import { MessageTimeline } from "@/components/dashboard/notification-panel/timeline";
@@ -15,6 +15,7 @@ import type { AgentMessage } from "@/lib/api/ai-assistant";
 import type { TimelineItem } from "@/lib/store/pipeline-store";
 import { useAssistantStore, type AssistantConversationRuntime } from "@/lib/store/assistant-store";
 import { cn } from "@/lib/utils";
+import { AssistantBrandIcon } from "./assistant-brand-icon";
 import { useAssistantMessageScroll } from "./use-assistant-message-scroll";
 import { UserMessageBubble } from "./user-message-bubble";
 
@@ -72,7 +73,7 @@ function buildSegments(messages: AgentMessage[], activeRunId?: string): MessageS
   return segments;
 }
 
-const AssistantTimelineBubble = memo(function AssistantTimelineBubble({
+const AssistantTimelineContent = memo(function AssistantTimelineContent({
   timeline,
   scrollRef,
   reasoningText,
@@ -89,25 +90,17 @@ const AssistantTimelineBubble = memo(function AssistantTimelineBubble({
 }) {
   if (timeline.length === 0) return null;
   return (
-    <div className="flex items-start gap-2">
-      <span
-        className="mt-1 flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary"
-        aria-hidden="true"
-      >
-        <Bot className="size-3.5" />
-      </span>
-      <div className="min-w-0 flex-1 rounded-2xl rounded-tl-md border border-border/20 bg-card/50 px-3.5 py-3">
-        <MessageTimeline
-          reasoningText={reasoningText}
-          reasoningStartTime={reasoningStartTime}
-          reasoningDurationMs={reasoningDurationMs}
-          timeline={timeline}
-          scrollRef={scrollRef}
-          initialScrollToEnd={false}
-          streaming={streaming}
-          error={undefined}
-        />
-      </div>
+    <div className="min-w-0 w-full">
+      <MessageTimeline
+        reasoningText={reasoningText}
+        reasoningStartTime={reasoningStartTime}
+        reasoningDurationMs={reasoningDurationMs}
+        timeline={timeline}
+        scrollRef={scrollRef}
+        initialScrollToEnd={false}
+        streaming={streaming}
+        error={undefined}
+      />
     </div>
   );
 });
@@ -200,7 +193,7 @@ export function AssistantMessageList({
           {!runtime.messagesLoading && !hasContent ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-3 py-20 text-center text-muted-foreground">
               <span className="flex size-11 items-center justify-center rounded-2xl bg-primary/10 text-primary">
-                <Bot className="size-5" />
+                <AssistantBrandIcon className="size-7" />
               </span>
               <p className="text-sm">告诉融光助手你想完成什么</p>
               <p className="max-w-xs text-xs text-muted-foreground/70">可以询问剧本、分镜或视频创作问题。</p>
@@ -210,14 +203,14 @@ export function AssistantMessageList({
           {segments.map((segment) => (
             <Fragment key={segment.key}>
               {segment.user ? <UserMessageBubble message={segment.user} /> : null}
-              <AssistantTimelineBubble
+              <AssistantTimelineContent
                 timeline={segment.timeline}
                 scrollRef={viewportRef}
               />
             </Fragment>
           ))}
 
-          <AssistantTimelineBubble
+          <AssistantTimelineContent
             timeline={liveTimeline}
             scrollRef={viewportRef}
             reasoningText={running ? runtime.pipeline.reasoningText : undefined}
@@ -227,13 +220,13 @@ export function AssistantMessageList({
           />
 
           {running && liveTimeline.length === 0 ? (
-            <div className="flex items-center gap-2 pl-8 text-xs text-muted-foreground">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" /> 正在思考…
             </div>
           ) : null}
 
           {error ? (
-            <div className="ml-8 flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
               <span className="min-w-0 flex-1 break-words">{error}</span>
               <Button
                 type="button"

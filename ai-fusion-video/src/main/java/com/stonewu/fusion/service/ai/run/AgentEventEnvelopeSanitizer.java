@@ -48,7 +48,10 @@ public final class AgentEventEnvelopeSanitizer {
             "(?i)[?&](?:x-amz-signature|x-goog-signature|signature|sig|token|access_token|"
                     + "expires|ossaccesskeyid|googleaccessid)=");
     private static final Pattern ABSOLUTE_FILE_PATH = Pattern.compile(
-            "(?i)(?:^|\\s)(?:file:/{1,3}|[a-z]:[\\\\/]|\\\\\\\\|/)[^\\s]+?");
+            "(?i)(?:^|\\s)(?:file:/{1,3}|[a-z]:[\\\\/]|\\\\\\\\|/"
+                    + "(?:app|data|dev|etc|home|mnt|opt|private|proc|root|run|srv|sys|tmp|usr|"
+                    + "users|var|volumes|workspace)"
+                    + "(?:[\\\\/]|$))[^\\s]*");
     private static final Pattern PATH_TRAVERSAL = Pattern.compile(
             "(?:^|[\\\\/])\\.\\.(?:[\\\\/]|$)");
     private static final Pattern BASE64 = Pattern.compile("[A-Za-z0-9+/]+={0,2}");

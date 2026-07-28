@@ -13,6 +13,7 @@ import io.agentscope.harness.agent.HarnessAgent;
 import io.agentscope.harness.agent.IsolationScope;
 import io.agentscope.harness.agent.filesystem.remote.store.BaseStore;
 import io.agentscope.harness.agent.filesystem.spec.RemoteFilesystemSpec;
+import io.agentscope.harness.agent.memory.compaction.CompactionConfig;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -23,6 +24,8 @@ import java.util.Set;
 
 @Component
 public final class AgentScopeHarnessFactory {
+    private static final int COMPACTION_TRIGGER_PERCENT = 80;
+
     private final AgentKernelModelFactory modelFactory;
     private final AgentKernelToolRegistry toolRegistry;
     private final AgentStateStore stateStore;
@@ -113,15 +116,19 @@ public final class AgentScopeHarnessFactory {
                         "Tool registry result does not match kernel whitelist: registered="
                                 + toolkit.getToolNames() + ", expected=" + spec.toolWhitelist());
             }
+            Integer contextWindow = resolveContextWindow(
+                    spec.model().getContextWindow(), ownedModel.model().getContextWindowSize());
             HarnessAgent.Builder builder = HarnessAgent.builder()
                     .agentId(spec.agentDefinitionStableKey())
                     .name(spec.agentName())
                     .description(spec.description())
                     .sysPrompt(spec.systemPrompt())
-                    .model(new StateStoreGuardedChatModel(ownedModel.model(), failures))
+                    .model(new StateStoreGuardedChatModel(
+                            ownedModel.model(), failures, contextWindow))
                     .stateStore(stateStore)
                     .toolkit(toolkit)
                     .middleware(shutdownRecoveryBridge)
+                    .compaction(compactionConfig(contextWindow))
                     .maxIters(spec.maxIters())
                     .disableFilesystemTools()
                     .disableShellTool()
@@ -176,6 +183,26 @@ public final class AgentScopeHarnessFactory {
                     "Harness toolkit does not match kernel whitelist after built-in removal: actual="
                             + toolkit.getToolNames() + ", expected=" + whitelist);
         }
+    }
+
+    static CompactionConfig compactionConfig(Integer contextWindow) {
+        if (contextWindow == null || contextWindow <= 0) {
+            return CompactionConfig.builder().build();
+        }
+        int triggerTokens = Math.max(
+                1,
+                (int) ((long) contextWindow * COMPACTION_TRIGGER_PERCENT / 100));
+        return CompactionConfig.builder()
+                .triggerMessages(0)
+                .triggerTokens(triggerTokens)
+                .build();
+    }
+
+    static Integer resolveContextWindow(Integer configuredContextWindow, int modelContextWindow) {
+        if (configuredContextWindow != null && configuredContextWindow > 0) {
+            return configuredContextWindow;
+        }
+        return modelContextWindow > 0 ? modelContextWindow : null;
     }
 
     private static AgentScopeSkillRegistry disabledSkillRegistry() {

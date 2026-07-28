@@ -130,6 +130,7 @@ class AiModelServiceTests {
                 null,
                 null,
                 null,
+                null,
                 null
         );
 
@@ -137,6 +138,26 @@ class AiModelServiceTests {
         verify(aiModelMapper).updateById(existing);
         verify(chatModelFactory).evict(202L);
         verifyClearOtherDefaults(3, 202L);
+    }
+
+    @Test
+    void createAiModelShouldNormalizeReasoningEffortLevelsInDeclaredOrder() {
+        AiModel model = AiModel.builder()
+                .name("Reasoning model")
+                .code("reasoning-model")
+                .modelType(1)
+                .apiConfigId(1L)
+                .supportReasoning(true)
+                .reasoningEffortLevels(java.util.List.of(" max ", "", "high", "max", "low"))
+                .build();
+        when(apiConfigService.getById(1L)).thenReturn(ApiConfig.builder()
+                .id(1L)
+                .textProtocol("openai_compatible")
+                .build());
+
+        aiModelService.createAiModel(model);
+
+        assertEquals(java.util.List.of("max", "high", "low"), model.getReasoningEffortLevels());
     }
 
     @Test

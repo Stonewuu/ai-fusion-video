@@ -26,6 +26,7 @@ public class AiModelRespVO {
     private List<String> multimodalInputTypes;
     private Map<String, List<String>> multimodalInputTransports;
     private Boolean supportReasoning;
+    private List<String> reasoningEffortLevels;
     private Integer contextWindow;
     private Long apiConfigId;
     private LocalDateTime createTime;

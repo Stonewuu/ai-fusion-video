@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
-import { Bot } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ASSISTANT_LAUNCHER_SIZE,
@@ -9,6 +8,7 @@ import {
   type AssistantPoint,
 } from "./geometry";
 import { useAssistantStore } from "@/lib/store/assistant-store";
+import { AssistantBrandIcon } from "./assistant-brand-icon";
 
 interface AssistantLauncherProps {
   collapsed: boolean;
@@ -126,30 +126,30 @@ export function AssistantLauncher({
       <Tooltip>
         <TooltipTrigger
           render={
-          <button
-            type="button"
-            aria-label="打开融光助手"
-            tabIndex={collapsed ? 0 : -1}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={finishPointer}
-            onPointerCancel={finishPointer}
-            onClick={(event) => {
-              if (draggedRef.current) {
-                event.preventDefault();
-                event.stopPropagation();
-                draggedRef.current = false;
-                return;
-              }
-              if (collapsed) onOpen(event.detail > 0);
-            }}
-            style={{ touchAction: "none" }}
-            className="relative z-10 flex size-full cursor-pointer items-center justify-center rounded-full bg-transparent text-primary outline-none transition-colors hover:bg-transparent focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-transparent"
-          >
-            <span className="flex items-center justify-center">
-              <Bot className="size-7" />
-            </span>
-          </button>
+            <button
+              type="button"
+              aria-label="打开融光助手"
+              tabIndex={collapsed ? 0 : -1}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={finishPointer}
+              onPointerCancel={finishPointer}
+              onClick={(event) => {
+                if (draggedRef.current) {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  draggedRef.current = false;
+                  return;
+                }
+                if (collapsed) onOpen(event.detail > 0);
+              }}
+              style={{ touchAction: "none" }}
+              className="relative z-10 flex size-full cursor-pointer items-center justify-center rounded-full bg-transparent text-primary outline-none transition-colors hover:bg-transparent focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-transparent"
+            >
+              <span className="flex items-center justify-center">
+                <AssistantBrandIcon className="size-8" />
+              </span>
+            </button>
           }
         />
         <TooltipContent>融光助手</TooltipContent>

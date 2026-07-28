@@ -46,6 +46,16 @@ class StateStoreGuardedChatModelTests {
     }
 
     @Test
+    void exposesTheConfiguredModelContextWindowToHarnessMiddleware() {
+        CountingChatModel delegate = new CountingChatModel();
+        StateStoreGuardedChatModel guarded = new StateStoreGuardedChatModel(
+                delegate, new InMemoryStateStoreFailureGuard(), 262_144);
+
+        assertThat(delegate.getContextWindowSize()).isEqualTo(8_192);
+        assertThat(guarded.getContextWindowSize()).isEqualTo(262_144);
+    }
+
+    @Test
     void rejectsStoredFailureBeforeInvokingProvider() {
         InMemoryStateStoreFailureGuard failures = new InMemoryStateStoreFailureGuard();
         RuntimeContext runtime = runtime();

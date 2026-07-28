@@ -300,7 +300,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       persist();
     },
 
-    sendMessage: async (message, modelId, projectId, references) => {
+    sendMessage: async (message, modelId, reasoningEffort, projectId, references) => {
       const multimodalInputs = references?.multimodalInputs ?? [];
       const content = message.trim() || (multimodalInputs.length ? "请分析这些附件。" : "");
       if (!content) return;
@@ -434,6 +434,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         message: content,
         conversationId,
         modelId: modelId ?? undefined,
+        reasoningEffort: reasoningEffort ?? undefined,
         category: ASSISTANT_CATEGORY,
         title: shouldSetTitle ? title : undefined,
         projectId: conversationProjectId ?? undefined,

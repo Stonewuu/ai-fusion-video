@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.run;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
@@ -12,6 +13,7 @@ import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentScopeHarnessInvoker;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
+import com.stonewu.fusion.service.ai.model.AiModelRequestOptions;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
@@ -41,6 +43,7 @@ public final class AgentExecutionFactory {
     private final AgentRuntimeSchedulers schedulers;
     private final PersistedAgentKernelSnapshotResolver snapshotResolver;
     private final AiModelMetadataResolver modelMetadataResolver;
+    private final ObjectMapper objectMapper;
 
     public AgentExecutionFactory(
             AgentScopeHarnessInvoker harnessInvoker,
@@ -60,7 +63,8 @@ public final class AgentExecutionFactory {
         this.schedulers = Objects.requireNonNull(schedulers, "schedulers must not be null");
         this.modelMetadataResolver = Objects.requireNonNull(
                 modelMetadataResolver, "modelMetadataResolver must not be null");
-        this.snapshotResolver = new PersistedAgentKernelSnapshotResolver(objectMapper);
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.snapshotResolver = new PersistedAgentKernelSnapshotResolver(this.objectMapper);
     }
 
     public Mono<AgentExecution> start(
@@ -137,6 +141,18 @@ public final class AgentExecutionFactory {
         }
         String modelFingerprint = modelFactory.modelConfigFingerprint(model);
         long modelVersion = CanonicalAgentKernelSnapshotBuilder.modelConfigVersion(modelFingerprint);
+        if (modelVersion != payload.modelConfigVersion()) {
+            try {
+                model = AiModelRequestOptions.withReasoningEffort(
+                        model,
+                        AiModelRequestOptions.reasoningEffort(payload.modelOptions()),
+                        objectMapper);
+            } catch (BusinessException invalidEffort) {
+                throw unavailable("Persisted reasoning effort is no longer available");
+            }
+            modelFingerprint = modelFactory.modelConfigFingerprint(model);
+            modelVersion = CanonicalAgentKernelSnapshotBuilder.modelConfigVersion(modelFingerprint);
+        }
         AgentKernelSnapshot validated = snapshotResolver.resolve(
                 snapshot.snapshotJson(), snapshot.fingerprint(), modelVersion, List.of());
         requireSameModel(validated.payload(), model);

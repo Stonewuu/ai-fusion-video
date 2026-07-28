@@ -16,6 +16,7 @@ import com.stonewu.fusion.mapper.storyboard.StoryboardMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardSceneMapper;
 import com.stonewu.fusion.security.SecurityUtils;
 import com.stonewu.fusion.service.storyboard.dto.StoryboardItemAssetsPatch;
+import com.stonewu.fusion.service.storyboard.dto.StoryboardStatistics;
 import com.stonewu.fusion.service.team.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
@@ -72,10 +73,21 @@ public class StoryboardService {
         return storyboardMapper.selectById(storyboard.getId());
     }
 
-    @CacheEvict(value = "storyboard", allEntries = true)
+    @CacheEvict(value = { "storyboard", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public void delete(Long id) {
         storyboardMapper.deleteById(id);
+    }
+
+    @Cacheable(value = "storyboardStatistics", key = "#storyboardId")
+    public StoryboardStatistics getStatistics(Long storyboardId) {
+        long episodeCount = episodeMapper.selectCount(new LambdaQueryWrapper<StoryboardEpisode>()
+                .eq(StoryboardEpisode::getStoryboardId, storyboardId));
+        long sceneCount = sceneMapper.selectCount(new LambdaQueryWrapper<StoryboardScene>()
+                .eq(StoryboardScene::getStoryboardId, storyboardId));
+        long itemCount = itemMapper.selectCount(new LambdaQueryWrapper<StoryboardItem>()
+                .eq(StoryboardItem::getStoryboardId, storyboardId));
+        return new StoryboardStatistics(episodeCount, sceneCount, itemCount);
     }
 
     // ========== 分镜集 ==========
@@ -95,7 +107,7 @@ public class StoryboardService {
                 .orderByAsc(StoryboardEpisode::getEpisodeNumber));
     }
 
-    @CacheEvict(value = "storyboardEpisode", allEntries = true)
+    @CacheEvict(value = { "storyboardEpisode", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardEpisode createEpisode(StoryboardEpisode episode) {
         if (episode.getScriptEpisodeId() != null) {
@@ -108,7 +120,7 @@ public class StoryboardService {
         return episode;
     }
 
-    @CacheEvict(value = "storyboardEpisode", allEntries = true)
+    @CacheEvict(value = { "storyboardEpisode", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardEpisode updateEpisode(StoryboardEpisode episode) {
         StoryboardEpisode existing = getEpisodeById(episode.getId());
@@ -120,7 +132,9 @@ public class StoryboardService {
         return episodeMapper.selectById(episode.getId());
     }
 
-    @CacheEvict(value = "storyboardEpisode", allEntries = true)
+    @CacheEvict(
+            value = { "storyboardEpisode", "storyboardScene", "storyboardItem", "storyboardStatistics" },
+            allEntries = true)
     @Transactional
     public void deleteEpisode(Long id) {
         StoryboardEpisode episode = getEpisodeById(id);
@@ -182,7 +196,7 @@ public class StoryboardService {
      * @param synopsis         集梗概
      * @return 已存在或新创建的分镜集
      */
-    @CacheEvict(value = "storyboardEpisode", allEntries = true)
+    @CacheEvict(value = { "storyboardEpisode", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardEpisode saveEpisodeForScript(Long storyboardId,
                                                   Long scriptEpisodeId,
@@ -224,7 +238,7 @@ public class StoryboardService {
      *
      * @param episodeId 分镜集ID
      */
-    @CacheEvict(value = { "storyboardScene", "storyboardItem" }, allEntries = true)
+    @CacheEvict(value = { "storyboardScene", "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public void clearEpisodeContent(Long episodeId) {
         getEpisodeById(episodeId);
@@ -322,14 +336,14 @@ public class StoryboardService {
                 .orderByAsc(StoryboardScene::getSortOrder));
     }
 
-    @CacheEvict(value = "storyboardScene", allEntries = true)
+    @CacheEvict(value = { "storyboardScene", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardScene createScene(StoryboardScene scene) {
         sceneMapper.insert(scene);
         return scene;
     }
 
-    @CacheEvict(value = "storyboardScene", allEntries = true)
+    @CacheEvict(value = { "storyboardScene", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardScene updateScene(StoryboardScene scene) {
         getSceneById(scene.getId());
@@ -337,7 +351,7 @@ public class StoryboardService {
         return sceneMapper.selectById(scene.getId());
     }
 
-    @CacheEvict(value = "storyboardScene", allEntries = true)
+    @CacheEvict(value = { "storyboardScene", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public void deleteScene(Long id) {
         sceneMapper.deleteById(id);
@@ -365,7 +379,7 @@ public class StoryboardService {
                 .orderByAsc(StoryboardItem::getSortOrder));
     }
 
-    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @CacheEvict(value = { "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardItem createItem(StoryboardItem item) {
         itemMapper.insert(item);
@@ -382,7 +396,7 @@ public class StoryboardService {
         storyboard.setOwnerId(ownerScope.getOwnerId());
     }
 
-    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @CacheEvict(value = { "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardItem updateItem(StoryboardItem item) {
         getItemById(item.getId());
@@ -467,13 +481,13 @@ public class StoryboardService {
         throw new BusinessException("帧类型仅支持 first 或 last");
     }
 
-    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @CacheEvict(value = { "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public void deleteItem(Long id) {
         itemMapper.deleteById(id);
     }
 
-    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @CacheEvict(value = { "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public void batchCreateItems(List<StoryboardItem> items) {
         for (StoryboardItem item : items) {
