@@ -67,6 +67,18 @@ def build_svg(size: int, include_background: bool) -> str:
     )
     construction_cy = cy + construction_offset
 
+    def rotate_point(x: float, y: float, degrees: float) -> tuple[float, float]:
+        angle = math.radians(degrees)
+        dx = x * scale - cx
+        dy = y * scale - cy
+        return (
+            cx + dx * math.cos(angle) - dy * math.sin(angle),
+            cy + dx * math.sin(angle) + dy * math.cos(angle),
+        )
+
+    coral_seam_start = rotate_point(530, 230, 60)
+    coral_seam_end = rotate_point(1010, 780, 60)
+
     leaf = " ".join(
         (
             circle_path(cx, cy, outer_radius),
@@ -99,20 +111,6 @@ def build_svg(size: int, include_background: bool) -> str:
         f"C{s(470)} {s(850)} {s(400)} {s(740)} {s(325)} {s(680)}Z"
     )
 
-    sparkle = (
-        f"M{s(638)} {s(445)} "
-        f"C{s(629)} {s(445)} {s(631)} {s(483)} {s(618)} {s(513)} "
-        f"C{s(600)} {s(552)} {s(559)} {s(573)} {s(499)} {s(580)} "
-        f"C{s(488)} {s(581)} {s(488)} {s(592)} {s(496)} {s(596)} "
-        f"C{s(556)} {s(608)} {s(607)} {s(641)} {s(624)} {s(704)} "
-        f"C{s(627)} {s(716)} {s(627)} {s(734)} {s(638)} {s(734)} "
-        f"C{s(648)} {s(734)} {s(648)} {s(716)} {s(651)} {s(704)} "
-        f"C{s(668)} {s(641)} {s(719)} {s(608)} {s(779)} {s(596)} "
-        f"C{s(788)} {s(594)} {s(788)} {s(582)} {s(778)} {s(580)} "
-        f"C{s(717)} {s(573)} {s(676)} {s(552)} {s(658)} {s(513)} "
-        f"C{s(645)} {s(483)} {s(647)} {s(445)} {s(638)} {s(445)}Z"
-    )
-
     background = ""
     if include_background:
         background = (
@@ -130,10 +128,10 @@ def build_svg(size: int, include_background: bool) -> str:
       <stop offset="0.58" stop-color="#fef9ef"/>
       <stop offset="1" stop-color="#fcf7eb"/>
     </radialGradient>
-    <linearGradient id="cyanLeaf" x1="{s(350)}" y1="{s(260)}" x2="{s(720)}" y2="{s(980)}" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#27b3c7"/>
-      <stop offset="0.5" stop-color="#20abc2"/>
-      <stop offset="1" stop-color="#25adc2"/>
+    <linearGradient id="topLeaf" x1="{s(350)}" y1="{s(260)}" x2="{s(720)}" y2="{s(980)}" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#78afff"/>
+      <stop offset="0.5" stop-color="#5c93f5"/>
+      <stop offset="1" stop-color="#447ae5"/>
     </linearGradient>
     <linearGradient id="darkLeaf" x1="{s(900)}" y1="{s(470)}" x2="{s(580)}" y2="{s(970)}" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#0291b1"/>
@@ -145,17 +143,17 @@ def build_svg(size: int, include_background: bool) -> str:
       <stop offset="0.5" stop-color="#fe8467"/>
       <stop offset="1" stop-color="#fc8165"/>
     </linearGradient>
+    <linearGradient id="coralSeam" x1="{fmt(coral_seam_start[0])}" y1="{fmt(coral_seam_start[1])}" x2="{fmt(coral_seam_end[0])}" y2="{fmt(coral_seam_end[1])}" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff8a6a"/>
+      <stop offset="0.5" stop-color="#fe8467"/>
+      <stop offset="1" stop-color="#fc8165"/>
+    </linearGradient>
     <linearGradient id="tailGradient" x1="{s(320)}" y1="{s(800)}" x2="{s(241)}" y2="{s(970)}" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#0291b1"/>
       <stop offset="0.55" stop-color="#0291b1"/>
       <stop offset="0.8" stop-color="#159bb3"/>
       <stop offset="1" stop-color="#27b3c7"/>
     </linearGradient>
-    <radialGradient id="lightSpirit" cx="{s(620)}" cy="{s(565)}" r="{s(180)}" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#ffc65a"/>
-      <stop offset="0.58" stop-color="#fdbe54"/>
-      <stop offset="1" stop-color="#fbbc52"/>
-    </radialGradient>
     <linearGradient id="eye" x1="0" y1="{s(575)}" x2="0" y2="{s(609)}" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#0e3768"/>
       <stop offset="1" stop-color="#082b56"/>
@@ -166,13 +164,14 @@ def build_svg(size: int, include_background: bool) -> str:
     </clipPath>
     <path id="leaf" fill-rule="evenodd" clip-rule="evenodd" d="{leaf}"/>
     <path id="leafClipExpanded" fill-rule="evenodd" clip-rule="evenodd" d="{clip_leaf}"/>
+    <circle id="darkConstructionCircle" cx="{fmt(cx)}" cy="{fmt(cy - construction_offset)}" r="{fmt(construction_radius)}"/>
     <clipPath id="coralLeafClip" clipPathUnits="userSpaceOnUse">
       <use href="#leafClipExpanded" transform="rotate(60 {fmt(cx)} {fmt(cy)})"/>
     </clipPath>
     <clipPath id="darkLeafClip" clipPathUnits="userSpaceOnUse">
       <use href="#leafClipExpanded" transform="rotate(180 {fmt(cx)} {fmt(cy)})"/>
     </clipPath>
-    <clipPath id="cyanLeafClip" clipPathUnits="userSpaceOnUse">
+    <clipPath id="topLeafClip" clipPathUnits="userSpaceOnUse">
       <use href="#leafClipExpanded" transform="rotate(300 {fmt(cx)} {fmt(cy)})"/>
     </clipPath>
     <clipPath id="upperRightOverlap" clipPathUnits="userSpaceOnUse">
@@ -181,24 +180,37 @@ def build_svg(size: int, include_background: bool) -> str:
     <clipPath id="upperLeftOverlap" clipPathUnits="userSpaceOnUse">
       <rect x="0" y="0" width="{fmt(cx)}" height="{fmt(cy)}"/>
     </clipPath>
+    <clipPath id="rightHalf" clipPathUnits="userSpaceOnUse">
+      <rect x="{fmt(cx)}" y="0" width="{fmt(size - cx)}" height="{fmt(size)}"/>
+    </clipPath>
+    <mask id="outsideTopLeaf" x="0" y="0" width="{fmt(size)}" height="{fmt(size)}" maskUnits="userSpaceOnUse" maskContentUnits="userSpaceOnUse" style="mask-type:luminance">
+      <rect width="{fmt(size)}" height="{fmt(size)}" fill="white"/>
+      <use href="#leaf" transform="rotate(300 {fmt(cx)} {fmt(cy)})" fill="black"/>
+    </mask>
   </defs>
 
 {background}  <path d="{tail}" fill="url(#tailGradient)"/>
 
   <g clip-path="url(#outerCircle)">
     <use href="#leaf" transform="rotate(60 {fmt(cx)} {fmt(cy)})" fill="url(#coralLeaf)"/>
-    <use href="#leaf" transform="rotate(300 {fmt(cx)} {fmt(cy)})" fill="url(#cyanLeaf)"/>
+    <use href="#leaf" transform="rotate(300 {fmt(cx)} {fmt(cy)})" fill="url(#topLeaf)"/>
     <use href="#leaf" transform="rotate(180 {fmt(cx)} {fmt(cy)})" fill="url(#darkLeaf)"/>
     <g clip-path="url(#coralLeafClip)">
       <g clip-path="url(#darkLeafClip)">
         <use href="#leaf" transform="rotate(60 {fmt(cx)} {fmt(cy)})" fill="url(#coralLeaf)"/>
       </g>
     </g>
+    <!-- Repair the coral clip fringe before restoring the cyclic top layers. -->
+    <g clip-path="url(#coralLeafClip)" mask="url(#outsideTopLeaf)">
+      <g clip-path="url(#rightHalf)">
+        <use href="#darkConstructionCircle" fill="none" stroke="url(#coralSeam)" stroke-width="{s(32)}"/>
+      </g>
+    </g>
     <g clip-path="url(#coralLeafClip)">
       <g clip-path="url(#darkLeafClip)">
-        <g clip-path="url(#cyanLeafClip)">
+        <g clip-path="url(#topLeafClip)">
           <g clip-path="url(#upperRightOverlap)">
-            <use href="#leaf" transform="rotate(300 {fmt(cx)} {fmt(cy)})" fill="url(#cyanLeaf)"/>
+            <use href="#leaf" transform="rotate(300 {fmt(cx)} {fmt(cy)})" fill="url(#topLeaf)"/>
           </g>
           <g clip-path="url(#upperLeftOverlap)">
             <use href="#leaf" transform="rotate(180 {fmt(cx)} {fmt(cy)})" fill="url(#darkLeaf)"/>
@@ -208,9 +220,8 @@ def build_svg(size: int, include_background: bool) -> str:
     </g>
   </g>
 
-  <path d="{sparkle}" fill="url(#lightSpirit)"/>
-  <ellipse cx="{s(610)}" cy="{s(592)}" rx="{s(11)}" ry="{s(17)}" fill="url(#eye)"/>
-  <ellipse cx="{s(669.5)}" cy="{s(592)}" rx="{s(10.5)}" ry="{s(17)}" fill="url(#eye)"/>
+  <ellipse cx="{s(558)}" cy="{s(591)}" rx="{s(54)}" ry="{s(82)}" fill="url(#eye)"/>
+  <ellipse cx="{s(718)}" cy="{s(591)}" rx="{s(54)}" ry="{s(82)}" fill="url(#eye)"/>
 </svg>
 '''
 
