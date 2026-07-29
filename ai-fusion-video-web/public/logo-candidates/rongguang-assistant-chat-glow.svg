@@ -23,11 +23,11 @@
       <stop offset="0.5" stop-color="#fe8467"/>
       <stop offset="1" stop-color="#fc8165"/>
     </linearGradient>
-    <linearGradient id="tailGradient" x1="505" y1="895" x2="325" y2="1015" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0785a8"/>
-      <stop offset="0.42" stop-color="#0b91ae"/>
-      <stop offset="0.74" stop-color="#1ca7bc"/>
-      <stop offset="1" stop-color="#28b2c4"/>
+    <linearGradient id="tailGradient" x1="320" y1="800" x2="241" y2="970" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0291b1"/>
+      <stop offset="0.55" stop-color="#0291b1"/>
+      <stop offset="0.8" stop-color="#159bb3"/>
+      <stop offset="1" stop-color="#27b3c7"/>
     </linearGradient>
     <radialGradient id="lightSpirit" cx="620" cy="565" r="180" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#ffc65a"/>
@@ -61,9 +61,7 @@
     </clipPath>
   </defs>
 
-  <rect width="1254" height="1254" fill="url(#background)"/>
-
-  <path d="M360 800 C355 850 320 900 270 938 C254 948 243 958 242 967 C241 975 249 979 264 980 C338 981 426 976 505 956 C530 949 550 938 566 925 C505 870 430 825 360 800Z" fill="url(#tailGradient)"/>
+  <path d="M325 680 C315 745 310 850 250 942 C243 949 241 956 244 963 C248 974 265 979 284 979 C365 981 445 978 520 956 C470 850 400 740 325 680Z" fill="url(#tailGradient)"/>
 
   <g clip-path="url(#outerCircle)">
     <use href="#leaf" transform="rotate(60 627 595)" fill="url(#coralLeaf)"/>

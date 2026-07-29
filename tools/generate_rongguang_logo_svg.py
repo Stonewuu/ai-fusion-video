@@ -87,14 +87,16 @@ def build_svg(size: int, include_background: bool) -> str:
         )
     )
 
+    # Keep the visible bubble tail inside the outer circle's bounding box
+    # (x >= 241, y <= 981). The closing curve stays inside the circle and is
+    # covered by the fan, leaving one broad, slightly concave exposed edge.
     tail = (
-        f"M{s(360)} {s(800)} "
-        f"C{s(355)} {s(850)} {s(320)} {s(900)} {s(270)} {s(938)} "
-        f"C{s(254)} {s(948)} {s(243)} {s(958)} {s(242)} {s(967)} "
-        f"C{s(241)} {s(975)} {s(249)} {s(979)} {s(264)} {s(980)} "
-        f"C{s(338)} {s(981)} {s(426)} {s(976)} {s(505)} {s(956)} "
-        f"C{s(530)} {s(949)} {s(550)} {s(938)} {s(566)} {s(925)} "
-        f"C{s(505)} {s(870)} {s(430)} {s(825)} {s(360)} {s(800)}Z"
+        f"M{s(325)} {s(680)} "
+        f"C{s(315)} {s(745)} {s(310)} {s(850)} {s(250)} {s(942)} "
+        f"C{s(243)} {s(949)} {s(241)} {s(956)} {s(244)} {s(963)} "
+        f"C{s(248)} {s(974)} {s(265)} {s(979)} {s(284)} {s(979)} "
+        f"C{s(365)} {s(981)} {s(445)} {s(978)} {s(520)} {s(956)} "
+        f"C{s(470)} {s(850)} {s(400)} {s(740)} {s(325)} {s(680)}Z"
     )
 
     sparkle = (
@@ -143,11 +145,11 @@ def build_svg(size: int, include_background: bool) -> str:
       <stop offset="0.5" stop-color="#fe8467"/>
       <stop offset="1" stop-color="#fc8165"/>
     </linearGradient>
-    <linearGradient id="tailGradient" x1="{s(505)}" y1="{s(895)}" x2="{s(325)}" y2="{s(1015)}" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0785a8"/>
-      <stop offset="0.42" stop-color="#0b91ae"/>
-      <stop offset="0.74" stop-color="#1ca7bc"/>
-      <stop offset="1" stop-color="#28b2c4"/>
+    <linearGradient id="tailGradient" x1="{s(320)}" y1="{s(800)}" x2="{s(241)}" y2="{s(970)}" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0291b1"/>
+      <stop offset="0.55" stop-color="#0291b1"/>
+      <stop offset="0.8" stop-color="#159bb3"/>
+      <stop offset="1" stop-color="#27b3c7"/>
     </linearGradient>
     <radialGradient id="lightSpirit" cx="{s(620)}" cy="{s(565)}" r="{s(180)}" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#ffc65a"/>
@@ -230,9 +232,9 @@ def parse_args() -> argparse.Namespace:
         help=f"Canvas size in CSS pixels (default: {CANONICAL_SIZE}).",
     )
     parser.add_argument(
-        "--transparent",
+        "--background",
         action="store_true",
-        help="Omit the warm off-white background rectangle.",
+        help="Include the warm off-white background rectangle.",
     )
     return parser.parse_args()
 
@@ -245,7 +247,7 @@ def main() -> None:
     output = args.output.resolve()
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(
-        build_svg(args.size, include_background=not args.transparent),
+        build_svg(args.size, include_background=args.background),
         encoding="utf-8",
         newline="\n",
     )
