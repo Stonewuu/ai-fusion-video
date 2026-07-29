@@ -58,8 +58,13 @@ def build_svg(size: int, include_background: bool) -> str:
     cx = 627.0 * scale
     cy = 595.0 * scale
     outer_radius = 386.0 * scale
-    construction_offset = 250.0 * scale
-    construction_radius = math.sqrt(3.0) * construction_offset
+    reuleaux_vertex_radius = 250.0 * scale
+    construction_offset = 120.0 * scale
+    construction_radius = math.sqrt(
+        construction_offset**2
+        + construction_offset * reuleaux_vertex_radius
+        + reuleaux_vertex_radius**2
+    )
     construction_cy = cy + construction_offset
 
     leaf = " ".join(
@@ -77,17 +82,19 @@ def build_svg(size: int, include_background: bool) -> str:
             circle_path(
                 cx,
                 construction_cy,
-                (math.sqrt(3.0) * 250.0 - 0.5) * scale,
+                construction_radius - 0.5 * scale,
             ),
         )
     )
 
     tail = (
-        f"M{s(389)} {s(807)} "
-        f"C{s(393)} {s(866)} {s(371)} {s(922)} {s(332)} {s(974)} "
-        f"C{s(317)} {s(994)} {s(326)} {s(1012)} {s(349)} {s(1012)} "
-        f"C{s(411)} {s(1011)} {s(468)} {s(982)} {s(514)} {s(945)} "
-        f"C{s(472)} {s(895)} {s(430)} {s(847)} {s(389)} {s(807)}Z"
+        f"M{s(360)} {s(800)} "
+        f"C{s(355)} {s(850)} {s(320)} {s(900)} {s(270)} {s(938)} "
+        f"C{s(254)} {s(948)} {s(243)} {s(958)} {s(242)} {s(967)} "
+        f"C{s(241)} {s(975)} {s(249)} {s(979)} {s(264)} {s(980)} "
+        f"C{s(338)} {s(981)} {s(426)} {s(976)} {s(505)} {s(956)} "
+        f"C{s(530)} {s(949)} {s(550)} {s(938)} {s(566)} {s(925)} "
+        f"C{s(505)} {s(870)} {s(430)} {s(825)} {s(360)} {s(800)}Z"
     )
 
     sparkle = (
@@ -163,6 +170,15 @@ def build_svg(size: int, include_background: bool) -> str:
     <clipPath id="darkLeafClip" clipPathUnits="userSpaceOnUse">
       <use href="#leafClipExpanded" transform="rotate(180 {fmt(cx)} {fmt(cy)})"/>
     </clipPath>
+    <clipPath id="cyanLeafClip" clipPathUnits="userSpaceOnUse">
+      <use href="#leafClipExpanded" transform="rotate(300 {fmt(cx)} {fmt(cy)})"/>
+    </clipPath>
+    <clipPath id="upperRightOverlap" clipPathUnits="userSpaceOnUse">
+      <rect x="{fmt(cx)}" y="0" width="{fmt(size - cx)}" height="{fmt(cy)}"/>
+    </clipPath>
+    <clipPath id="upperLeftOverlap" clipPathUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="{fmt(cx)}" height="{fmt(cy)}"/>
+    </clipPath>
   </defs>
 
 {background}  <path d="{tail}" fill="url(#tailGradient)"/>
@@ -174,6 +190,18 @@ def build_svg(size: int, include_background: bool) -> str:
     <g clip-path="url(#coralLeafClip)">
       <g clip-path="url(#darkLeafClip)">
         <use href="#leaf" transform="rotate(60 {fmt(cx)} {fmt(cy)})" fill="url(#coralLeaf)"/>
+      </g>
+    </g>
+    <g clip-path="url(#coralLeafClip)">
+      <g clip-path="url(#darkLeafClip)">
+        <g clip-path="url(#cyanLeafClip)">
+          <g clip-path="url(#upperRightOverlap)">
+            <use href="#leaf" transform="rotate(300 {fmt(cx)} {fmt(cy)})" fill="url(#cyanLeaf)"/>
+          </g>
+          <g clip-path="url(#upperLeftOverlap)">
+            <use href="#leaf" transform="rotate(180 {fmt(cx)} {fmt(cy)})" fill="url(#darkLeaf)"/>
+          </g>
+        </g>
       </g>
     </g>
   </g>

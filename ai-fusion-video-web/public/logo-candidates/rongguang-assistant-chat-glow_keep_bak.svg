@@ -63,7 +63,7 @@
 
   <rect width="1254" height="1254" fill="url(#background)"/>
 
-  <path d="M360 800 C355 850 320 900 270 938 C254 948 243 958 242 967 C241 975 249 979 264 980 C338 981 426 976 505 956 C530 949 550 938 566 925 C505 870 430 825 360 800Z" fill="url(#tailGradient)"/>
+  <path d="M360 800 C355 850 320 900 270 940 C245 958 242 973 260 978 C335 980 425 978 505 956 C530 949 550 938 566 925 C505 870 430 825 360 800Z" fill="url(#tailGradient)"/>
 
   <g clip-path="url(#outerCircle)">
     <use href="#leaf" transform="rotate(60 627 595)" fill="url(#coralLeaf)"/>
