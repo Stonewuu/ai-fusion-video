@@ -61,8 +61,8 @@ export const UserMessageBubble = memo(function UserMessageBubble({
         </div>
       ) : null}
 
-      <div className="flex max-w-full justify-end gap-2">
-        <div className="max-w-[85%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground shadow-sm">
+      <div className="flex w-full max-w-full justify-end gap-2">
+        <div className="max-w-[80%] rounded-2xl rounded-br-md bg-primary px-3.5 py-2.5 text-sm leading-relaxed text-primary-foreground shadow-sm">
           <p className="whitespace-pre-wrap break-words">{message.content}</p>
         </div>
         <span
