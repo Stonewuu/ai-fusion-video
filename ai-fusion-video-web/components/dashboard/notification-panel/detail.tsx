@@ -55,6 +55,15 @@ import {
 const EMPTY_TIMELINE: PipelineTask["state"]["timeline"] = [];
 const EMPTY_MESSAGES: AgentMessage[] = [];
 
+function mergeConversationsById(
+  current: AgentConversation[],
+  incoming: AgentConversation[]
+): AgentConversation[] {
+  const merged = new Map(current.map((conversation) => [conversation.id, conversation]));
+  incoming.forEach((conversation) => merged.set(conversation.id, conversation));
+  return Array.from(merged.values());
+}
+
 function selectTaskListVersion(state: {
   tasks: PipelineTask[];
 }): string {
@@ -506,9 +515,10 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
         );
 
         if (append) {
-          setConversations((prev) => [...prev, ...filtered]);
+          setConversations((current) => mergeConversationsById(current, filtered));
         } else {
-          setConversations(filtered);
+          const uniqueConversations = mergeConversationsById([], filtered);
+          setConversations(uniqueConversations);
           setSelected((current) => {
             if (current?.type === "pipeline") {
               const stillPresent = usePipelineStore
@@ -517,15 +527,15 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
               if (stillPresent) return current;
             }
             if (current?.type === "history") {
-              const refreshed = filtered.find(
+              const refreshed = uniqueConversations.find(
                 (conversation) => conversation.id === current.conversation.id
               );
               return refreshed
                 ? { type: "history", conversation: refreshed }
                 : current;
             }
-            return filtered[0]
-              ? { type: "history", conversation: filtered[0] }
+            return uniqueConversations[0]
+              ? { type: "history", conversation: uniqueConversations[0] }
               : null;
           });
         }

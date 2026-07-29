@@ -53,6 +53,64 @@ export interface AgentSkillSaveRequest {
   content: string;
 }
 
+export type AgentSkillImportAction = "CREATE" | "REPLACE" | "SKIP";
+
+export interface AgentSkillImportCandidate {
+  rootPath: string;
+  name: string | null;
+  description: string | null;
+  suggestedDisplayName: string;
+  fileCount: number;
+  totalBytes: number;
+  hasScripts: boolean;
+  hasReferences: boolean;
+  hasAssets: boolean;
+  exists: boolean;
+  valid: boolean;
+  recommendedAction: AgentSkillImportAction;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface AgentSkillImportPreview {
+  sourceType: "ZIP" | "DIRECTORY";
+  totalFiles: number;
+  totalBytes: number;
+  skills: AgentSkillImportCandidate[];
+  warnings: string[];
+  errors: string[];
+}
+
+export interface AgentSkillImportSelection {
+  rootPath: string;
+  displayName: string;
+  action: AgentSkillImportAction;
+}
+
+export interface AgentSkillImportResult {
+  createdCount: number;
+  replacedCount: number;
+  skippedCount: number;
+  createdNames: string[];
+  replacedNames: string[];
+  skippedNames: string[];
+}
+
+function skillImportForm(files: File[], paths: string[], request?: object) {
+  const form = new FormData();
+  files.forEach((file, index) => {
+    form.append("files", file, file.name);
+    form.append("paths", paths[index] ?? file.name);
+  });
+  if (request) {
+    form.append(
+      "request",
+      new Blob([JSON.stringify(request)], { type: "application/json" }),
+    );
+  }
+  return form;
+}
+
 export interface AgentMcpServer {
   id: number;
   name: string;
@@ -105,6 +163,24 @@ export const agentConfigApi = {
   },
   saveSkill(request: AgentSkillSaveRequest): Promise<AgentUserSkill> {
     return http.put("/api/ai/agent-config/skills", request);
+  },
+  previewSkillImport(files: File[], paths: string[]): Promise<AgentSkillImportPreview> {
+    return http.post(
+      "/api/ai/agent-config/skills/import/preview",
+      skillImportForm(files, paths),
+      { timeout: 120000 },
+    );
+  },
+  importSkills(
+    files: File[],
+    paths: string[],
+    selections: AgentSkillImportSelection[],
+  ): Promise<AgentSkillImportResult> {
+    return http.post(
+      "/api/ai/agent-config/skills/import",
+      skillImportForm(files, paths, { selections }),
+      { timeout: 120000 },
+    );
   },
   deleteSkill(name: string): Promise<boolean> {
     return http.delete(`/api/ai/agent-config/skills/${encodeURIComponent(name)}`);

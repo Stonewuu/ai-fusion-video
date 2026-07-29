@@ -56,7 +56,7 @@ class AgentUserSkillServiceTests {
         assertThat(namespace.getValue()).containsExactly(
                 "agents", "ai_assistant_agent", "users", "42", "skills");
         assertThat(skillValue.getValue().get("content").toString())
-                .contains("name: story-review", "description: \"检查故事结构\"");
+                .contains("name: story-review", "description: 检查故事结构");
         assertThat(metadataValue.getValue().get("display_name")).isEqualTo("故事结构检查");
         assertThat(saved.name()).isEqualTo("story-review");
         assertThat(saved.displayName()).isEqualTo("故事结构检查");
@@ -113,8 +113,11 @@ class AgentUserSkillServiceTests {
     void renamingAndDeletingSkillAlsoMovesItsDisplayNameMetadata() {
         AgentWorkspaceBaseStore store = mock(AgentWorkspaceBaseStore.class);
         AgentUserSkillService service = new AgentUserSkillService(store);
-        when(store.get(anyList(), eq("/story-a/SKILL.md"))).thenReturn(null);
+        when(store.get(anyList(), eq("/story-a/SKILL.md"))).thenReturn(skillItem("story-a"));
         when(store.get(anyList(), eq("/story-b/SKILL.md"))).thenReturn(null);
+        when(store.search(anyList(), eq(100), eq(0))).thenReturn(List.of(
+                skillItem("story-a"),
+                metadataItem("story-a")));
 
         service.save(42L, "story-a", "story-b", "故事检查", "检查故事", "# 步骤");
 
@@ -123,6 +126,9 @@ class AgentUserSkillServiceTests {
         verify(store).delete(anyList(), eq("/story-a/SKILL.md"));
         verify(store).delete(anyList(), eq("/story-a/.fusion-skill.json"));
 
+        when(store.search(anyList(), eq(100), eq(0))).thenReturn(List.of(
+                skillItem("story-b"),
+                metadataItem("story-b")));
         service.delete(42L, "story-b");
 
         verify(store).delete(anyList(), eq("/story-b/SKILL.md"));
@@ -175,6 +181,13 @@ class AgentUserSkillServiceTests {
                         # 步骤
                         检查冲突与节奏。
                         """.formatted(name)),
+                1L);
+    }
+
+    private StoreItem metadataItem(String name) {
+        return new StoreItem(
+                "/" + name + "/.fusion-skill.json",
+                Map.of("display_name", name),
                 1L);
     }
 

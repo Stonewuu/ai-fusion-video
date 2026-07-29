@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { BookOpen, Loader2, Pencil, Plus, Trash2 } from "lucide-react";
+import { BookOpen, Loader2, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { agentConfigApi, type AgentUserSkill } from "@/lib/api/agent-config";
+import { SkillImportDialog } from "./skills/skill-import-dialog";
 
 interface SkillsSectionProps {
   skills: AgentUserSkill[];
@@ -27,6 +28,7 @@ const EMPTY_FORM = { name: "", displayName: "", description: "", content: "" };
 
 export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<AgentUserSkill | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
@@ -96,7 +98,10 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
             <p className="mt-1 text-sm text-muted-foreground">保存个人工作规范，在助手输入框中输入 / 即可主动引用。</p>
           </div>
         </div>
-        <Button onClick={() => showEditor()}><Plus />新建 Skill</Button>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="outline" onClick={() => setImportOpen(true)}><Upload />导入 Skill</Button>
+          <Button onClick={() => showEditor()}><Plus />新建 Skill</Button>
+        </div>
       </div>
 
       <div className="mt-4 flex-1 overflow-hidden rounded-lg border border-border/20 bg-background/70">
@@ -168,7 +173,7 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
                   onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))}
                   placeholder="storyboard-review"
                 />
-                <p className="text-xs text-muted-foreground">使用小写字母、数字、下划线或短横线，最长 64 位。</p>
+                <p className="text-xs text-muted-foreground">使用小写字母、数字或短横线，不能包含连续短横线，最长 64 位。</p>
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor="skill-description">描述</Label>
@@ -204,6 +209,12 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SkillImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        onImported={onRefresh}
+      />
     </section>
   );
 }

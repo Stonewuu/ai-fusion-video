@@ -11,6 +11,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.util.List;
 import java.util.Map;
@@ -81,7 +83,7 @@ public class AgentWorkspaceBaseStore implements BaseStore {
                 && namespaceKey.equals(entry.getNamespaceKey())
                 && key.equals(entry.getItemKey())) {
             entryMapper.physicalDeleteById(entry.getId());
-            payloadService.delete(stored(entry));
+            deleteAfterCommitOrNow(stored(entry));
         }
     }
 
@@ -147,18 +149,60 @@ public class AgentWorkspaceBaseStore implements BaseStore {
             applyStored(created, stored);
             try {
                 entryMapper.insert(created);
+                deleteOnRollback(stored);
                 return true;
             } catch (DuplicateKeyException duplicate) {
                 payloadService.delete(stored);
                 return false;
+            } catch (RuntimeException failure) {
+                payloadService.delete(stored);
+                throw failure;
             }
         }
         AgentWorkspaceStoredPayload previous = stored(current);
         current.setVersion(current.getVersion() + 1);
         applyStored(current, stored);
-        entryMapper.updateById(current);
-        payloadService.delete(previous);
+        try {
+            entryMapper.updateById(current);
+        } catch (RuntimeException failure) {
+            payloadService.delete(stored);
+            throw failure;
+        }
+        deleteOnRollback(stored);
+        deleteAfterCommitOrNow(previous);
         return true;
+    }
+
+    private void deleteAfterCommitOrNow(AgentWorkspaceStoredPayload stored) {
+        if (!transactionSynchronizationActive()) {
+            payloadService.delete(stored);
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                payloadService.delete(stored);
+            }
+        });
+    }
+
+    private void deleteOnRollback(AgentWorkspaceStoredPayload stored) {
+        if (!transactionSynchronizationActive()) {
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCompletion(int status) {
+                if (status == TransactionSynchronization.STATUS_ROLLED_BACK) {
+                    payloadService.delete(stored);
+                }
+            }
+        });
+    }
+
+    private boolean transactionSynchronizationActive() {
+        return TransactionSynchronizationManager.isActualTransactionActive()
+                && TransactionSynchronizationManager.isSynchronizationActive();
     }
 
     private StoreItem toStoreItem(AgentWorkspaceEntry entry) {

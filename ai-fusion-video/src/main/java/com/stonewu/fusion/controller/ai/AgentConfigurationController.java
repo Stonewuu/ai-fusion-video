@@ -1,6 +1,7 @@
 package com.stonewu.fusion.controller.ai;
 
 import com.stonewu.fusion.common.CommonResult;
+import com.stonewu.fusion.controller.ai.vo.AgentSkillImportReqVO;
 import com.stonewu.fusion.controller.ai.vo.AgentSkillSaveReqVO;
 import com.stonewu.fusion.controller.ai.vo.AgentMcpServerRespVO;
 import com.stonewu.fusion.controller.ai.vo.AgentMcpServerSaveReqVO;
@@ -12,6 +13,7 @@ import com.stonewu.fusion.entity.ai.AgentWorkspaceMigration;
 import com.stonewu.fusion.entity.ai.AgentMcpServer;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentMcpServerService;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentUserMcpRuntimeRegistry;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentSkillImportService;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceConfigService;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceMigrationService;
@@ -20,6 +22,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -27,7 +30,10 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RequestPart;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -43,6 +49,7 @@ public class AgentConfigurationController {
     private final AgentWorkspaceConfigService workspaceConfigService;
     private final AgentWorkspaceMigrationService migrationService;
     private final AgentUserSkillService userSkillService;
+    private final AgentSkillImportService skillImportService;
     private final AgentMcpServerService mcpServerService;
     private final AgentUserMcpRuntimeRegistry userMcpRuntimeRegistry;
 
@@ -117,6 +124,30 @@ public class AgentConfigurationController {
                 request.displayName(),
                 request.description(),
                 request.content()));
+    }
+
+    @PostMapping(value = "/skills/import/preview", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "预检当前用户要导入的 Skill 包")
+    public CommonResult<AgentSkillImportService.ImportPreview> previewSkillImport(
+            @RequestPart("files") List<MultipartFile> files,
+            @RequestParam("paths") List<String> paths) {
+        return success(skillImportService.preview(requireCurrentUserId(), files, paths));
+    }
+
+    @PostMapping(value = "/skills/import", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @Operation(summary = "导入当前用户选择的 Skill")
+    public CommonResult<AgentSkillImportService.ImportResult> importSkills(
+            @RequestPart("files") List<MultipartFile> files,
+            @RequestParam("paths") List<String> paths,
+            @Valid @RequestPart("request") AgentSkillImportReqVO request) {
+        List<AgentSkillImportService.ImportSelection> selections = request.selections().stream()
+                .map(selection -> new AgentSkillImportService.ImportSelection(
+                        selection.rootPath(),
+                        selection.displayName(),
+                        selection.action()))
+                .toList();
+        return success(skillImportService.importSkills(
+                requireCurrentUserId(), files, paths, selections));
     }
 
     @DeleteMapping("/skills/{name}")

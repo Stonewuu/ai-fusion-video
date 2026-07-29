@@ -124,7 +124,8 @@ public class AgentConversationService {
                 new LambdaQueryWrapper<AgentConversation>()
                         .eq(AgentConversation::getUserId, userId)
                         .eq(AgentConversation::getDeleted, false)
-                        .orderByDesc(AgentConversation::getUpdateTime)));
+                        .orderByDesc(AgentConversation::getUpdateTime)
+                        .orderByDesc(AgentConversation::getId)));
     }
 
     public PageResult<AgentConversation> listByUserAndCategory(Long userId, String category, int pageNo, int pageSize) {
@@ -133,7 +134,8 @@ public class AgentConversationService {
                         .eq(AgentConversation::getUserId, userId)
                         .eq(AgentConversation::getCategory, category)
                         .eq(AgentConversation::getDeleted, false)
-                        .orderByDesc(AgentConversation::getUpdateTime)));
+                        .orderByDesc(AgentConversation::getUpdateTime)
+                        .orderByDesc(AgentConversation::getId)));
     }
 
     public List<AgentConversation> listByProject(Long projectId) {
