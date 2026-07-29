@@ -463,10 +463,10 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
           }}
           onAnimationComplete={finishOverlayAnimation}
           className={cn(
-            "fixed z-65 border backdrop-blur-xl backdrop-saturate-150",
+            "fixed z-65 border border-border/40 backdrop-blur-xl backdrop-saturate-150",
             overlayMode === "collapsed"
               ? "overflow-visible bg-background/75 shadow-lg"
-              : "overflow-hidden border-border/40 bg-popover/80 shadow-xl",
+              : "overflow-hidden bg-popover/80 shadow-xl",
           )}
         >
           <AssistantLauncher

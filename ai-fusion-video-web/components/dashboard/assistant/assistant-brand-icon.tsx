@@ -9,7 +9,7 @@ export function AssistantBrandIcon({ className }: { className?: string }) {
       width={64}
       height={64}
       draggable={false}
-      className={cn("shrink-0 select-none object-contain", className)}
+      className={cn("pointer-events-none shrink-0 select-none object-contain", className)}
     />
   );
 }

@@ -149,6 +149,8 @@ export function AssistantLauncher({
               onPointerMove={handlePointerMove}
               onPointerUp={finishPointer}
               onPointerCancel={finishPointer}
+              onDragStart={(event) => event.preventDefault()}
+              onDoubleClick={(event) => event.preventDefault()}
               onClick={(event) => {
                 if (draggedRef.current) {
                   event.preventDefault();
@@ -159,7 +161,7 @@ export function AssistantLauncher({
                 if (collapsed) onOpen(event.detail > 0);
               }}
               style={{ touchAction: "none" }}
-              className="relative z-10 flex size-full cursor-pointer items-center justify-center rounded-full bg-transparent text-primary outline-none transition-colors hover:bg-transparent focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-transparent"
+              className="relative z-10 flex size-full cursor-pointer select-none items-center justify-center rounded-full bg-transparent text-primary outline-none transition-colors hover:bg-transparent focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-transparent"
             >
               <span className="flex items-center justify-center">
                 <AssistantBrandIcon className="size-9" />

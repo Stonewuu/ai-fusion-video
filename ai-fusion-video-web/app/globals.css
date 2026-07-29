@@ -231,17 +231,14 @@
 
 [data-assistant-launcher-status="idle"] {
   --assistant-launcher-accent: color-mix(in oklab, oklch(0.606 0.25 292.717) 36%, transparent);
-  border-color: var(--assistant-launcher-accent);
 }
 
 [data-assistant-launcher-status="running"] {
   --assistant-launcher-accent: color-mix(in oklab, var(--primary) 64%, transparent);
-  border-color: var(--assistant-launcher-accent);
 }
 
 [data-assistant-launcher-status="completed"] {
   --assistant-launcher-accent: color-mix(in oklab, oklch(0.696 0.17 162.48) 52%, transparent);
-  border-color: var(--assistant-launcher-accent);
 }
 
 .assistant-launcher-waves {
