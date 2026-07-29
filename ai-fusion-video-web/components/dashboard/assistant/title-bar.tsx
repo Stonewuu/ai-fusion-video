@@ -83,6 +83,26 @@ export function AssistantTitleBar({
   );
   const isDocked = mode === "docked";
   const isMaximized = mode === "maximized";
+  const conversationMenu = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon-sm"
+      aria-label="打开会话列表"
+      title="打开会话列表"
+      data-assistant-interactive="true"
+      className="assistant-narrow-only"
+      onPointerDown={(event) => event.stopPropagation()}
+      onClick={() => useAssistantStore.getState().setDrawerOpen(true)}
+    >
+      <Menu className="size-4" />
+    </Button>
+  );
+  const leadingIcon = showLeadingIcon ? (
+    <span className="flex size-8 shrink-0 items-center justify-center">
+      <AssistantBrandIcon className="size-7" />
+    </span>
+  ) : <span className="size-8 shrink-0" aria-hidden="true" />;
 
   return (
     <div
@@ -93,25 +113,17 @@ export function AssistantTitleBar({
         onToggleMaximize();
       }}
     >
-      {showLeadingIcon ? (
-        <span className="flex size-8 shrink-0 items-center justify-center">
-          <AssistantBrandIcon className="size-7" />
-        </span>
-      ) : <span className="size-8 shrink-0" aria-hidden="true" />}
-
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-sm"
-        aria-label="打开会话列表"
-        title="打开会话列表"
-        data-assistant-interactive="true"
-        className="assistant-narrow-only"
-        onPointerDown={(event) => event.stopPropagation()}
-        onClick={() => useAssistantStore.getState().setDrawerOpen(true)}
-      >
-        <Menu className="size-4" />
-      </Button>
+      {isDocked ? (
+        <>
+          {conversationMenu}
+          {leadingIcon}
+        </>
+      ) : (
+        <>
+          {leadingIcon}
+          {conversationMenu}
+        </>
+      )}
 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold">融光助手</p>

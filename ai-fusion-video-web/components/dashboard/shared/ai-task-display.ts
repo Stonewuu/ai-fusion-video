@@ -30,6 +30,7 @@ export const toolDisplayNames: Record<string, string> = {
   get_generation_model_capabilities: "查询生成模型能力",
   generate_image: "AI 生成图片",
   generate_video: "AI 生成视频",
+  load_skill_through_path: "加载技能资源",
   update_storyboard_item_video: "更新分镜视频",
   update_storyboard_item_frame: "更新分镜首尾帧",
   get_storyboard_scene_items: "查询场次镜头列表",

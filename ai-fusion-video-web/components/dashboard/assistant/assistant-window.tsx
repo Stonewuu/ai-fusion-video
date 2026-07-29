@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { createPortal } from "react-dom";
 import { Loader2 } from "lucide-react";
 import { AssistantComposer } from "./composer";
 import { ConversationNavigation, AssistantEmptyState } from "./conversation-navigation";
@@ -41,6 +42,17 @@ const RESIZE_HANDLES: Array<{ direction: ResizeDirection; className: string; lab
   { direction: "sw", className: "bottom-0 left-0 size-4 cursor-nesw-resize", label: "调整窗口左下角" },
 ];
 
+const EXTERNAL_RESIZE_HANDLE_CLASSES: Record<ResizeDirection, string> = {
+  n: "inset-x-[7px] top-0 h-[7px] cursor-ns-resize",
+  s: "inset-x-[7px] bottom-0 h-[7px] cursor-ns-resize",
+  e: "inset-y-[7px] right-0 w-[7px] cursor-ew-resize",
+  w: "inset-y-[7px] left-0 w-[7px] cursor-ew-resize",
+  ne: "right-0 top-0 size-[7px] cursor-nesw-resize",
+  nw: "left-0 top-0 size-[7px] cursor-nwse-resize",
+  se: "bottom-0 right-0 size-[7px] cursor-nwse-resize",
+  sw: "bottom-0 left-0 size-[7px] cursor-nesw-resize",
+};
+
 function isInteractiveTarget(target: EventTarget | null) {
   return target instanceof HTMLElement && !!target.closest("[data-assistant-interactive],button,input,textarea,select,[role=combobox]");
 }
@@ -61,6 +73,7 @@ export function AssistantWindow({
   onDockResizeStart,
 }: AssistantWindowProps) {
   const selectedConversationId = useAssistantStore((state) => state.selectedConversationId);
+  const normalRect = useAssistantStore((state) => state.normalRect);
   const updateNormalRect = useAssistantStore((state) => state.updateNormalRect);
   const setMode = useAssistantStore((state) => state.setMode);
   const setDrawerOpen = useAssistantStore((state) => state.setDrawerOpen);
@@ -184,78 +197,106 @@ export function AssistantWindow({
   };
 
   return (
-    <div ref={shellRef} className="assistant-shell relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden">
-      <AssistantTitleBar
-        mode={mode}
-        canDock={canDock}
-        mobileViewport={mobileViewport}
-        showLeadingIcon={showLeadingIcon}
-        onToggleDock={onToggleDock}
-        onToggleMaximize={onToggleMaximize}
-        onClose={onClose}
-        onStartDrag={startDrag}
-      />
+    <>
+      <div className="relative h-full min-h-0 min-w-0 overflow-visible rounded-[inherit]">
+      <div ref={shellRef} className="assistant-shell relative flex h-full min-h-0 min-w-0 flex-col overflow-hidden rounded-[inherit]">
+        <AssistantTitleBar
+          mode={mode}
+          canDock={canDock}
+          mobileViewport={mobileViewport}
+          showLeadingIcon={showLeadingIcon}
+          onToggleDock={onToggleDock}
+          onToggleMaximize={onToggleMaximize}
+          onClose={onClose}
+          onStartDrag={startDrag}
+        />
 
-      <div className="relative flex min-h-0 flex-1">
-        {mode !== "collapsed" ? <ConversationNavigation /> : null}
-        <section className="assistant-content relative flex min-w-0 flex-1 flex-col bg-background/20">
-          {mode !== "collapsed"
-            ? selectedConversationId
-              ? contentActive ? (
-                  <AssistantMessageList
-                    key={selectedConversationId}
-                    conversationId={selectedConversationId}
-                    inputHeight={inputHeight}
-                  />
-                ) : (
-                  <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
-                    <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> 加载消息
-                  </div>
-                )
-              : <AssistantEmptyState inputRef={inputRef} bottomInset={inputHeight} />
-            : null}
-          {mode !== "collapsed" ? (
-            <AssistantComposer
-              active={contentActive}
-              tooltipsEnabled={!interactionGuardActive}
-              projectId={projectId}
-              inputRef={inputRef}
-              onHeightChange={setInputHeight}
-            />
-          ) : null}
-        </section>
+        <div className="relative flex min-h-0 flex-1">
+          {mode !== "collapsed" ? <ConversationNavigation /> : null}
+          <section className="assistant-content relative flex min-w-0 flex-1 flex-col bg-background/20">
+            {mode !== "collapsed"
+              ? selectedConversationId
+                ? contentActive ? (
+                    <AssistantMessageList
+                      key={selectedConversationId}
+                      conversationId={selectedConversationId}
+                      inputHeight={inputHeight}
+                    />
+                  ) : (
+                    <div className="flex min-h-0 flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
+                      <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> 加载消息
+                    </div>
+                  )
+                : <AssistantEmptyState inputRef={inputRef} bottomInset={inputHeight} />
+              : null}
+            {mode !== "collapsed" ? (
+              <AssistantComposer
+                active={contentActive}
+                tooltipsEnabled={!interactionGuardActive}
+                projectId={projectId}
+                inputRef={inputRef}
+                onHeightChange={setInputHeight}
+              />
+            ) : null}
+          </section>
+        </div>
+
+        {mode === "docked" && onDockResizeStart ? (
+          <div
+            role="separator"
+            aria-label="调整助手宽度"
+            tabIndex={0}
+            className="absolute inset-y-0 left-0 z-50 w-1 touch-none cursor-ew-resize bg-border/40 transition-colors hover:bg-primary/60 focus-visible:bg-primary/60"
+            data-assistant-interactive="true"
+            onPointerDown={onDockResizeStart}
+          />
+        ) : null}
+
+        {mode === "floating" ? RESIZE_HANDLES.map((handle) => (
+          <div
+            key={handle.direction}
+            role="separator"
+            aria-label={handle.label}
+            className={`absolute z-20 touch-none ${handle.className}`}
+            data-assistant-interactive="true"
+            onPointerDown={(event) => startResize(handle.direction, event)}
+          />
+        )) : null}
+
+        {interactionGuardActive ? (
+          <div
+            aria-hidden="true"
+            className="absolute inset-0 z-60 cursor-default"
+            onPointerMove={onInteractionGuardRelease}
+            onPointerDown={onInteractionGuardRelease}
+          />
+        ) : null}
+      </div>
       </div>
 
-      {mode === "docked" && onDockResizeStart ? (
-        <div
-          role="separator"
-          aria-label="调整助手宽度"
-          tabIndex={0}
-          className="absolute inset-y-0 left-0 z-50 w-1 touch-none cursor-ew-resize bg-border/40 transition-colors hover:bg-primary/60 focus-visible:bg-primary/60"
-          data-assistant-interactive="true"
-          onPointerDown={onDockResizeStart}
-        />
-      ) : null}
-
-      {mode === "floating" ? RESIZE_HANDLES.map((handle) => (
-        <div
-          key={handle.direction}
-          role="separator"
-          aria-label={handle.label}
-          className={`absolute z-20 touch-none ${handle.className}`}
-          data-assistant-interactive="true"
-          onPointerDown={(event) => startResize(handle.direction, event)}
-        />
-      )) : null}
-
-      {interactionGuardActive ? (
-        <div
-          aria-hidden="true"
-          className="absolute inset-0 z-60 cursor-default"
-          onPointerMove={onInteractionGuardRelease}
-          onPointerDown={onInteractionGuardRelease}
-        />
-      ) : null}
-    </div>
+      {mode === "floating" && !interactionGuardActive && typeof document !== "undefined"
+        ? createPortal(
+            <div
+              aria-hidden="true"
+              className="pointer-events-none fixed z-[66]"
+              style={{
+                left: normalRect.x - 5,
+                top: normalRect.y - 5,
+                width: normalRect.width + 10,
+                height: normalRect.height + 10,
+              }}
+            >
+              {RESIZE_HANDLES.map((handle) => (
+                <div
+                  key={handle.direction}
+                  className={`pointer-events-auto absolute touch-none ${EXTERNAL_RESIZE_HANDLE_CLASSES[handle.direction]}`}
+                  onPointerDown={(event) => startResize(handle.direction, event)}
+                />
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
+import { motion, useReducedMotion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ASSISTANT_LAUNCHER_SIZE,
@@ -9,6 +10,9 @@ import {
 } from "./geometry";
 import { useAssistantStore } from "@/lib/store/assistant-store";
 import { AssistantBrandIcon } from "./assistant-brand-icon";
+
+// The open launcher overlays the 56px title bar; keep this separate from the collapsed hit area.
+const ASSISTANT_OPEN_LAUNCHER_AREA_SIZE = 56;
 
 interface AssistantLauncherProps {
   collapsed: boolean;
@@ -27,12 +31,16 @@ export function AssistantLauncher({
   onOpen,
   onPositionPaint,
 }: AssistantLauncherProps) {
+  const reducedMotion = useReducedMotion();
   const position = useAssistantStore((state) => state.launcherPosition);
   const updatePosition = useAssistantStore((state) => state.updateLauncherPosition);
   const pointerRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
   const livePositionRef = useRef(position);
   const dragFrameRef = useRef<number | null>(null);
   const draggedRef = useRef(false);
+  const launcherAreaSize = collapsed
+    ? ASSISTANT_LAUNCHER_SIZE
+    : ASSISTANT_OPEN_LAUNCHER_AREA_SIZE;
 
   const paintPosition = useCallback((nextPosition: typeof position) => {
     onPositionPaint(nextPosition);
@@ -100,15 +108,22 @@ export function AssistantLauncher({
   };
 
   return (
-    <div
+    <motion.div
       aria-hidden={!collapsed}
       data-assistant-launcher
+      initial={false}
+      animate={{
+        width: launcherAreaSize,
+        height: launcherAreaSize,
+      }}
+      transition={{
+        duration: reducedMotion ? 0.01 : collapsed ? 0.15 : 0.2,
+        ease: collapsed ? "easeIn" : "easeOut",
+      }}
       className={collapsed && wavesVisible
         ? "absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2"
         : "absolute left-0 top-0 z-20"}
       style={{
-        width: ASSISTANT_LAUNCHER_SIZE,
-        height: ASSISTANT_LAUNCHER_SIZE,
         pointerEvents: collapsed ? "auto" : "none",
       }}
     >
@@ -147,13 +162,13 @@ export function AssistantLauncher({
               className="relative z-10 flex size-full cursor-pointer items-center justify-center rounded-full bg-transparent text-primary outline-none transition-colors hover:bg-transparent focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-transparent"
             >
               <span className="flex items-center justify-center">
-                <AssistantBrandIcon className="size-8" />
+                <AssistantBrandIcon className="size-9" />
               </span>
             </button>
           }
         />
         <TooltipContent>融光助手</TooltipContent>
       </Tooltip>
-    </div>
+    </motion.div>
   );
 }

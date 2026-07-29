@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 export function AssistantBrandIcon({ className }: { className?: string }) {
   return (
     <Image
-      src="/assistant-avatar.svg"
+      src="/brand/fusion-assistant.svg"
       alt=""
       width={64}
       height={64}

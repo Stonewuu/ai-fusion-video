@@ -24,8 +24,8 @@ DEFAULT_OUTPUT = (
     Path(__file__).resolve().parents[1]
     / "ai-fusion-video-web"
     / "public"
-    / "logo-candidates"
-    / "rongguang-assistant-chat-glow.svg"
+    / "brand"
+    / "fusion-assistant.svg"
 )
 
 
