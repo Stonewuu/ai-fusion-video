@@ -10,7 +10,6 @@ import com.stonewu.fusion.repository.ai.AgentRunRepository;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreSlot;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
-import com.stonewu.fusion.service.ai.run.model.ExecutionStopReason;
 import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
 import com.stonewu.fusion.service.ai.run.model.SystemTerminalActor;
 import org.springframework.stereotype.Service;
@@ -33,7 +32,8 @@ public final class CancellationCoordinator implements RunShutdownCancellationPor
 
     private final AgentRunRepository runs;
     private final AgentRunRedisSignalService signals;
-    private final OwnedExecutionRegistry executions;
+    private final OwnedCancellationHandler ownedCancellations;
+    private final AgentRuntimeInstanceIdentity instanceIdentity;
     private final RunTerminalCoordinator terminals;
     private final AgentEventEnvelopeSanitizer sanitizer;
     private final TransactionTemplate transactions;
@@ -42,15 +42,18 @@ public final class CancellationCoordinator implements RunShutdownCancellationPor
     public CancellationCoordinator(
             AgentRunRepository runs,
             AgentRunRedisSignalService signals,
-            OwnedExecutionRegistry executions,
+            OwnedCancellationHandler ownedCancellations,
+            AgentRuntimeInstanceIdentity instanceIdentity,
             RunTerminalCoordinator terminals,
             AgentEventEnvelopeSanitizer sanitizer,
             TransactionTemplate transactions,
             AgentRuntimeSchedulers schedulers) {
         this.runs = Objects.requireNonNull(runs, "runs must not be null");
         this.signals = Objects.requireNonNull(signals, "signals must not be null");
-        this.executions = Objects.requireNonNull(
-                executions, "executions must not be null");
+        this.ownedCancellations = Objects.requireNonNull(
+                ownedCancellations, "ownedCancellations must not be null");
+        this.instanceIdentity = Objects.requireNonNull(
+                instanceIdentity, "instanceIdentity must not be null");
         this.terminals = Objects.requireNonNull(terminals, "terminals must not be null");
         this.sanitizer = Objects.requireNonNull(sanitizer, "sanitizer must not be null");
         this.transactions = Objects.requireNonNull(
@@ -120,20 +123,16 @@ public final class CancellationCoordinator implements RunShutdownCancellationPor
                         run.getRunId(), CANCEL_RETRY_DELAY)).then())
                 .onErrorResume(ignored -> Mono.empty());
         if (!hasOwner(run)) {
-            return publish.then(terminalCancelled(run));
+            return Mono.when(publish, terminalCancelled(run));
         }
-        return publish.then(executions.interruptOwned(
-                        run.getRunId(),
-                        run.getOwnerInstanceId(),
-                        run.getOwnerEpoch(),
-                        ExecutionStopReason.CANCEL_REQUESTED)
-                .flatMap(interrupted -> interrupted
-                        ? journal(() -> runs.acknowledgeOwnedCancellation(
-                                        run.getRunId(),
-                                        run.getOwnerInstanceId(),
-                                        run.getOwnerEpoch()))
-                                .then()
-                        : Mono.empty()));
+        Mono<Void> localCancellation = isOwnedByThisInstance(run)
+                ? ownedCancellations.acknowledgeAndFinalize(
+                                run.getRunId(),
+                                run.getOwnerInstanceId(),
+                                run.getOwnerEpoch())
+                        .then()
+                : Mono.empty();
+        return Mono.when(publish, localCancellation);
     }
 
     private Mono<Void> terminalCancelled(AgentRun run) {
@@ -198,6 +197,11 @@ public final class CancellationCoordinator implements RunShutdownCancellationPor
                 && !run.getOwnerInstanceId().isBlank()
                 && run.getOwnerEpoch() != null
                 && run.getOwnerEpoch() > 0;
+    }
+
+    private boolean isOwnedByThisInstance(AgentRun run) {
+        return hasOwner(run)
+                && instanceIdentity.value().equals(run.getOwnerInstanceId());
     }
 
     private <T> Mono<T> transaction(java.util.function.Supplier<T> operation) {

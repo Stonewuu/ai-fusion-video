@@ -120,7 +120,7 @@ def build_svg(size: int, include_background: bool) -> str:
 
     return f'''<svg xmlns="http://www.w3.org/2000/svg" width="{size}" height="{size}" viewBox="0 0 {size} {size}" role="img" aria-labelledby="title desc">
   <title id="title">融光助手 Logo</title>
-  <desc id="desc">三片相隔一百二十度并循环覆盖的渐变叶片组成圆形莫比乌斯对话气泡，构造圆交集形成鲁洛克斯三角形负空间。</desc>
+  <desc id="desc">三片相隔一百二十度并循环覆盖的渐变叶片组成圆形莫比乌斯对话气泡，构造圆交集形成白色鲁洛克斯三角形面部，并配有带高光的蓝色眼睛。</desc>
 
   <defs>
     <radialGradient id="background" cx="{s(627)}" cy="{s(539)}" r="{s(980)}" gradientUnits="userSpaceOnUse">
@@ -154,17 +154,22 @@ def build_svg(size: int, include_background: bool) -> str:
       <stop offset="0.8" stop-color="#159bb3"/>
       <stop offset="1" stop-color="#27b3c7"/>
     </linearGradient>
-    <linearGradient id="eye" x1="0" y1="{s(575)}" x2="0" y2="{s(609)}" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0e3768"/>
-      <stop offset="1" stop-color="#082b56"/>
-    </linearGradient>
-
     <clipPath id="outerCircle" clipPathUnits="userSpaceOnUse">
       <circle cx="{fmt(cx)}" cy="{fmt(cy)}" r="{fmt(outer_radius)}"/>
     </clipPath>
     <path id="leaf" fill-rule="evenodd" clip-rule="evenodd" d="{leaf}"/>
     <path id="leafClipExpanded" fill-rule="evenodd" clip-rule="evenodd" d="{clip_leaf}"/>
+    <circle id="faceConstructionCircle" cx="{fmt(cx)}" cy="{fmt(construction_cy)}" r="{fmt(construction_radius)}"/>
     <circle id="darkConstructionCircle" cx="{fmt(cx)}" cy="{fmt(cy - construction_offset)}" r="{fmt(construction_radius)}"/>
+    <clipPath id="faceCoralCircle" clipPathUnits="userSpaceOnUse">
+      <use href="#faceConstructionCircle" transform="rotate(60 {fmt(cx)} {fmt(cy)})"/>
+    </clipPath>
+    <clipPath id="faceDarkCircle" clipPathUnits="userSpaceOnUse">
+      <use href="#faceConstructionCircle" transform="rotate(180 {fmt(cx)} {fmt(cy)})"/>
+    </clipPath>
+    <clipPath id="faceTopCircle" clipPathUnits="userSpaceOnUse">
+      <use href="#faceConstructionCircle" transform="rotate(300 {fmt(cx)} {fmt(cy)})"/>
+    </clipPath>
     <clipPath id="coralLeafClip" clipPathUnits="userSpaceOnUse">
       <use href="#leafClipExpanded" transform="rotate(60 {fmt(cx)} {fmt(cy)})"/>
     </clipPath>
@@ -190,6 +195,14 @@ def build_svg(size: int, include_background: bool) -> str:
   </defs>
 
 {background}  <path d="{tail}" fill="url(#tailGradient)"/>
+
+  <g clip-path="url(#faceCoralCircle)">
+    <g clip-path="url(#faceDarkCircle)">
+      <g clip-path="url(#faceTopCircle)">
+        <rect width="{size}" height="{size}" fill="#ffffff"/>
+      </g>
+    </g>
+  </g>
 
   <g clip-path="url(#outerCircle)">
     <use href="#leaf" transform="rotate(60 {fmt(cx)} {fmt(cy)})" fill="url(#coralLeaf)"/>
@@ -220,8 +233,10 @@ def build_svg(size: int, include_background: bool) -> str:
     </g>
   </g>
 
-  <ellipse cx="{s(558)}" cy="{s(591)}" rx="{s(54)}" ry="{s(82)}" fill="url(#eye)"/>
-  <ellipse cx="{s(718)}" cy="{s(591)}" rx="{s(54)}" ry="{s(82)}" fill="url(#eye)"/>
+  <ellipse cx="{s(558)}" cy="{s(591)}" rx="{s(54)}" ry="{s(82)}" fill="#447ae5"/>
+  <ellipse cx="{s(718)}" cy="{s(591)}" rx="{s(54)}" ry="{s(82)}" fill="#447ae5"/>
+  <ellipse cx="{s(540)}" cy="{s(558)}" rx="{s(13)}" ry="{s(18)}" fill="#ffffff" fill-opacity="0.95"/>
+  <ellipse cx="{s(700)}" cy="{s(558)}" rx="{s(13)}" ry="{s(18)}" fill="#ffffff" fill-opacity="0.95"/>
 </svg>
 '''
 

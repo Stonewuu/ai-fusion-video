@@ -118,7 +118,7 @@ export const OPENAI_IMAGE_MODE_CONFIG_KEYS = [
 export const MODEL_PROTOCOL_LABELS: Record<string, string> = {
   openai_compatible: "OpenAI 兼容文本协议",
   openai: "OpenAI 官方协议",
-  deepseek: "DeepSeek 协议",
+  deepseek: "OpenAI 兼容文本协议",
   anthropic: "Anthropic 协议",
   gemini: "Gemini 协议",
   newapi: "New API 协议",
@@ -134,7 +134,6 @@ export const MODEL_PROTOCOL_LABELS: Record<string, string> = {
 
 export const TEXT_PROTOCOL_OPTIONS = [
   { value: "openai_compatible", label: "OpenAI 兼容文本协议" },
-  { value: "deepseek", label: "DeepSeek 协议" },
   { value: "anthropic", label: "Anthropic 协议" },
   { value: "gemini", label: "Gemini 协议" },
   { value: "dashscope", label: "DashScope 协议" },

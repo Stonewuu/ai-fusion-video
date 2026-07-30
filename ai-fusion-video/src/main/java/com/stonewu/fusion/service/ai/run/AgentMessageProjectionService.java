@@ -471,6 +471,9 @@ public class AgentMessageProjectionService {
                                 run.getConversationId())
                         .eq(AgentConversation::getDeleted, false)
                         .set(AgentConversation::getStatus, status)
+                        .set(AgentConversation::getAgentStateLastActiveAt,
+                                databaseNow)
+                        .set(AgentConversation::getAgentStateExpiredAt, null)
                         .set(AgentConversation::getUpdateTime, databaseNow)) != 1) {
             throw new IllegalStateException(
                     "Agent conversation terminal update did not affect exactly one row");

@@ -51,10 +51,9 @@ public final class AgentScopeMessageMapper {
     }
 
     /**
-     * Rebuilds a provider-safe conversation prefix when the durable AgentScope
-     * state slot is absent (for example after migrating from the old in-memory
-     * local store). Tool calls are summarized as assistant context so an
-     * interrupted call never becomes an invalid pending provider tool call.
+     * Rebuilds a provider-safe conversation prefix at a terminal-run
+     * continuation boundary. Tool calls are summarized as assistant context so
+     * an interrupted call never becomes an invalid pending provider tool call.
      */
     public List<Msg> toRecoveredContinuationMessages(
             List<AgentMessage> persistedMessages, String continuationText) {

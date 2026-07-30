@@ -104,6 +104,13 @@ class AgentScopeMessageMapperTests {
                         .reasoningContent("第一场已保存，第二场尚未完成")
                         .build(),
                 AgentMessage.builder()
+                        .role("tool")
+                        .toolCallId("sub-agent-call")
+                        .toolName("storyboard_asset_preprocessor")
+                        .toolStatus("cancelled")
+                        .content("{\"scriptEpisodeIds\":\"13,14\"}")
+                        .build(),
+                AgentMessage.builder()
                         .role("assistant")
                         .parentToolCallId("sub-agent-call")
                         .content("子 Agent 内部明细")
@@ -115,6 +122,7 @@ class AgentScopeMessageMapperTests {
                         MsgRole.ASSISTANT,
                         MsgRole.ASSISTANT,
                         MsgRole.ASSISTANT,
+                        MsgRole.ASSISTANT,
                         MsgRole.USER);
         assertThat(recovered.get(1).getTextContent())
                 .contains("get_script_episode", "状态：success", "第一集");
@@ -123,6 +131,8 @@ class AgentScopeMessageMapperTests {
         assertThat(recovered.get(3).getTextContent())
                 .contains("第一场已保存，第二场尚未完成")
                 .doesNotContain("子 Agent 内部明细");
+        assertThat(recovered.get(4).getTextContent())
+                .contains("storyboard_asset_preprocessor", "状态：cancelled", "13,14");
         assertThat(recovered.getLast().getTextContent()).isEqualTo("继续");
     }
 

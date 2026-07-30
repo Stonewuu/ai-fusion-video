@@ -103,18 +103,15 @@ function resolveModelIcon(source?: ModelIconSource | null): LobeIconDefinition |
   }
   if (identity.includes("gpt-") || identity.includes("openai")) return LOBE_ICONS.openAi;
 
-  return resolveProviderIcon(source.platform, source.name);
+  return resolveProviderIcon(source.platform);
 }
 
-function resolveProviderIcon(
-  provider?: string | null,
-  name?: string | null,
-): LobeIconDefinition | null {
-  const identity = normalizedIdentity([name, provider]);
+function resolveProviderIcon(provider?: string | null): LobeIconDefinition | null {
+  const identity = normalizedIdentity([provider]);
   if (!identity) return null;
 
   if (identity.includes("agnes")) return LOBE_ICONS.agnes;
-  if (identity.includes("deepseek")) return LOBE_ICONS.deepSeek;
+  if (identity.includes("deepseek")) return LOBE_ICONS.openAi;
   if (identity.includes("newapi") || identity.includes("new api")) return LOBE_ICONS.newApi;
   if (identity.includes("zhipu") || identity.includes("智谱")) return LOBE_ICONS.zhipu;
   if (identity.includes("moonshot") || identity.includes("月之暗面")) return LOBE_ICONS.moonshot;
@@ -169,16 +166,14 @@ export function ModelVendorIcon({
 
 export function ProviderVendorIcon({
   provider,
-  name,
   className,
 }: {
   provider?: string | null;
-  name?: string | null;
   className?: string;
 }) {
   return (
     <LobeIcon
-      definition={resolveProviderIcon(provider, name)}
+      definition={resolveProviderIcon(provider)}
       className={className}
     />
   );

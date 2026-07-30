@@ -44,7 +44,11 @@ import {
   messagesToTimeline,
   resolveHistoryErrorMessage,
 } from "./history";
-import { ElapsedText, useSmartScroll } from "./hooks";
+import {
+  ElapsedText,
+  useScrollElement,
+  useSmartScroll,
+} from "./hooks";
 import { MessageTimeline } from "./timeline";
 import {
   formatDatetime,
@@ -69,6 +73,17 @@ function PipelineContinueAction({ onContinue }: { onContinue: () => void }) {
         <RefreshCw />
         重试
       </Button>
+    </div>
+  );
+}
+
+function PipelineStateExpiredNotice() {
+  return (
+    <div className="rounded-xl border border-border/30 bg-card/50 p-3">
+      <p className="text-xs font-medium">会话状态已过期</p>
+      <p className="mt-0.5 text-[11px] text-muted-foreground">
+        该会话状态存储已过期，请发起新会话
+      </p>
     </div>
   );
 }
@@ -118,12 +133,20 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
   const isIdle = isRunning && !cancelling && idleTimelineLength === timelineLength;
   const canCancel = isRunning && !cancelling && task?.cancellable !== false;
   const showCancel = isRunning && task?.cancellable !== false;
-  const timelineRef = useSmartScroll([timeline, isIdle], isRunning && !cancelling);
+  const [timelineElement, setTimelineElement] = useScrollElement();
+  useSmartScroll(
+    timelineElement,
+    [timeline, isIdle],
+    isRunning && !cancelling,
+  );
 
   useEffect(() => {
     loadPipelineContent(taskId);
+  }, [loadPipelineContent, task?.state.contentLoaded, task?.status, taskId]);
+
+  useEffect(() => {
     return () => disconnectPipelineContent(taskId);
-  }, [disconnectPipelineContent, loadPipelineContent, taskId]);
+  }, [disconnectPipelineContent, taskId]);
 
   useEffect(() => {
     if (!isRunning) return;
@@ -192,7 +215,7 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
         )}
       </div>
 
-      <div ref={timelineRef} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
+      <div ref={setTimelineElement} className="flex-1 min-h-0 overflow-y-auto p-4 space-y-3">
         {isContentPending && timeline.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -204,7 +227,7 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
             reasoningStartTime={task.state.reasoningStartTime}
             reasoningDurationMs={task.state.reasoningDurationMs}
             timeline={timeline}
-            scrollRef={timelineRef}
+            scrollElement={timelineElement}
             initialScrollToEnd
             streaming={isRunning && !cancelling}
             error={task.state.error}
@@ -254,7 +277,6 @@ function HistoryDetailPanel({
     timeline: PipelineTask["state"]["timeline"]
   ) => void;
 }) {
-  const timelineRef = useRef<HTMLDivElement>(null);
   const [messageState, setMessageState] = useState<{
     conversationId: string;
     messages: AgentMessage[];
@@ -264,6 +286,8 @@ function HistoryDetailPanel({
     messageState?.conversationId === conversation.conversationId
       ? messageState.messages
       : EMPTY_MESSAGES;
+  const [timelineElement, setTimelineElement] = useScrollElement();
+  useSmartScroll(timelineElement, [messages], false);
 
   useEffect(() => {
     let cancelled = false;
@@ -318,6 +342,7 @@ function HistoryDetailPanel({
     () => resolveHistoryErrorMessage(conversation, displayMessages),
     [conversation, displayMessages]
   );
+  const stateExpired = conversation.agentStateStatus === "EXPIRED";
 
   return (
     <div className="flex flex-col h-full">
@@ -345,7 +370,7 @@ function HistoryDetailPanel({
         </div>
       </div>
 
-      <div ref={timelineRef} className="flex-1 min-h-0 overflow-y-auto p-4">
+      <div ref={setTimelineElement} className="flex-1 min-h-0 overflow-y-auto p-4">
         {loading ? (
           <div className="flex items-center justify-center py-8">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -357,7 +382,7 @@ function HistoryDetailPanel({
             reasoningText={firstAssistant?.reasoningContent || undefined}
             reasoningDurationMs={firstAssistant?.reasoningDurationMs ?? undefined}
             timeline={timeline}
-            scrollRef={timelineRef}
+            scrollElement={timelineElement}
             initialScrollToEnd
             streaming={false}
             error={historyError}
@@ -365,6 +390,14 @@ function HistoryDetailPanel({
         )}
         {!loading &&
           isPipeline &&
+          stateExpired && (
+          <div className="mt-3">
+            <PipelineStateExpiredNotice />
+          </div>
+        )}
+        {!loading &&
+          isPipeline &&
+          !stateExpired &&
           (historyError || conversation.status === "cancelled") && (
           <div className="mt-3">
             <PipelineContinueAction
@@ -834,9 +867,13 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
 
   /* ---- detail content ---- */
   const detailContent = selectedPipelineTaskId ? (
-    <PipelineDetailPanel taskId={selectedPipelineTaskId} />
+    <PipelineDetailPanel
+      key={selectedPipelineTaskId}
+      taskId={selectedPipelineTaskId}
+    />
   ) : selectedConversation ? (
     <HistoryDetailPanel
+      key={selectedConversation.conversationId}
       conversation={selectedConversation}
       onContinue={handleContinueHistory}
     />

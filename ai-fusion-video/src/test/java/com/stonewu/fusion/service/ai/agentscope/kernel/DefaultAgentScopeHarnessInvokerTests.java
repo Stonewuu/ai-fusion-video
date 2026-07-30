@@ -151,7 +151,11 @@ class DefaultAgentScopeHarnessInvokerTests {
         InvocationFixture fixture = fixture();
         when(fixture.agent.call(any(List.class), any(RuntimeContext.class)))
                 .thenReturn(Mono.never());
-        clearInvocations(fixture.cache, fixture.preflight, fixture.lease, fixture.agent);
+        clearInvocations(
+                fixture.cache,
+                fixture.preflight,
+                fixture.lease,
+                fixture.agent);
 
         Disposable active = fixture.invoker.call(
                         fixture.spec, List.of(), fixture.context)
@@ -226,8 +230,15 @@ class DefaultAgentScopeHarnessInvokerTests {
         when(lease.resource()).thenReturn(resource);
         when(resource.agent()).thenReturn(agent);
         return new InvocationFixture(
-                new DefaultAgentScopeHarnessInvoker(cache, preflight, cleanupScheduler),
-                cache, preflight, lease, resource, agent, spec, context);
+                new DefaultAgentScopeHarnessInvoker(
+                        cache, preflight, cleanupScheduler),
+                cache,
+                preflight,
+                lease,
+                resource,
+                agent,
+                spec,
+                context);
     }
 
     private record InvocationFixture(

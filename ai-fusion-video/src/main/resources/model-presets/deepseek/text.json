@@ -2,8 +2,8 @@
   {
     "code": "deepseek-v4-flash",
     "name": "DeepSeek V4 Flash",
-    "platform": "deepseek",
-    "modelProtocol": "deepseek",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_compatible",
     "modelType": 1,
     "description": "DeepSeek V4 低延迟模型，支持非思考与思考模式。当前官方接口按纯文本输入配置。",
     "capabilities": ["文本对话", "深度推理", "工具调用"],
@@ -17,8 +17,8 @@
   {
     "code": "deepseek-v4-pro",
     "name": "DeepSeek V4 Pro",
-    "platform": "deepseek",
-    "modelProtocol": "deepseek",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_compatible",
     "modelType": 1,
     "description": "DeepSeek V4 高能力模型，支持非思考与思考模式。当前官方接口按纯文本输入配置。",
     "capabilities": ["文本对话", "深度推理", "工具调用"],

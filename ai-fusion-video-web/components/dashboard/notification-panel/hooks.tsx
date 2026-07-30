@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { PipelineTask } from "@/lib/store/pipeline-store";
 import { formatElapsed } from "./utils";
 
@@ -22,33 +28,40 @@ export function ElapsedText({ task }: { task: PipelineTask }) {
   return <>{text}</>;
 }
 
-export function useSmartScroll(deps: unknown[], active: boolean) {
-  const ref = useRef<HTMLDivElement>(null);
+export function useScrollElement() {
+  const [element, setElement] = useState<HTMLDivElement | null>(null);
+  const ref = useCallback((node: HTMLDivElement | null) => {
+    setElement(node);
+  }, []);
+  return [element, ref] as const;
+}
+
+export function useSmartScroll(
+  element: HTMLDivElement | null,
+  deps: unknown[],
+  active: boolean,
+) {
   const userScrolledUp = useRef(false);
 
   const isNearBottom = useCallback(() => {
-    const el = ref.current;
-    if (!el) return true;
-    return el.scrollHeight - el.scrollTop - el.clientHeight < 40;
-  }, []);
+    if (!element) return true;
+    return element.scrollHeight - element.scrollTop - element.clientHeight < 40;
+  }, [element]);
 
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
+    if (!element) return;
     const onScroll = () => {
       userScrolledUp.current = !isNearBottom();
     };
-    el.addEventListener("scroll", onScroll, { passive: true });
-    return () => el.removeEventListener("scroll", onScroll);
-  }, [isNearBottom]);
+    element.addEventListener("scroll", onScroll, { passive: true });
+    return () => element.removeEventListener("scroll", onScroll);
+  }, [element, isNearBottom]);
 
-  useEffect(() => {
-    if (!active) return;
-    if (!userScrolledUp.current && ref.current) {
-      ref.current.scrollTop = ref.current.scrollHeight;
+  useLayoutEffect(() => {
+    if (!active || !element) return;
+    if (!userScrolledUp.current) {
+      element.scrollTop = element.scrollHeight;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-
-  return ref;
+  }, [active, element, ...deps]);
 }

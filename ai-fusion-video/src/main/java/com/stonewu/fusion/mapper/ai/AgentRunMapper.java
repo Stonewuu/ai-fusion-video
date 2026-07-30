@@ -80,6 +80,17 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
             @Param("userId") long userId);
 
     @Select("""
+            SELECT *
+            FROM afv_agent_run FORCE INDEX (idx_agent_run_conversation_status)
+            WHERE conversation_id = #{conversationId}
+              AND parent_run_id IS NULL
+            ORDER BY id DESC
+            LIMIT 1
+            """)
+    AgentRun selectLatestRootByConversation(
+            @Param("conversationId") String conversationId);
+
+    @Select("""
             SELECT r.*
             FROM afv_agent_run r FORCE INDEX (idx_agent_run_user_status)
             INNER JOIN afv_agent_conversation c
@@ -94,6 +105,15 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
             ORDER BY r.update_time DESC, r.id DESC
             """)
     List<AgentRun> selectAuthorizedRunningRoots(@Param("userId") long userId);
+
+    @Select("""
+            SELECT DISTINCT agent_state_session_id
+            FROM afv_agent_run
+            WHERE conversation_id = #{conversationId}
+            ORDER BY agent_state_session_id
+            """)
+    List<String> selectStateSessionIdsByConversation(
+            @Param("conversationId") String conversationId);
 
     @Select("SELECT UTC_TIMESTAMP(3)")
     LocalDateTime selectDatabaseNow();

@@ -23,10 +23,13 @@ import com.stonewu.fusion.service.ai.agentscope.state.FailClosedAgentStateStore;
 import com.stonewu.fusion.service.ai.agentscope.state.InMemoryStateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.agentscope.context.ToolPermissionContext;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
+import com.stonewu.fusion.service.ai.run.AgentStateSessionIds;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEventType;
 import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.AssistantMessage;
 import io.agentscope.core.message.TextBlock;
+import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.ChatResponse;
 import io.agentscope.core.model.GenerateOptions;
@@ -44,6 +47,7 @@ import reactor.test.StepVerifier;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -247,17 +251,68 @@ class AgentScopeNoToolKernelIntegrationTests {
                                     AgentEventType.AGENT_END))
                     .verifyComplete();
 
+            RuntimeContext cancelledContext = context(
+                    "42", "afv:v2:conversation-c:no-tool");
+            RuntimeContext recoveredContext = context(
+                    "42",
+                    AgentStateSessionIds.recoveryGeneration(
+                            "conversation-c", "no-tool", "continued-run"));
+            ToolUseBlock interruptedTool = ToolUseBlock.builder()
+                    .id("sub-agent-call")
+                    .name("sub_agent")
+                    .input(Map.of("task", "prepare assets"))
+                    .build();
+            store.save(
+                    cancelledContext.getUserId(),
+                    cancelledContext.getSessionId(),
+                    "agent_state",
+                    AgentState.builder()
+                            .userId(cancelledContext.getUserId())
+                            .sessionId(cancelledContext.getSessionId())
+                            .context(List.of(AssistantMessage.builder()
+                                    .name("assistant")
+                                    .content(interruptedTool)
+                                    .build()))
+                            .build());
+
+            StepVerifier.create(invoker.call(
+                            spec,
+                            messages.toUserMessages("continue after cancellation"),
+                            recoveredContext))
+                    .assertNext(response -> assertThat(response.getTextContent())
+                            .isEqualTo("continue after cancellation"))
+                    .verifyComplete();
+
+            AgentState continued = store.get(
+                            recoveredContext.getUserId(),
+                            recoveredContext.getSessionId(),
+                            "agent_state",
+                            AgentState.class)
+                    .orElseThrow();
+            assertThat(continued.getContext().stream()
+                    .flatMap(message -> message
+                            .getContentBlocks(ToolUseBlock.class)
+                            .stream())
+                    .map(ToolUseBlock::getId))
+                    .doesNotContain("sub-agent-call");
+
             assertThat(registryCalls).hasValue(1);
-            assertThat(model.toolsByCall).hasSize(3)
+            assertThat(model.toolsByCall).hasSize(4)
                     .allSatisfy(tools -> assertThat(tools).isEmpty());
             assertThat(store.exists(secondContext.getUserId(), secondContext.getSessionId())).isTrue();
             assertStateSlot(store, firstContext);
             assertStateSlot(store, secondContext);
-            assertThat(model.messagesByCall).hasSize(3);
+            assertStateSlot(store, cancelledContext);
+            assertStateSlot(store, recoveredContext);
+            assertThat(model.messagesByCall).hasSize(4);
             assertThat(model.messagesByCall.get(2))
                     .extracting(Msg::getTextContent)
                     .doesNotContain("first echo")
                     .contains("second echo");
+            assertThat(model.messagesByCall.get(3))
+                    .extracting(Msg::getTextContent)
+                    .contains("continue after cancellation")
+                    .doesNotContain("Pending tool calls exist");
             store.delete(firstContext.getUserId(), firstContext.getSessionId());
             assertThat(store.exists(firstContext.getUserId(), firstContext.getSessionId())).isFalse();
             assertThat(store.exists(secondContext.getUserId(), secondContext.getSessionId())).isTrue();

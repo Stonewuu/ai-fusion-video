@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   type CSSProperties,
-  type RefObject,
 } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useVirtualizer } from "@tanstack/react-virtual";
@@ -36,7 +35,7 @@ import {
   getToolDisplayName,
   isSubAgentTool,
 } from "./constants";
-import { useSmartScroll } from "./hooks";
+import { useScrollElement, useSmartScroll } from "./hooks";
 import {
   parseTaskContent,
   type TaskMediaLinkInfo,
@@ -255,7 +254,8 @@ const SubAgentCard = memo(function SubAgentCard({
       : null;
   const hasResult = !!renderedResult;
   const hasContent = children.length > 0 || hasResult;
-  const innerScrollRef = useSmartScroll([children], isRunning);
+  const [innerScrollElement, setInnerScrollElement] = useScrollElement();
+  useSmartScroll(innerScrollElement, [children], isRunning);
   const childConfirmationItems = toolConfirmation?.parentToolCallId === item.id
     ? toolConfirmation.toolCallIds.map((toolCallId) => {
         const matches = children.filter(
@@ -362,7 +362,7 @@ const SubAgentCard = memo(function SubAgentCard({
             className="overflow-hidden"
           >
             <div
-              ref={innerScrollRef}
+              ref={setInnerScrollElement}
               className="border-t border-purple-500/10 px-4 py-3 space-y-2 max-h-[400px] overflow-y-auto"
             >
               {children.map((child, index) => {
@@ -486,7 +486,7 @@ export interface MessageTimelineProps {
   reasoningStartTime?: number;
   reasoningDurationMs?: number;
   timeline: TimelineItem[];
-  scrollRef: RefObject<HTMLDivElement | null>;
+  scrollElement?: HTMLDivElement | null;
   initialScrollToEnd?: boolean;
   streaming?: boolean;
   error?: string;
@@ -582,11 +582,11 @@ function MessageTimelineRowContent({
 
 function VirtualizedMessageTimeline({
   rows,
-  scrollRef,
+  scrollElement,
   toolConfirmation,
 }: {
   rows: MessageTimelineRow[];
-  scrollRef: RefObject<HTMLDivElement | null>;
+  scrollElement: HTMLDivElement | null;
   toolConfirmation?: TimelineToolConfirmation;
 }) {
   // TanStack Virtual owns a mutable measurement instance; this component is
@@ -594,7 +594,7 @@ function VirtualizedMessageTimeline({
   // eslint-disable-next-line react-hooks/incompatible-library
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
-    getScrollElement: () => scrollRef.current,
+    getScrollElement: () => scrollElement,
     estimateSize: (index) => {
       const row = rows[index];
       if (row?.type === "fallback-reasoning") return 192;
@@ -661,7 +661,7 @@ export function MessageTimeline({
   reasoningStartTime,
   reasoningDurationMs,
   timeline,
-  scrollRef,
+  scrollElement,
   initialScrollToEnd = false,
   streaming,
   error,
@@ -756,7 +756,7 @@ export function MessageTimeline({
   return (
     <VirtualizedMessageTimeline
       rows={rows}
-      scrollRef={scrollRef}
+      scrollElement={scrollElement ?? null}
       toolConfirmation={toolConfirmation}
     />
   );

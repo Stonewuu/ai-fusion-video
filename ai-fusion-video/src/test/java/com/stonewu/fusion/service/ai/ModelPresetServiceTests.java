@@ -164,6 +164,10 @@ class ModelPresetServiceTests {
         assertEquals(List.of("max", "high"),
                 JSONUtil.toList(service.getPreset("deepseek-v4-pro")
                         .getJSONArray("reasoningEffortLevels"), String.class));
+        assertEquals("openai_compatible",
+                service.getPreset("deepseek-v4-pro").getStr("platform"));
+        assertEquals("openai_compatible",
+                service.getPreset("deepseek-v4-pro").getStr("modelProtocol"));
         assertEquals(List.of("high", "medium", "low", "minimal"),
                 JSONUtil.toList(service.getPreset("gemini-3.6-flash")
                         .getJSONArray("reasoningEffortLevels"), String.class));

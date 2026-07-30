@@ -8,15 +8,19 @@ import com.stonewu.fusion.controller.ai.vo.AgentMcpServerSaveReqVO;
 import com.stonewu.fusion.controller.ai.vo.AgentMcpTestRespVO;
 import com.stonewu.fusion.controller.ai.vo.AgentWorkspaceConfigRespVO;
 import com.stonewu.fusion.controller.ai.vo.AgentWorkspaceMigrateReqVO;
+import com.stonewu.fusion.controller.ai.vo.AgentStateCleanupPolicyRespVO;
+import com.stonewu.fusion.controller.ai.vo.AgentStateCleanupPolicySaveReqVO;
 import com.stonewu.fusion.entity.ai.AgentWorkspaceConfig;
 import com.stonewu.fusion.entity.ai.AgentWorkspaceMigration;
 import com.stonewu.fusion.entity.ai.AgentMcpServer;
+import com.stonewu.fusion.entity.ai.AgentStateCleanupPolicy;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentMcpServerService;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentUserMcpRuntimeRegistry;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentSkillImportService;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceConfigService;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceMigrationService;
+import com.stonewu.fusion.service.ai.agentscope.state.AgentStateCleanupPolicyService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -36,6 +40,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.time.LocalDateTime;
+import java.time.Instant;
+import java.time.ZoneOffset;
 
 import static com.stonewu.fusion.common.CommonResult.success;
 import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
@@ -52,6 +59,24 @@ public class AgentConfigurationController {
     private final AgentSkillImportService skillImportService;
     private final AgentMcpServerService mcpServerService;
     private final AgentUserMcpRuntimeRegistry userMcpRuntimeRegistry;
+    private final AgentStateCleanupPolicyService stateCleanupPolicyService;
+
+    @GetMapping("/state-cleanup")
+    @Operation(summary = "获取 AgentState 清理配置")
+    public CommonResult<AgentStateCleanupPolicyRespVO> stateCleanupPolicy() {
+        AgentStateCleanupPolicy policy = stateCleanupPolicyService.getCurrent();
+        return success(toStateCleanupResponse(policy));
+    }
+
+    @PutMapping("/state-cleanup")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "更新 AgentState 清理配置")
+    public CommonResult<AgentStateCleanupPolicyRespVO> updateStateCleanupPolicy(
+            @Valid @RequestBody AgentStateCleanupPolicySaveReqVO request) {
+        AgentStateCleanupPolicy policy = stateCleanupPolicyService.update(
+                request.cleanupIntervalDays(), request.retentionDays());
+        return success(toStateCleanupResponse(policy));
+    }
 
     @GetMapping("/workspace")
     @Operation(summary = "获取智能体工作空间配置")
@@ -193,5 +218,18 @@ public class AgentConfigurationController {
         AgentMcpTestRespVO result = userMcpRuntimeRegistry.test(server);
         mcpServerService.recordTest(userId, id, result.success(), result.message());
         return success(result);
+    }
+
+    private AgentStateCleanupPolicyRespVO toStateCleanupResponse(
+            AgentStateCleanupPolicy policy) {
+        return new AgentStateCleanupPolicyRespVO(
+                policy.getCleanupIntervalDays(),
+                policy.getRetentionDays(),
+                toInstant(policy.getNextCleanupAt()),
+                toInstant(policy.getLastCleanupAt()));
+    }
+
+    private Instant toInstant(LocalDateTime value) {
+        return value == null ? null : value.toInstant(ZoneOffset.UTC);
     }
 }

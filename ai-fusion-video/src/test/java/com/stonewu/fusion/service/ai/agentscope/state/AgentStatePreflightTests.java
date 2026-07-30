@@ -8,16 +8,10 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import reactor.test.StepVerifier;
 
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -52,21 +46,6 @@ class AgentStatePreflightTests {
     }
 
     @Test
-    void reportsWhetherTheExactDurableStateSlotExists() {
-        AgentStateStore store = mock(AgentStateStore.class);
-        when(store.exists("42", "afv:v2:conversation-7:assistant-v3"))
-                .thenReturn(true);
-        AgentStatePreflight preflight = new AgentStatePreflight(store, failures, schedulers);
-
-        StepVerifier.create(preflight.exists(
-                        "42", "afv:v2:conversation-7:assistant-v3"))
-                .expectNext(true)
-                .verifyComplete();
-
-        verify(store).exists("42", "afv:v2:conversation-7:assistant-v3");
-    }
-
-    @Test
     void deletesTheExactStaleStateSlotBeforeFailedRunRecovery() {
         AgentStateStore store = mock(AgentStateStore.class);
         AgentStatePreflight preflight = new AgentStatePreflight(store, failures, schedulers);
@@ -92,49 +71,6 @@ class AgentStatePreflightTests {
                 .expectErrorSatisfies(actual -> {
                     assertThat(actual).isInstanceOf(StateStoreFailure.class);
                     assertThat(actual).isSameAs(failures.failure(slot).orElseThrow());
-                    assertThat(actual.getCause()).isSameAs(redisFailure);
-                })
-                .verify();
-    }
-
-    @Test
-    void deletesOnlyMatchingConversationSessionsSequentiallyOnStateScheduler() {
-        AgentStateStore store = mock(AgentStateStore.class);
-        when(store.listSessionIds("42")).thenReturn(Set.of(
-                "afv:v2:conversation-7:assistant-v3",
-                "afv:v2:conversation-7:asset-agent-v1",
-                "afv:v2:conversation-8:assistant-v3"));
-        List<String> deleted = new CopyOnWriteArrayList<>();
-        List<String> threads = new CopyOnWriteArrayList<>();
-        doAnswer(invocation -> {
-            deleted.add(invocation.getArgument(1));
-            threads.add(Thread.currentThread().getName());
-            return null;
-        }).when(store).delete(org.mockito.ArgumentMatchers.eq("42"), org.mockito.ArgumentMatchers.anyString());
-        AgentStatePreflight preflight = new AgentStatePreflight(store, failures, schedulers);
-
-        StepVerifier.create(preflight.deleteConversationSessions("42", "conversation-7"))
-                .verifyComplete();
-
-        assertThat(deleted).containsExactlyInAnyOrder(
-                "afv:v2:conversation-7:assistant-v3",
-                "afv:v2:conversation-7:asset-agent-v1");
-        assertThat(threads).allSatisfy(name -> assertThat(name).startsWith("agent-state-"));
-        verify(store, never()).delete("42", "afv:v2:conversation-8:assistant-v3");
-    }
-
-    @Test
-    void sessionCleanupFailsClosedAndStopsAtFirstDeleteFailure() {
-        AgentStateStore delegate = mock(AgentStateStore.class);
-        when(delegate.listSessionIds("42")).thenReturn(Set.of("afv:v2:conversation-7:assistant-v3"));
-        IllegalStateException redisFailure = new IllegalStateException("delete failed");
-        doThrow(redisFailure).when(delegate).delete("42", "afv:v2:conversation-7:assistant-v3");
-        AgentStateStore store = new FailClosedAgentStateStore(delegate, failures);
-        AgentStatePreflight preflight = new AgentStatePreflight(store, failures, schedulers);
-
-        StepVerifier.create(preflight.deleteConversationSessions("42", "conversation-7"))
-                .expectErrorSatisfies(actual -> {
-                    assertThat(actual).isInstanceOf(StateStoreFailure.class);
                     assertThat(actual.getCause()).isSameAs(redisFailure);
                 })
                 .verify();

@@ -28,7 +28,6 @@ import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
-import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import com.stonewu.fusion.service.ai.model.AiModelRequestOptions;
 import com.stonewu.fusion.service.ai.run.AgentExecutionRuntimeContextRequests;
 import com.stonewu.fusion.service.ai.run.AgentExecutionFactory;
@@ -36,6 +35,7 @@ import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
 import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
 import com.stonewu.fusion.service.ai.run.AgentRuntimeInstanceIdentity;
+import com.stonewu.fusion.service.ai.run.AgentStateSessionIds;
 import com.stonewu.fusion.service.ai.run.RunExecutionSupervisor;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
@@ -90,7 +90,6 @@ public final class AgentScopePipelineRunService {
     private final AgentRunCoordinator coordinator;
     private final AgentExecutionRuntimeContextRequests runtimeContexts;
     private final AgentExecutionFactory executionFactory;
-    private final AgentStatePreflight statePreflight;
     private final RunExecutionSupervisor supervisor;
     private final AgentRunQueryService runQueries;
     private final AgentRunReplayService replay;
@@ -112,7 +111,6 @@ public final class AgentScopePipelineRunService {
             AgentRunCoordinator coordinator,
             AgentExecutionRuntimeContextRequests runtimeContexts,
             AgentExecutionFactory executionFactory,
-            AgentStatePreflight statePreflight,
             RunExecutionSupervisor supervisor,
             AgentRunQueryService runQueries,
             AgentRunReplayService replay,
@@ -135,8 +133,6 @@ public final class AgentScopePipelineRunService {
                 runtimeContexts, "runtimeContexts must not be null");
         this.executionFactory = Objects.requireNonNull(
                 executionFactory, "executionFactory must not be null");
-        this.statePreflight = Objects.requireNonNull(
-                statePreflight, "statePreflight must not be null");
         this.supervisor = Objects.requireNonNull(supervisor, "supervisor must not be null");
         this.runQueries = Objects.requireNonNull(runQueries, "runQueries must not be null");
         this.replay = Objects.requireNonNull(replay, "replay must not be null");
@@ -193,27 +189,18 @@ public final class AgentScopePipelineRunService {
                     String stateSessionId = requireText(
                             previous.getAgentStateSessionId(),
                             "previous.agentStateSessionId");
-                    Mono<Boolean> stateAvailability = AgentRunStatus.FAILED.name()
-                            .equals(previous.getStatus())
-                            ? statePreflight.deleteSession(
-                                            String.valueOf(userId), stateSessionId)
-                                    .thenReturn(false)
-                            : statePreflight.exists(
-                                    String.valueOf(userId), stateSessionId);
                     return executionFactory.resolve(snapshot)
                             .onErrorMap(
                                     RunConfigUnavailableException.class,
                                     unavailable -> new BusinessException(
                                             409, "历史 Pipeline 配置已不可用"))
-                            .flatMap(spec -> stateAvailability
-                                    .flatMap(stateExists -> Mono.fromCallable(() ->
-                                                    prepareContinuation(
-                                                            previous,
-                                                            spec,
-                                                            snapshot,
-                                                            userId,
-                                                            stateExists))
-                                            .subscribeOn(schedulers.journal())));
+                            .flatMap(spec -> Mono.fromCallable(() ->
+                                            prepareContinuation(
+                                                    previous,
+                                                    spec,
+                                                    snapshot,
+                                                    userId))
+                                    .subscribeOn(schedulers.journal()));
                 })
                 .flatMap(this::launch);
     }
@@ -279,7 +266,8 @@ public final class AgentScopePipelineRunService {
                 null,
                 null,
                 null,
-                stateSessionId(conversationId, spec.agentDefinitionStableKey()),
+                AgentStateSessionIds.conversation(
+                        conversationId, spec.agentDefinitionStableKey()),
                 snapshot,
                 instanceIdentity.value(),
                 properties.getExecution().getOwnerLease(),
@@ -305,8 +293,7 @@ public final class AgentScopePipelineRunService {
             AgentRun previous,
             AgentKernelSpec spec,
             AgentKernelSnapshot snapshot,
-            long userId,
-            boolean stateExists) {
+            long userId) {
         if (!Objects.equals(spec.agentDefinitionStableKey(), previous.getAgentType())) {
             throw new BusinessException(409, "历史 Pipeline 的 Agent 配置不一致");
         }
@@ -323,8 +310,9 @@ public final class AgentScopePipelineRunService {
         Instant deadline = Instant.now()
                 .plus(properties.getExecution().getRunTimeout())
                 .truncatedTo(ChronoUnit.MILLIS);
+        String runId = IdUtil.fastSimpleUUID();
         StartAgentRunCommand admission = new StartAgentRunCommand(
-                IdUtil.fastSimpleUUID(),
+                runId,
                 previous.getConversationId(),
                 userId,
                 previous.getProjectId(),
@@ -332,8 +320,8 @@ public final class AgentScopePipelineRunService {
                 null,
                 null,
                 null,
-                requireText(previous.getAgentStateSessionId(),
-                        "previous.agentStateSessionId"),
+                AgentStateSessionIds.recoveryGeneration(
+                        previous.getConversationId(), previous.getAgentType(), runId),
                 snapshot,
                 instanceIdentity.value(),
                 properties.getExecution().getOwnerLease(),
@@ -343,11 +331,9 @@ public final class AgentScopePipelineRunService {
         ProjectContext project = previous.getProjectId() == null
                 ? null
                 : new ProjectContext(previous.getProjectId());
-        List<Msg> executionMessages = stateExists
-                ? messages.toUserMessages(input)
-                : messages.toRecoveredContinuationMessages(
-                        persistedMessages.listByConversation(previous.getConversationId()),
-                        input);
+        List<Msg> executionMessages = messages.toRecoveredContinuationMessages(
+                persistedMessages.listByConversation(previous.getConversationId()),
+                input);
         return new PreparedRun(
                 spec,
                 snapshot,
@@ -624,10 +610,6 @@ public final class AgentScopePipelineRunService {
         // different title merely because of formatting in the prompt.
         title = title.replaceAll("\\s+", " ").trim();
         return title.length() <= 50 ? title : title.substring(0, 50);
-    }
-
-    private String stateSessionId(String conversationId, String definitionKey) {
-        return "afv:v2:" + conversationId + ':' + definitionKey;
     }
 
     private static String normalize(String value) {

@@ -33,12 +33,29 @@ public class AgentRunRepository {
         return conversationMapper.selectByConversationIdForUpdate(conversationId);
     }
 
+    public void activateConversation(
+            AgentConversation conversation,
+            LocalDateTime databaseNow) {
+        conversation.setStatus("running");
+        conversation.setAgentStateLastActiveAt(databaseNow);
+        conversation.setAgentStateExpiredAt(null);
+        conversation.setUpdateTime(databaseNow);
+        if (conversationMapper.updateById(conversation) != 1) {
+            throw new IllegalStateException(
+                    "Agent conversation activation did not affect exactly one row");
+        }
+    }
+
     public AgentRun lockRun(String runId) {
         return runMapper.selectByRunIdForUpdate(runId);
     }
 
     public AgentRun findRun(String runId) {
         return runMapper.selectByRunId(runId);
+    }
+
+    public AgentRun findLatestRoot(String conversationId) {
+        return runMapper.selectLatestRootByConversation(conversationId);
     }
 
     public AgentRun lockChild(String parentRunId, String parentToolCallId) {

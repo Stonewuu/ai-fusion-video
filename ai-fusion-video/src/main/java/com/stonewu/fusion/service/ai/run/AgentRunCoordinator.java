@@ -12,20 +12,19 @@ import com.stonewu.fusion.service.ai.run.model.ChildRunIdentityConflictException
 import com.stonewu.fusion.service.ai.run.model.StartAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartChildAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
+import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
+import com.stonewu.fusion.service.ai.agentscope.state.AgentStateCleanupPolicyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.util.HexFormat;
 import java.util.Objects;
 
 /**
@@ -41,6 +40,7 @@ public class AgentRunCoordinator {
     private final AgentMessageAllocator messageAllocator;
     private final TransactionTemplate transactionTemplate;
     private final AgentRuntimeSchedulers schedulers;
+    private final AgentStateCleanupPolicyService stateCleanupPolicy;
 
     public Mono<StartedAgentRun> start(StartAgentRunCommand command) {
         Objects.requireNonNull(command, "command must not be null");
@@ -61,6 +61,12 @@ public class AgentRunCoordinator {
         AgentConversation conversation = requireOwnedConversation(
                 command.conversationId(), command.userId(), command.projectId());
         LocalDateTime databaseNow = runRepository.databaseNow();
+        stateCleanupPolicy.requireAvailable(
+                conversation,
+                databaseNow,
+                stateCleanupPolicy.getCurrent().getRetentionDays());
+        String stateSessionId = rootStateSessionId(command);
+        runRepository.activateConversation(conversation, databaseNow);
         LocalDateTime deadline = requireFutureDeadline(command.deadline(), databaseNow);
         LocalDateTime leaseUntil = leaseUntil(databaseNow, command.ownerLease(), deadline);
 
@@ -72,7 +78,7 @@ public class AgentRunCoordinator {
                 .agentType(command.agentType())
                 .kernelFingerprint(command.kernelSnapshot().fingerprint())
                 .agentDefinitionSnapshotJson(command.kernelSnapshot().snapshotJson())
-                .agentStateSessionId(command.agentStateSessionId())
+                .agentStateSessionId(stateSessionId)
                 .status(AgentRunStatus.RUNNING.name())
                 .ownerInstanceId(command.ownerInstanceId())
                 .ownerEpoch(INITIAL_OWNER_EPOCH)
@@ -114,7 +120,11 @@ public class AgentRunCoordinator {
                 .agentName(command.agentName())
                 .kernelFingerprint(command.kernelSnapshot().fingerprint())
                 .agentDefinitionSnapshotJson(command.kernelSnapshot().snapshotJson())
-                .agentStateSessionId(childSessionId(parent, command))
+                .agentStateSessionId(AgentStateSessionIds.childGeneration(
+                        parent.getRunId(),
+                        parent.getAgentStateSessionId(),
+                        command.parentToolCallId(),
+                        command.agentDefinitionStableKey()))
                 .status(AgentRunStatus.RUNNING.name())
                 .ownerInstanceId(command.ownerInstanceId())
                 .ownerEpoch(INITIAL_OWNER_EPOCH)
@@ -230,7 +240,7 @@ public class AgentRunCoordinator {
 
     private LocalDateTime leaseUntil(
             LocalDateTime databaseNow,
-            java.time.Duration ownerLease,
+            Duration ownerLease,
             LocalDateTime deadline) {
         LocalDateTime requested = databaseNow.plus(ownerLease)
                 .truncatedTo(ChronoUnit.MILLIS);
@@ -248,7 +258,7 @@ public class AgentRunCoordinator {
 
     private StartedAgentRun started(
             AgentRun run,
-            com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot snapshot,
+            AgentKernelSnapshot snapshot,
             long initialMessageOrder) {
         return new StartedAgentRun(
                 run.getRunId(),
@@ -262,18 +272,36 @@ public class AgentRunCoordinator {
                 initialMessageOrder);
     }
 
-    private String childSessionId(AgentRun parent, StartChildAgentRunCommand command) {
-        String material = parent.getRunId() + '\0'
-                + parent.getAgentStateSessionId() + '\0'
-                + command.parentToolCallId() + '\0'
-                + command.agentDefinitionStableKey();
-        try {
-            byte[] digest = MessageDigest.getInstance("SHA-256")
-                    .digest(material.getBytes(StandardCharsets.UTF_8));
-            return "afv-child:" + HexFormat.of().formatHex(digest);
-        } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException("SHA-256 is unavailable", impossible);
+    private String rootStateSessionId(StartAgentRunCommand command) {
+        AgentRun latest = runRepository.findLatestRoot(command.conversationId());
+        if (latest == null || !Objects.equals(latest.getAgentType(), command.agentType())) {
+            return command.stateSessionCandidate();
         }
+        AgentRunStatus status;
+        try {
+            status = AgentRunStatus.valueOf(latest.getStatus());
+        } catch (RuntimeException invalidStatus) {
+            throw new IllegalStateException(
+                    "Latest root run has an unsupported status: " + latest.getStatus(),
+                    invalidStatus);
+        }
+        if (status == AgentRunStatus.FAILED || status == AgentRunStatus.CANCELLED) {
+            // AgentScope may finish an asynchronous state save after durable
+            // cancellation. A new immutable generation fences every such late
+            // write without delaying cancellation or fabricating tool results.
+            return AgentStateSessionIds.recoveryGeneration(
+                    command.conversationId(), command.agentType(), command.runId());
+        }
+        return requireStateSessionId(latest);
+    }
+
+    private String requireStateSessionId(AgentRun run) {
+        String sessionId = run.getAgentStateSessionId();
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new IllegalStateException(
+                    "Latest root run has no AgentState session: " + run.getRunId());
+        }
+        return sessionId;
     }
 
     private LocalDateTime toDatabaseTime(Instant instant) {

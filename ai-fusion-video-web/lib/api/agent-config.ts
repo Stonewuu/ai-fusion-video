@@ -36,6 +36,18 @@ export interface AgentWorkspaceTarget {
   localPath?: string | null;
 }
 
+export interface AgentStateCleanupPolicy {
+  cleanupIntervalDays: number;
+  retentionDays: number;
+  nextCleanupAt: string;
+  lastCleanupAt?: string | null;
+}
+
+export interface AgentStateCleanupPolicySaveRequest {
+  cleanupIntervalDays: number;
+  retentionDays: number;
+}
+
 export interface AgentUserSkill {
   id: string;
   name: string;
@@ -140,6 +152,14 @@ export interface AgentMcpTestResult {
 }
 
 export const agentConfigApi = {
+  stateCleanupPolicy(): Promise<AgentStateCleanupPolicy> {
+    return http.get("/api/ai/agent-config/state-cleanup");
+  },
+  saveStateCleanupPolicy(
+    request: AgentStateCleanupPolicySaveRequest,
+  ): Promise<AgentStateCleanupPolicy> {
+    return http.put("/api/ai/agent-config/state-cleanup", request);
+  },
   workspace(): Promise<AgentWorkspaceConfig> {
     return http.get("/api/ai/agent-config/workspace");
   },

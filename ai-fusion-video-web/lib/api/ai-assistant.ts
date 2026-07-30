@@ -277,6 +277,7 @@ export interface AgentConversation {
   messageCount: number;
   lastMessageTime?: string;
   status: string;
+  agentStateStatus?: "ACTIVE" | "EXPIRED";
   createTime?: string;
 }
 

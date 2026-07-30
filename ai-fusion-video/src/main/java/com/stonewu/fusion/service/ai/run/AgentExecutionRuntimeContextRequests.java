@@ -54,7 +54,8 @@ public final class AgentExecutionRuntimeContextRequests {
                 started.deadline(),
                 projectContext,
                 parentRun,
-                toolExecutionMode));
+                toolExecutionMode,
+                PipelineRequestContext.Kind.PIPELINE));
     }
 
     public Mono<AgentScopeRuntimeContextRequest> forRoot(
@@ -77,7 +78,8 @@ public final class AgentExecutionRuntimeContextRequests {
                     started.deadline(),
                     projectContext,
                     null,
-                    toolExecutionMode);
+                    toolExecutionMode,
+                    PipelineRequestContext.Kind.PIPELINE);
         });
     }
 
@@ -95,7 +97,8 @@ public final class AgentExecutionRuntimeContextRequests {
                 resumed.deadline(),
                 run.getProjectId() != null ? new ProjectContext(run.getProjectId()) : null,
                 parentForResume(run),
-                toolExecutionMode));
+                toolExecutionMode,
+                PipelineRequestContext.Kind.PIPELINE));
     }
 
     private Mono<AgentRun> load(String runId) {
@@ -117,8 +120,10 @@ public final class AgentExecutionRuntimeContextRequests {
             Instant deadline,
             ProjectContext requestedProject,
             ParentAgentRunContext parentRun,
-            ToolExecutionMode toolExecutionMode) {
+            ToolExecutionMode toolExecutionMode,
+            PipelineRequestContext.Kind requestKind) {
         Objects.requireNonNull(toolExecutionMode, "toolExecutionMode must not be null");
+        Objects.requireNonNull(requestKind, "requestKind must not be null");
         if (!Objects.equals(persisted.getAgentType(), agentDefinitionStableKey)) {
             throw new IllegalArgumentException(
                     "RuntimeContext agent definition does not match the persisted run");
@@ -152,7 +157,7 @@ public final class AgentExecutionRuntimeContextRequests {
                 parentRun,
                 project,
                 new PipelineRequestContext(
-                        persisted.getRunId(), PipelineRequestContext.Kind.PIPELINE),
+                        persisted.getRunId(), requestKind),
                 new ToolExecutionContext(userId, 1, userId),
                 CancellationContext.noop(),
                 new ToolPermissionContext(toolExecutionMode));

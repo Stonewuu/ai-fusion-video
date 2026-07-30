@@ -12,6 +12,7 @@ import com.stonewu.fusion.mapper.ai.AgentMessageMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
+import com.stonewu.fusion.service.ai.run.AgentStateSessionIds;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
@@ -169,6 +170,63 @@ class AgentRunStartIT {
         assertThat(run(command.runId())).isNull();
         assertConversationCounters(conversationId, 0, 1L);
         assertThat(messages(command.runId())).isEmpty();
+    }
+
+    @Test
+    void rotatesStateGenerationAfterInterruptedRootAndReusesItAfterSuccess() {
+        String conversationId = createConversation(42L, 7L);
+        AgentKernelSnapshot snapshot = snapshot("assistant", 1L);
+
+        StartAgentRunCommand firstCommand = rootCommand(
+                uniqueId("interrupted-root"),
+                conversationId,
+                42L,
+                7L,
+                snapshot,
+                Instant.now().plusSeconds(300),
+                null,
+                null,
+                null);
+        StartedAgentRun first = await(coordinator.start(firstCommand));
+        assertThat(runMapper.update(null, new LambdaUpdateWrapper<AgentRun>()
+                .eq(AgentRun::getRunId, first.runId())
+                .set(AgentRun::getStatus, "CANCELLED"))).isEqualTo(1);
+
+        StartAgentRunCommand recoveryCommand = rootCommand(
+                uniqueId("recovery-root"),
+                conversationId,
+                42L,
+                7L,
+                snapshot,
+                Instant.now().plusSeconds(300),
+                null,
+                null,
+                null);
+        StartedAgentRun recovery = await(coordinator.start(recoveryCommand));
+
+        assertThat(recovery.agentStateSessionId())
+                .isEqualTo(AgentStateSessionIds.recoveryGeneration(
+                        conversationId, "assistant", recovery.runId()))
+                .startsWith("afv-root:")
+                .isNotEqualTo(first.agentStateSessionId());
+
+        assertThat(runMapper.update(null, new LambdaUpdateWrapper<AgentRun>()
+                .eq(AgentRun::getRunId, recovery.runId())
+                .set(AgentRun::getStatus, "COMPLETED"))).isEqualTo(1);
+        StartAgentRunCommand nextTurnCommand = rootCommand(
+                uniqueId("next-turn-root"),
+                conversationId,
+                42L,
+                7L,
+                snapshot,
+                Instant.now().plusSeconds(300),
+                null,
+                null,
+                null);
+        StartedAgentRun nextTurn = await(coordinator.start(nextTurnCommand));
+
+        assertThat(nextTurn.agentStateSessionId())
+                .isEqualTo(recovery.agentStateSessionId());
     }
 
     @Test

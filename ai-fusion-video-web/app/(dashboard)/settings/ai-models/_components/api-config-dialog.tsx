@@ -51,7 +51,7 @@ export const PROXY_TYPE_OPTIONS = [
 export const UNSET_PROTOCOL_VALUE = "__unset_protocol__";
 
 export const API_PROVIDER_PRESETS = [
-  { id: "deepseek", platform: "deepseek", label: "DeepSeek", url: "https://api.deepseek.com", textProtocol: "deepseek", imageProtocol: "", videoProtocol: "" },
+  { id: "deepseek", platform: "openai_compatible", label: "DeepSeek", url: "https://api.deepseek.com", textProtocol: "openai_compatible", imageProtocol: "", videoProtocol: "" },
   { id: "dashscope", platform: "dashscope", label: "通义千问", url: "https://dashscope.aliyuncs.com", textProtocol: "dashscope", imageProtocol: "dashscope", videoProtocol: "dashscope" },
   { id: "openai", platform: "openai_compatible", label: "OpenAI", url: "https://api.openai.com", textProtocol: "openai_compatible", imageProtocol: "openai", videoProtocol: "openai" },
   { id: "agnes", platform: "openai_compatible", label: "Agnes AI", url: "https://apihub.agnes-ai.com", textProtocol: "openai_compatible", imageProtocol: "agnes", videoProtocol: "agnes" },
@@ -68,8 +68,8 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
         setForm({
           id: editingConfig.id,
           name: editingConfig.name,
-          platform: editingConfig.platform || "",
-          textProtocol: editingConfig.textProtocol || "",
+          platform: editingConfig.platform === "deepseek" ? "openai_compatible" : editingConfig.platform || "",
+          textProtocol: editingConfig.textProtocol === "deepseek" ? "openai_compatible" : editingConfig.textProtocol || "",
           imageProtocol: editingConfig.imageProtocol || "",
           videoProtocol: editingConfig.videoProtocol || "",
           apiUrl: editingConfig.apiUrl || "",
@@ -173,7 +173,6 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
                     <SelectItem key={opt.value} value={opt.value} className="text-sm">
                       <ProviderVendorIcon
                         provider={opt.value}
-                        name={opt.label}
                         className="size-4"
                       />
                       <div className="min-w-0">
@@ -213,7 +212,7 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
                       updateField("textProtocol", provider.textProtocol);
                       updateField("imageProtocol", provider.imageProtocol);
                       updateField("videoProtocol", provider.videoProtocol);
-                      if (provider.platform === "openai_compatible" || provider.platform === "deepseek") {
+                      if (provider.platform === "openai_compatible") {
                         updateField("autoAppendV1Path", true);
                       }
                     }}
@@ -228,7 +227,6 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
                       <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted/60">
                         <ProviderVendorIcon
                           provider={provider.platform}
-                          name={provider.label}
                           className="size-4"
                         />
                       </span>

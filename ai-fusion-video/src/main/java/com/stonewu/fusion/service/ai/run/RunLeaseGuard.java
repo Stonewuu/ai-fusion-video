@@ -17,15 +17,19 @@ public final class RunLeaseGuard {
 
     private final AgentRunRepository runs;
     private final OwnedExecutionRegistry executions;
+    private final OwnedCancellationHandler ownedCancellations;
     private final AgentRuntimeSchedulers schedulers;
 
     public RunLeaseGuard(
             AgentRunRepository runs,
             OwnedExecutionRegistry executions,
+            OwnedCancellationHandler ownedCancellations,
             AgentRuntimeSchedulers schedulers) {
         this.runs = Objects.requireNonNull(runs, "runs must not be null");
         this.executions = Objects.requireNonNull(
                 executions, "executions must not be null");
+        this.ownedCancellations = Objects.requireNonNull(
+                ownedCancellations, "ownedCancellations must not be null");
         this.schedulers = Objects.requireNonNull(
                 schedulers, "schedulers must not be null");
     }
@@ -66,13 +70,9 @@ public final class RunLeaseGuard {
     public Mono<Void> observeCancellationSignal(
             String runId, String ownerInstanceId, long ownerEpoch) {
         OwnerIdentity owner = owner(runId, ownerInstanceId, ownerEpoch);
-        return journal(() -> java.util.Optional.ofNullable(
-                        runs.findRun(owner.runId())))
-                .flatMap(current -> current.isPresent()
-                                && AgentRunStatus.CANCEL_REQUESTED.name()
-                                        .equals(current.get().getStatus())
-                        ? acknowledgeAndInterrupt(owner)
-                        : Mono.empty());
+        return ownedCancellations.acknowledgeAndFinalize(
+                        owner.runId(), owner.ownerInstanceId(), owner.ownerEpoch())
+                .then();
     }
 
     private Mono<Void> classifyLostHeartbeat(OwnerIdentity owner) {
@@ -86,26 +86,17 @@ public final class RunLeaseGuard {
                                         owner.ownerInstanceId())
                                 && Objects.equals(
                                         current.get().getOwnerEpoch(), owner.ownerEpoch())
-                        ? acknowledgeAndInterrupt(owner)
+                        ? ownedCancellations.acknowledgeAndFinalize(
+                                        owner.runId(),
+                                        owner.ownerInstanceId(),
+                                        owner.ownerEpoch())
+                                .then()
                         : executions.interruptOwned(
                                         owner.runId(),
                                         owner.ownerInstanceId(),
                                         owner.ownerEpoch(),
                                         ExecutionStopReason.OWNER_FENCED)
                                 .then());
-    }
-
-    private Mono<Void> acknowledgeAndInterrupt(OwnerIdentity owner) {
-        return journal(() -> runs.acknowledgeOwnedCancellation(
-                        owner.runId(),
-                        owner.ownerInstanceId(),
-                        owner.ownerEpoch()))
-                .then(executions.interruptOwned(
-                        owner.runId(),
-                        owner.ownerInstanceId(),
-                        owner.ownerEpoch(),
-                        ExecutionStopReason.CANCEL_REQUESTED))
-                .then();
     }
 
     private <T> Mono<T> journal(java.util.concurrent.Callable<T> operation) {

@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254" role="img" aria-labelledby="title desc">
   <title id="title">融光助手 Logo</title>
-  <desc id="desc">三片相隔一百二十度并循环覆盖的渐变叶片组成圆形莫比乌斯对话气泡，构造圆交集形成鲁洛克斯三角形负空间。</desc>
+  <desc id="desc">三片相隔一百二十度并循环覆盖的渐变叶片组成圆形莫比乌斯对话气泡，构造圆交集形成白色鲁洛克斯三角形面部，并配有带高光的蓝色眼睛。</desc>
 
   <defs>
     <radialGradient id="background" cx="627" cy="539" r="980" gradientUnits="userSpaceOnUse">
@@ -34,17 +34,22 @@
       <stop offset="0.8" stop-color="#159bb3"/>
       <stop offset="1" stop-color="#27b3c7"/>
     </linearGradient>
-    <linearGradient id="eye" x1="0" y1="575" x2="0" y2="609" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#0e3768"/>
-      <stop offset="1" stop-color="#082b56"/>
-    </linearGradient>
-
     <clipPath id="outerCircle" clipPathUnits="userSpaceOnUse">
       <circle cx="627" cy="595" r="386"/>
     </clipPath>
     <path id="leaf" fill-rule="evenodd" clip-rule="evenodd" d="M627 209 A386 386 0 1 1 627 981 A386 386 0 1 1 627 209Z M627 388.044 A326.956 326.956 0 1 1 627 1041.956 A326.956 326.956 0 1 1 627 388.044Z"/>
     <path id="leafClipExpanded" fill-rule="evenodd" clip-rule="evenodd" d="M627 208.5 A386.5 386.5 0 1 1 627 981.5 A386.5 386.5 0 1 1 627 208.5Z M627 388.544 A326.456 326.456 0 1 1 627 1041.456 A326.456 326.456 0 1 1 627 388.544Z"/>
+    <circle id="faceConstructionCircle" cx="627" cy="715" r="326.956"/>
     <circle id="darkConstructionCircle" cx="627" cy="475" r="326.956"/>
+    <clipPath id="faceCoralCircle" clipPathUnits="userSpaceOnUse">
+      <use href="#faceConstructionCircle" transform="rotate(60 627 595)"/>
+    </clipPath>
+    <clipPath id="faceDarkCircle" clipPathUnits="userSpaceOnUse">
+      <use href="#faceConstructionCircle" transform="rotate(180 627 595)"/>
+    </clipPath>
+    <clipPath id="faceTopCircle" clipPathUnits="userSpaceOnUse">
+      <use href="#faceConstructionCircle" transform="rotate(300 627 595)"/>
+    </clipPath>
     <clipPath id="coralLeafClip" clipPathUnits="userSpaceOnUse">
       <use href="#leafClipExpanded" transform="rotate(60 627 595)"/>
     </clipPath>
@@ -70,6 +75,14 @@
   </defs>
 
   <path d="M325 680 C315 745 310 850 250 942 C243 949 241 956 244 963 C248 974 265 979 284 979 C365 981 445 978 520 956 C470 850 400 740 325 680Z" fill="url(#tailGradient)"/>
+
+  <g clip-path="url(#faceCoralCircle)">
+    <g clip-path="url(#faceDarkCircle)">
+      <g clip-path="url(#faceTopCircle)">
+        <rect width="1254" height="1254" fill="#ffffff"/>
+      </g>
+    </g>
+  </g>
 
   <g clip-path="url(#outerCircle)">
     <use href="#leaf" transform="rotate(60 627 595)" fill="url(#coralLeaf)"/>
@@ -100,6 +113,8 @@
     </g>
   </g>
 
-  <ellipse cx="558" cy="591" rx="54" ry="82" fill="url(#eye)"/>
-  <ellipse cx="718" cy="591" rx="54" ry="82" fill="url(#eye)"/>
+  <ellipse cx="558" cy="591" rx="54" ry="82" fill="#447ae5"/>
+  <ellipse cx="718" cy="591" rx="54" ry="82" fill="#447ae5"/>
+  <ellipse cx="540" cy="558" rx="13" ry="18" fill="#ffffff" fill-opacity="0.95"/>
+  <ellipse cx="700" cy="558" rx="13" ry="18" fill="#ffffff" fill-opacity="0.95"/>
 </svg>

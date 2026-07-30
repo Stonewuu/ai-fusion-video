@@ -10,12 +10,14 @@ import {
   type AgentMcpServer,
   type AgentUserSkill,
   type AgentWorkspaceConfig,
+  type AgentStateCleanupPolicy,
 } from "@/lib/api/agent-config";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { McpServersSection } from "./_components/mcp-servers-section";
 import { SkillsSection } from "./_components/skills-section";
 import { WorkspaceStorageSection } from "./_components/workspace-storage-section";
+import { StateRetentionSection } from "./_components/state-retention-section";
 
 const WORKSPACE_LABELS = {
   database: "数据库",
@@ -27,6 +29,7 @@ export default function AgentSettingsPage() {
   const currentUser = useAuthStore((state) => state.user);
   const isAdmin = currentUser?.roles?.includes("admin") ?? false;
   const [workspace, setWorkspace] = useState<AgentWorkspaceConfig | null>(null);
+  const [statePolicy, setStatePolicy] = useState<AgentStateCleanupPolicy | null>(null);
   const [skills, setSkills] = useState<AgentUserSkill[]>([]);
   const [mcpServers, setMcpServers] = useState<AgentMcpServer[]>([]);
   const [storageConfigs, setStorageConfigs] = useState<StorageConfig[]>([]);
@@ -37,13 +40,15 @@ export default function AgentSettingsPage() {
   }, []);
 
   const loadAll = useCallback(async () => {
-    const [workspaceConfig, skillList, mcpList, storageList] = await Promise.all([
+    const [workspaceConfig, cleanupPolicy, skillList, mcpList, storageList] = await Promise.all([
       agentConfigApi.workspace(),
+      agentConfigApi.stateCleanupPolicy(),
       agentConfigApi.skills(),
       agentConfigApi.mcpServers(),
       isAdmin ? storageConfigApi.list() : Promise.resolve([]),
     ]);
     setWorkspace(workspaceConfig);
+    setStatePolicy(cleanupPolicy);
     setSkills(skillList);
     setMcpServers(mcpList);
     setStorageConfigs(storageList);
@@ -89,7 +94,7 @@ export default function AgentSettingsPage() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">智能体配置</h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              管理 AgentScope 工作空间，以及助手可主动引用的 Skill 和 MCP 工具。
+              管理 AgentScope 工作空间、状态生命周期，以及助手可主动引用的 Skill 和 MCP 工具。
             </p>
           </div>
         </div>
@@ -102,7 +107,7 @@ export default function AgentSettingsPage() {
         )}
       </header>
 
-      {loading || !workspace ? (
+      {loading || !workspace || !statePolicy ? (
         <div className="flex min-h-64 items-center justify-center text-muted-foreground">
           <Loader2 className="mr-2 size-5 animate-spin" />加载配置中…
         </div>
@@ -113,6 +118,11 @@ export default function AgentSettingsPage() {
             storageConfigs={storageConfigs}
             isAdmin={isAdmin}
             onRefresh={loadWorkspace}
+          />
+          <StateRetentionSection
+            policy={statePolicy}
+            isAdmin={isAdmin}
+            onSaved={setStatePolicy}
           />
           <div className="grid items-start gap-6 xl:grid-cols-2">
             <SkillsSection skills={skills} onRefresh={refreshSkills} />

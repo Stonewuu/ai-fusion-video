@@ -7,6 +7,7 @@ import com.stonewu.fusion.service.ai.agentscope.mcp.AgentMcpServerService;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentUserMcpRuntimeRegistry;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentSkillImportService;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
+import com.stonewu.fusion.service.ai.agentscope.state.AgentStateCleanupPolicyService;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceConfigService;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceMigrationService;
 import org.junit.jupiter.api.AfterEach;
@@ -32,7 +33,8 @@ class AgentConfigurationControllerSkillImportTests {
             mock(AgentUserSkillService.class),
             importService,
             mock(AgentMcpServerService.class),
-            mock(AgentUserMcpRuntimeRegistry.class));
+            mock(AgentUserMcpRuntimeRegistry.class),
+            mock(AgentStateCleanupPolicyService.class));
 
     @AfterEach
     void clearSecurityContext() {

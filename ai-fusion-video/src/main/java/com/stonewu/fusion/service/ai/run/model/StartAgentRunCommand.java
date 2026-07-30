@@ -10,7 +10,9 @@ import java.util.Objects;
  * Immutable request for atomically admitting a root agent run and its initial message.
  *
  * <p>The parent identity remains explicit so the coordinator can reject every non-root
- * admission through the root-only entry point.</p>
+ * admission through the root-only entry point. {@code stateSessionCandidate} is the
+ * caller's identity for a new conversation; the coordinator owns the final generation
+ * selection under the conversation lock.</p>
  */
 public record StartAgentRunCommand(
         String runId,
@@ -21,7 +23,7 @@ public record StartAgentRunCommand(
         String parentRunId,
         String parentToolCallId,
         String agentName,
-        String agentStateSessionId,
+        String stateSessionCandidate,
         AgentKernelSnapshot kernelSnapshot,
         String ownerInstanceId,
         Duration ownerLease,
@@ -42,7 +44,7 @@ public record StartAgentRunCommand(
         requireOptionalText(parentRunId, "parentRunId");
         requireOptionalText(parentToolCallId, "parentToolCallId");
         requireOptionalText(agentName, "agentName");
-        requireText(agentStateSessionId, "agentStateSessionId");
+        requireText(stateSessionCandidate, "stateSessionCandidate");
         Objects.requireNonNull(kernelSnapshot, "kernelSnapshot must not be null");
         requireText(ownerInstanceId, "ownerInstanceId");
         requirePositive(ownerLease, "ownerLease");

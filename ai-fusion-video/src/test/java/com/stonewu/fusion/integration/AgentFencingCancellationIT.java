@@ -176,10 +176,25 @@ class AgentFencingCancellationIT {
         await(executions.awaitEmpty(Duration.ofSeconds(2)));
         AgentRun cancelled = run(started.runId());
         assertThat(cancelled.getStatus())
-                .isEqualTo(AgentRunStatus.CANCEL_REQUESTED.name());
+                .isEqualTo(AgentRunStatus.CANCELLED.name());
         assertThat(cancelled.getCancelAcknowledgedAt()).isNotNull();
         assertThat(cancelled.getLeaseUntil())
                 .isBeforeOrEqualTo(runMapper.selectDatabaseNow());
+    }
+
+    @Test
+    void localCancellationFinalizesWhenTheExecutionHandleAlreadyExited() {
+        StartedAgentRun started = startRoot(
+                "handle-exited", "fencing-node-a", Duration.ofMinutes(2));
+
+        assertThat(await(cancellations.cancel(started.runId(), USER_ID)))
+                .isEqualTo(AgentRunStatus.CANCELLED);
+
+        AgentRun cancelled = run(started.runId());
+        assertThat(cancelled.getCancelAcknowledgedAt()).isNotNull();
+        assertThat(cancelled.getStatus()).isEqualTo(AgentRunStatus.CANCELLED.name());
+        assertThat(cancelled.getTerminalSequence()).isNotNull();
+        assertThat(terminalEvents(started.runId())).hasSize(1);
     }
 
     @Test

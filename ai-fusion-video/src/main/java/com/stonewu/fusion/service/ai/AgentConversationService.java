@@ -6,12 +6,15 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.mapper.ai.AgentConversationMapper;
+import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
+import com.stonewu.fusion.service.ai.agentscope.state.AgentStateCleanupPolicyService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.LocalDateTime;
@@ -28,18 +31,22 @@ public class AgentConversationService {
 
     private final AgentConversationMapper conversationMapper;
     private final AgentStatePreflight statePreflight;
+    private final AgentStateCleanupPolicyService stateCleanupPolicy;
+    private final AgentRunMapper runMapper;
     private final AgentRuntimeSchedulers schedulers;
 
     @Transactional
     public AgentConversation createOrUpdate(String conversationId, Long userId, Long projectId,
                                             String contextType, Long contextId,
                                             String agentType, String title, String category) {
-        AgentConversation existing = conversationMapper.selectOne(
-                new LambdaQueryWrapper<AgentConversation>()
-                        .eq(AgentConversation::getConversationId, conversationId)
-                        .eq(AgentConversation::getDeleted, false));
+        AgentConversation existing =
+                conversationMapper.selectByConversationIdForUpdate(conversationId);
         if (existing != null) {
-            LocalDateTime updatedAt = LocalDateTime.now();
+            LocalDateTime updatedAt = conversationMapper.selectDatabaseNow();
+            stateCleanupPolicy.requireAvailable(
+                    existing,
+                    updatedAt,
+                    stateCleanupPolicy.getCurrent().getRetentionDays());
             boolean assistantConversation = "assistant".equals(existing.getCategory())
                     || "assistant".equals(category);
             String existingTitle = existing.getTitle() == null
@@ -85,6 +92,7 @@ public class AgentConversationService {
                 .status("running")
                 .messageCount(0)
                 .nextMessageOrder(1L)
+                .agentStateLastActiveAt(conversationMapper.selectDatabaseNow())
                 .build();
         conversationMapper.insert(conv);
         return conv;
@@ -92,11 +100,14 @@ public class AgentConversationService {
 
     @Transactional
     public void finish(String conversationId, String status) {
+        LocalDateTime finishedAt = conversationMapper.selectDatabaseNow();
         conversationMapper.update(null, new LambdaUpdateWrapper<AgentConversation>()
                 .eq(AgentConversation::getConversationId, conversationId)
                 .eq(AgentConversation::getDeleted, false)
                 .set(AgentConversation::getStatus, status)
-                .set(AgentConversation::getUpdateTime, LocalDateTime.now()));
+                .set(AgentConversation::getAgentStateLastActiveAt, finishedAt)
+                .set(AgentConversation::getAgentStateExpiredAt, null)
+                .set(AgentConversation::getUpdateTime, finishedAt));
     }
 
     public AgentConversation getByConversationId(String conversationId) {
@@ -120,29 +131,32 @@ public class AgentConversationService {
     }
 
     public PageResult<AgentConversation> listByUser(Long userId, int pageNo, int pageSize) {
-        return PageResult.of(conversationMapper.selectPage(new Page<>(pageNo, pageSize),
+        return annotateStateStatus(PageResult.of(conversationMapper.selectPage(
+                new Page<>(pageNo, pageSize),
                 new LambdaQueryWrapper<AgentConversation>()
                         .eq(AgentConversation::getUserId, userId)
                         .eq(AgentConversation::getDeleted, false)
                         .orderByDesc(AgentConversation::getUpdateTime)
-                        .orderByDesc(AgentConversation::getId)));
+                        .orderByDesc(AgentConversation::getId))));
     }
 
     public PageResult<AgentConversation> listByUserAndCategory(Long userId, String category, int pageNo, int pageSize) {
-        return PageResult.of(conversationMapper.selectPage(new Page<>(pageNo, pageSize),
+        return annotateStateStatus(PageResult.of(conversationMapper.selectPage(
+                new Page<>(pageNo, pageSize),
                 new LambdaQueryWrapper<AgentConversation>()
                         .eq(AgentConversation::getUserId, userId)
                         .eq(AgentConversation::getCategory, category)
                         .eq(AgentConversation::getDeleted, false)
                         .orderByDesc(AgentConversation::getUpdateTime)
-                        .orderByDesc(AgentConversation::getId)));
+                        .orderByDesc(AgentConversation::getId))));
     }
 
     public List<AgentConversation> listByProject(Long projectId) {
-        return conversationMapper.selectList(new LambdaQueryWrapper<AgentConversation>()
+        return annotateStateStatus(conversationMapper.selectList(
+                new LambdaQueryWrapper<AgentConversation>()
                 .eq(AgentConversation::getProjectId, projectId)
                 .eq(AgentConversation::getDeleted, false)
-                .orderByDesc(AgentConversation::getUpdateTime));
+                        .orderByDesc(AgentConversation::getUpdateTime)));
     }
 
     /**
@@ -173,8 +187,13 @@ public class AgentConversationService {
             long currentUserId) {
         return Mono.fromCallable(() -> conversationMapper.selectOne(ownedConversation.get()))
                 .subscribeOn(schedulers.journal())
-                .flatMap(conversation -> statePreflight.deleteConversationSessions(
-                                String.valueOf(currentUserId), conversation.getConversationId())
+                .flatMap(conversation -> Mono.fromCallable(() ->
+                                runMapper.selectStateSessionIdsByConversation(
+                                        conversation.getConversationId()))
+                        .subscribeOn(schedulers.journal())
+                        .flatMapMany(Flux::fromIterable)
+                        .concatMap(sessionId -> statePreflight.deleteSession(
+                                String.valueOf(currentUserId), sessionId))
                         .then(Mono.fromRunnable(() -> conversationMapper.delete(
                                         ownedConversation.get()))
                                 .subscribeOn(schedulers.journal())))
@@ -195,5 +214,24 @@ public class AgentConversationService {
                 .eq(AgentConversation::getConversationId, conversationId)
                 .eq(AgentConversation::getUserId, userId)
                 .eq(AgentConversation::getDeleted, false);
+    }
+
+    private PageResult<AgentConversation> annotateStateStatus(
+            PageResult<AgentConversation> page) {
+        annotateStateStatus(page.getList());
+        return page;
+    }
+
+    private List<AgentConversation> annotateStateStatus(
+            List<AgentConversation> conversations) {
+        if (conversations.isEmpty()) {
+            return conversations;
+        }
+        LocalDateTime databaseNow = conversationMapper.selectDatabaseNow();
+        int retentionDays = stateCleanupPolicy.getCurrent().getRetentionDays();
+        conversations.forEach(conversation -> conversation.setAgentStateStatus(
+                stateCleanupPolicy.stateStatus(
+                        conversation, databaseNow, retentionDays)));
+        return conversations;
     }
 }

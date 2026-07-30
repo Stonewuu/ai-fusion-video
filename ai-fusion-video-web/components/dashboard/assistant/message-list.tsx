@@ -4,7 +4,6 @@ import {
   Fragment,
   memo,
   useMemo,
-  type RefObject,
 } from "react";
 import { ArrowDown, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -78,7 +77,6 @@ function buildSegments(messages: AgentMessage[], activeRunId?: string): MessageS
 
 const AssistantTimelineContent = memo(function AssistantTimelineContent({
   timeline,
-  scrollRef,
   reasoningText,
   reasoningStartTime,
   reasoningDurationMs,
@@ -86,7 +84,6 @@ const AssistantTimelineContent = memo(function AssistantTimelineContent({
   toolConfirmation,
 }: {
   timeline: TimelineItem[];
-  scrollRef: RefObject<HTMLDivElement | null>;
   reasoningText?: string;
   reasoningStartTime?: number;
   reasoningDurationMs?: number;
@@ -101,7 +98,6 @@ const AssistantTimelineContent = memo(function AssistantTimelineContent({
         reasoningStartTime={reasoningStartTime}
         reasoningDurationMs={reasoningDurationMs}
         timeline={timeline}
-        scrollRef={scrollRef}
         initialScrollToEnd={false}
         streaming={streaming}
         error={undefined}
@@ -218,14 +214,12 @@ export function AssistantMessageList({
               {segment.user ? <UserMessageBubble message={segment.user} /> : null}
               <AssistantTimelineContent
                 timeline={segment.timeline}
-                scrollRef={viewportRef}
               />
             </Fragment>
           ))}
 
           <AssistantTimelineContent
             timeline={liveTimeline}
-            scrollRef={viewportRef}
             reasoningText={running ? runtime.pipeline.reasoningText : undefined}
             reasoningStartTime={running ? runtime.pipeline.reasoningStartTime : undefined}
             reasoningDurationMs={running ? runtime.pipeline.reasoningDurationMs : undefined}

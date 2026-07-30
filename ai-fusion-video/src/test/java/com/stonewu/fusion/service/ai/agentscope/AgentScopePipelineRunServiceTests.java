@@ -20,7 +20,6 @@ import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
-import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import com.stonewu.fusion.service.ai.run.AgentExecutionRuntimeContextRequests;
 import com.stonewu.fusion.service.ai.run.AgentExecutionFactory;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
@@ -80,7 +79,6 @@ class AgentScopePipelineRunServiceTests {
         AgentExecutionRuntimeContextRequests runtimeContexts =
                 mock(AgentExecutionRuntimeContextRequests.class);
         AgentExecutionFactory executionFactory = mock(AgentExecutionFactory.class);
-        AgentStatePreflight statePreflight = mock(AgentStatePreflight.class);
         RunExecutionSupervisor supervisor = mock(RunExecutionSupervisor.class);
         AgentRunQueryService queries = mock(AgentRunQueryService.class);
         AgentRunReplayService replay = mock(AgentRunReplayService.class);
@@ -118,7 +116,7 @@ class AgentScopePipelineRunServiceTests {
                     return Mono.just(new StartedAgentRun(
                             command.runId(),
                             command.conversationId(),
-                            command.agentStateSessionId(),
+                            command.stateSessionCandidate(),
                             command.ownerInstanceId(),
                             1L,
                             command.deadline().minusSeconds(1),
@@ -142,7 +140,6 @@ class AgentScopePipelineRunServiceTests {
                 coordinator,
                 runtimeContexts,
                 executionFactory,
-                statePreflight,
                 supervisor,
                 queries,
                 replay,
@@ -167,7 +164,7 @@ class AgentScopePipelineRunServiceTests {
                 ArgumentCaptor.forClass(StartAgentRunCommand.class);
         verify(coordinator).start(admission.capture());
         assertThat(admission.getValue().agentType()).isEqualTo("ai_assistant_agent");
-        assertThat(admission.getValue().agentStateSessionId())
+        assertThat(admission.getValue().stateSessionCandidate())
                 .isEqualTo("afv:v2:conversation-1:ai_assistant_agent");
         assertThat(admission.getValue().userContent()).isEqualTo("hello harness");
 
@@ -206,7 +203,6 @@ class AgentScopePipelineRunServiceTests {
         AgentExecutionRuntimeContextRequests runtimeContexts =
                 mock(AgentExecutionRuntimeContextRequests.class);
         AgentExecutionFactory executionFactory = mock(AgentExecutionFactory.class);
-        AgentStatePreflight statePreflight = mock(AgentStatePreflight.class);
         RunExecutionSupervisor supervisor = mock(RunExecutionSupervisor.class);
         AgentRunQueryService queries = mock(AgentRunQueryService.class);
         AgentRunReplayService replay = mock(AgentRunReplayService.class);
@@ -231,12 +227,6 @@ class AgentScopePipelineRunServiceTests {
         when(queries.resolveAuthorizedTarget(isNull(), eq("conversation-1"), eq(42L)))
                 .thenReturn(Mono.just(previous));
         when(executionFactory.resolve(any(AgentKernelSnapshot.class))).thenReturn(Mono.just(spec));
-        when(statePreflight.exists(
-                "42", "afv:v2:conversation-1:ai_assistant_agent"))
-                .thenReturn(Mono.just(AgentRunStatus.CANCELLED.name().equals(status)));
-        when(statePreflight.deleteSession(
-                "42", "afv:v2:conversation-1:ai_assistant_agent"))
-                .thenReturn(Mono.empty());
         when(persistedMessages.listByConversation("conversation-1")).thenReturn(List.of());
         when(spec.agentDefinitionStableKey()).thenReturn("ai_assistant_agent");
         when(identity.value()).thenReturn("node-2");
@@ -246,7 +236,7 @@ class AgentScopePipelineRunServiceTests {
                     return Mono.just(new StartedAgentRun(
                             command.runId(),
                             command.conversationId(),
-                            command.agentStateSessionId(),
+                            command.stateSessionCandidate(),
                             command.ownerInstanceId(),
                             1L,
                             command.deadline().minusSeconds(1),
@@ -255,7 +245,8 @@ class AgentScopePipelineRunServiceTests {
                             2L));
                 });
         when(runtimeContexts.forRoot(
-                any(), eq("ai_assistant_agent"), any(), eq(ToolExecutionMode.FULL_ACCESS)))
+                any(), eq("ai_assistant_agent"), any(),
+                eq(ToolExecutionMode.FULL_ACCESS)))
                 .thenReturn(Mono.just(runtime));
         when(supervisor.start(any(StartAgentExecutionCommand.class))).thenReturn(Mono.empty());
 
@@ -270,7 +261,6 @@ class AgentScopePipelineRunServiceTests {
                 coordinator,
                 runtimeContexts,
                 executionFactory,
-                statePreflight,
                 supervisor,
                 queries,
                 replay,
@@ -291,8 +281,9 @@ class AgentScopePipelineRunServiceTests {
         verify(coordinator).start(admission.capture());
         assertThat(admission.getValue().userContent()).isEqualTo("继续");
         assertThat(admission.getValue().projectId()).isEqualTo(9L);
-        assertThat(admission.getValue().agentStateSessionId())
-                .isEqualTo("afv:v2:conversation-1:ai_assistant_agent");
+        assertThat(admission.getValue().stateSessionCandidate())
+                .startsWith("afv-root:")
+                .isNotEqualTo(previous.getAgentStateSessionId());
         assertThat(admission.getValue().kernelSnapshot().snapshotJson())
                 .isEqualTo(snapshot.snapshotJson());
 
@@ -303,19 +294,10 @@ class AgentScopePipelineRunServiceTests {
                 .isInstanceOfSatisfying(UserMessage.class, message ->
                         assertThat(message.getTextContent()).isEqualTo("继续"));
         assertThat(execution.getValue().kernelSpec()).isSameAs(spec);
-        if (AgentRunStatus.FAILED.name().equals(status)) {
-            verify(statePreflight).deleteSession(
-                    "42", "afv:v2:conversation-1:ai_assistant_agent");
-            verify(statePreflight, never()).exists(
-                    "42", "afv:v2:conversation-1:ai_assistant_agent");
-            verify(persistedMessages).listByConversation("conversation-1");
-        } else {
-            verify(statePreflight).exists(
-                    "42", "afv:v2:conversation-1:ai_assistant_agent");
-            verify(statePreflight, never()).deleteSession(
-                    "42", "afv:v2:conversation-1:ai_assistant_agent");
-            verify(persistedMessages, never()).listByConversation("conversation-1");
-        }
+        verify(persistedMessages).listByConversation("conversation-1");
+        verify(runtimeContexts).forRoot(
+                any(), eq("ai_assistant_agent"), any(),
+                eq(ToolExecutionMode.FULL_ACCESS));
     }
 
     @Test
@@ -343,7 +325,6 @@ class AgentScopePipelineRunServiceTests {
                 coordinator,
                 mock(AgentExecutionRuntimeContextRequests.class),
                 mock(AgentExecutionFactory.class),
-                mock(AgentStatePreflight.class),
                 mock(RunExecutionSupervisor.class),
                 queries,
                 mock(AgentRunReplayService.class),
