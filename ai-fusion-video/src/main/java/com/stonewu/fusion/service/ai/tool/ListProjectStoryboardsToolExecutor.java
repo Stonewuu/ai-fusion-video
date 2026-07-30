@@ -32,6 +32,11 @@ public class ListProjectStoryboardsToolExecutor implements ToolExecutor {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public String getDisplayName() {
         return "列出项目分镜";
     }

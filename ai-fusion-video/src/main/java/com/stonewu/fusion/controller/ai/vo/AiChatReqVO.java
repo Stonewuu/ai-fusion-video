@@ -69,4 +69,7 @@ public class AiChatReqVO {
 
     /** 是否启用并行工具执行（Multi-Agent 模式） */
     private Boolean enableParallelTools;
+
+    /** Tool execution policy: DEFAULT / ALWAYS_ASK / ALWAYS_ALLOW / FULL_ACCESS. */
+    private String toolExecutionMode;
 }

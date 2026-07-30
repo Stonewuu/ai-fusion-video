@@ -14,6 +14,7 @@ import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
 import com.stonewu.fusion.service.ai.agentscope.message.AgentScopeMessageMapper;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
 import com.stonewu.fusion.service.ai.run.AgentExecutionRuntimeContextRequests;
@@ -113,7 +114,8 @@ class AgentScopePipelineRunServiceTests {
                             snapshot,
                             1L));
                 });
-        when(runtimeContexts.forRoot(any(), eq("ai_assistant_agent"), isNull()))
+        when(runtimeContexts.forRoot(
+                any(), eq("ai_assistant_agent"), isNull(), eq(ToolExecutionMode.DEFAULT)))
                 .thenReturn(Mono.just(runtime));
         when(supervisor.start(any(StartAgentExecutionCommand.class))).thenReturn(Mono.empty());
 
@@ -139,6 +141,7 @@ class AgentScopePipelineRunServiceTests {
                 .setConversationId("conversation-1")
                 .setMessage("hello harness")
                 .setReasoningEffort("high")
+                .setToolExecutionMode(ToolExecutionMode.DEFAULT.name())
                 .setEnabledSkills(List.of("story-review"));
 
         StepVerifier.create(service.start(request, 42L))

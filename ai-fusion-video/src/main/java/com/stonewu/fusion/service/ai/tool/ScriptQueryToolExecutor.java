@@ -26,6 +26,11 @@ public class ScriptQueryToolExecutor implements ToolExecutor {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public String getDisplayName() {
         return "查询剧本";
     }

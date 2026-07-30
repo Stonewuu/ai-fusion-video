@@ -12,6 +12,7 @@ import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelKey;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentCommand;
 import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRun;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
@@ -167,6 +168,7 @@ class PlatformSubAgentRunServiceIT {
                 childSpec(),
                 messages(),
                 new ProjectContext(77L),
+                ToolExecutionMode.DEFAULT,
                 parent.deadline().minusSeconds(1));
         assertThatThrownBy(() -> await(service.start(stale)))
                 .isInstanceOf(BusinessException.class)
@@ -310,6 +312,7 @@ class PlatformSubAgentRunServiceIT {
                 childSpec(),
                 messages(),
                 new ProjectContext(77L),
+                ToolExecutionMode.DEFAULT,
                 parent.deadline().minusSeconds(1));
     }
 

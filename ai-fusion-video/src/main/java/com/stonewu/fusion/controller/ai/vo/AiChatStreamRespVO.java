@@ -1,5 +1,6 @@
 package com.stonewu.fusion.controller.ai.vo;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
@@ -11,6 +12,7 @@ import java.util.List;
  */
 @Data
 @Accessors(chain = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AiChatStreamRespVO {
 
     /** Durable wire schema version. */
@@ -94,6 +96,9 @@ public class AiChatStreamRespVO {
     /** Server-persisted tool set for an actionable confirmation. */
     private List<PendingToolCallVO> pendingToolCalls;
 
+    /** Exact user decisions for the persisted confirmation tool set. */
+    private List<ToolConfirmationDecisionVO> decisions;
+
     /** Server-authoritative action expiry. */
     private Instant expiresAt;
 
@@ -111,5 +116,12 @@ public class AiChatStreamRespVO {
         private String toolCallId;
         private String toolName;
         private String argumentsPreview;
+    }
+
+    @Data
+    @Accessors(chain = true)
+    public static class ToolConfirmationDecisionVO {
+        private String toolCallId;
+        private Boolean approved;
     }
 }

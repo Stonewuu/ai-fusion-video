@@ -184,9 +184,15 @@ public final class AgentScopeEventMapper {
             case TOOL_RESULT_END -> "TOOL_FINISHED";
             case SUBAGENT_EXPOSED -> "SUB_AGENT_STARTED";
             case AGENT_END -> isMainSource(event.getSource()) ? null : "SUB_AGENT_FINISHED";
-            case REQUIRE_USER_CONFIRM -> "USER_CONFIRMATION_REQUIRED";
+            // The raw pause event is journaled as an internal checkpoint. The
+            // durable waiting-state service publishes the actionable event only
+            // after the RUNNING -> WAITING_CONFIRMATION transition commits.
+            case REQUIRE_USER_CONFIRM -> null;
             case REQUIRE_EXTERNAL_EXECUTION -> "EXTERNAL_EXECUTION_REQUIRED";
-            case USER_CONFIRM_RESULT -> "USER_CONFIRM_RESULT";
+            // The durable waiting-state transition publishes the authoritative
+            // decision event before execution resumes. The AgentScope echo is
+            // journaled only and must not produce a second frontend decision.
+            case USER_CONFIRM_RESULT -> null;
             case EXTERNAL_EXECUTION_RESULT -> "EXTERNAL_EXECUTION_RESULT";
             case AGENT_START,
                     AGENT_RESULT,

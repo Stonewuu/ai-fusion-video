@@ -7,6 +7,7 @@ import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.ai.ToolPermissionRisk;
 import com.stonewu.fusion.service.script.ScriptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 场次管理工具（manage_script_scenes）
@@ -99,6 +101,18 @@ public class ManageScriptSceneItemsToolExecutor implements ToolExecutor {
                     "required": ["action"]
                 }
                 """;
+    }
+
+    @Override
+    public ToolPermissionRisk getPermissionRisk(Map<String, Object> toolInput) {
+        return "delete".equals(toolInput.get("action"))
+                ? ToolPermissionRisk.HIGH_RISK
+                : ToolPermissionRisk.EDIT;
+    }
+
+    @Override
+    public boolean mayRequireHighRiskApproval() {
+        return true;
     }
 
     @Override

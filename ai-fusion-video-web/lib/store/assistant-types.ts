@@ -4,6 +4,7 @@ import type {
   AssistantMcpToolReferenceOption,
   AssistantSkillReferenceOption,
   AiMultimodalInput,
+  ToolExecutionMode,
 } from "@/lib/api/ai-assistant";
 import type { AiChatReq, AiChatStreamEvent } from "@/lib/api/ai-pipeline";
 import type { AgentPipelineState } from "@/components/dashboard/agent-pipeline/types";
@@ -53,6 +54,7 @@ export interface AssistantConversationRuntime {
   messagesError?: string;
   connectionError?: string;
   unread: boolean;
+  toolExecutionMode: ToolExecutionMode;
 }
 
 export interface PersistedAssistantState {
@@ -70,6 +72,8 @@ export interface PersistedAssistantState {
   /** A cursor is valid only when its conversation entry has the same run id. */
   runIds: Record<string, string>;
   lastSequences: Record<string, number>;
+  toolExecutionModes: Record<string, ToolExecutionMode>;
+  newToolExecutionMode: ToolExecutionMode;
 }
 
 export interface AssistantStoreState {
@@ -86,6 +90,7 @@ export interface AssistantStoreState {
   conversations: AgentConversation[];
   conversationStates: Record<string, AssistantConversationRuntime>;
   newDraft: string;
+  newToolExecutionMode: ToolExecutionMode;
   drawerOpen: boolean;
   conversationsLoading: boolean;
   conversationsError?: string;
@@ -101,6 +106,7 @@ export interface AssistantStoreState {
   startNewConversation: () => void;
   setDraft: (conversationId: string | null, draft: string) => void;
   setSelectedModelId: (modelId: number | null) => void;
+  setToolExecutionMode: (mode: ToolExecutionMode) => void;
   sendMessage: (
     message: string,
     modelId: number | null,
@@ -109,6 +115,10 @@ export interface AssistantStoreState {
     references?: AssistantMessageReferences,
   ) => Promise<void>;
   stopGeneration: () => Promise<void>;
+  respondToToolConfirmation: (
+    toolCallId: string,
+    approved: boolean,
+  ) => Promise<void>;
   markConversationRead: (conversationId: string) => void;
   deleteConversation: (conversationId: string, id: number) => Promise<void>;
   setMode: (mode: AssistantMode, canDock?: boolean) => void;

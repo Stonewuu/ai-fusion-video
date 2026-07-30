@@ -20,23 +20,23 @@ import {
   ChevronRight,
   Download,
   Loader2,
-  Wrench,
   XCircle,
 } from "lucide-react";
+import {
+  ToolCallCard,
+} from "@/components/dashboard/shared/tool-call-card";
 import { StreamMarkdown } from "@/components/dashboard/stream-markdown";
 import { StreamThink } from "@/components/dashboard/stream-think";
 import { cn } from "@/lib/utils";
 import type {
   SubTimelineItem,
   TimelineItem,
-  ToolTimelineStatus,
 } from "@/lib/store/pipeline-store";
 import {
   getToolDisplayName,
   isSubAgentTool,
 } from "./constants";
 import { useSmartScroll } from "./hooks";
-import { ToolResultDisplay } from "./results";
 import {
   parseTaskContent,
   type TaskMediaLinkInfo,
@@ -161,111 +161,24 @@ function TaskMediaLinks({ mediaLinks }: { mediaLinks: TaskMediaLinkInfo[] }) {
   );
 }
 
-const ExpandableToolCard = memo(function ExpandableToolCard({
-  toolName,
-  toolStatus,
-  result,
-}: {
-  toolName: string;
-  toolStatus: Exclude<ToolTimelineStatus, "calling">;
-  result?: string;
-}) {
-  const [expanded, setExpanded] = useState(false);
-  const hasResult = !!result;
+export interface TimelineToolConfirmation {
+  toolCallIds: string[];
+  parentToolCallId?: string;
+  decisions: Readonly<Record<string, boolean>>;
+  submitting: boolean;
+  showActions: boolean;
+  onDecision: (toolCallId: string, approved: boolean) => void;
+}
 
-  return (
-    <div
-      className={cn(
-        "rounded-xl text-sm border overflow-hidden",
-        toolStatus === "done"
-          ? "border-green-500/20 bg-green-500/5"
-          : toolStatus === "error"
-            ? "border-destructive/20 bg-destructive/5"
-            : "border-border/30 bg-muted/30"
-      )}
-    >
-      <div
-        className={cn(
-          "flex items-center gap-3 px-4 py-2.5",
-          hasResult &&
-            "cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-        )}
-        onClick={() => hasResult && setExpanded(!expanded)}
-      >
-        {toolStatus === "done" ? (
-          <CheckCircle2 className="h-3.5 w-3.5 text-green-400 shrink-0" />
-        ) : toolStatus === "error" ? (
-          <XCircle className="h-3.5 w-3.5 text-destructive shrink-0" />
-        ) : (
-          <Ban className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        )}
-        {isSubAgentTool(toolName) ? (
-          <Bot className="h-3.5 w-3.5 text-purple-400 shrink-0" />
-        ) : (
-          <Wrench className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        )}
-        <span className="font-medium text-xs">{getToolDisplayName(toolName)}</span>
-        <span className="flex items-center gap-1 text-xs text-muted-foreground ml-auto">
-          {toolStatus === "done" ? "已完成" : toolStatus === "error" ? "失败" : "已取消"}
-          {hasResult &&
-            (expanded ? (
-              <ChevronDown className="h-3.5 w-3.5 text-muted-foreground/50" />
-            ) : (
-              <ChevronRight className="h-3.5 w-3.5 text-muted-foreground/50" />
-            ))}
-        </span>
-      </div>
-
-      {hasResult && (
-        <AnimatePresence initial={false}>
-          {expanded && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={{ duration: 0.2 }}
-              className="overflow-hidden"
-            >
-              <div
-                className={cn(
-                  "border-t px-4 py-3",
-                  toolStatus === "error"
-                    ? "border-destructive/10"
-                    : toolStatus === "done"
-                      ? "border-green-500/10"
-                      : "border-border/20"
-                )}
-              >
-                <ToolResultDisplay toolName={toolName} content={result} />
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      )}
-    </div>
-  );
-});
-
-const CallingToolCard = memo(function CallingToolCard({
-  toolName,
-}: {
-  toolName: string;
-}) {
-  return (
-    <div className="rounded-xl text-sm border overflow-hidden border-blue-500/20 bg-blue-500/5">
-      <div className="flex items-center gap-3 px-4 py-2.5">
-        <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-400 shrink-0" />
-        {isSubAgentTool(toolName) ? (
-          <Bot className="h-3.5 w-3.5 text-purple-400 shrink-0" />
-        ) : (
-          <Wrench className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-        )}
-        <span className="font-medium text-xs">{getToolDisplayName(toolName)}</span>
-        <span className="text-xs text-blue-400/80 ml-auto">调用中…</span>
-      </div>
-    </div>
-  );
-});
+function confirmationDecision(
+  confirmation: TimelineToolConfirmation,
+  toolCallId: string,
+): "approve" | "deny" | undefined {
+  if (!Object.prototype.hasOwnProperty.call(confirmation.decisions, toolCallId)) {
+    return undefined;
+  }
+  return confirmation.decisions[toolCallId] ? "approve" : "deny";
+}
 
 const SubTimelineEntry = memo(function SubTimelineEntry({
   child,
@@ -288,16 +201,17 @@ const SubTimelineEntry = memo(function SubTimelineEntry({
       />
     );
   } else if (child.type === "tool") {
-    content =
-      child.status === "calling" ? (
-        <CallingToolCard toolName={child.name} />
-      ) : (
-        <ExpandableToolCard
-          toolName={child.name}
-          toolStatus={child.status}
-          result={child.result}
-        />
-      );
+    content = (
+      <ToolCallCard
+        items={[{
+          toolCallId: child.id,
+          toolName: child.name,
+          argumentsText: child.arguments,
+          status: child.status,
+          result: child.result,
+        }]}
+      />
+    );
   } else {
     content = (
       <div className="text-xs leading-relaxed text-muted-foreground/80">
@@ -316,8 +230,10 @@ const SubTimelineEntry = memo(function SubTimelineEntry({
 
 const SubAgentCard = memo(function SubAgentCard({
   item,
+  toolConfirmation,
 }: {
   item: Extract<TimelineItem, { type: "tool" }>;
+  toolConfirmation?: TimelineToolConfirmation;
 }) {
   const children = item.children ?? [];
   const isRunning = item.status === "calling";
@@ -340,13 +256,37 @@ const SubAgentCard = memo(function SubAgentCard({
   const hasResult = !!renderedResult;
   const hasContent = children.length > 0 || hasResult;
   const innerScrollRef = useSmartScroll([children], isRunning);
+  const childConfirmationItems = toolConfirmation?.parentToolCallId === item.id
+    ? toolConfirmation.toolCallIds.map((toolCallId) => {
+        const matches = children.filter(
+          (child): child is Extract<SubTimelineItem, { type: "tool" }> =>
+            child.type === "tool" && child.id === toolCallId,
+        );
+        if (matches.length !== 1 || matches[0].status !== "awaiting_approval") {
+          throw new Error(`Child confirmation tool is not awaiting approval: ${toolCallId}`);
+        }
+        return matches[0];
+      })
+    : [];
+  const childConfirmationIds = new Set(
+    childConfirmationItems.map((child) => child.id),
+  );
 
   const toolCount = children.filter((child) => child.type === "tool").length;
   const doneToolCount = children.filter(
-    (child) => child.type === "tool" && child.status !== "calling"
+    (child) => child.type === "tool" && (
+      child.status === "done"
+      || child.status === "error"
+      || child.status === "cancelled"
+      || child.status === "rejected"
+    )
   ).length;
   const activeToolCount = children.filter(
-    (child) => child.type === "tool" && child.status === "calling"
+    (child) => child.type === "tool" && (
+      child.status === "calling"
+      || child.status === "awaiting_approval"
+      || child.status === "approved"
+    )
   ).length;
   const toolProgressLabel =
     toolCount > 0
@@ -425,17 +365,43 @@ const SubAgentCard = memo(function SubAgentCard({
               ref={innerScrollRef}
               className="border-t border-purple-500/10 px-4 py-3 space-y-2 max-h-[400px] overflow-y-auto"
             >
-              {children.map((child, index) => (
-                <SubTimelineEntry
-                  key={
-                    child.type === "tool"
-                      ? `sub-tool-${child.id}`
-                      : `sub-${child.type}-${index}`
+              {children.map((child, index) => {
+                if (child.type === "tool" && childConfirmationIds.has(child.id)) {
+                  if (!toolConfirmation) {
+                    throw new Error("Child confirmation has no controls");
                   }
-                  child={child}
-                  streaming={isRunning && index === children.length - 1}
-                />
-              ))}
+                  return (
+                    <ToolCallCard
+                      key={`sub-tool-confirmation-${child.id}`}
+                      items={[{
+                        toolCallId: child.id,
+                        toolName: child.name,
+                        argumentsText: child.arguments,
+                        status: child.status,
+                        result: child.result,
+                      }]}
+                      approval={{
+                        decision: confirmationDecision(toolConfirmation, child.id),
+                        submitting: toolConfirmation.submitting,
+                        showActions: toolConfirmation.showActions,
+                        onApprove: () => toolConfirmation.onDecision(child.id, true),
+                        onReject: () => toolConfirmation.onDecision(child.id, false),
+                      }}
+                    />
+                  );
+                }
+                return (
+                  <SubTimelineEntry
+                    key={
+                      child.type === "tool"
+                        ? `sub-tool-${child.id}`
+                        : `sub-${child.type}-${index}`
+                    }
+                    child={child}
+                    streaming={isRunning && index === children.length - 1}
+                  />
+                );
+              })}
 
               {hasResult && (
                 <div className="text-xs leading-relaxed text-foreground/70">
@@ -454,11 +420,13 @@ const TimelineEntry = memo(function TimelineEntry({
   item,
   previousItem,
   streaming,
+  toolConfirmation,
   optimizeOffscreen = true,
 }: {
   item: TimelineItem;
   previousItem: TimelineItem | null;
   streaming: boolean;
+  toolConfirmation?: TimelineToolConfirmation;
   optimizeOffscreen?: boolean;
 }) {
   let content;
@@ -474,15 +442,17 @@ const TimelineEntry = memo(function TimelineEntry({
     );
   } else if (item.type === "tool") {
     if (isSubAgentTool(item.name) || (item.children && item.children.length > 0)) {
-      content = <SubAgentCard item={item} />;
-    } else if (item.status === "calling") {
-      content = <CallingToolCard toolName={item.name} />;
+      content = <SubAgentCard item={item} toolConfirmation={toolConfirmation} />;
     } else {
       content = (
-        <ExpandableToolCard
-          toolName={item.name}
-          toolStatus={item.status}
-          result={item.result}
+        <ToolCallCard
+          items={[{
+            toolCallId: item.id,
+            toolName: item.name,
+            argumentsText: item.arguments,
+            status: item.status,
+            result: item.result,
+          }]}
         />
       );
     }
@@ -520,6 +490,7 @@ export interface MessageTimelineProps {
   initialScrollToEnd?: boolean;
   streaming?: boolean;
   error?: string;
+  toolConfirmation?: TimelineToolConfirmation;
 }
 
 type MessageTimelineRow =
@@ -533,6 +504,11 @@ type MessageTimelineRow =
     }
   | {
       key: string;
+      type: "tool-confirmation";
+      item: Extract<TimelineItem, { type: "tool" }>;
+    }
+  | {
+      key: string;
       type: "entry";
       item: TimelineItem;
       previousItem: TimelineItem | null;
@@ -543,9 +519,11 @@ type MessageTimelineRow =
 function MessageTimelineRowContent({
   row,
   optimizeOffscreen,
+  toolConfirmation,
 }: {
   row: MessageTimelineRow;
   optimizeOffscreen: boolean;
+  toolConfirmation?: TimelineToolConfirmation;
 }) {
   if (row.type === "fallback-reasoning") {
     return (
@@ -567,11 +545,36 @@ function MessageTimelineRowContent({
     );
   }
 
+  if (row.type === "tool-confirmation") {
+    if (!toolConfirmation || toolConfirmation.parentToolCallId) {
+      throw new Error("Root tool confirmation row has no matching confirmation batch");
+    }
+    return (
+      <ToolCallCard
+        items={[{
+          toolCallId: row.item.id,
+          toolName: row.item.name,
+          argumentsText: row.item.arguments,
+          status: row.item.status,
+          result: row.item.result,
+        }]}
+        approval={{
+          decision: confirmationDecision(toolConfirmation, row.item.id),
+          submitting: toolConfirmation.submitting,
+          showActions: toolConfirmation.showActions,
+          onApprove: () => toolConfirmation.onDecision(row.item.id, true),
+          onReject: () => toolConfirmation.onDecision(row.item.id, false),
+        }}
+      />
+    );
+  }
+
   return (
     <TimelineEntry
       item={row.item}
       previousItem={row.previousItem}
       streaming={row.streaming}
+      toolConfirmation={toolConfirmation}
       optimizeOffscreen={optimizeOffscreen}
     />
   );
@@ -580,9 +583,11 @@ function MessageTimelineRowContent({
 function VirtualizedMessageTimeline({
   rows,
   scrollRef,
+  toolConfirmation,
 }: {
   rows: MessageTimelineRow[];
   scrollRef: RefObject<HTMLDivElement | null>;
+  toolConfirmation?: TimelineToolConfirmation;
 }) {
   // TanStack Virtual owns a mutable measurement instance; this component is
   // intentionally excluded from React Compiler memoization.
@@ -639,7 +644,11 @@ function VirtualizedMessageTimeline({
             className="absolute left-0 top-0 w-full"
             style={{ transform: `translateY(${virtualRow.start}px)` }}
           >
-            <MessageTimelineRowContent row={row} optimizeOffscreen />
+            <MessageTimelineRowContent
+              row={row}
+              optimizeOffscreen
+              toolConfirmation={toolConfirmation}
+            />
           </div>
         );
       })}
@@ -656,6 +665,7 @@ export function MessageTimeline({
   initialScrollToEnd = false,
   streaming,
   error,
+  toolConfirmation,
 }: MessageTimelineProps) {
   const hasTimelineReasoning = timeline.some((item) => item.type === "reasoning");
   const fallbackReasoningStreaming =
@@ -675,7 +685,30 @@ export function MessageTimeline({
       });
     }
 
+    let rootConfirmationItems: Array<Extract<TimelineItem, { type: "tool" }>> = [];
+    if (toolConfirmation && !toolConfirmation.parentToolCallId) {
+      rootConfirmationItems = toolConfirmation.toolCallIds.map((toolCallId) => {
+        const matches = timeline.filter(
+          (item): item is Extract<TimelineItem, { type: "tool" }> =>
+            item.type === "tool" && item.id === toolCallId,
+        );
+        if (matches.length !== 1 || matches[0].status !== "awaiting_approval") {
+          throw new Error(`Confirmation batch tool is not awaiting approval: ${toolCallId}`);
+        }
+        return matches[0];
+      });
+    }
+    const rootConfirmationIds = new Set(rootConfirmationItems.map((item) => item.id));
+
     timeline.forEach((item, index) => {
+      if (item.type === "tool" && rootConfirmationIds.has(item.id)) {
+        nextRows.push({
+          key: `tool-confirmation-${item.id}`,
+          type: "tool-confirmation",
+          item,
+        });
+        return;
+      }
       nextRows.push({
         key: item.type === "tool" ? `tool-${item.id}` : `${item.type}-${index}`,
         type: "entry",
@@ -699,6 +732,7 @@ export function MessageTimeline({
     reasoningText,
     streaming,
     timeline,
+    toolConfirmation,
   ]);
 
   // Assistant conversations render several independent timelines inside one
@@ -712,11 +746,18 @@ export function MessageTimeline({
             key={row.key}
             row={row}
             optimizeOffscreen={false}
+            toolConfirmation={toolConfirmation}
           />
         ))}
       </div>
     );
   }
 
-  return <VirtualizedMessageTimeline rows={rows} scrollRef={scrollRef} />;
+  return (
+    <VirtualizedMessageTimeline
+      rows={rows}
+      scrollRef={scrollRef}
+      toolConfirmation={toolConfirmation}
+    />
+  );
 }

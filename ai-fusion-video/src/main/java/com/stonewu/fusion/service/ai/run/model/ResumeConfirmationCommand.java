@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.run.model;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -9,6 +10,7 @@ public record ResumeConfirmationCommand(
         long currentUserId,
         String replyId,
         Set<String> decisionIds,
+        Map<String, Boolean> decisionResults,
         String newOwnerInstanceId,
         Duration ownerLease) {
 
@@ -24,6 +26,13 @@ public record ResumeConfirmationCommand(
                 || decisionIds.stream().anyMatch(value -> value == null || value.isBlank())) {
             throw new IllegalArgumentException(
                     "decisionIds must contain only non-blank values");
+        }
+        decisionResults = Map.copyOf(Objects.requireNonNull(
+                decisionResults, "decisionResults must not be null"));
+        if (!decisionResults.keySet().equals(decisionIds)
+                || decisionResults.values().stream().anyMatch(Objects::isNull)) {
+            throw new IllegalArgumentException(
+                    "decisionResults must contain one boolean for every decisionId");
         }
         newOwnerInstanceId = requireText(newOwnerInstanceId, "newOwnerInstanceId");
         requirePositive(ownerLease, "ownerLease");

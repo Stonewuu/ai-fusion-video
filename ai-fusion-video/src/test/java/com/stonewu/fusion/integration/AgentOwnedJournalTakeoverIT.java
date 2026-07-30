@@ -43,6 +43,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -58,6 +59,9 @@ class AgentOwnedJournalTakeoverIT {
             [{"toolCallId":"tool-a","toolName":"generate_image",\
             "argumentsPreview":"{}"}]
             """;
+    private static final String SUSPENDED_TOOLS =
+            "[{\"id\":\"tool-a\",\"name\":\"generate_image\",\"input\":{},"
+                    + "\"metadata\":{},\"state\":\"ASKING\"}]";
 
     @Container
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.6")
@@ -122,6 +126,7 @@ class AgentOwnedJournalTakeoverIT {
                 "reply-1",
                 Set.of("tool-a"),
                 PENDING_TOOLS,
+                SUSPENDED_TOOLS,
                 started.deadline().minusSeconds(10));
         await(waiting.recordConfirmationCandidate(started.runId(), candidate));
         AgentRun beforeWaiting = run(started.runId());
@@ -138,6 +143,7 @@ class AgentOwnedJournalTakeoverIT {
                         USER_ID,
                         candidate.replyId(),
                         candidate.decisionIds(),
+                        Map.of("tool-a", true),
                         "node-b",
                         Duration.ofSeconds(30))));
         assertThat(resumed.newOwnerEpoch()).isEqualTo(2L);

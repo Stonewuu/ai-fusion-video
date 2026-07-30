@@ -39,6 +39,11 @@ public class QueryAssetItemsToolExecutor implements ToolExecutor {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public String getDisplayName() {
         return "查询子资产";
     }

@@ -253,6 +253,7 @@ export default function ScriptTabPage() {
         projectId,
         request: {
           agentType: "script_full_parse",
+          toolExecutionMode: "FULL_ACCESS",
           category: "pipeline",
           title: `AI 剧本解析：${scriptDisplayTitle}`,
           projectId,
@@ -490,6 +491,7 @@ export default function ScriptTabPage() {
         projectId,
         request: {
           agentType: "script_episode_parse",
+          toolExecutionMode: "FULL_ACCESS",
           category: "pipeline",
           title: `AI 解析 · 第 ${ep.episodeNumber} 集`,
           projectId,
@@ -564,6 +566,7 @@ export default function ScriptTabPage() {
         projectId,
         request: {
           agentType: "episode_storyboard_writer",
+          toolExecutionMode: "FULL_ACCESS",
           category: "pipeline",
           title: `AI 分镜 · 第 ${ep.episodeNumber} 集`,
           message: `请为剧本分集（scriptEpisodeId: ${ep.id}）生成分镜，并保存到分镜脚本 ${targetStoryboard.id}。`,

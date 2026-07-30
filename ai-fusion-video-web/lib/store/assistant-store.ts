@@ -6,12 +6,13 @@ import {
   listMessages,
   type AgentConversation,
   type AgentMessage,
+  type ToolExecutionMode,
 } from "@/lib/api/ai-assistant";
-import { cancelPipeline, type AiChatReq } from "@/lib/api/ai-pipeline";
 import {
-  cancelCallingTimelineTools,
-  restoreOptimisticallyCancelledTimelineTools,
-} from "@/lib/store/pipeline-timeline";
+  cancelPipeline,
+  confirmPipelineTools,
+  type AiChatReq,
+} from "@/lib/api/ai-pipeline";
 import {
   clampDockWidth,
   clampLauncherPosition,
@@ -60,6 +61,14 @@ const PAGE_SIZE = 20;
 const defaultRect = getDefaultNormalRect();
 const defaultLauncher = getDefaultLauncherPosition();
 
+function initialConversationToolExecutionMode(
+  modes: Record<string, ToolExecutionMode>,
+  conversationId: string,
+): ToolExecutionMode {
+  const persisted = modes[conversationId];
+  return persisted === undefined ? "DEFAULT" : persisted;
+}
+
 export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
   const connectionCoordinator = createAssistantConnectionCoordinator(set, get);
 
@@ -95,6 +104,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
     conversations: [],
     conversationStates: {},
     newDraft: "",
+    newToolExecutionMode: "DEFAULT",
     drawerOpen: false,
     conversationsLoading: false,
     hasMoreConversations: false,
@@ -110,8 +120,9 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       connectionCoordinator.reset();
       clearAssistantPersistTimer();
       const persisted = defaultPersistedState(userId);
-      const drafts = persisted.drafts ?? {};
-      const restoredMode = persisted.mode ?? "collapsed";
+      const drafts = persisted.drafts;
+      const restoredSelectedConversationId = persisted.selectedConversationId;
+      const restoredMode = persisted.mode;
       const initialMode = typeof window !== "undefined"
         && window.innerWidth < 650
         && restoredMode !== "collapsed"
@@ -121,16 +132,17 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         hydratedUserId: userId,
         initialized: true,
         mode: initialMode,
-        lastOpenMode: persisted.lastOpenMode ?? "floating",
-        restoreMode: persisted.restoreMode ?? "floating",
-        launcherPosition: persisted.launcherPosition ?? defaultLauncher,
-        normalRect: persisted.normalRect ?? defaultRect,
-        dockWidth: persisted.dockWidth ?? 520,
-        selectedConversationId: persisted.selectedConversationId ?? null,
-        selectedModelId: persisted.selectedModelId ?? null,
+        lastOpenMode: persisted.lastOpenMode,
+        restoreMode: persisted.restoreMode,
+        launcherPosition: persisted.launcherPosition,
+        normalRect: persisted.normalRect,
+        dockWidth: persisted.dockWidth,
+        selectedConversationId: null,
+        selectedModelId: persisted.selectedModelId,
         conversations: [],
         conversationStates: {},
         newDraft: drafts[NEW_ASSISTANT_DRAFT_KEY] ?? "",
+        newToolExecutionMode: persisted.newToolExecutionMode,
         drawerOpen: false,
         conversationsLoading: true,
         conversationsError: undefined,
@@ -144,17 +156,22 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
           const filtered = result.list.filter((conversation) =>
             !conversation.category || conversation.category === ASSISTANT_CATEGORY,
           );
-          set((state) => {
+          set(() => {
             const conversationStates: Record<string, AssistantConversationRuntime> = {};
             for (const conversation of filtered) {
               conversationStates[conversation.conversationId] = makeRuntime(
                 conversation,
                 drafts,
-                persisted.runIds ?? {},
+                persisted.runIds,
+                initialConversationToolExecutionMode(
+                  persisted.toolExecutionModes,
+                  conversation.conversationId,
+                ),
               );
             }
-            const selected = state.selectedConversationId && conversationStates[state.selectedConversationId]
-              ? state.selectedConversationId
+            const selected = restoredSelectedConversationId
+              && conversationStates[restoredSelectedConversationId]
+              ? restoredSelectedConversationId
               : null;
             return {
               conversations: filtered,
@@ -200,6 +217,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         selectedConversationId: null,
         selectedModelId: null,
         newDraft: "",
+        newToolExecutionMode: "DEFAULT",
         drawerOpen: false,
         conversationsLoading: false,
         conversationsError: undefined,
@@ -234,8 +252,12 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
                   }
                 : makeRuntime(
                     conversation,
-                    persisted.drafts ?? {},
-                    persisted.runIds ?? {},
+                    persisted.drafts,
+                    persisted.runIds,
+                    initialConversationToolExecutionMode(
+                      persisted.toolExecutionModes,
+                      conversation.conversationId,
+                    ),
                   );
             }
             return {
@@ -259,13 +281,18 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
 
     selectConversation: (conversationId: string | null) => {
       const state = get();
+      if (conversationId && !state.conversationStates[conversationId]) {
+        throw new Error(`Cannot select conversation without runtime: ${conversationId}`);
+      }
       if (state.selectedConversationId !== conversationId) {
         connectionCoordinator.invalidateConnection();
       }
       set((current) => {
         if (!conversationId) return { selectedConversationId: null, drawerOpen: false };
         const runtime = current.conversationStates[conversationId];
-        if (!runtime) return { selectedConversationId: conversationId, drawerOpen: false };
+        if (!runtime) {
+          throw new Error(`Conversation runtime disappeared during selection: ${conversationId}`);
+        }
         return {
           selectedConversationId: conversationId,
           drawerOpen: false,
@@ -300,6 +327,19 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       persist();
     },
 
+    setToolExecutionMode: (mode) => {
+      const conversationId = get().selectedConversationId;
+      if (!conversationId) {
+        set({ newToolExecutionMode: mode });
+      } else {
+        updateRuntime(conversationId, (runtime) => ({
+          ...runtime,
+          toolExecutionMode: mode,
+        }));
+      }
+      persist();
+    },
+
     sendMessage: async (message, modelId, reasoningEffort, projectId, references) => {
       const multimodalInputs = references?.multimodalInputs ?? [];
       const content = message.trim() || (multimodalInputs.length ? "请分析这些附件。" : "");
@@ -325,7 +365,12 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
           status: "completed",
         };
         const runtime = {
-          ...makeRuntime(conversation, {}, {}),
+          ...makeRuntime(
+            conversation,
+            {},
+            {},
+            state.newToolExecutionMode,
+          ),
           // The optimistic conversation has no server history yet. Treat its
           // empty local transcript as loaded so connection recovery cannot
           // race the create request with a history lookup that must 404.
@@ -443,6 +488,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         enabledMcpTools: references?.mcpTools.map((tool) => tool.toolName),
         multimodalInputs,
         referencesJson: serializedReferences,
+        toolExecutionMode: runtime.toolExecutionMode,
       };
       connectionCoordinator.startConnection(conversationId, request);
       connectionCoordinator.scheduleStatusPolling();
@@ -460,7 +506,6 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       const previousStatus = runtime.status;
       const previousConversationStatus = runtime.conversation.status;
       const previousPipelineStatus = runtime.pipeline.status;
-      const previousTimeline = runtime.pipeline.timeline;
       const previousListStatus = state.conversations.find(
         (item) => item.conversationId === conversationId,
       )?.status;
@@ -471,7 +516,6 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         pipeline: {
           ...current.pipeline,
           status: "cancelling",
-          timeline: cancelCallingTimelineTools(current.pipeline.timeline),
         },
         conversation: { ...current.conversation, status: "CANCEL_REQUESTED" },
       }));
@@ -493,10 +537,6 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
               pipeline: {
                 ...current.pipeline,
                 status: previousPipelineStatus,
-                timeline: restoreOptimisticallyCancelledTimelineTools(
-                  current.pipeline.timeline,
-                  previousTimeline,
-                ),
               },
               conversation: {
                 ...current.conversation,
@@ -511,6 +551,99 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
               : item),
         }));
         throw error;
+      }
+    },
+
+    respondToToolConfirmation: async (toolCallId, approved) => {
+      const state = get();
+      const conversationId = state.selectedConversationId;
+      if (!conversationId) {
+        throw new Error("Tool confirmation requires a selected conversation");
+      }
+      const runtime = state.conversationStates[conversationId];
+      if (!runtime) {
+        throw new Error(`Missing assistant runtime for ${conversationId}`);
+      }
+      const pending = runtime.pipeline.pendingConfirmation;
+      if (!pending) {
+        throw new Error(`Conversation ${conversationId} has no pending tool confirmation`);
+      }
+      if (pending.submitting) {
+        throw new Error(`Conversation ${conversationId} is submitting tool decisions`);
+      }
+      const pendingIds = new Set(pending.toolCalls.map((toolCall) => toolCall.toolCallId));
+      if (pendingIds.size !== pending.toolCalls.length || !pendingIds.has(toolCallId)) {
+        throw new Error(`Tool confirmation does not contain ${toolCallId}`);
+      }
+      const existingDecisionIds = Object.keys(pending.decisions);
+      if (existingDecisionIds.some((decisionId) =>
+        !pendingIds.has(decisionId)
+        || typeof pending.decisions[decisionId] !== "boolean")) {
+        throw new Error("Pending tool confirmation contains invalid local decisions");
+      }
+      const decisions = {
+        ...pending.decisions,
+        [toolCallId]: approved,
+      };
+      const submitting = Object.keys(decisions).length === pendingIds.size;
+      const decisionsToSubmit = submitting
+        ? pending.toolCalls.map((toolCall) => ({
+            toolCallId: toolCall.toolCallId,
+            approved: decisions[toolCall.toolCallId],
+          }))
+        : undefined;
+      updateRuntime(conversationId, (current) => {
+        const currentPending = current.pipeline.pendingConfirmation;
+        if (currentPending !== pending) {
+          throw new Error("Pending tool confirmation changed before submission");
+        }
+        return {
+          ...current,
+          connectionError: undefined,
+          pipeline: {
+            ...current.pipeline,
+            pendingConfirmation: {
+              ...currentPending,
+              decisions,
+              submitting,
+            },
+          },
+        };
+      });
+      if (!decisionsToSubmit) return;
+      try {
+        await confirmPipelineTools({
+          runId: pending.runId,
+          replyId: pending.replyId,
+          decisions: decisionsToSubmit,
+        });
+        // The SSE request that delivered REQUIRE_USER_CONFIRM can remain open
+        // while AgentScope is paused. It cannot be reused as the resumed run's
+        // event cursor, so replace it with an explicit reconnect after the
+        // atomic confirmation batch has been accepted.
+        connectionCoordinator.invalidateConnection();
+        connectionCoordinator.ensureConnection();
+        connectionCoordinator.scheduleStatusPolling();
+      } catch (error) {
+        updateRuntime(conversationId, (current) => {
+          const currentPending = current.pipeline.pendingConfirmation;
+          if (!currentPending
+            || currentPending.replyId !== pending.replyId
+            || !currentPending.submitting) {
+            throw new Error("Pending tool confirmation changed after submission failure");
+          }
+          return {
+            ...current,
+            connectionError: error instanceof Error ? error.message : String(error),
+            pipeline: {
+              ...current.pipeline,
+              pendingConfirmation: {
+                ...currentPending,
+                submitting: false,
+              },
+            },
+          };
+        });
       }
     },
 

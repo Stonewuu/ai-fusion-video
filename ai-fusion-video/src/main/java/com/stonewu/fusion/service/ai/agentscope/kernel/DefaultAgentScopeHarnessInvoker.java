@@ -1,10 +1,12 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
+import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.message.Msg;
+import io.agentscope.harness.agent.HarnessAgent;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -78,10 +80,18 @@ public final class DefaultAgentScopeHarnessInvoker implements AgentScopeHarnessI
                 cache.acquire(safeSpec),
                 lease -> Mono.defer(() -> preflight.check(context))
                         .thenMany(Flux.defer(() ->
-                                lease.resource().agent().streamEvents(safeMessages, context))),
+                                streamWithPolicy(lease.resource().agent(), safeMessages, context))),
                 this::cleanup,
                 (lease, failure) -> cleanup(lease),
                 this::cleanup));
+    }
+
+    private Flux<AgentEvent> streamWithPolicy(
+            HarnessAgent agent,
+            List<Msg> messages,
+            RuntimeContext context) {
+        AgentToolPermissionPolicy.applyRequestedPolicy(agent, context);
+        return agent.streamEvents(messages, context);
     }
 
     private Mono<Void> cleanup(HarnessLease lease) {

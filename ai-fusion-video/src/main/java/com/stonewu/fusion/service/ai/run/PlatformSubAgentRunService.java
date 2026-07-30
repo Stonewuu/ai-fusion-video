@@ -189,7 +189,8 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
                                 command.parentOwnerInstanceId(),
                                 command.parentOwnerEpoch(),
                                 command.parentToolCallId(),
-                                command.agentName()))
+                                command.agentName()),
+                        command.toolExecutionMode())
                 .flatMap(runtime -> supervisor.start(new StartAgentExecutionCommand(
                         started,
                         command.messages(),

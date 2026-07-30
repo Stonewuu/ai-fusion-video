@@ -3,6 +3,11 @@ import { getApiPayloadMessage, readApiResponseError, toApiError } from "./api-er
 
 export type AiMultimodalInputType = "image" | "video" | "audio" | "file";
 export type AiMultimodalInputTransport = "url" | "base64";
+export type ToolExecutionMode =
+  | "DEFAULT"
+  | "ALWAYS_ASK"
+  | "ALWAYS_ALLOW"
+  | "FULL_ACCESS";
 
 export interface AiMultimodalInput {
   id: string;
@@ -38,6 +43,7 @@ export interface AiChatReq {
   enabledMcpTools?: string[];
   multimodalInputs?: AiMultimodalInput[];
   enableParallelTools?: boolean;
+  toolExecutionMode: ToolExecutionMode;
   referencesJson?: string;
   /** 当前页面上下文引用（type + id），用于模板变量替换 */
   autoReferences?: Array<{ type: string; id: number }>;
@@ -64,6 +70,11 @@ export interface ToolCallInfo {
   arguments: string;
 }
 
+export interface ToolConfirmationDecision {
+  toolCallId: string;
+  approved: boolean;
+}
+
 export interface AiChatStreamEvent {
   /** Durable fields are present on AgentScope v2 Pipeline events. */
   schemaVersion?: number;
@@ -79,7 +90,7 @@ export interface AiChatStreamEvent {
   toolCalls?: ToolCallInfo[];
   toolCallId?: string;
   toolName?: string;
-  toolResult?: string;
+  toolResult?: string | null;
   toolStatus?: string;
   finished?: boolean;
   error?: string;
@@ -99,6 +110,7 @@ export interface AiChatStreamEvent {
     toolName: string;
     argumentsPreview: string;
   }>;
+  decisions?: ToolConfirmationDecision[];
   expiresAt?: string;
 }
 

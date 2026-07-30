@@ -139,6 +139,42 @@ class AgentRunQueryServiceTests {
     }
 
     @Test
+    void projectsExactToolConfirmationDecisions() {
+        AgentRun run = run();
+        ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("outputType", "USER_CONFIRM_RESULT");
+        payload.putArray("pendingToolCalls")
+                .addObject()
+                .put("toolCallId", "tool-1")
+                .put("toolName", "update_script_info")
+                .put("argumentsPreview", "{\"scriptId\":1}");
+        payload.putArray("decisions")
+                .addObject()
+                .put("toolCallId", "tool-1")
+                .put("approved", false);
+        CommittedAgentEvent event = committed(
+                7, "USER_CONFIRM_RESULT", "USER_CONFIRM_RESULT", null, payload);
+
+        StepVerifier.create(service.project(run, event))
+                .assertNext(projected -> {
+                    assertThat(projected.getOutputType())
+                            .isEqualTo("USER_CONFIRM_RESULT");
+                    assertThat(projected.getPendingToolCalls())
+                            .singleElement()
+                            .satisfies(tool -> assertThat(tool.getToolCallId())
+                                    .isEqualTo("tool-1"));
+                    assertThat(projected.getDecisions())
+                            .singleElement()
+                            .satisfies(decision -> {
+                                assertThat(decision.getToolCallId())
+                                        .isEqualTo("tool-1");
+                                assertThat(decision.getApproved()).isFalse();
+                            });
+                })
+                .verifyComplete();
+    }
+
+    @Test
     void hidesMissingOrCrossUserRunAsNotFound() {
         when(runMapper.selectAuthorizedByRunId("foreign-run", 42L))
                 .thenReturn(null);

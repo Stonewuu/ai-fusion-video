@@ -28,6 +28,11 @@ public class ListProjectsToolExecutor implements ToolExecutor {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public String getDisplayName() {
         return "列出我的项目";
     }
@@ -73,9 +78,6 @@ public class ListProjectsToolExecutor implements ToolExecutor {
             return JSONUtil.createObj()
                     .set("count", projects.size())
                     .set("projects", projectList)
-                    .set("hint", projects.isEmpty()
-                        ? "当前还没有可访问的项目，可以先创建一个项目"
-                            : "以上是您能访问的所有项目，请告诉我您想操作哪个项目")
                     .toString();
         } catch (Exception e) {
             log.error("列出用户项目失败", e);

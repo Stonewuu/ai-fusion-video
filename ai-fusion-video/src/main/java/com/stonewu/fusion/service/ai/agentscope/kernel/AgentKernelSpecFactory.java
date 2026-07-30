@@ -11,7 +11,10 @@ import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
+import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
+import com.stonewu.fusion.service.ai.run.kernel.ToolManifestSnapshot;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -31,6 +34,7 @@ public final class AgentKernelSpecFactory {
     public static final String TOOL_WHITELIST_VERSION = "afv-tools-v2";
     public static final String OWNER_USER_ID_VARIABLE = "agentWorkspaceUserId";
     public static final String MCP_CONFIG_FINGERPRINT_VARIABLE = "agentMcpConfigFingerprint";
+    public static final String TOOL_EXECUTION_MODE_VARIABLE = "agentToolExecutionMode";
     private final AiAgentService agentService;
     private final AiToolConfigService toolConfigService;
     private final AgentScopeModelFactory modelFactory;
@@ -95,6 +99,9 @@ public final class AgentKernelSpecFactory {
                 ownerUserId);
         Map<String, String> promptVariables = new LinkedHashMap<>(
                 AgentPromptVariables.fromRequest(request));
+        promptVariables.put(
+                TOOL_EXECUTION_MODE_VARIABLE,
+                ToolExecutionMode.parse(request.getToolExecutionMode()).name());
         if (ownerUserId != null) {
             promptVariables.put(OWNER_USER_ID_VARIABLE, String.valueOf(ownerUserId));
             String mcpFingerprint = mcpRegistry.userConfigurationFingerprint(ownerUserId);
@@ -150,6 +157,57 @@ public final class AgentKernelSpecFactory {
                 variables,
                 tools,
                 parent.key().modelConfigFingerprint());
+    }
+
+    /** Rebuilds the exact persisted whitelist after verifying every live tool contract. */
+    public AgentKernelSpec restore(
+            AgentKernelSnapshotPayload payload,
+            AiModel model,
+            String modelFingerprint) {
+        Objects.requireNonNull(payload, "payload must not be null");
+        Objects.requireNonNull(model, "model must not be null");
+        String definitionKey = payload.agentDefinitionStableKey();
+        String agentType = DEFAULT_AGENT_KEY.equals(definitionKey) ? null : definitionKey;
+        Long ownerUserId = ownerUserId(payload.promptVariables());
+        ToolSelection available = selectTools(agentType, null, null, ownerUserId);
+        Map<String, AgentKernelToolManifest> availableByName = new LinkedHashMap<>();
+        for (AgentKernelToolManifest tool : available.manifest()) {
+            availableByName.put(tool.toolName(), tool);
+        }
+        List<AgentKernelToolManifest> restoredManifest = new ArrayList<>();
+        Set<String> restoredWhitelist = new LinkedHashSet<>();
+        for (ToolManifestSnapshot persisted : payload.tools()) {
+            AgentKernelToolManifest live = availableByName.get(persisted.name());
+            if (live == null
+                    || !persisted.schemaSha256().equals(live.schemaSha256())
+                    || persisted.readOnly() != live.readOnly()
+                    || persisted.concurrencySafe() != live.concurrencySafe()
+                    || !TOOL_WHITELIST_VERSION.equals(persisted.implementationVersion())) {
+                throw new IllegalStateException(
+                        "Persisted AgentScope tool is unavailable: " + persisted.name());
+            }
+            restoredManifest.add(live);
+            restoredWhitelist.add(live.toolName());
+        }
+        AgentKernelKey key = AgentKernelKey.create(
+                definitionKey,
+                modelFingerprint,
+                AgentKernelKey.promptVersion(
+                        payload.systemPrompt(), payload.promptVariables()),
+                restoredManifest,
+                TOOL_WHITELIST_VERSION);
+        return new AgentKernelSpec(
+                key,
+                model,
+                definitionKey,
+                payload.agentName(),
+                payload.description(),
+                payload.systemPrompt(),
+                payload.promptVariables(),
+                payload.maxIters(),
+                restoredManifest,
+                restoredWhitelist,
+                TOOL_WHITELIST_VERSION);
     }
 
     private AgentKernelSpec create(
@@ -275,7 +333,11 @@ public final class AgentKernelSpecFactory {
     }
 
     public static Long ownerUserId(AgentKernelSpec spec) {
-        String value = spec.promptVariables().get(OWNER_USER_ID_VARIABLE);
+        return ownerUserId(spec.promptVariables());
+    }
+
+    private static Long ownerUserId(Map<String, String> promptVariables) {
+        String value = promptVariables.get(OWNER_USER_ID_VARIABLE);
         if (value == null || value.isBlank()) {
             return null;
         }

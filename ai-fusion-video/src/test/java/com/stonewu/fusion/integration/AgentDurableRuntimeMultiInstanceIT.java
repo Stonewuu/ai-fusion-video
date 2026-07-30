@@ -60,6 +60,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -80,6 +81,9 @@ class AgentDurableRuntimeMultiInstanceIT {
             [{"toolCallId":"tool-a","toolName":"generate_image",\
             "argumentsPreview":"{}"}]
             """;
+    private static final String SUSPENDED_TOOLS =
+            "[{\"id\":\"tool-a\",\"name\":\"generate_image\",\"input\":{},"
+                    + "\"metadata\":{},\"state\":\"ASKING\"}]";
 
     @Container
     private static final MySQLContainer<?> MYSQL = AgentRuntimeContainers.mysql();
@@ -170,6 +174,7 @@ class AgentDurableRuntimeMultiInstanceIT {
                 "reply-1",
                 Set.of("tool-a"),
                 PENDING_TOOLS,
+                SUSPENDED_TOOLS,
                 started.deadline().minusSeconds(10));
         awaitMono(waiting.recordConfirmationCandidate(started.runId(), candidate));
         AgentRun beforeWaiting = run(started.runId());
@@ -187,6 +192,7 @@ class AgentDurableRuntimeMultiInstanceIT {
                         USER_ID,
                         candidate.replyId(),
                         candidate.decisionIds(),
+                        Map.of("tool-a", true),
                         NODE_B,
                         Duration.ofSeconds(30))));
         assertThat(resumed.newOwnerEpoch()).isEqualTo(started.ownerEpoch() + 1);

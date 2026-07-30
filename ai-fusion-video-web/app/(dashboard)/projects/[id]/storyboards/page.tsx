@@ -289,6 +289,7 @@ export default function StoryboardTabPage() {
         projectId,
         request: {
           agentType: "script_to_storyboard",
+          toolExecutionMode: "FULL_ACCESS",
           category: "pipeline",
           title: `AI 生成分镜：${scriptDisplayTitle}`,
           projectId,
@@ -398,6 +399,7 @@ export default function StoryboardTabPage() {
         projectId,
         request: {
           agentType: "episode_storyboard_writer",
+          toolExecutionMode: "FULL_ACCESS",
           category: "pipeline",
           title: `AI 分镜 · 第 ${displayNumber} 集`,
           message: `请为剧本分集（scriptEpisodeId: ${episode.scriptEpisodeId}）生成分镜，并保存到分镜脚本 ${storyboard.id}。`,
@@ -772,6 +774,7 @@ export default function StoryboardTabPage() {
           projectId,
           request: {
             agentType: "storyboard_frame_gen",
+            toolExecutionMode: "FULL_ACCESS",
             category: "pipeline",
             title: `生成镜头 ${shotLabel} ${frameLabel}`,
             projectId,
@@ -864,6 +867,7 @@ export default function StoryboardTabPage() {
           projectId,
           request: {
             agentType: "storyboard_frame_gen",
+            toolExecutionMode: "FULL_ACCESS",
             category: "pipeline",
             title,
             projectId,
@@ -1017,6 +1021,7 @@ export default function StoryboardTabPage() {
         projectId,
         request: {
           agentType: "storyboard_video_gen",
+          toolExecutionMode: "FULL_ACCESS",
           projectId,
           context: {
             selectedStoryboardItemIds: [itemId],

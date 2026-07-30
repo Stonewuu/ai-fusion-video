@@ -35,6 +35,11 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public String getDisplayName() {
         return "列出资产";
     }

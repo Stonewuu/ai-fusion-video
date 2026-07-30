@@ -1,5 +1,8 @@
 package com.stonewu.fusion.service.ai;
 
+import java.util.Map;
+import java.util.Locale;
+
 /**
  * 工具执行器接口
  * <p>
@@ -77,6 +80,31 @@ public interface ToolExecutor {
     /** Whether separate invocations may safely execute concurrently. */
     default boolean isConcurrencySafe() {
         return false;
+    }
+
+    /**
+     * Returns the approval sensitivity of one invocation. Read-only tools are
+     * auto-approved by the default policy, edits ask, and high-risk operations
+     * remain gated even in the "always allow" policy.
+     */
+    default ToolPermissionRisk getPermissionRisk(Map<String, Object> toolInput) {
+        if (isReadOnly()) {
+            return ToolPermissionRisk.READ_ONLY;
+        }
+        String normalizedName = getToolName().toLowerCase(Locale.ROOT);
+        if (normalizedName.contains("delete")
+                || normalizedName.contains("remove")
+                || normalizedName.contains("destroy")
+                || normalizedName.contains("drop")
+                || normalizedName.contains("purge")) {
+            return ToolPermissionRisk.HIGH_RISK;
+        }
+        return ToolPermissionRisk.EDIT;
+    }
+
+    /** Whether this tool can produce a high-risk invocation for some input. */
+    default boolean mayRequireHighRiskApproval() {
+        return getPermissionRisk(Map.of()) == ToolPermissionRisk.HIGH_RISK;
     }
 
     /**

@@ -8,6 +8,7 @@ public record PendingConfirmation(
         String replyId,
         Set<String> decisionIds,
         String pendingToolCallsJson,
+        String suspendedToolCallsJson,
         Instant expiresAt) {
 
     public PendingConfirmation {
@@ -22,6 +23,8 @@ public record PendingConfirmation(
         }
         pendingToolCallsJson = requireText(
                 pendingToolCallsJson, "pendingToolCallsJson");
+        suspendedToolCallsJson = requireText(
+                suspendedToolCallsJson, "suspendedToolCallsJson");
         Objects.requireNonNull(expiresAt, "expiresAt must not be null");
     }
 

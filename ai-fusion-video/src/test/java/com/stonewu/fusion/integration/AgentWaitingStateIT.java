@@ -39,6 +39,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -60,6 +61,10 @@ class AgentWaitingStateIT {
             [{"toolCallId":"tool-a","toolName":"generate_image",\
             "argumentsPreview":"{\\"prompt\\":\\"sunrise\\"}"}]
             """;
+    private static final String SUSPENDED_TOOLS =
+            "[{\"id\":\"tool-a\",\"name\":\"generate_image\","
+                    + "\"input\":{\"prompt\":\"sunrise\"},"
+                    + "\"metadata\":{},\"state\":\"ASKING\"}]";
 
     @Container
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.6")
@@ -126,7 +131,7 @@ class AgentWaitingStateIT {
                 .isEqualTo(checkpoint.pausedThroughSequence());
         AgentEvent actionable = events(
                 started.runId(), "PLATFORM_USER_CONFIRM_REQUIRED").getFirst();
-        assertThat(actionable.getOutputType()).isEqualTo("TOOL_CALL");
+        assertThat(actionable.getOutputType()).isEqualTo("USER_CONFIRMATION_REQUIRED");
         assertThat(actionable.getPublishRequired()).isTrue();
 
         assertForbidden(() -> await(waiting.getPendingConfirmationAuthorized(
@@ -140,6 +145,7 @@ class AgentWaitingStateIT {
                         USER_ID,
                         candidate.replyId(),
                         Set.of("different-tool"),
+                        Map.of("different-tool", true),
                         "waiting-node-b",
                         Duration.ofSeconds(30)))));
 
@@ -174,7 +180,15 @@ class AgentWaitingStateIT {
                 .isEqualTo(resumed.newOwnerInstanceId());
         assertThat(running.getWaitingReplyId()).isNull();
         assertThat(running.getWaitExpiresAt()).isNull();
-        assertThat(events(started.runId(), "USER_CONFIRM_RESULT")).hasSize(1);
+        AgentEvent confirmationResult = events(
+                started.runId(), "USER_CONFIRM_RESULT").getFirst();
+        assertThat(confirmationResult.getOutputType())
+                .isEqualTo("USER_CONFIRM_RESULT");
+        assertThat(confirmationResult.getPublishRequired()).isTrue();
+        assertThat(confirmationResult.getPayloadJson())
+                .contains("\"toolCallId\":\"tool-a\"")
+                .contains("\"approved\":true")
+                .contains("\"pendingToolCalls\"");
     }
 
     @Test
@@ -235,6 +249,7 @@ class AgentWaitingStateIT {
                 candidate.decisionIds(),
                 "[{\"toolCallId\":\"tool-a\",\"toolName\":\"other\","
                         + "\"argumentsPreview\":\"{}\"}]",
+                candidate.suspendedToolCallsJson(),
                 candidate.expiresAt());
         assertConflict(() -> await(waiting.recordConfirmationCandidate(
                 started.runId(), conflict)));
@@ -267,6 +282,7 @@ class AgentWaitingStateIT {
                         USER_ID,
                         candidate.replyId(),
                         candidate.decisionIds(),
+                        Map.of("tool-a", true),
                         "waiting-node-b",
                         Duration.ofSeconds(30)))));
         assertThat(run(started.runId()).getStatus())
@@ -285,6 +301,7 @@ class AgentWaitingStateIT {
                     USER_ID,
                     candidate.replyId(),
                     candidate.decisionIds(),
+                    Map.of("tool-a", true),
                     owner,
                     Duration.ofSeconds(30))));
         } catch (BusinessException expectedLoser) {
@@ -344,7 +361,7 @@ class AgentWaitingStateIT {
 
     private PendingConfirmation confirmation(Instant expiresAt) {
         return new PendingConfirmation(
-                "reply-1", Set.of("tool-a"), PENDING_TOOLS, expiresAt);
+                "reply-1", Set.of("tool-a"), PENDING_TOOLS, SUSPENDED_TOOLS, expiresAt);
     }
 
     private WaitingCheckpoint checkpoint(AgentRun run) {

@@ -130,6 +130,166 @@ function updateToolStatus(
   );
 }
 
+type ToolStatusUpdate = {
+  status: ToolTimelineStatus;
+  expectedStatus: ToolTimelineStatus;
+  expectedName?: string;
+};
+
+function updateConfirmationToolStatuses(
+  timeline: TimelineItem[],
+  parentToolCallId: string | undefined,
+  updates: ReadonlyMap<string, ToolStatusUpdate>,
+): TimelineItem[] {
+  if (updates.size === 0) {
+    throw new Error("Tool confirmation must contain at least one decision");
+  }
+
+  const updateChildren = (children: SubTimelineItem[]): SubTimelineItem[] => {
+    for (const [toolCallId, update] of updates) {
+      const matches = children.filter(
+        (child) => child.type === "tool" && child.id === toolCallId,
+      );
+      if (matches.length !== 1) {
+        throw new Error(`Expected one child tool call for confirmation: ${toolCallId}`);
+      }
+      const match = matches[0];
+      if (match.type !== "tool" || match.status !== update.expectedStatus) {
+        throw new Error(`Invalid confirmation state for child tool call: ${toolCallId}`);
+      }
+      if (update.expectedName !== undefined && match.name !== update.expectedName) {
+        throw new Error(`Confirmation tool name mismatch: ${toolCallId}`);
+      }
+    }
+    return children.map((child) => {
+      if (child.type !== "tool") return child;
+      const update = updates.get(child.id);
+      return update ? { ...child, status: update.status } : child;
+    });
+  };
+
+  if (parentToolCallId) {
+    const parents = timeline.filter(
+      (item) => item.type === "tool" && item.id === parentToolCallId,
+    );
+    if (parents.length !== 1 || parents[0].type !== "tool" || !parents[0].children) {
+      throw new Error(`Confirmation parent tool call is missing: ${parentToolCallId}`);
+    }
+    return timeline.map((item) => item.type === "tool" && item.id === parentToolCallId
+      ? { ...item, children: updateChildren(item.children!) }
+      : item);
+  }
+
+  for (const [toolCallId, update] of updates) {
+    const matches = timeline.filter(
+      (item) => item.type === "tool" && item.id === toolCallId,
+    );
+    if (matches.length !== 1 || matches[0].type !== "tool") {
+      throw new Error(`Expected one tool call for confirmation: ${toolCallId}`);
+    }
+    const match = matches[0];
+    if (match.status !== update.expectedStatus) {
+      throw new Error(`Invalid confirmation state for tool call: ${toolCallId}`);
+    }
+    if (update.expectedName !== undefined && match.name !== update.expectedName) {
+      throw new Error(`Confirmation tool name mismatch: ${toolCallId}`);
+    }
+  }
+  return timeline.map((item) => {
+    if (item.type !== "tool") return item;
+    const update = updates.get(item.id);
+    return update ? { ...item, status: update.status } : item;
+  });
+}
+
+function requireConfirmationDecisions(
+  event: AiChatStreamEvent,
+  pending: NonNullable<AgentPipelineState["pendingConfirmation"]>,
+): Map<string, boolean> {
+  if (!event.replyId || event.replyId !== pending.replyId) {
+    throw new Error("USER_CONFIRM_RESULT replyId does not match the pending confirmation");
+  }
+  if (event.parentToolCallId !== pending.parentToolCallId) {
+    throw new Error("USER_CONFIRM_RESULT parent tool identity does not match");
+  }
+  if (!event.decisions?.length) {
+    throw new Error("USER_CONFIRM_RESULT has no decisions");
+  }
+  const decisions = new Map<string, boolean>();
+  for (const decision of event.decisions) {
+    if (!decision.toolCallId || typeof decision.approved !== "boolean") {
+      throw new Error("USER_CONFIRM_RESULT contains an invalid decision");
+    }
+    if (decisions.has(decision.toolCallId)) {
+      throw new Error(`USER_CONFIRM_RESULT contains a duplicate decision: ${decision.toolCallId}`);
+    }
+    decisions.set(decision.toolCallId, decision.approved);
+  }
+  const pendingIds = new Set(pending.toolCalls.map((toolCall) => toolCall.toolCallId));
+  if (
+    pendingIds.size !== pending.toolCalls.length
+    || decisions.size !== pendingIds.size
+    || [...decisions.keys()].some((toolCallId) => !pendingIds.has(toolCallId))
+  ) {
+    throw new Error("USER_CONFIRM_RESULT decisions do not match the pending tool calls");
+  }
+  return decisions;
+}
+
+function finishToolCall(
+  timeline: TimelineItem[],
+  parentToolCallId: string | undefined,
+  toolCallId: string,
+  status: Extract<ToolTimelineStatus, "done" | "error" | "cancelled">,
+  result: string | null | undefined,
+): TimelineItem[] {
+  const validPreviousStatus = (value: ToolTimelineStatus) =>
+    value === "calling" || value === "approved";
+
+  if (parentToolCallId) {
+    const parents = timeline.filter(
+      (item) => item.type === "tool" && item.id === parentToolCallId,
+    );
+    if (parents.length !== 1 || parents[0].type !== "tool" || !parents[0].children) {
+      throw new Error(`Finished tool parent is missing: ${parentToolCallId}`);
+    }
+    const children = parents[0].children;
+    const matches = children.filter(
+      (child) => child.type === "tool" && child.id === toolCallId,
+    );
+    if (
+      matches.length !== 1
+      || matches[0].type !== "tool"
+      || !validPreviousStatus(matches[0].status)
+    ) {
+      throw new Error(`Finished child tool has no valid in-progress call: ${toolCallId}`);
+    }
+    return timeline.map((item) => item.type === "tool" && item.id === parentToolCallId
+      ? {
+          ...item,
+          children: item.children!.map((child) =>
+            child.type === "tool" && child.id === toolCallId
+              ? { ...child, status, result }
+              : child),
+        }
+      : item);
+  }
+
+  const matches = timeline.filter(
+    (item) => item.type === "tool" && item.id === toolCallId,
+  );
+  if (
+    matches.length !== 1
+    || matches[0].type !== "tool"
+    || !validPreviousStatus(matches[0].status)
+  ) {
+    throw new Error(`Finished tool has no valid in-progress call: ${toolCallId}`);
+  }
+  return timeline.map((item) => item.type === "tool" && item.id === toolCallId
+    ? { ...item, status, result }
+    : item);
+}
+
 function appendToToolChildren(
   timeline: TimelineItem[],
   parentToolCallId: string,
@@ -286,7 +446,10 @@ export function reducePipelineEvent(
 
     case "TOOL_CALL":
       next.status = prev.status === "cancelling" ? "cancelling" : "running";
-      if (event.toolCalls) {
+      if (!event.replyId || !event.toolCalls?.length) {
+        throw new Error("TOOL_CALL event has no replyId or tool calls");
+      }
+      {
         for (const toolCall of event.toolCalls) {
           if (isSubAgent) {
             next.timeline = appendToToolChildren(
@@ -307,6 +470,7 @@ export function reducePipelineEvent(
                     id: toolCall.id,
                     name: toolCall.name,
                     arguments: toolCall.arguments,
+                    batchId: event.replyId,
                     status: "calling",
                   },
                 ];
@@ -322,6 +486,7 @@ export function reducePipelineEvent(
               id: toolCall.id,
               name: toolCall.name,
               arguments: toolCall.arguments,
+              batchId: event.replyId,
               status: "calling",
               agentName: event.agentName,
             });
@@ -331,27 +496,16 @@ export function reducePipelineEvent(
       return next;
 
     case "TOOL_FINISHED":
-      if (event.toolCallId) {
-        const toolItemStatus = finishedToolTimelineStatus(event.toolStatus);
-        if (isSubAgent) {
-          next.timeline = appendToToolChildren(
-            next.timeline,
-            event.parentToolCallId!,
-            (children) =>
-              children.map((child) =>
-                child.type === "tool" && child.id === event.toolCallId
-                  ? { ...child, status: toolItemStatus, result: event.toolResult }
-                  : child
-              )
-          );
-        } else {
-          next.timeline = next.timeline.map((item) =>
-            item.type === "tool" && item.id === event.toolCallId
-              ? { ...item, status: toolItemStatus, result: event.toolResult }
-              : item
-          );
-        }
+      if (!event.toolCallId) {
+        throw new Error("TOOL_FINISHED event has no toolCallId");
       }
+      next.timeline = finishToolCall(
+        next.timeline,
+        event.parentToolCallId,
+        event.toolCallId,
+        finishedToolTimelineStatus(event.toolStatus),
+        event.toolResult,
+      );
       return next;
 
     case "SUB_AGENT_FINISHED":
@@ -364,9 +518,100 @@ export function reducePipelineEvent(
       }
       return next;
 
+    case "USER_CONFIRMATION_REQUIRED":
+      if (!event.replyId || !event.pendingToolCalls?.length || !event.expiresAt) {
+        throw new Error("Invalid USER_CONFIRMATION_REQUIRED event");
+      }
+      {
+        const existing = prev.pendingConfirmation;
+        if (existing && (
+          existing.runId !== event.runId
+          || existing.replyId !== event.replyId
+          || existing.parentToolCallId !== event.parentToolCallId
+          || existing.expiresAt !== event.expiresAt
+        )) {
+          throw new Error("Concurrent tool confirmation batches have different identities");
+        }
+        const existingToolCalls = new Map(
+          (existing?.toolCalls ?? []).map((toolCall) => [toolCall.toolCallId, toolCall]),
+        );
+        const updates = new Map<string, ToolStatusUpdate>();
+        const appendedToolCalls: NonNullable<AiChatStreamEvent["pendingToolCalls"]> = [];
+        for (const toolCall of event.pendingToolCalls) {
+          if (updates.has(toolCall.toolCallId)) {
+            throw new Error(`Duplicate pending tool call: ${toolCall.toolCallId}`);
+          }
+          const existingToolCall = existingToolCalls.get(toolCall.toolCallId);
+          if (existingToolCall && (
+            existingToolCall.toolName !== toolCall.toolName
+            || existingToolCall.argumentsPreview !== toolCall.argumentsPreview
+          )) {
+            throw new Error(`Pending tool call changed within its batch: ${toolCall.toolCallId}`);
+          }
+          updates.set(toolCall.toolCallId, {
+            status: "awaiting_approval",
+            expectedStatus: existingToolCall ? "awaiting_approval" : "calling",
+            expectedName: toolCall.toolName,
+          });
+          if (!existingToolCall) appendedToolCalls.push(toolCall);
+        }
+        if (existing
+          && (existing.submitting || Object.keys(existing.decisions).length > 0)
+          && appendedToolCalls.length > 0) {
+          throw new Error("Tool confirmation batch changed after a decision was submitted");
+        }
+        next.timeline = updateConfirmationToolStatuses(
+          next.timeline,
+          event.parentToolCallId,
+          updates,
+        );
+        next.pendingConfirmation = existing
+          ? {
+              ...existing,
+              toolCalls: [...existing.toolCalls, ...appendedToolCalls],
+            }
+          : {
+              runId: event.runId,
+              replyId: event.replyId,
+              ...(event.parentToolCallId
+                ? { parentToolCallId: event.parentToolCallId }
+                : {}),
+              toolCalls: event.pendingToolCalls,
+              expiresAt: event.expiresAt,
+              decisions: {},
+              submitting: false,
+            };
+      }
+      next.status = prev.status === "cancelling" ? "cancelling" : "running";
+      return next;
+
+    case "USER_CONFIRM_RESULT":
+      if (!prev.pendingConfirmation) {
+        throw new Error("USER_CONFIRM_RESULT has no pending confirmation");
+      }
+      {
+        const decisions = requireConfirmationDecisions(event, prev.pendingConfirmation);
+        const updates = new Map<string, ToolStatusUpdate>();
+        for (const [toolCallId, approved] of decisions) {
+          updates.set(toolCallId, {
+            status: approved ? "approved" : "rejected",
+            expectedStatus: "awaiting_approval",
+          });
+        }
+        next.timeline = updateConfirmationToolStatuses(
+          next.timeline,
+          event.parentToolCallId,
+          updates,
+        );
+      }
+      next.pendingConfirmation = undefined;
+      next.status = prev.status === "cancelling" ? "cancelling" : "running";
+      return next;
+
     case "DONE":
       if (event.parentToolCallId || event.agentName) return next;
       next.status = "done";
+      next.pendingConfirmation = undefined;
       if (event.content) {
         next.timeline = appendContentToTimeline(next.timeline, event.content);
       }
@@ -392,6 +637,7 @@ export function reducePipelineEvent(
         );
       } else {
         next.status = "error";
+        next.pendingConfirmation = undefined;
         next.error = event.error || "未知错误";
       }
       return next;
@@ -399,6 +645,7 @@ export function reducePipelineEvent(
     case "CANCELLED":
       if (!event.parentToolCallId && !event.agentName) {
         next.status = "cancelled";
+        next.pendingConfirmation = undefined;
         next.timeline = cancelCallingTimelineTools(next.timeline);
       }
       return next;

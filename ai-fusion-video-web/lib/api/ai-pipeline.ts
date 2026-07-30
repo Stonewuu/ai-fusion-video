@@ -11,6 +11,7 @@ import {
   authenticatedFetch,
   type AiChatReq,
   type AiChatStreamEvent as BaseAiChatStreamEvent,
+  type ToolConfirmationDecision,
 } from "./ai-assistant";
 
 export type { AiChatReq };
@@ -54,6 +55,7 @@ export interface AiChatStreamEvent extends BaseAiChatStreamEvent {
   createdAt?: string;
   controlType?: string;
   pendingToolCalls?: PendingToolCallInfo[];
+  decisions?: ToolConfirmationDecision[];
   expiresAt?: string;
 }
 
@@ -356,6 +358,14 @@ function targetQuery(target: PipelineRunTarget): string {
 
 export async function cancelPipeline(target: PipelineRunTarget): Promise<void> {
   await http.post(`/api/ai/pipeline/cancel?${targetQuery(target)}`);
+}
+
+export async function confirmPipelineTools(request: {
+  runId: string;
+  replyId: string;
+  decisions: ToolConfirmationDecision[];
+}): Promise<void> {
+  await http.post("/api/ai/pipeline/confirm", request);
 }
 
 export async function getPipelineStatus(

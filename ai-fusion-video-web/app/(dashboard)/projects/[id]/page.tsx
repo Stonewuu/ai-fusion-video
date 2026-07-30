@@ -229,6 +229,7 @@ export default function ProjectOverviewPage() {
       projectId,
       request: {
         agentType: "script_full_parse",
+        toolExecutionMode: "FULL_ACCESS",
         category: "pipeline",
         title: `AI 剧本解析：${scriptDisplayTitle}`,
         projectId,
@@ -267,6 +268,7 @@ export default function ProjectOverviewPage() {
         projectId,
         request: {
           agentType: "script_to_storyboard",
+          toolExecutionMode: "FULL_ACCESS",
           category: "pipeline",
           title: `AI 生成分镜：${scriptDisplayTitle}`,
           projectId,

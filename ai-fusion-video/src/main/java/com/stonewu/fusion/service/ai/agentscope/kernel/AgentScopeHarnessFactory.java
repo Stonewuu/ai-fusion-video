@@ -6,6 +6,8 @@ import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreGuardedChatModel;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceBaseStore;
+import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.ToolkitConfig;
@@ -127,6 +129,8 @@ public final class AgentScopeHarnessFactory {
                             ownedModel.model(), failures, contextWindow))
                     .stateStore(stateStore)
                     .toolkit(toolkit)
+                    .permissionContext(AgentToolPermissionPolicy.contextFor(
+                            toolkit, ToolExecutionMode.DEFAULT))
                     .middleware(shutdownRecoveryBridge)
                     .compaction(compactionConfig(contextWindow))
                     .maxIters(spec.maxIters())

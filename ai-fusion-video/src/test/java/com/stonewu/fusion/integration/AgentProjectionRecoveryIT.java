@@ -248,6 +248,42 @@ class AgentProjectionRecoveryIT {
     }
 
     @Test
+    void rejectedConfirmationProjectsATerminalToolHistoryState() {
+        StartedAgentRun run = startRoot("projection-rejected-tool");
+        append(run, "TOOL_CALL_DELTA", null, "rejected-tool",
+                objectPayload("delta", "{\"scriptId\":1}"));
+        append(run, "TOOL_CALL_END", "TOOL_CALL", "rejected-tool",
+                objectPayload("toolCallName", "update_script_info"));
+        ObjectNode confirmation = JsonNodeFactory.instance.objectNode();
+        confirmation.putArray("pendingToolCalls")
+                .addObject()
+                .put("toolCallId", "rejected-tool")
+                .put("toolName", "update_script_info")
+                .put("argumentsPreview", "{\"scriptId\":1}");
+        confirmation.putArray("decisions")
+                .addObject()
+                .put("toolCallId", "rejected-tool")
+                .put("approved", false);
+        append(run, "USER_CONFIRM_RESULT", "USER_CONFIRM_RESULT", null, confirmation);
+        assertThat(await(terminalCoordinator.terminateOwned(
+                completedTerminal(run),
+                run.ownerInstanceId(),
+                run.ownerEpoch())))
+                .isPresent();
+        long terminalSequence = requireRun(run.runId()).getTerminalSequence();
+
+        await(projectionService.projectThrough(run.runId(), terminalSequence));
+
+        assertThat(projectedMessages(run.runId()))
+                .extracting(
+                        AgentMessage::getToolCallId,
+                        AgentMessage::getToolStatus)
+                .containsExactly(
+                        tuple("rejected-tool", "running"),
+                        tuple("rejected-tool", "rejected"));
+    }
+
+    @Test
     void mirroredChildEventsAdvanceTheParentCursorWithoutDuplicatingHistory() {
         StartedAgentRun run = startRoot("projection-mirrored-child");
         append(run, "TOOL_CALL_END", "TOOL_CALL", "child-inner-tool",

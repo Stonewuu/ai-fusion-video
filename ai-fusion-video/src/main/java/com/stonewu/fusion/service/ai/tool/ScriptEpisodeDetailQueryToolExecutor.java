@@ -33,6 +33,11 @@ public class ScriptEpisodeDetailQueryToolExecutor implements ToolExecutor {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public String getDisplayName() {
         return "查询集详情";
     }

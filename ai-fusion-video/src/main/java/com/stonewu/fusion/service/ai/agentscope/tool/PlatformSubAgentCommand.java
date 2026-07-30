@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.ai.agentscope.tool;
 
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import io.agentscope.core.message.Msg;
 
 import java.time.Instant;
@@ -17,6 +18,7 @@ public record PlatformSubAgentCommand(
         AgentKernelSpec kernelSpec,
         List<Msg> messages,
         ProjectContext projectContext,
+        ToolExecutionMode toolExecutionMode,
         Instant deadline) {
 
     public PlatformSubAgentCommand {
@@ -32,6 +34,8 @@ public record PlatformSubAgentCommand(
         if (messages.isEmpty()) {
             throw new IllegalArgumentException("messages must not be empty");
         }
+        toolExecutionMode = Objects.requireNonNull(
+                toolExecutionMode, "toolExecutionMode must not be null");
         deadline = Objects.requireNonNull(deadline, "deadline must not be null");
     }
 

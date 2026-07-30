@@ -5,10 +5,12 @@ import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
 import com.stonewu.fusion.controller.ai.vo.PipelineRunStatusRespVO;
 import com.stonewu.fusion.controller.ai.vo.RunningPipelineRunRespVO;
+import com.stonewu.fusion.controller.ai.vo.ToolConfirmationReqVO;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopePipelineRunService;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
 import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
 import com.stonewu.fusion.service.ai.run.CancellationCoordinator;
+import com.stonewu.fusion.service.ai.run.AgentConfirmationService;
 import com.stonewu.fusion.service.ai.run.PipelineCursorParser;
 import com.stonewu.fusion.service.ai.run.model.RunCursor;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +44,7 @@ public class AiPipelineController {
     private final AgentRunReplayService replayService;
     private final PipelineCursorParser cursorParser;
     private final CancellationCoordinator cancellations;
+    private final AgentConfirmationService confirmations;
 
     @Operation(summary = "启动 Pipeline（SSE 流式）")
     @PostMapping(value = "/run", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -65,6 +68,15 @@ public class AiPipelineController {
                 runId, conversationId, currentUserId)
                 .flatMap(run -> cancellations.cancel(
                         run.getRunId(), currentUserId))
+                .thenReturn(CommonResult.success(true));
+    }
+
+    @Operation(summary = "批准或拒绝等待中的工具调用")
+    @PostMapping("/confirm")
+    public Mono<CommonResult<Boolean>> confirm(
+            @RequestBody ToolConfirmationReqVO request) {
+        long currentUserId = requireCurrentUserId();
+        return confirmations.respond(request, currentUserId)
                 .thenReturn(CommonResult.success(true));
     }
 

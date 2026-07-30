@@ -7,6 +7,7 @@ import {
   getDefaultNormalRect,
 } from "@/components/dashboard/assistant/geometry";
 import type { AssistantMode } from "./assistant-types";
+import type { ToolExecutionMode } from "@/lib/api/ai-assistant";
 
 export const ASSISTANT_STORAGE_SCHEMA_VERSION = 1;
 const ASSISTANT_GEOMETRY_VERSION = 2;
@@ -53,6 +54,22 @@ function safeNumberRecord(value: unknown): Record<string, number> {
   return result;
 }
 
+function isToolExecutionMode(value: unknown): value is ToolExecutionMode {
+  return value === "DEFAULT"
+    || value === "ALWAYS_ASK"
+    || value === "ALWAYS_ALLOW"
+    || value === "FULL_ACCESS";
+}
+
+function safeToolExecutionModes(value: unknown): Record<string, ToolExecutionMode> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const result: Record<string, ToolExecutionMode> = {};
+  for (const [key, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (isToolExecutionMode(entry)) result[key] = entry;
+  }
+  return result;
+}
+
 function readRaw(userId: number): Partial<PersistedAssistantState> {
   if (typeof window === "undefined") return {};
   try {
@@ -67,10 +84,11 @@ function readRaw(userId: number): Partial<PersistedAssistantState> {
   }
 }
 
-export function defaultPersistedState(userId: number): Partial<PersistedAssistantState> {
+export function defaultPersistedState(userId: number): PersistedAssistantState {
   const value = readRaw(userId);
   return {
-    ...value,
+    schemaVersion: ASSISTANT_STORAGE_SCHEMA_VERSION,
+    geometryVersion: ASSISTANT_GEOMETRY_VERSION,
     mode: isMode(value.mode) ? value.mode : "collapsed",
     lastOpenMode: isOpenMode(value.lastOpenMode) && value.lastOpenMode !== "maximized"
       ? value.lastOpenMode
@@ -94,6 +112,10 @@ export function defaultPersistedState(userId: number): Partial<PersistedAssistan
     drafts: safeRecord(value.drafts),
     runIds: safeRecord(value.runIds),
     lastSequences: safeNumberRecord(value.lastSequences),
+    toolExecutionModes: safeToolExecutionModes(value.toolExecutionModes),
+    newToolExecutionMode: isToolExecutionMode(value.newToolExecutionMode)
+      ? value.newToolExecutionMode
+      : "DEFAULT",
   };
 }
 
@@ -103,8 +125,10 @@ export function writeAssistantPersisted(state: AssistantStoreState) {
   const drafts: Record<string, string> = { __new__: state.newDraft };
   const runIds: Record<string, string> = {};
   const lastSequences: Record<string, number> = {};
+  const toolExecutionModes: Record<string, ToolExecutionMode> = {};
 
   for (const [conversationId, runtime] of Object.entries(state.conversationStates)) {
+    toolExecutionModes[conversationId] = runtime.toolExecutionMode;
     if (runtime.draft) drafts[conversationId] = runtime.draft;
 
     const advertisedRunId = runtime.knownRunId || runtime.pipeline.runId;
@@ -134,6 +158,8 @@ export function writeAssistantPersisted(state: AssistantStoreState) {
     drafts,
     runIds,
     lastSequences,
+    toolExecutionModes,
+    newToolExecutionMode: state.newToolExecutionMode,
   };
 
   try {

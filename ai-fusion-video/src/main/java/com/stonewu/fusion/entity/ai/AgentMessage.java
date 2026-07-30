@@ -46,7 +46,7 @@ public class AgentMessage extends BaseEntity {
     /** 工具调用名称（当 role=tool 时） */
     private String toolName;
 
-    /** 工具执行状态：running/success/error/cancelled */
+    /** 工具执行状态：running/success/error/cancelled/rejected */
     private String toolStatus;
 
     /** 工具调用 ID（关联同一次工具调用的发起和结果） */

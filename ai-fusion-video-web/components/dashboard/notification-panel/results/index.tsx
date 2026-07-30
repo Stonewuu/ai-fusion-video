@@ -28,9 +28,11 @@ import { StoryboardResult } from "./storyboard";
 export function ToolResultDisplay({
   toolName,
   content,
+  expanded = false,
 }: {
   toolName: string;
   content: string;
+  expanded?: boolean;
 }) {
   let parsed: unknown;
   try {
@@ -54,6 +56,14 @@ export function ToolResultDisplay({
       <p className="text-xs text-destructive inline-flex items-center gap-1">
         <XCircle className="h-3.5 w-3.5 shrink-0" />
         {typeof message === "string" ? message : "操作失败"}
+      </p>
+    );
+  }
+
+  if (parsed === null) {
+    return (
+      <p className="text-xs text-muted-foreground">
+        工具未返回结果
       </p>
     );
   }
@@ -103,7 +113,13 @@ export function ToolResultDisplay({
     case "get_storyboard":
     case "get_storyboard_scene_items":
     case "list_project_storyboards":
-      return <StoryboardResult data={parsed} toolName={toolName} />;
+      return (
+        <StoryboardResult
+          data={parsed}
+          toolName={toolName}
+          expanded={expanded}
+        />
+      );
     case "get_script":
     case "get_asset":
     case "list_my_projects":

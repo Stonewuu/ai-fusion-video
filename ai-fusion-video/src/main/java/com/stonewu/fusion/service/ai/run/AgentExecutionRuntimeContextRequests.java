@@ -11,6 +11,8 @@ import com.stonewu.fusion.service.ai.agentscope.context.PipelineRequestContext;
 import com.stonewu.fusion.service.ai.agentscope.context.ParentAgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext;
+import com.stonewu.fusion.service.ai.agentscope.context.ToolPermissionContext;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.run.model.ResumedAgentRun;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
@@ -39,9 +41,11 @@ public final class AgentExecutionRuntimeContextRequests {
             StartedAgentRun started,
             String agentDefinitionStableKey,
             ProjectContext projectContext,
-            ParentAgentRunContext parentRun) {
+            ParentAgentRunContext parentRun,
+            ToolExecutionMode toolExecutionMode) {
         Objects.requireNonNull(started, "started must not be null");
         Objects.requireNonNull(parentRun, "parentRun must not be null");
+        Objects.requireNonNull(toolExecutionMode, "toolExecutionMode must not be null");
         return load(started.runId()).map(run -> create(
                 run,
                 agentDefinitionStableKey,
@@ -49,14 +53,17 @@ public final class AgentExecutionRuntimeContextRequests {
                 started.ownerEpoch(),
                 started.deadline(),
                 projectContext,
-                parentRun));
+                parentRun,
+                toolExecutionMode));
     }
 
     public Mono<AgentScopeRuntimeContextRequest> forRoot(
             StartedAgentRun started,
             String agentDefinitionStableKey,
-            ProjectContext projectContext) {
+            ProjectContext projectContext,
+            ToolExecutionMode toolExecutionMode) {
         Objects.requireNonNull(started, "started must not be null");
+        Objects.requireNonNull(toolExecutionMode, "toolExecutionMode must not be null");
         return load(started.runId()).map(run -> {
             if (run.getParentRunId() != null || run.getParentToolCallId() != null) {
                 throw new IllegalArgumentException(
@@ -69,14 +76,17 @@ public final class AgentExecutionRuntimeContextRequests {
                     started.ownerEpoch(),
                     started.deadline(),
                     projectContext,
-                    null);
+                    null,
+                    toolExecutionMode);
         });
     }
 
     public Mono<AgentScopeRuntimeContextRequest> forResume(
             ResumedAgentRun resumed,
-            String agentDefinitionStableKey) {
+            String agentDefinitionStableKey,
+            ToolExecutionMode toolExecutionMode) {
         Objects.requireNonNull(resumed, "resumed must not be null");
+        Objects.requireNonNull(toolExecutionMode, "toolExecutionMode must not be null");
         return load(resumed.runId()).map(run -> create(
                 run,
                 agentDefinitionStableKey,
@@ -84,7 +94,8 @@ public final class AgentExecutionRuntimeContextRequests {
                 resumed.newOwnerEpoch(),
                 resumed.deadline(),
                 run.getProjectId() != null ? new ProjectContext(run.getProjectId()) : null,
-                parentForResume(run)));
+                parentForResume(run),
+                toolExecutionMode));
     }
 
     private Mono<AgentRun> load(String runId) {
@@ -105,7 +116,9 @@ public final class AgentExecutionRuntimeContextRequests {
             long ownerEpoch,
             Instant deadline,
             ProjectContext requestedProject,
-            ParentAgentRunContext parentRun) {
+            ParentAgentRunContext parentRun,
+            ToolExecutionMode toolExecutionMode) {
+        Objects.requireNonNull(toolExecutionMode, "toolExecutionMode must not be null");
         if (!Objects.equals(persisted.getAgentType(), agentDefinitionStableKey)) {
             throw new IllegalArgumentException(
                     "RuntimeContext agent definition does not match the persisted run");
@@ -141,7 +154,8 @@ public final class AgentExecutionRuntimeContextRequests {
                 new PipelineRequestContext(
                         persisted.getRunId(), PipelineRequestContext.Kind.PIPELINE),
                 new ToolExecutionContext(userId, 1, userId),
-                CancellationContext.noop());
+                CancellationContext.noop(),
+                new ToolPermissionContext(toolExecutionMode));
     }
 
     private ParentAgentRunContext parentForResume(AgentRun child) {

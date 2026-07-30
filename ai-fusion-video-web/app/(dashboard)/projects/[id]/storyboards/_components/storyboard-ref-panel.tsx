@@ -676,6 +676,7 @@ function SceneAssetPanel({
       projectId,
       request: {
         agentType: "asset_image_gen",
+        toolExecutionMode: "FULL_ACCESS",
         projectId,
         context: {
           selectedAssetIds,
@@ -700,6 +701,7 @@ function SceneAssetPanel({
       projectId,
       request: {
         agentType: "storyboard_video_gen",
+        toolExecutionMode: "FULL_ACCESS",
         projectId,
         context: {
           selectedStoryboardItemIds: selectedItemIds,

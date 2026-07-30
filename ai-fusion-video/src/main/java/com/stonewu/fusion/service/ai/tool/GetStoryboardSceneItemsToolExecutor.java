@@ -37,6 +37,11 @@ public class GetStoryboardSceneItemsToolExecutor implements ToolExecutor {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public String getDisplayName() {
         return "查询场次镜头列表";
     }

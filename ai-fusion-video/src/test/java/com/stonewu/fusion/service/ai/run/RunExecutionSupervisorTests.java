@@ -12,9 +12,11 @@ import com.stonewu.fusion.service.ai.agentscope.context.AuthenticatedUserContext
 import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
 import com.stonewu.fusion.service.ai.agentscope.context.PipelineRequestContext;
 import com.stonewu.fusion.service.ai.agentscope.context.ParentAgentRunContext;
+import com.stonewu.fusion.service.ai.agentscope.context.ToolPermissionContext;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelKey;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.HarnessLeaseCache;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.kernel.RunConfigUnavailableException;
@@ -26,6 +28,7 @@ import com.stonewu.fusion.service.ai.run.model.ResumedAgentRun;
 import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
 import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
+import com.stonewu.fusion.service.ai.run.model.WaitingCheckpoint;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.UserMessage;
@@ -52,6 +55,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -135,6 +139,43 @@ class RunExecutionSupervisorTests {
                 eq(fixture.command.run().ownerEpoch()));
         assertThat(terminal.getValue().terminalStatus().name()).isEqualTo("COMPLETED");
         assertThat(closes).hasValue(1);
+    }
+
+    @Test
+    void confirmationPauseEntersDurableWaitingInsteadOfCompletingRun() {
+        Fixture fixture = fixture();
+        AgentEventEnvelope pause = confirmationPauseEvent();
+        when(fixture.journal.appendOwned(anyString(), anyString(), anyLong(), any()))
+                .thenReturn(Mono.just(Optional.of(new CommittedAgentEvent(
+                        11,
+                        fixture.command.run().runId(),
+                        4,
+                        pause,
+                        Instant.now()))));
+        when(fixture.waitingState.recordConfirmationCandidate(anyString(), any()))
+                .thenReturn(Mono.empty());
+        when(fixture.waitingState.enterWaitingConfirmation(
+                anyString(), anyLong(), any())).thenReturn(Mono.just(true));
+        when(fixture.executionFactory.start(
+                anyString(), anyString(), anyLong(), anyString(),
+                any(), any(), any(), any())).thenReturn(Mono.just(execution(
+                        fixture.command.run(), Flux.just(pause),
+                        new AtomicReference<>(), new AtomicInteger())));
+
+        StepVerifier.create(fixture.supervisor.start(fixture.command)).verifyComplete();
+        StepVerifier.create(fixture.registry.awaitEmpty(Duration.ofSeconds(1)))
+                .verifyComplete();
+
+        ArgumentCaptor<WaitingCheckpoint> checkpoint =
+                ArgumentCaptor.forClass(WaitingCheckpoint.class);
+        verify(fixture.waitingState).recordConfirmationCandidate(
+                eq(fixture.command.run().runId()), any());
+        verify(fixture.waitingState).enterWaitingConfirmation(
+                eq(fixture.command.run().runId()),
+                eq(fixture.command.run().ownerEpoch()),
+                checkpoint.capture());
+        assertThat(checkpoint.getValue().pausedThroughSequence()).isEqualTo(5);
+        verify(fixture.terminals, never()).terminateOwned(any(), anyString(), anyLong());
     }
 
     @Test
@@ -450,6 +491,7 @@ class RunExecutionSupervisorTests {
         when(shutdown.request(anyString())).thenReturn(Mono.empty());
         RunLeaseGuard leases = mock(RunLeaseGuard.class);
         AgentRunRedisSignalService signals = mock(AgentRunRedisSignalService.class);
+        AgentWaitingStatePort waitingState = mock(AgentWaitingStatePort.class);
         when(signals.cancellations(anyString())).thenReturn(Flux.never());
         when(signals.publishWakeup(anyString(), anyLong())).thenReturn(Mono.empty());
         OwnedExecutionRegistry registry = new OwnedExecutionRegistry(
@@ -472,7 +514,8 @@ class RunExecutionSupervisorTests {
                 shutdown,
                 leases,
                 signals,
-                new AgentEventEnvelopeSanitizer());
+                new AgentEventEnvelopeSanitizer(),
+                waitingState);
         Instant deadline = Instant.now().plus(deadlineDelay);
         AgentKernelSpec spec = spec();
         AgentKernelSnapshot snapshot =
@@ -497,7 +540,7 @@ class RunExecutionSupervisorTests {
                 runtime(started.runId(), started.ownerInstanceId(), 1, deadline));
         return new Fixture(
                 factory, registry, journal, terminals, cache, shutdown,
-                projections, supervisor, command);
+                projections, waitingState, supervisor, command);
     }
 
     private AgentExecution execution(
@@ -552,9 +595,11 @@ class RunExecutionSupervisorTests {
                         "conversation-1", "assistant", "session-1"),
                 new AgentRunContext(runId, owner, epoch, deadline),
                 null,
+                null,
                 new PipelineRequestContext(runId, PipelineRequestContext.Kind.CHAT),
                 null,
-                CancellationContext.noop());
+                CancellationContext.noop(),
+                new ToolPermissionContext(ToolExecutionMode.DEFAULT));
     }
 
     private AgentEventEnvelope event(String id) {
@@ -572,6 +617,29 @@ class RunExecutionSupervisorTests {
                 Instant.now());
     }
 
+    private AgentEventEnvelope confirmationPauseEvent() {
+        var candidate = JsonNodeFactory.instance.objectNode()
+                .put("replyId", "reply-confirm")
+                .put("pendingToolCallsJson", "[{\"toolCallId\":\"call-1\",\"toolName\":\"update_script\",\"argumentsPreview\":\"{}\"}]")
+                .put("suspendedToolCallsJson", "[{\"id\":\"call-1\",\"name\":\"update_script\",\"input\":{},\"metadata\":{},\"state\":\"ASKING\"}]")
+                .put("expiresAt", Instant.now().plusSeconds(60).toString());
+        candidate.putArray("decisionIds").add("call-1");
+        var payload = JsonNodeFactory.instance.objectNode();
+        payload.set("_platformConfirmationCandidate", candidate);
+        return new AgentEventEnvelope(
+                "confirm-event-1",
+                "REQUIRE_USER_CONFIRM",
+                "main",
+                "reply-confirm",
+                null,
+                null,
+                null,
+                null,
+                null,
+                payload,
+                Instant.now());
+    }
+
     private record Fixture(
             AgentExecutionFactory executionFactory,
             OwnedExecutionRegistry registry,
@@ -580,6 +648,7 @@ class RunExecutionSupervisorTests {
             HarnessLeaseCache cache,
             RunShutdownCancellationPort shutdownCancellation,
             AgentMessageProjectionService projections,
+            AgentWaitingStatePort waitingState,
             DefaultRunExecutionSupervisor supervisor,
             StartAgentExecutionCommand command) {
     }

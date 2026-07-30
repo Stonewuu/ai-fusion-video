@@ -24,6 +24,7 @@ function enqueueAssetGeneration(
     projectId,
     request: {
       agentType: "asset_image_gen",
+      toolExecutionMode: "FULL_ACCESS",
       projectId,
       context: {
         selectedAssetIds: assetIds,

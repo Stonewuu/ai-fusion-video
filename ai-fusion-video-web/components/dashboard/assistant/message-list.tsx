@@ -9,7 +9,10 @@ import {
 import { ArrowDown, Loader2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
-import { MessageTimeline } from "@/components/dashboard/notification-panel/timeline";
+import {
+  MessageTimeline,
+  type TimelineToolConfirmation,
+} from "@/components/dashboard/notification-panel/timeline";
 import { messagesToTimeline } from "@/components/dashboard/notification-panel/history";
 import type { AgentMessage } from "@/lib/api/ai-assistant";
 import type { TimelineItem } from "@/lib/store/pipeline-store";
@@ -80,6 +83,7 @@ const AssistantTimelineContent = memo(function AssistantTimelineContent({
   reasoningStartTime,
   reasoningDurationMs,
   streaming = false,
+  toolConfirmation,
 }: {
   timeline: TimelineItem[];
   scrollRef: RefObject<HTMLDivElement | null>;
@@ -87,6 +91,7 @@ const AssistantTimelineContent = memo(function AssistantTimelineContent({
   reasoningStartTime?: number;
   reasoningDurationMs?: number;
   streaming?: boolean;
+  toolConfirmation?: TimelineToolConfirmation;
 }) {
   if (timeline.length === 0) return null;
   return (
@@ -100,6 +105,7 @@ const AssistantTimelineContent = memo(function AssistantTimelineContent({
         initialScrollToEnd={false}
         streaming={streaming}
         error={undefined}
+        toolConfirmation={toolConfirmation}
       />
     </div>
   );
@@ -112,6 +118,9 @@ export function AssistantMessageList({
   const runtime = useAssistantStore((state) => state.conversationStates[conversationId]);
   const loadMessages = useAssistantStore((state) => state.loadMessagesIfNeeded);
   const ensureConnection = useAssistantStore((state) => state.ensureContentConnection);
+  const respondToToolConfirmation = useAssistantStore(
+    (state) => state.respondToToolConfirmation,
+  );
 
   const running = !!runtime && isRunning(runtime);
   const contentReady = !!runtime && (runtime.messagesLoaded || !!runtime.messagesError);
@@ -134,6 +143,7 @@ export function AssistantMessageList({
     ? runtime.pipeline.timeline
     : EMPTY_TIMELINE;
   const error = runtime?.messagesError || runtime?.pipeline.error || runtime?.connectionError;
+  const pendingConfirmation = runtime?.pipeline.pendingConfirmation;
 
   const {
     viewportRef,
@@ -156,10 +166,13 @@ export function AssistantMessageList({
 
   if (!runtime) return null;
 
-  const hasContent = segments.length > 0 || liveTimeline.length > 0 || !!error;
+  const hasContent = segments.length > 0
+    || liveTimeline.length > 0
+    || !!pendingConfirmation
+    || !!error;
 
   return (
-    <div className="relative min-h-0 flex-1">
+    <div data-assistant-message-list className="relative min-h-0 flex-1">
       <OverlayScrollArea
         data-assistant-message-content
         data-ready={viewportReady ? "true" : "false"}
@@ -217,9 +230,20 @@ export function AssistantMessageList({
             reasoningStartTime={running ? runtime.pipeline.reasoningStartTime : undefined}
             reasoningDurationMs={running ? runtime.pipeline.reasoningDurationMs : undefined}
             streaming={running}
+            toolConfirmation={pendingConfirmation ? {
+              toolCallIds: pendingConfirmation.toolCalls.map(
+                (toolCall) => toolCall.toolCallId,
+              ),
+              parentToolCallId: pendingConfirmation.parentToolCallId,
+              decisions: pendingConfirmation.decisions,
+              submitting: pendingConfirmation.submitting,
+              showActions: runtime.pipeline.status !== "cancelling",
+              onDecision: (toolCallId, approved) =>
+                void respondToToolConfirmation(toolCallId, approved),
+            } : undefined}
           />
 
-          {running && liveTimeline.length === 0 ? (
+          {running && liveTimeline.length === 0 && !pendingConfirmation ? (
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none" /> 正在思考…
             </div>
@@ -263,6 +287,7 @@ export function AssistantMessageList({
           className="absolute left-1/2 z-10 -translate-x-1/2"
           style={{ bottom: inputHeight + 16 }}
           data-assistant-interactive="true"
+          data-assistant-back-to-bottom
           onClick={scrollToBottom}
         >
           <ArrowDown /> 回到底部

@@ -8,9 +8,11 @@ import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.AiAgentService;
 import com.stonewu.fusion.service.ai.AiToolConfigService;
+import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,9 +23,9 @@ import java.util.regex.Pattern;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.anyString;
 
 class AgentKernelSpecFactoryTests {
 
@@ -71,7 +73,7 @@ class AgentKernelSpecFactoryTests {
                 .thenReturn(List.of(manifest));
 
         AgentKernelSpec spec = factory.createRoot(
-                new AiChatReqVO(), model, "root prompt");
+                request(), model, "root prompt");
 
         assertThat(spec.toolWhitelist()).containsExactly("search_assets");
         assertThat(spec.toolManifest()).containsExactly(manifest);
@@ -92,9 +94,9 @@ class AgentKernelSpecFactoryTests {
                 .thenReturn(List.of(manifest));
 
         AgentKernelSpec first = factory.createRoot(
-                new AiChatReqVO(), model, "root prompt", 42L);
+                request(), model, "root prompt", 42L);
         AgentKernelSpec second = factory.createRoot(
-                new AiChatReqVO(), model, "root prompt", 43L);
+                request(), model, "root prompt", 43L);
 
         assertThat(AgentKernelSpecFactory.ownerUserId(first)).isEqualTo(42L);
         assertThat(first.toolWhitelist()).containsExactly("private_search");
@@ -109,9 +111,9 @@ class AgentKernelSpecFactoryTests {
                 .thenReturn("a".repeat(64), "b".repeat(64));
 
         AgentKernelSpec first = factory.createRoot(
-                new AiChatReqVO(), model, "root prompt", 42L);
+                request(), model, "root prompt", 42L);
         AgentKernelSpec second = factory.createRoot(
-                new AiChatReqVO(), model, "root prompt", 42L);
+                request(), model, "root prompt", 42L);
 
         assertThat(first.key()).isNotEqualTo(second.key());
     }
@@ -132,7 +134,7 @@ class AgentKernelSpecFactoryTests {
                 .thenReturn(List.of(search, inspect));
 
         AgentKernelSpec spec = factory.createRoot(
-                new AiChatReqVO().setEnabledMcpTools(List.of("inspect_media")),
+                request().setEnabledMcpTools(List.of("inspect_media")),
                 model,
                 "root prompt");
 
@@ -151,7 +153,7 @@ class AgentKernelSpecFactoryTests {
                 .thenReturn(List.of(search));
 
         AgentKernelSpec spec = factory.createRoot(
-                new AiChatReqVO().setEnabledMcpTools(List.of()),
+                request().setEnabledMcpTools(List.of()),
                 model,
                 "root prompt");
 
@@ -161,7 +163,7 @@ class AgentKernelSpecFactoryTests {
 
     @Test
     void activeReferenceContextUsesSupportedPromptVariableNames() {
-        AiChatReqVO request = new AiChatReqVO().setContext(Map.of(
+        AiChatReqVO request = request().setContext(Map.of(
                 "activeSkillReferences", "fusion-video-workflow",
                 "activeMcpReferences", "assets/search_assets"));
 
@@ -174,7 +176,7 @@ class AgentKernelSpecFactoryTests {
 
     @Test
     void inheritedRootVariablesRenderEveryConfiguredPlatformChildKernel() {
-        AiChatReqVO request = new AiChatReqVO()
+        AiChatReqVO request = request()
                 .setProjectId(7L)
                 .setContext(Map.of("scriptId", 41L, "storyboardId", 73L));
 
@@ -190,7 +192,7 @@ class AgentKernelSpecFactoryTests {
 
     @Test
     void durableSnapshotRetainsVariablesNeededByFutureChildCalls() {
-        AiChatReqVO request = new AiChatReqVO()
+        AiChatReqVO request = request()
                 .setAgentType("script_full_parse")
                 .setProjectId(7L)
                 .setContext(Map.of("scriptId", 41L));
@@ -219,7 +221,7 @@ class AgentKernelSpecFactoryTests {
 
     @Test
     void scriptFullParseTemplateMatchesFrontendRequestWithoutScriptContent() {
-        AiChatReqVO request = new AiChatReqVO()
+        AiChatReqVO request = request()
                 .setAgentType("script_full_parse")
                 .setProjectId(7L)
                 .setContext(Map.of("scriptId", 41L));
@@ -285,6 +287,43 @@ class AgentKernelSpecFactoryTests {
                 });
     }
 
+    @Test
+    void restoresPersistedToolsOnlyWhenTheLiveContractStillMatches() {
+        ToolExecutor tool = mock(ToolExecutor.class);
+        when(tool.getToolName()).thenReturn("read_script");
+        when(tool.getParametersSchema()).thenReturn("""
+                {"type":"object","properties":{"scriptId":{"type":"integer"}}}
+                """);
+        when(tool.isEnabled()).thenReturn(true);
+        when(tool.isReadOnly()).thenReturn(true);
+        when(tool.isConcurrencySafe()).thenReturn(true);
+        AgentScopeModelFactory models = mock(AgentScopeModelFactory.class);
+        when(models.modelConfigFingerprint(model)).thenReturn("a".repeat(64));
+        AgentKernelSpecFactory toolFactory = new AgentKernelSpecFactory(
+                new AiAgentService(registry),
+                new AiToolConfigService(List.of(tool), registry),
+                models,
+                new AgentScopeV2Properties(),
+                new ObjectMapper(),
+                mcp);
+        AgentKernelSpec original = toolFactory.createRoot(
+                request().setEnabledTools(List.of("read_script")),
+                model,
+                "root prompt");
+        var payload = new CanonicalAgentKernelSnapshotBuilder().build(original).payload();
+
+        AgentKernelSpec restored = toolFactory.restore(payload, model, "b".repeat(64));
+
+        assertThat(restored.toolWhitelist()).containsExactly("read_script");
+        assertThat(restored.toolManifest()).containsExactlyElementsOf(original.toolManifest());
+        assertThat(restored.key().modelConfigFingerprint()).isEqualTo("b".repeat(64));
+
+        when(tool.isReadOnly()).thenReturn(false);
+        assertThatThrownBy(() -> toolFactory.restore(payload, model, "b".repeat(64)))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessage("Persisted AgentScope tool is unavailable: read_script");
+    }
+
     private void assertChildrenRender(
             AiChatReqVO request,
             String parentType,
@@ -319,9 +358,14 @@ class AgentKernelSpecFactoryTests {
     }
 
     private AiChatReqVO requestForScript(long scriptId) {
-        return new AiChatReqVO()
+        return request()
                 .setAgentType("script_full_parse")
                 .setProjectId(7L)
                 .setContext(Map.of("scriptId", scriptId));
+    }
+
+    private AiChatReqVO request() {
+        return new AiChatReqVO()
+                .setToolExecutionMode(ToolExecutionMode.DEFAULT.name());
     }
 }

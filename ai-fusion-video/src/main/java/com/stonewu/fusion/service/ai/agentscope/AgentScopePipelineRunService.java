@@ -22,6 +22,7 @@ import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentPromptVariables;
 import com.stonewu.fusion.service.ai.agentscope.message.AgentScopeMessageMapper;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
 import com.stonewu.fusion.service.ai.model.AiModelRequestOptions;
@@ -147,7 +148,8 @@ public final class AgentScopePipelineRunService {
                         .flatMap(started -> runtimeContexts.forRoot(
                                         started,
                                         prepared.spec().agentDefinitionStableKey(),
-                                        prepared.project())
+                                        prepared.project(),
+                                        prepared.toolExecutionMode())
                                 .flatMap(runtime -> supervisor.start(
                                                 new StartAgentExecutionCommand(
                                                         started,
@@ -175,6 +177,8 @@ public final class AgentScopePipelineRunService {
         AiModel model = AiModelRequestOptions.withReasoningEffort(
                 model(request.getModelId()), request.getReasoningEffort(), objectMapper);
         AiModelMultimodalCapabilities.validateInputs(model, request.getMultimodalInputs());
+        ToolExecutionMode toolExecutionMode = toolExecutionMode(request);
+        request.setToolExecutionMode(toolExecutionMode.name());
         AgentKernelSpec spec = specFactory.createRoot(request, model, systemPrompt, userId);
         AgentKernelSnapshot snapshot = snapshots.build(spec);
         Instant deadline = Instant.now()
@@ -214,7 +218,12 @@ public final class AgentScopePipelineRunService {
         List<AiMultimodalInputVO> multimodalInputs = request.getMultimodalInputs() == null
                 ? List.of()
                 : List.copyOf(request.getMultimodalInputs());
-        return new PreparedRun(spec, snapshot, admission, input, multimodalInputs, project);
+        return new PreparedRun(
+                spec, snapshot, admission, input, multimodalInputs, project, toolExecutionMode);
+    }
+
+    private ToolExecutionMode toolExecutionMode(AiChatReqVO request) {
+        return ToolExecutionMode.parse(request.getToolExecutionMode());
     }
 
     private AiModel model(Long modelId) {
@@ -472,13 +481,15 @@ public final class AgentScopePipelineRunService {
             StartAgentRunCommand admission,
             String input,
             List<AiMultimodalInputVO> multimodalInputs,
-            ProjectContext project) {
+            ProjectContext project,
+            ToolExecutionMode toolExecutionMode) {
         private PreparedRun {
             Objects.requireNonNull(spec, "spec must not be null");
             Objects.requireNonNull(snapshot, "snapshot must not be null");
             Objects.requireNonNull(admission, "admission must not be null");
             requireText(input, "input");
             multimodalInputs = List.copyOf(multimodalInputs);
+            Objects.requireNonNull(toolExecutionMode, "toolExecutionMode must not be null");
         }
     }
 

@@ -1,4 +1,4 @@
-import type { AiChatReq } from "@/lib/api/ai-pipeline";
+import type { AiChatReq, PendingToolCallInfo } from "@/lib/api/ai-pipeline";
 import type {
   SubTimelineItem,
   TimelineItem,
@@ -16,6 +16,15 @@ export interface AgentPipelineState {
   lastSequence: number;
   conversationId?: string;
   error?: string;
+  pendingConfirmation?: {
+    runId: string;
+    replyId: string;
+    parentToolCallId?: string;
+    toolCalls: PendingToolCallInfo[];
+    expiresAt: string;
+    decisions: Record<string, boolean>;
+    submitting: boolean;
+  };
 }
 
 export interface AgentPipelineProps {

@@ -5,10 +5,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.ai.ToolPermissionRisk;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
 import com.stonewu.fusion.service.ai.agentscope.tool.AbstractPlatformAgentTool;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
+import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
 import com.stonewu.fusion.service.ai.run.RunLeaseGuard;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.ToolResultBlock;
@@ -54,7 +56,8 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
                             runtime,
                             com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext.class);
             Duration remaining = remaining(run);
-            Map<String, Object> input = param.getInput() == null ? Map.of() : param.getInput();
+            Map<String, Object> input = Objects.requireNonNull(
+                    param.getInput(), "AgentScope tool input must not be null");
             Mono<String> invocation = Mono.fromCallable(() -> toolExecutor.execute(
                             JSONUtil.toJsonStr(input),
                             com.stonewu.fusion.service.ai.ToolExecutionContext.builder()
@@ -71,6 +74,19 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
                             .thenReturn(projectResult(param, result)))
                     .timeout(remaining);
         });
+    }
+
+    @Override
+    public boolean matchRule(String ruleContent, Map<String, Object> toolInput) {
+        if (AgentToolPermissionPolicy.HIGH_RISK_RULE_CONTENT.equals(ruleContent)) {
+            return toolExecutor.getPermissionRisk(Objects.requireNonNull(
+                    toolInput, "toolInput must not be null")) == ToolPermissionRisk.HIGH_RISK;
+        }
+        return super.matchRule(ruleContent, toolInput);
+    }
+
+    public boolean mayRequireHighRiskApproval() {
+        return toolExecutor.mayRequireHighRiskApproval();
     }
 
     private ToolResultBlock projectResult(ToolCallParam param, String result) {

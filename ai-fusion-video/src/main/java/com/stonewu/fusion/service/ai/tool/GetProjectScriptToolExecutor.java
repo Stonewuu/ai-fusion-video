@@ -36,6 +36,11 @@ public class GetProjectScriptToolExecutor implements ToolExecutor {
     }
 
     @Override
+    public boolean isReadOnly() {
+        return true;
+    }
+
+    @Override
     public String getDisplayName() {
         return "查询项目剧本信息";
     }

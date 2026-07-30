@@ -7,6 +7,7 @@ import com.stonewu.fusion.common.GlobalExceptionHandler;
 import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
 import com.stonewu.fusion.controller.ai.vo.PipelineRunStatusRespVO;
+import com.stonewu.fusion.controller.ai.vo.ToolConfirmationReqVO;
 import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.security.SecurityUserDetails;
@@ -14,6 +15,7 @@ import com.stonewu.fusion.service.ai.agentscope.AgentScopePipelineRunService;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
 import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
 import com.stonewu.fusion.service.ai.run.CancellationCoordinator;
+import com.stonewu.fusion.service.ai.run.AgentConfirmationService;
 import com.stonewu.fusion.service.ai.run.PipelineCursorParser;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
 import com.stonewu.fusion.service.ai.run.model.CommittedAgentEvent;
@@ -54,6 +56,7 @@ class AiPipelineSseControllerTests {
     private AgentRunQueryService queries;
     private AgentRunReplayService replay;
     private CancellationCoordinator cancellations;
+    private AgentConfirmationService confirmations;
     private AiPipelineController controller;
     private MockMvc mockMvc;
 
@@ -63,12 +66,14 @@ class AiPipelineSseControllerTests {
         queries = mock(AgentRunQueryService.class);
         replay = mock(AgentRunReplayService.class);
         cancellations = mock(CancellationCoordinator.class);
+        confirmations = mock(AgentConfirmationService.class);
         controller = new AiPipelineController(
                 pipelineRuns,
                 queries,
                 replay,
                 new PipelineCursorParser(),
-                cancellations);
+                cancellations,
+                confirmations);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -108,7 +113,8 @@ class AiPipelineSseControllerTests {
                 .contains("data:")
                 .contains("\"runId\":\"run-1\"")
                 .contains("\"sequence\":8")
-                .contains("\"content\":\"hello\"");
+                .contains("\"content\":\"hello\"")
+                .doesNotContain("\"parentToolCallId\":null");
         verify(replay).replayThenLive("run-1", 7);
     }
 
@@ -231,6 +237,24 @@ class AiPipelineSseControllerTests {
 
         verify(cancellations).cancel("run-ops", CURRENT_USER_ID);
         verify(queries).status("run-ops", null, CURRENT_USER_ID);
+    }
+
+    @Test
+    void confirmationUsesCurrentUserAndResumesTheWaitingRun() {
+        ToolConfirmationReqVO request = new ToolConfirmationReqVO();
+        request.setRunId("run-confirm");
+        request.setReplyId("reply-confirm");
+        ToolConfirmationReqVO.DecisionVO decision = new ToolConfirmationReqVO.DecisionVO();
+        decision.setToolCallId("call-1");
+        decision.setApproved(true);
+        request.setDecisions(List.of(decision));
+        when(confirmations.respond(request, CURRENT_USER_ID)).thenReturn(Mono.empty());
+
+        StepVerifier.create(controller.confirm(request))
+                .assertNext(response -> assertThat(response.getData()).isTrue())
+                .verifyComplete();
+
+        verify(confirmations).respond(request, CURRENT_USER_ID);
     }
 
     private MvcResult dispatch(

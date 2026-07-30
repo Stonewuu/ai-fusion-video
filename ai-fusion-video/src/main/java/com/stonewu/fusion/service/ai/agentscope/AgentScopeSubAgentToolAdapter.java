@@ -3,9 +3,11 @@ package com.stonewu.fusion.service.ai.agentscope;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.config.ai.AiAgentDefinition;
+import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
+import com.stonewu.fusion.service.ai.agentscope.context.ToolPermissionContext;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
 import com.stonewu.fusion.service.ai.agentscope.tool.AbstractPlatformAgentTool;
@@ -14,7 +16,6 @@ import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentCommand;
 import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRun;
 import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRunPort;
 import com.stonewu.fusion.service.ai.run.RunLeaseGuard;
-import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
@@ -23,12 +24,13 @@ import io.agentscope.core.tool.ToolBase;
 import io.agentscope.core.tool.ToolCallParam;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
-import java.time.Duration;
-import java.time.Instant;
 
 /** Executes a durable platform-managed child Harness run as an AgentScope V2 tool call. */
 public final class AgentScopeSubAgentToolAdapter extends AbstractPlatformAgentTool {
@@ -64,8 +66,11 @@ public final class AgentScopeSubAgentToolAdapter extends AbstractPlatformAgentTo
             RuntimeContext runtime = requireRuntimeContext(param);
             AgentRunContext run = requireContext(runtime, AgentRunContext.class);
             CancellationContext cancellation = requireContext(runtime, CancellationContext.class);
+            ToolPermissionContext permission = requireContext(
+                    runtime, ToolPermissionContext.class);
             ProjectContext project = runtime.get(ProjectContext.class);
-            Map<String, Object> input = param.getInput() == null ? Map.of() : param.getInput();
+            Map<String, Object> input = Objects.requireNonNull(
+                    param.getInput(), "AgentScope sub-agent tool input must not be null");
             String message = inputMessage(input);
             AgentKernelSpec childSpec = specFactory.createChild(
                     parentSpec, definition, project, input);
@@ -76,8 +81,9 @@ public final class AgentScopeSubAgentToolAdapter extends AbstractPlatformAgentTo
                     run.ownerEpoch(),
                     getName(),
                     childSpec,
-                    java.util.List.of(new UserMessage(message)),
+                    List.of(new UserMessage(message)),
                     project,
+                    permission.mode(),
                     run.deadline());
             return cancellation.checkpoint()
                     .then(assertLease(run))

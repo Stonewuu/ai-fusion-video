@@ -589,6 +589,7 @@ function createEventHandler(
                             id: tc.id,
                             name: tc.name,
                             arguments: tc.arguments,
+                            batchId: event.replyId,
                             status: "calling" as const,
                           },
                         ];
@@ -604,6 +605,7 @@ function createEventHandler(
                         id: tc.id,
                         name: tc.name,
                         arguments: tc.arguments,
+                        batchId: event.replyId,
                         status: "calling",
                         agentName: event.agentName,
                       });

@@ -32,6 +32,7 @@ public final class AgentScopeRuntimeContextFactory {
         if (safeRequest.toolExecution() != null) {
             builder.put(ToolExecutionContext.class, safeRequest.toolExecution());
         }
+        builder.put(ToolPermissionContext.class, safeRequest.toolPermission());
         return builder.build();
     }
 

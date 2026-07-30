@@ -25,8 +25,12 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /** Rebuilds conversation messages deterministically from the committed event journal. */
 @Service
@@ -158,6 +162,80 @@ public class AgentMessageProjectionService {
             persistProjection(run, event, "tool-call", toolCallProjection(run, event));
         } else if ("TOOL_FINISHED".equals(outputType)) {
             persistProjection(run, event, "tool-result", toolResultProjection(run, event));
+        } else if ("USER_CONFIRM_RESULT".equals(outputType)) {
+            projectRejectedTools(run, event);
+        }
+    }
+
+    private void projectRejectedTools(AgentRun run, AgentEvent event) {
+        JsonNode eventPayload = payload(event);
+        JsonNode pendingNode = eventPayload.get("pendingToolCalls");
+        JsonNode decisionsNode = eventPayload.get("decisions");
+        if (pendingNode == null || !pendingNode.isArray() || pendingNode.isEmpty()) {
+            throw new IllegalStateException(
+                    "USER_CONFIRM_RESULT pendingToolCalls must be a non-empty array");
+        }
+        if (decisionsNode == null || !decisionsNode.isArray() || decisionsNode.isEmpty()) {
+            throw new IllegalStateException(
+                    "USER_CONFIRM_RESULT decisions must be a non-empty array");
+        }
+
+        Map<String, String> toolNames = new LinkedHashMap<>();
+        for (JsonNode pending : pendingNode) {
+            if (!pending.isObject()) {
+                throw new IllegalStateException(
+                        "USER_CONFIRM_RESULT pending tool call must be an object");
+            }
+            String toolCallId = requireText(firstText(
+                    pending, "toolCallId"), "pendingToolCallId");
+            String toolName = requireText(firstText(
+                    pending, "toolName"), "pendingToolName");
+            if (toolNames.putIfAbsent(toolCallId, toolName) != null) {
+                throw new IllegalStateException(
+                        "USER_CONFIRM_RESULT contains a duplicate pending tool call: "
+                                + toolCallId);
+            }
+        }
+
+        Set<String> decisionIds = new LinkedHashSet<>();
+        for (JsonNode decision : decisionsNode) {
+            if (!decision.isObject()) {
+                throw new IllegalStateException(
+                        "USER_CONFIRM_RESULT decision must be an object");
+            }
+            String toolCallId = requireText(firstText(
+                    decision, "toolCallId"), "decisionToolCallId");
+            JsonNode approvedNode = decision.get("approved");
+            if (approvedNode == null || !approvedNode.isBoolean()) {
+                throw new IllegalStateException(
+                        "USER_CONFIRM_RESULT approved must be boolean: " + toolCallId);
+            }
+            if (!decisionIds.add(toolCallId)) {
+                throw new IllegalStateException(
+                        "USER_CONFIRM_RESULT contains a duplicate decision: " + toolCallId);
+            }
+            String toolName = toolNames.get(toolCallId);
+            if (toolName == null) {
+                throw new IllegalStateException(
+                        "USER_CONFIRM_RESULT decision has no pending tool call: " + toolCallId);
+            }
+            if (!approvedNode.booleanValue()) {
+                AgentMessage rejected = AgentMessage.builder()
+                        .conversationId(run.getConversationId())
+                        .runId(run.getRunId())
+                        .role("tool")
+                        .toolName(toolName)
+                        .toolStatus("rejected")
+                        .toolCallId(toolCallId)
+                        .parentToolCallId(projectedParentToolCallId(run, event))
+                        .build();
+                persistProjection(
+                        run, event, "tool-rejected-" + toolCallId, rejected);
+            }
+        }
+        if (!decisionIds.equals(toolNames.keySet())) {
+            throw new IllegalStateException(
+                    "USER_CONFIRM_RESULT decisions do not match pending tool calls");
         }
     }
 

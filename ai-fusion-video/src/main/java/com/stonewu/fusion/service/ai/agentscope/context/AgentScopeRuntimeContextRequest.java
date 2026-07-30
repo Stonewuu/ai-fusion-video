@@ -10,7 +10,8 @@ public record AgentScopeRuntimeContextRequest(
         ProjectContext project,
         PipelineRequestContext pipelineRequest,
         ToolExecutionContext toolExecution,
-        CancellationContext cancellation) {
+        CancellationContext cancellation,
+        ToolPermissionContext toolPermission) {
 
     public AgentScopeRuntimeContextRequest {
         authenticatedUser = Objects.requireNonNull(authenticatedUser, "authenticatedUser must not be null");
@@ -18,17 +19,7 @@ public record AgentScopeRuntimeContextRequest(
         run = Objects.requireNonNull(run, "run must not be null");
         pipelineRequest = Objects.requireNonNull(pipelineRequest, "pipelineRequest must not be null");
         cancellation = Objects.requireNonNull(cancellation, "cancellation must not be null");
-    }
-
-    public AgentScopeRuntimeContextRequest(
-            AuthenticatedUserContext authenticatedUser,
-            AgentConversationContext conversation,
-            AgentRunContext run,
-            ProjectContext project,
-            PipelineRequestContext pipelineRequest,
-            ToolExecutionContext toolExecution,
-            CancellationContext cancellation) {
-        this(authenticatedUser, conversation, run, null, project,
-                pipelineRequest, toolExecution, cancellation);
+        toolPermission = Objects.requireNonNull(
+                toolPermission, "toolPermission must not be null");
     }
 }

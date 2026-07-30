@@ -1,6 +1,11 @@
 package com.stonewu.fusion.service.ai.run;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.AiModelService;
@@ -8,8 +13,8 @@ import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentScopeRuntimeContextFactory;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentScopeRuntimeContextRequest;
-import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelKey;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentScopeHarnessInvoker;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
@@ -19,21 +24,25 @@ import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.kernel.PersistedAgentKernelSnapshotResolver;
 import com.stonewu.fusion.service.ai.run.kernel.RunConfigUnavailableException;
+import com.stonewu.fusion.service.ai.run.kernel.ToolManifestSnapshot;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
+import com.stonewu.fusion.service.ai.run.model.PendingConfirmation;
 import io.agentscope.core.agent.RuntimeContext;
+import io.agentscope.core.event.AgentEvent;
+import io.agentscope.core.event.RequireUserConfirmEvent;
 import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.ToolUseBlock;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
 @Component
 public final class AgentExecutionFactory {
-
-    private static final String SNAPSHOT_WHITELIST_VERSION = "snapshot-schema-2";
 
     private final AgentScopeHarnessInvoker harnessInvoker;
     private final AgentScopeRuntimeContextFactory runtimeContextFactory;
@@ -44,6 +53,7 @@ public final class AgentExecutionFactory {
     private final PersistedAgentKernelSnapshotResolver snapshotResolver;
     private final AiModelMetadataResolver modelMetadataResolver;
     private final ObjectMapper objectMapper;
+    private final AgentKernelSpecFactory specFactory;
 
     public AgentExecutionFactory(
             AgentScopeHarnessInvoker harnessInvoker,
@@ -53,7 +63,8 @@ public final class AgentExecutionFactory {
             AgentScopeModelFactory modelFactory,
             AgentRuntimeSchedulers schedulers,
             AiModelMetadataResolver modelMetadataResolver,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AgentKernelSpecFactory specFactory) {
         this.harnessInvoker = Objects.requireNonNull(harnessInvoker, "harnessInvoker must not be null");
         this.runtimeContextFactory = Objects.requireNonNull(
                 runtimeContextFactory, "runtimeContextFactory must not be null");
@@ -64,6 +75,7 @@ public final class AgentExecutionFactory {
         this.modelMetadataResolver = Objects.requireNonNull(
                 modelMetadataResolver, "modelMetadataResolver must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.specFactory = Objects.requireNonNull(specFactory, "specFactory must not be null");
         this.snapshotResolver = new PersistedAgentKernelSnapshotResolver(this.objectMapper);
     }
 
@@ -90,11 +102,116 @@ public final class AgentExecutionFactory {
                     stateSessionId,
                     runtimeRequest.parentRun(),
                     harnessInvoker.streamEvents(spec, List.copyOf(messages), runtimeContext)
-                            .map(eventMapper::map)
+                            .map(event -> mapConfirmationCandidate(
+                                    event, run.deadline()))
                             .map(event -> childIdentity(event, run)),
                     ignored -> Mono.empty(),
                     () -> { });
         });
+    }
+
+    private AgentEventEnvelope mapConfirmationCandidate(
+            AgentEvent event, Instant deadline) {
+        AgentEventEnvelope mapped = eventMapper.map(event);
+        if (!(event instanceof RequireUserConfirmEvent confirmation)) {
+            return mapped;
+        }
+        PendingConfirmation candidate = confirmationCandidate(
+                confirmation, mapped.payload(), deadline);
+        ObjectNode payload = mapped.payload().deepCopy();
+        ObjectNode candidatePayload = JsonNodeFactory.instance.objectNode()
+                .put("replyId", candidate.replyId())
+                .put("pendingToolCallsJson", candidate.pendingToolCallsJson())
+                .put("suspendedToolCallsJson", candidate.suspendedToolCallsJson())
+                .put("expiresAt", candidate.expiresAt().toString());
+        ArrayNode decisionIds = JsonNodeFactory.instance.arrayNode();
+        candidate.decisionIds().stream().sorted().forEach(decisionIds::add);
+        candidatePayload.set("decisionIds", decisionIds);
+        payload.set("_platformConfirmationCandidate", candidatePayload);
+        return new AgentEventEnvelope(
+                mapped.rawEventId(),
+                mapped.rawEventType(),
+                mapped.source(),
+                mapped.replyId(),
+                mapped.blockId(),
+                mapped.toolCallId(),
+                mapped.parentToolCallId(),
+                mapped.agentName(),
+                mapped.outputType(),
+                payload,
+                mapped.createdAt());
+    }
+
+    private PendingConfirmation confirmationCandidate(
+            RequireUserConfirmEvent event, JsonNode sanitizedPayload, Instant deadline) {
+        if (event.getReplyId() == null || event.getReplyId().isBlank()
+                || event.getToolCalls().isEmpty()) {
+            throw new IllegalStateException(
+                    "AgentScope confirmation event has no actionable tool calls");
+        }
+        ArrayNode previews = JsonNodeFactory.instance.arrayNode();
+        JsonNode sanitizedCalls = sanitizedPayload.path("toolCalls");
+        if (!sanitizedCalls.isArray()
+                || sanitizedCalls.size() != event.getToolCalls().size()) {
+            throw new IllegalStateException(
+                    "Sanitized AgentScope confirmation calls do not match the source event");
+        }
+        Set<String> decisionIds = new LinkedHashSet<>();
+        for (int index = 0; index < event.getToolCalls().size(); index++) {
+            ToolUseBlock toolCall = event.getToolCalls().get(index);
+            if (toolCall.getId() == null || toolCall.getId().isBlank()
+                    || toolCall.getName() == null || toolCall.getName().isBlank()
+                    || !decisionIds.add(toolCall.getId())) {
+                throw new IllegalStateException(
+                        "AgentScope confirmation event contains invalid tool identity");
+            }
+            JsonNode sanitizedInput = sanitizedCalls.get(index).get("input");
+            if (sanitizedInput == null) {
+                throw new IllegalStateException(
+                        "Sanitized AgentScope confirmation call has no input");
+            }
+            String argumentsPreview = writeJson(sanitizedInput);
+            if (argumentsPreview.length() > 2048) {
+                argumentsPreview = argumentsPreview.substring(0, 2048) + "…";
+            }
+            ObjectNode preview = JsonNodeFactory.instance.objectNode()
+                    .put("toolCallId", toolCall.getId())
+                    .put("toolName", toolCall.getName())
+                    .put("argumentsPreview", argumentsPreview);
+            previews.add(preview);
+        }
+        return new PendingConfirmation(
+                event.getReplyId(),
+                decisionIds,
+                writeJson(previews),
+                writeJson(suspendedToolCalls(event.getToolCalls())),
+                deadline);
+    }
+
+    private ArrayNode suspendedToolCalls(List<ToolUseBlock> toolCalls) {
+        ArrayNode suspended = JsonNodeFactory.instance.arrayNode();
+        for (ToolUseBlock toolCall : toolCalls) {
+            ObjectNode value = JsonNodeFactory.instance.objectNode()
+                    .put("id", toolCall.getId())
+                    .put("name", toolCall.getName())
+                    .put("state", toolCall.getState().name());
+            value.set("input", objectMapper.valueToTree(toolCall.getInput()));
+            value.set("metadata", objectMapper.valueToTree(toolCall.getMetadata()));
+            if (toolCall.getContent() != null) {
+                value.put("content", toolCall.getContent());
+            }
+            suspended.add(value);
+        }
+        return suspended;
+    }
+
+    private String writeJson(Object value) {
+        try {
+            return objectMapper.writeValueAsString(value);
+        } catch (JsonProcessingException failure) {
+            throw new IllegalStateException(
+                    "Failed to serialize AgentScope confirmation state", failure);
+        }
     }
 
     private AgentEventEnvelope childIdentity(
@@ -126,9 +243,6 @@ public final class AgentExecutionFactory {
 
     private AgentKernelSpec resolveBlocking(AgentKernelSnapshot snapshot) {
         AgentKernelSnapshotPayload payload = snapshot.payload();
-        if (!payload.tools().isEmpty()) {
-            throw unavailable("Persisted tool implementations are not available for resume");
-        }
         long modelId;
         try {
             modelId = Long.parseLong(payload.modelConfigId());
@@ -153,28 +267,24 @@ public final class AgentExecutionFactory {
             modelFingerprint = modelFactory.modelConfigFingerprint(model);
             modelVersion = CanonicalAgentKernelSnapshotBuilder.modelConfigVersion(modelFingerprint);
         }
+        AgentKernelSpec restored;
+        try {
+            restored = specFactory.restore(payload, model, modelFingerprint);
+        } catch (RuntimeException unavailableTool) {
+            throw unavailable(unavailableTool.getMessage());
+        }
+        List<ToolManifestSnapshot> currentTools = restored.toolManifest().stream()
+                .map(tool -> new ToolManifestSnapshot(
+                        tool.toolName(),
+                        tool.schemaSha256(),
+                        tool.readOnly(),
+                        tool.concurrencySafe(),
+                        restored.toolWhitelistVersion()))
+                .toList();
         AgentKernelSnapshot validated = snapshotResolver.resolve(
-                snapshot.snapshotJson(), snapshot.fingerprint(), modelVersion, List.of());
+                snapshot.snapshotJson(), snapshot.fingerprint(), modelVersion, currentTools);
         requireSameModel(validated.payload(), model);
-        AgentKernelKey key = AgentKernelKey.create(
-                payload.agentDefinitionStableKey(),
-                modelFingerprint,
-                AgentKernelKey.promptVersion(
-                        payload.systemPrompt(), payload.promptVariables()),
-                List.of(),
-                SNAPSHOT_WHITELIST_VERSION);
-        return new AgentKernelSpec(
-                key,
-                model,
-                payload.agentDefinitionStableKey(),
-                payload.agentName(),
-                payload.description(),
-                payload.systemPrompt(),
-                payload.promptVariables(),
-                payload.maxIters(),
-                List.of(),
-                Set.of(),
-                SNAPSHOT_WHITELIST_VERSION);
+        return restored;
     }
 
     private void requireSameModel(AgentKernelSnapshotPayload payload, AiModel model) {

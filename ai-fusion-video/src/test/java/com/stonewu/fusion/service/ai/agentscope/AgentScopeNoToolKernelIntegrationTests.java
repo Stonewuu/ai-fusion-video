@@ -21,6 +21,8 @@ import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeShutdownRecovery
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import com.stonewu.fusion.service.ai.agentscope.state.FailClosedAgentStateStore;
 import com.stonewu.fusion.service.ai.agentscope.state.InMemoryStateStoreFailureGuard;
+import com.stonewu.fusion.service.ai.agentscope.context.ToolPermissionContext;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEventType;
 import io.agentscope.core.message.Msg;
@@ -345,6 +347,9 @@ class AgentScopeNoToolKernelIntegrationTests {
         return RuntimeContext.builder()
                 .userId(userId)
                 .sessionId(sessionId)
+                .put(
+                        ToolPermissionContext.class,
+                        new ToolPermissionContext(ToolExecutionMode.DEFAULT))
                 .build();
     }
 

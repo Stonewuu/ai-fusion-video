@@ -154,11 +154,11 @@ class AgentScopeEventMapperTests {
         assertThat(mapper.map(new AgentEndEvent("r").withSource("main/researcher")).outputType())
                 .isEqualTo("SUB_AGENT_FINISHED");
         assertThat(mapper.map(new RequireUserConfirmEvent("r", List.of())).outputType())
-                .isEqualTo("USER_CONFIRMATION_REQUIRED");
+                .isNull();
         assertThat(mapper.map(new RequireExternalExecutionEvent("r", List.of())).outputType())
                 .isEqualTo("EXTERNAL_EXECUTION_REQUIRED");
         assertThat(mapper.map(new UserConfirmResultEvent("r", List.of())).outputType())
-                .isEqualTo("USER_CONFIRM_RESULT");
+                .isNull();
         assertThat(mapper.map(new ExternalExecutionResultEvent("r", List.of())).outputType())
                 .isEqualTo("EXTERNAL_EXECUTION_RESULT");
         assertThat(mapper.map(new AgentStartEvent("session", "r", "main")).outputType())

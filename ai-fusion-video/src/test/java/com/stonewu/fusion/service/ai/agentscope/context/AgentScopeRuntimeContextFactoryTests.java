@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.ai.agentscope.context;
 
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import io.agentscope.core.agent.RuntimeContext;
 import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
@@ -34,6 +35,8 @@ class AgentScopeRuntimeContextFactoryTests {
         assertThat(context.get(CancellationContext.class)).isSameAs(request.cancellation());
         assertThat(context.get(ProjectContext.class)).isSameAs(project);
         assertThat(context.get(ToolExecutionContext.class)).isSameAs(tool);
+        assertThat(context.get(ToolPermissionContext.class).mode())
+                .isEqualTo(ToolExecutionMode.DEFAULT);
         assertThat(context.get(AgentRunContext.class).ownerEpoch()).isEqualTo(3L);
     }
 
@@ -64,9 +67,11 @@ class AgentScopeRuntimeContextFactoryTests {
                         "conversation-7", "assistant-v3", "afv-child:stable-session"),
                 new AgentRunContext("run-9", "node-a", 3L, DEADLINE),
                 null,
+                null,
                 new PipelineRequestContext("request-11", PipelineRequestContext.Kind.PIPELINE),
                 null,
-                CancellationContext.noop());
+                CancellationContext.noop(),
+                new ToolPermissionContext(ToolExecutionMode.DEFAULT));
 
         assertThat(factory.create(request).getSessionId())
                 .isEqualTo("afv-child:stable-session");
@@ -79,9 +84,11 @@ class AgentScopeRuntimeContextFactoryTests {
                 new AgentConversationContext("  conversation-7  ", "  assistant-v3  "),
                 new AgentRunContext("  run-9  ", "  node-a  ", 3L, DEADLINE),
                 null,
+                null,
                 new PipelineRequestContext("  request-11  ", PipelineRequestContext.Kind.PIPELINE),
                 null,
-                CancellationContext.noop());
+                CancellationContext.noop(),
+                new ToolPermissionContext(ToolExecutionMode.DEFAULT));
 
         RuntimeContext context = factory.create(normalized);
 
@@ -124,9 +131,11 @@ class AgentScopeRuntimeContextFactoryTests {
                         new AgentConversationContext("conversation-7", "assistant-v3"),
                         null,
                         null,
+                        null,
                         new PipelineRequestContext("request-11", PipelineRequestContext.Kind.CHAT),
                         null,
-                        CancellationContext.noop()))
+                        CancellationContext.noop(),
+                        new ToolPermissionContext(ToolExecutionMode.DEFAULT)))
                 .isInstanceOf(NullPointerException.class)
                 .hasMessageContaining("run");
     }
@@ -154,9 +163,11 @@ class AgentScopeRuntimeContextFactoryTests {
                 new AuthenticatedUserContext(42L),
                 new AgentConversationContext("conversation-7", "assistant-v3"),
                 new AgentRunContext("run-9", "node-a", 3L, DEADLINE),
+                null,
                 project,
                 new PipelineRequestContext("request-11", PipelineRequestContext.Kind.PIPELINE),
                 toolExecution,
-                CancellationContext.noop());
+                CancellationContext.noop(),
+                new ToolPermissionContext(ToolExecutionMode.DEFAULT));
     }
 }

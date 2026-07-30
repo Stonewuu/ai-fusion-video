@@ -1,4 +1,4 @@
-import type { AgentConversation, AgentMessage } from "@/lib/api/ai-assistant";
+import type { AgentConversation, AgentMessage, ToolExecutionMode } from "@/lib/api/ai-assistant";
 import type { AiChatStreamEvent, PipelineRunStatus } from "@/lib/api/ai-pipeline";
 import { messagesToTimeline } from "@/components/dashboard/notification-panel/history";
 import {
@@ -44,6 +44,7 @@ export function makeRuntime(
   conversation: AgentConversation,
   drafts: Record<string, string>,
   runIds: Record<string, string>,
+  toolExecutionMode: ToolExecutionMode,
 ): AssistantConversationRuntime {
   const conversationId = conversation.conversationId;
   const knownRunId = runIds[conversationId];
@@ -67,6 +68,7 @@ export function makeRuntime(
     messagesLoaded: false,
     messagesLoading: false,
     unread: false,
+    toolExecutionMode,
   };
 }
 

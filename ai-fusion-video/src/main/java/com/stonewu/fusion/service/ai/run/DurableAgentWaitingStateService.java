@@ -34,6 +34,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -190,6 +191,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         ObjectNode payload = JsonNodeFactory.instance.objectNode()
                 .put("replyId", normalized.replyId())
                 .put("pendingToolCallsJson", normalized.pendingToolCallsJson())
+                .put("suspendedToolCallsJson", normalized.suspendedToolCallsJson())
                 .put("expiresAt", normalized.expiresAt().toString());
         payload.set("decisionIds", textArray(normalized.decisionIds()));
         insertEvent(
@@ -225,7 +227,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 candidate.expiresAt(), run, now);
         long sequence = nextSequence(run);
         ObjectNode payload = JsonNodeFactory.instance.objectNode()
-                .put("outputType", "TOOL_CALL")
+                .put("outputType", "USER_CONFIRMATION_REQUIRED")
                 .put("controlType", "USER_CONFIRM_REQUIRED")
                 .put("replyId", candidate.replyId())
                 .put("toolName", "user_confirmation")
@@ -239,8 +241,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 "PLATFORM_USER_CONFIRM_REQUIRED",
                 WAITING_SOURCE,
                 candidate.replyId(),
-                candidate.replyId(),
-                "TOOL_CALL",
+                null,
+                "USER_CONFIRMATION_REQUIRED",
                 sanitizer.sanitize(payload),
                 now);
         int updated = runMapper.enterWaitingConfirmation(
@@ -373,10 +375,20 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         LocalDateTime leaseUntil = leaseUntil(now, command.ownerLease(), run.getDeadlineAt());
         long sequence = nextSequence(run);
         ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("outputType", "USER_CONFIRM_RESULT")
                 .put("replyId", command.replyId())
                 .put("ownerInstanceId", command.newOwnerInstanceId())
                 .put("ownerEpoch", newEpoch);
         payload.set("decisionIds", textArray(command.decisionIds()));
+        payload.set("pendingToolCalls", parseArray(
+                pending.pendingToolCallsJson(), "pendingToolCallsJson"));
+        ArrayNode decisions = JsonNodeFactory.instance.arrayNode();
+        command.decisionResults().entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .forEach(entry -> decisions.addObject()
+                        .put("toolCallId", entry.getKey())
+                        .put("approved", entry.getValue()));
+        payload.set("decisions", decisions);
         insertEvent(
                 run,
                 sequence,
@@ -384,7 +396,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 WAITING_SOURCE,
                 command.replyId(),
                 null,
-                null,
+                "USER_CONFIRM_RESULT",
                 payload,
                 now);
         if (runMapper.resumeConfirmation(
@@ -475,6 +487,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 candidate.replyId(),
                 candidate.decisionIds(),
                 candidate.pendingToolCallsJson(),
+                candidate.suspendedToolCallsJson(),
                 toInstant(expiresAt));
     }
 
@@ -563,6 +576,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 requireJsonText(
                         payload.get("pendingToolCallsJson"),
                         "confirmation pendingToolCallsJson"),
+                requireJsonText(
+                        payload.get("suspendedToolCallsJson"),
+                        "confirmation suspendedToolCallsJson"),
                 parseInstant(payload.get("expiresAt"), "confirmation expiresAt"));
     }
 
@@ -581,6 +597,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         requireText(candidate.replyId(), 128, "candidate.replyId");
         ArrayNode tools = parseArray(
                 candidate.pendingToolCallsJson(), "pendingToolCallsJson");
+        parseArray(candidate.suspendedToolCallsJson(), "suspendedToolCallsJson");
         if (tools.isEmpty()) {
             throw new IllegalArgumentException("pendingToolCallsJson must not be empty");
         }
@@ -714,7 +731,10 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 && Objects.equals(left.expiresAt(), right.expiresAt())
                 && Objects.equals(
                         parseJson(left.pendingToolCallsJson(), "pendingToolCallsJson"),
-                        parseJson(right.pendingToolCallsJson(), "pendingToolCallsJson"));
+                        parseJson(right.pendingToolCallsJson(), "pendingToolCallsJson"))
+                && Objects.equals(
+                        parseJson(left.suspendedToolCallsJson(), "suspendedToolCallsJson"),
+                        parseJson(right.suspendedToolCallsJson(), "suspendedToolCallsJson"));
     }
 
     private boolean sameExternal(

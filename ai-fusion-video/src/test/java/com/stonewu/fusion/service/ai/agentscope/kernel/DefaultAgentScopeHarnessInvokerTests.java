@@ -1,5 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
+import com.stonewu.fusion.service.ai.agentscope.context.ToolPermissionContext;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEvent;
@@ -7,6 +9,7 @@ import io.agentscope.core.message.Msg;
 import io.agentscope.harness.agent.HarnessAgent;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Answers;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -211,11 +214,13 @@ class DefaultAgentScopeHarnessInvokerTests {
         AgentStatePreflight preflight = mock(AgentStatePreflight.class);
         HarnessLease lease = mock(HarnessLease.class);
         AgentKernelResource resource = mock(AgentKernelResource.class);
-        HarnessAgent agent = mock(HarnessAgent.class);
+        HarnessAgent agent = mock(HarnessAgent.class, Answers.RETURNS_DEEP_STUBS);
         AgentKernelSpec spec = mock(AgentKernelSpec.class);
         RuntimeContext context = mock(RuntimeContext.class);
         when(context.getUserId()).thenReturn("42");
         when(context.getSessionId()).thenReturn("conversation-7");
+        when(context.get(ToolPermissionContext.class))
+                .thenReturn(new ToolPermissionContext(ToolExecutionMode.DEFAULT));
         when(cache.acquire(spec)).thenReturn(Mono.just(lease));
         when(preflight.check(context)).thenReturn(Mono.empty());
         when(lease.resource()).thenReturn(resource);

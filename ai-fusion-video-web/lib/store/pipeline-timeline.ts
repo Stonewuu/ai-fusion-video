@@ -1,4 +1,11 @@
-export type ToolTimelineStatus = "calling" | "done" | "error" | "cancelled";
+export type ToolTimelineStatus =
+  | "calling"
+  | "awaiting_approval"
+  | "approved"
+  | "rejected"
+  | "done"
+  | "error"
+  | "cancelled";
 
 export type SubTimelineItem =
   | {
@@ -6,8 +13,9 @@ export type SubTimelineItem =
       id: string;
       name: string;
       arguments: string;
+      batchId?: string;
       status: ToolTimelineStatus;
-      result?: string;
+      result?: string | null;
     }
   | { type: "content"; text: string }
   | {
@@ -23,8 +31,9 @@ export type TimelineItem =
       id: string;
       name: string;
       arguments: string;
+      batchId?: string;
       status: ToolTimelineStatus;
-      result?: string;
+      result?: string | null;
       agentName?: string;
       children?: SubTimelineItem[];
     }
@@ -36,12 +45,18 @@ export type TimelineItem =
     }
   | { type: "content"; text: string };
 
+function isInProgressToolStatus(status: ToolTimelineStatus): boolean {
+  return status === "calling"
+    || status === "awaiting_approval"
+    || status === "approved";
+}
+
 function cancelCallingSubTimelineTools(
   children: SubTimelineItem[],
 ): SubTimelineItem[] {
   let changed = false;
   const next = children.map((child) => {
-    if (child.type !== "tool" || child.status !== "calling") return child;
+    if (child.type !== "tool" || !isInProgressToolStatus(child.status)) return child;
     changed = true;
     return { ...child, status: "cancelled" as const };
   });
@@ -57,7 +72,7 @@ export function cancelCallingTimelineTools(
     const children = item.children
       ? cancelCallingSubTimelineTools(item.children)
       : item.children;
-    const status = item.status === "calling" ? "cancelled" : item.status;
+    const status = isInProgressToolStatus(item.status) ? "cancelled" : item.status;
     if (status === item.status && children === item.children) return item;
     changed = true;
     return { ...item, status, children };
@@ -79,11 +94,15 @@ function restoreSubTimelineTools(
   const next = current.map((item) => {
     if (item.type !== "tool") return item;
     const previousItem = previousTools.get(item.id);
-    if (item.status !== "cancelled" || previousItem?.status !== "calling") {
+    if (
+      item.status !== "cancelled"
+      || !previousItem
+      || !isInProgressToolStatus(previousItem.status)
+    ) {
       return item;
     }
     changed = true;
-    return { ...item, status: "calling" as const };
+    return { ...item, status: previousItem.status };
   });
   return changed ? next : current;
 }
@@ -105,8 +124,10 @@ export function restoreOptimisticallyCancelledTimelineTools(
     const children = item.children && previousItem?.children
       ? restoreSubTimelineTools(item.children, previousItem.children)
       : item.children;
-    const status = item.status === "cancelled" && previousItem?.status === "calling"
-      ? "calling"
+    const status = item.status === "cancelled"
+      && previousItem
+      && isInProgressToolStatus(previousItem.status)
+      ? previousItem.status
       : item.status;
     if (status === item.status && children === item.children) return item;
     changed = true;
@@ -115,13 +136,17 @@ export function restoreOptimisticallyCancelledTimelineTools(
   return changed ? next : current;
 }
 
-export function finishedToolTimelineStatus(status?: string): Exclude<ToolTimelineStatus, "calling"> {
+export function finishedToolTimelineStatus(
+  status: string | undefined,
+): Extract<ToolTimelineStatus, "done" | "error" | "cancelled"> {
+  if (status === "success" || status === "done") return "done";
   if (status === "error") return "error";
   if (status === "cancelled") return "cancelled";
-  return "done";
+  throw new Error(`Unsupported finished tool status: ${String(status)}`);
 }
 
 export function persistedToolTimelineStatus(status?: string): ToolTimelineStatus {
   if (status === "running") return "calling";
+  if (status === "rejected") return "rejected";
   return finishedToolTimelineStatus(status);
 }

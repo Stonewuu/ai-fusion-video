@@ -20,6 +20,7 @@ import { useAssistantReferences } from "./use-assistant-references";
 import { AssistantAttachmentStrip } from "./attachment-strip";
 import { useAssistantAttachments } from "./use-assistant-attachments";
 import { AssistantModelControls } from "./model-controls";
+import { AssistantToolPermissionControl } from "./tool-permission-control";
 
 interface AssistantComposerProps {
   active: boolean;
@@ -57,23 +58,47 @@ function loadAssistantModels(): Promise<AiModel[]> {
 
 export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef, onHeightChange }: AssistantComposerProps) {
   const selectedConversationId = useAssistantStore((state) => state.selectedConversationId);
-  const text = useAssistantStore((state) =>
-    selectedConversationId
-      ? state.conversationStates[selectedConversationId]?.draft ?? ""
-      : state.newDraft,
-  );
-  const runtimeStatus = useAssistantStore((state) =>
-    selectedConversationId ? state.conversationStates[selectedConversationId]?.status : undefined,
-  );
-  const runtimeMessagesError = useAssistantStore((state) =>
-    selectedConversationId ? state.conversationStates[selectedConversationId]?.messagesError : undefined,
-  );
-  const conversationProjectId = useAssistantStore((state) =>
-    selectedConversationId ? state.conversationStates[selectedConversationId]?.conversation.projectId : undefined,
-  );
+  const text = useAssistantStore((state) => {
+    const conversationId = state.selectedConversationId;
+    if (!conversationId) return state.newDraft;
+    const runtime = state.conversationStates[conversationId];
+    if (!runtime) throw new Error(`Missing assistant runtime for ${conversationId}`);
+    return runtime.draft;
+  });
+  const runtimeStatus = useAssistantStore((state) => {
+    const conversationId = state.selectedConversationId;
+    if (!conversationId) return undefined;
+    const runtime = state.conversationStates[conversationId];
+    if (!runtime) throw new Error(`Missing assistant runtime for ${conversationId}`);
+    return runtime.status;
+  });
+  const runtimeMessagesError = useAssistantStore((state) => {
+    const conversationId = state.selectedConversationId;
+    if (!conversationId) return undefined;
+    const runtime = state.conversationStates[conversationId];
+    if (!runtime) throw new Error(`Missing assistant runtime for ${conversationId}`);
+    return runtime.messagesError;
+  });
+  const conversationProjectId = useAssistantStore((state) => {
+    const conversationId = state.selectedConversationId;
+    if (!conversationId) return undefined;
+    const runtime = state.conversationStates[conversationId];
+    if (!runtime) throw new Error(`Missing assistant runtime for ${conversationId}`);
+    return runtime.conversation.projectId;
+  });
   const selectedModelId = useAssistantStore((state) => state.selectedModelId);
+  const toolExecutionMode = useAssistantStore((state) => {
+    const conversationId = state.selectedConversationId;
+    if (!conversationId) return state.newToolExecutionMode;
+    const runtime = state.conversationStates[conversationId];
+    if (!runtime) {
+      throw new Error(`Missing assistant runtime for ${conversationId}`);
+    }
+    return runtime.toolExecutionMode;
+  });
   const setDraft = useAssistantStore((state) => state.setDraft);
   const setSelectedModelId = useAssistantStore((state) => state.setSelectedModelId);
+  const setToolExecutionMode = useAssistantStore((state) => state.setToolExecutionMode);
   const startNewConversation = useAssistantStore((state) => state.startNewConversation);
   const sendMessage = useAssistantStore((state) => state.sendMessage);
   const stopGeneration = useAssistantStore((state) => state.stopGeneration);
@@ -336,6 +361,12 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
             }}
           />
 
+          <AssistantToolPermissionControl
+            value={toolExecutionMode}
+            disabled={submitting || running}
+            onChange={setToolExecutionMode}
+          />
+
           <div className="ml-auto flex shrink-0 items-center gap-2">
             {cancelling ? (
               <Button
@@ -372,7 +403,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
                     >
                       <Button
                         type="button"
-                        variant="default"
+                        variant="secondary"
                         size="sm"
                         data-assistant-interactive="true"
                         disabled={sendDisabled}
