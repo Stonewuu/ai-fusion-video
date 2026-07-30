@@ -13,7 +13,8 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
-import org.springframework.data.redis.core.StringRedisTemplate;
+
+import javax.sql.DataSource;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({AgentScopeRuntimeProperties.class, AgentScopeV2Properties.class})
@@ -49,20 +50,19 @@ public class AgentScopeRuntimeConfiguration {
     @Primary
     public AgentStateStore agentScopeStateStore(
             AgentScopeStateStoreFactory factory,
-            ObjectProvider<StringRedisTemplate> redisTemplateProvider,
-            AgentScopeRuntimeProperties runtimeProperties,
+            ObjectProvider<DataSource> dataSourceProvider,
             AgentScopeV2Properties v2Properties) {
         AgentScopeV2Properties.State state = v2Properties.getState();
         if (state.getMode() == AgentScopeV2Properties.Mode.IN_MEMORY) {
             return factory.createInMemory();
         }
-        StringRedisTemplate redisTemplate = redisTemplateProvider.getIfAvailable();
-        if (redisTemplate == null) {
+        DataSource dataSource = dataSourceProvider.getIfAvailable();
+        if (dataSource == null) {
             throw new IllegalStateException(
-                    "StringRedisTemplate is required when fusion.agentscope.v2.state.mode=redis");
+                    "DataSource is required when fusion.agentscope.v2.state.mode=mysql");
         }
-        return factory.createRedis(
-                redisTemplate, runtimeProperties.getStateThreads(), state.getKeyPrefix());
+        return factory.createMysql(
+                dataSource, state.getDatabaseName(), state.getTableName());
     }
 
     @Bean

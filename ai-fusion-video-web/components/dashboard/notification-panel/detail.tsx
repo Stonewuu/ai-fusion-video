@@ -18,6 +18,7 @@ import {
   Clock,
   Loader2,
   MessageSquare,
+  RefreshCw,
   X,
   XCircle,
 } from "lucide-react";
@@ -55,6 +56,23 @@ import {
 const EMPTY_TIMELINE: PipelineTask["state"]["timeline"] = [];
 const EMPTY_MESSAGES: AgentMessage[] = [];
 
+function PipelineContinueAction({ onContinue }: { onContinue: () => void }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border/30 bg-card/50 p-3">
+      <div className="min-w-0">
+        <p className="text-xs font-medium">执行未完成</p>
+        <p className="mt-0.5 text-[11px] text-muted-foreground">
+          保留当前进度并让 Agent 继续执行
+        </p>
+      </div>
+      <Button type="button" variant="outline" size="sm" onClick={onContinue}>
+        <RefreshCw />
+        重试
+      </Button>
+    </div>
+  );
+}
+
 function mergeConversationsById(
   current: AgentConversation[],
   incoming: AgentConversation[]
@@ -89,6 +107,7 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
   const disconnectPipelineContent = usePipelineStore(
     (state) => state.disconnectPipelineContent
   );
+  const continuePipeline = usePipelineStore((state) => state.continuePipeline);
   const [idleTimelineLength, setIdleTimelineLength] = useState<number | null>(null);
   const timeline = task?.state.timeline ?? EMPTY_TIMELINE;
   const timelineLength = timeline.length;
@@ -206,6 +225,20 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {(task.status === "error" || task.status === "cancelled") &&
+          task.continuable && (
+          <PipelineContinueAction
+            onContinue={() => {
+              try {
+                continuePipeline(task.id);
+              } catch (error) {
+                console.error("[Pipeline] 继续执行失败:", error);
+                toastApiError(error, "继续执行失败");
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );
@@ -213,8 +246,13 @@ function PipelineDetailPanel({ taskId }: { taskId: string }) {
 
 function HistoryDetailPanel({
   conversation,
+  onContinue,
 }: {
   conversation: AgentConversation;
+  onContinue: (
+    conversation: AgentConversation,
+    timeline: PipelineTask["state"]["timeline"]
+  ) => void;
 }) {
   const timelineRef = useRef<HTMLDivElement>(null);
   const [messageState, setMessageState] = useState<{
@@ -324,6 +362,15 @@ function HistoryDetailPanel({
             streaming={false}
             error={historyError}
           />
+        )}
+        {!loading &&
+          isPipeline &&
+          (historyError || conversation.status === "cancelled") && (
+          <div className="mt-3">
+            <PipelineContinueAction
+              onContinue={() => onContinue(conversation, timeline)}
+            />
+          </div>
         )}
       </div>
     </div>
@@ -469,6 +516,7 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
   }
   const tasks = taskListSnapshotRef.current.tasks;
   const clearCompleted = usePipelineStore((state) => state.clearCompleted);
+  const removePipeline = usePipelineStore((state) => state.removePipeline);
   const expandedTaskId = usePipelineStore((state) => state.expandedTaskId);
   const listEndRef = useRef<HTMLDivElement>(null);
   // mobile: track whether we're showing detail view
@@ -570,11 +618,16 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
     if (justFinished) {
       const timer = setTimeout(() => {
         loadHistory(1);
-        clearCompleted();
+        usePipelineStore
+          .getState()
+          .tasks.filter(
+            (task) => task.status === "done"
+          )
+          .forEach((task) => removePipeline(task.id));
       }, 1500);
       return () => clearTimeout(timer);
     }
-  }, [tasks, loadHistory, clearCompleted]);
+  }, [tasks, loadHistory, removePipeline]);
 
   useEffect(() => {
     if (!listEndRef.current || !hasMore) return;
@@ -608,6 +661,15 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
     selected?.type === "history" ? selected.conversation : null;
   const runningTasks = tasks.filter((task) => task.status === "running");
   const completedTasks = tasks.filter((task) => task.status !== "running");
+  const currentPipelineConversationIds = new Set(
+    tasks
+      .filter((task) => task.continuable && task.state.conversationId)
+      .map((task) => task.state.conversationId)
+  );
+  const visibleConversations = conversations.filter(
+    (conversation) =>
+      !currentPipelineConversationIds.has(conversation.conversationId)
+  );
 
   // helper: select an item and switch to detail view on mobile
   const handleSelect = (item: SelectedItem) => {
@@ -618,6 +680,26 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
   // helper: go back to list on mobile
   const handleMobileBack = () => {
     setMobileShowDetail(false);
+  };
+
+  const handleContinueHistory = (
+    conversation: AgentConversation,
+    timeline: PipelineTask["state"]["timeline"]
+  ) => {
+    try {
+      const taskId = usePipelineStore.getState().addPipelineContinuation({
+        label: conversation.title,
+        projectId: conversation.projectId,
+        conversationId: conversation.conversationId,
+        initialTimeline: timeline,
+      });
+      usePipelineStore.getState().setExpandedTaskId(taskId);
+      setSelected({ type: "pipeline", taskId });
+      setMobileShowDetail(true);
+    } catch (error) {
+      console.error("[Pipeline] 历史任务继续执行失败:", error);
+      toastApiError(error, "继续执行失败");
+    }
   };
 
   /* ---- shared list content (used in both desktop sidebar and mobile full view) ---- */
@@ -680,12 +762,12 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
           <Clock className="h-3 w-3" />
           历史记录
         </p>
-        {conversations.length === 0 && !historyLoading && (
+        {visibleConversations.length === 0 && !historyLoading && (
           <p className="text-xs text-muted-foreground/60 px-1 py-3 text-center">
             暂无历史记录
           </p>
         )}
-        {conversations.map((conversation) => {
+        {visibleConversations.map((conversation) => {
           const isError =
             conversation.status === "error" ||
             conversation.status === "failed";
@@ -754,7 +836,10 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
   const detailContent = selectedPipelineTaskId ? (
     <PipelineDetailPanel taskId={selectedPipelineTaskId} />
   ) : selectedConversation ? (
-    <HistoryDetailPanel conversation={selectedConversation} />
+    <HistoryDetailPanel
+      conversation={selectedConversation}
+      onContinue={handleContinueHistory}
+    />
   ) : (
     <div className="flex items-center justify-center h-full text-muted-foreground">
       <div className="text-center">

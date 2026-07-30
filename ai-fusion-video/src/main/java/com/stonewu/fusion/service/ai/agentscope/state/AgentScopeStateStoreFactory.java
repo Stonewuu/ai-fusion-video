@@ -2,10 +2,10 @@ package com.stonewu.fusion.service.ai.agentscope.state;
 
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.state.InMemoryAgentStateStore;
-import io.agentscope.extensions.redis.state.RedisAgentStateStore;
-import org.springframework.data.redis.core.StringRedisTemplate;
+import io.agentscope.extensions.mysql.state.MysqlAgentStateStore;
 import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
 
+import javax.sql.DataSource;
 import java.util.Objects;
 
 public final class AgentScopeStateStoreFactory {
@@ -28,19 +28,13 @@ public final class AgentScopeStateStoreFactory {
                 new InMemoryAgentStateStore(), failures, metrics);
     }
 
-    public AgentStateStore createRedis(
-            StringRedisTemplate redisTemplate,
-            int maxConcurrentOperations,
-            String keyPrefix) {
-        Objects.requireNonNull(redisTemplate, "redisTemplate must not be null");
-        if (keyPrefix == null || keyPrefix.isBlank()) {
-            throw new IllegalArgumentException("keyPrefix must not be blank");
-        }
-        RedisAgentStateStore delegate = RedisAgentStateStore.builder()
-                .clientAdapter(new SpringStringRedisClientAdapter(
-                        redisTemplate, maxConcurrentOperations))
-                .keyPrefix(keyPrefix.trim())
-                .build();
+    public AgentStateStore createMysql(
+            DataSource dataSource, String databaseName, String tableName) {
+        MysqlAgentStateStore delegate = new MysqlAgentStateStore(
+                Objects.requireNonNull(dataSource, "dataSource must not be null"),
+                databaseName,
+                tableName,
+                false);
         return new FailClosedAgentStateStore(delegate, failures, metrics);
     }
 }

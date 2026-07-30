@@ -12,7 +12,10 @@ import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
 import com.stonewu.fusion.controller.ai.vo.AiMultimodalInputVO;
 import com.stonewu.fusion.controller.ai.vo.AiReferenceVO;
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.entity.ai.AgentRun;
+import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.service.ai.AgentConversationService;
+import com.stonewu.fusion.service.ai.AgentMessageService;
 import com.stonewu.fusion.service.ai.AiAgentService;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.AiModelMultimodalCapabilities;
@@ -25,8 +28,10 @@ import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
+import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import com.stonewu.fusion.service.ai.model.AiModelRequestOptions;
 import com.stonewu.fusion.service.ai.run.AgentExecutionRuntimeContextRequests;
+import com.stonewu.fusion.service.ai.run.AgentExecutionFactory;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
 import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
@@ -34,9 +39,12 @@ import com.stonewu.fusion.service.ai.run.AgentRuntimeInstanceIdentity;
 import com.stonewu.fusion.service.ai.run.RunExecutionSupervisor;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
+import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
+import com.stonewu.fusion.service.ai.run.kernel.RunConfigUnavailableException;
 import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.run.model.StartAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
+import io.agentscope.core.message.Msg;
 import io.agentscope.core.skill.AgentSkill;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -75,11 +83,14 @@ public final class AgentScopePipelineRunService {
     private final AiModelService modelService;
     private final AiAgentService agentService;
     private final AgentConversationService conversations;
+    private final AgentMessageService persistedMessages;
     private final AgentKernelSpecFactory specFactory;
     private final AgentKernelSnapshotBuilder snapshots;
     private final AgentScopeMessageMapper messages;
     private final AgentRunCoordinator coordinator;
     private final AgentExecutionRuntimeContextRequests runtimeContexts;
+    private final AgentExecutionFactory executionFactory;
+    private final AgentStatePreflight statePreflight;
     private final RunExecutionSupervisor supervisor;
     private final AgentRunQueryService runQueries;
     private final AgentRunReplayService replay;
@@ -94,11 +105,14 @@ public final class AgentScopePipelineRunService {
             AiModelService modelService,
             AiAgentService agentService,
             AgentConversationService conversations,
+            AgentMessageService persistedMessages,
             AgentKernelSpecFactory specFactory,
             AgentKernelSnapshotBuilder snapshots,
             AgentScopeMessageMapper messages,
             AgentRunCoordinator coordinator,
             AgentExecutionRuntimeContextRequests runtimeContexts,
+            AgentExecutionFactory executionFactory,
+            AgentStatePreflight statePreflight,
             RunExecutionSupervisor supervisor,
             AgentRunQueryService runQueries,
             AgentRunReplayService replay,
@@ -111,12 +125,18 @@ public final class AgentScopePipelineRunService {
         this.modelService = Objects.requireNonNull(modelService, "modelService must not be null");
         this.agentService = Objects.requireNonNull(agentService, "agentService must not be null");
         this.conversations = Objects.requireNonNull(conversations, "conversations must not be null");
+        this.persistedMessages = Objects.requireNonNull(
+                persistedMessages, "persistedMessages must not be null");
         this.specFactory = Objects.requireNonNull(specFactory, "specFactory must not be null");
         this.snapshots = Objects.requireNonNull(snapshots, "snapshots must not be null");
         this.messages = Objects.requireNonNull(messages, "messages must not be null");
         this.coordinator = Objects.requireNonNull(coordinator, "coordinator must not be null");
         this.runtimeContexts = Objects.requireNonNull(
                 runtimeContexts, "runtimeContexts must not be null");
+        this.executionFactory = Objects.requireNonNull(
+                executionFactory, "executionFactory must not be null");
+        this.statePreflight = Objects.requireNonNull(
+                statePreflight, "statePreflight must not be null");
         this.supervisor = Objects.requireNonNull(supervisor, "supervisor must not be null");
         this.runQueries = Objects.requireNonNull(runQueries, "runQueries must not be null");
         this.replay = Objects.requireNonNull(replay, "replay must not be null");
@@ -137,6 +157,14 @@ public final class AgentScopePipelineRunService {
                         .concatMap(event -> runQueries.project(run, event)));
     }
 
+    public Flux<AiChatStreamRespVO> streamContinuation(
+            String conversationId, long userId) {
+        return startContinuation(conversationId, userId)
+                .flatMap(run -> runQueries.requireAuthorizedRun(run.runId(), userId))
+                .flatMapMany(run -> replay.replayThenLive(run.getRunId(), 0)
+                        .concatMap(event -> runQueries.project(run, event)));
+    }
+
     public Mono<StartedAgentRun> start(AiChatReqVO request, long userId) {
         if (userId <= 0) {
             return Mono.error(new IllegalArgumentException("userId must be positive"));
@@ -144,21 +172,67 @@ public final class AgentScopePipelineRunService {
         AiChatReqVO safeRequest = Objects.requireNonNull(request, "request must not be null");
         return Mono.fromCallable(() -> prepare(safeRequest, userId))
                 .subscribeOn(schedulers.journal())
-                .flatMap(prepared -> coordinator.start(prepared.admission())
-                        .flatMap(started -> runtimeContexts.forRoot(
-                                        started,
-                                        prepared.spec().agentDefinitionStableKey(),
-                                        prepared.project(),
-                                        prepared.toolExecutionMode())
+                .flatMap(this::launch);
+    }
+
+    public Mono<StartedAgentRun> startContinuation(
+            String conversationId, long userId) {
+        if (userId <= 0) {
+            return Mono.error(new IllegalArgumentException("userId must be positive"));
+        }
+        String safeConversationId = normalize(conversationId);
+        if (safeConversationId == null) {
+            return Mono.error(new IllegalArgumentException(
+                    "conversationId must not be blank"));
+        }
+
+        return runQueries.resolveAuthorizedTarget(null, safeConversationId, userId)
+                .flatMap(previous -> {
+                    requireContinuableRoot(previous, userId);
+                    AgentKernelSnapshot snapshot = persistedSnapshot(previous);
+                    String stateSessionId = requireText(
+                            previous.getAgentStateSessionId(),
+                            "previous.agentStateSessionId");
+                    Mono<Boolean> stateAvailability = AgentRunStatus.FAILED.name()
+                            .equals(previous.getStatus())
+                            ? statePreflight.deleteSession(
+                                            String.valueOf(userId), stateSessionId)
+                                    .thenReturn(false)
+                            : statePreflight.exists(
+                                    String.valueOf(userId), stateSessionId);
+                    return executionFactory.resolve(snapshot)
+                            .onErrorMap(
+                                    RunConfigUnavailableException.class,
+                                    unavailable -> new BusinessException(
+                                            409, "历史 Pipeline 配置已不可用"))
+                            .flatMap(spec -> stateAvailability
+                                    .flatMap(stateExists -> Mono.fromCallable(() ->
+                                                    prepareContinuation(
+                                                            previous,
+                                                            spec,
+                                                            snapshot,
+                                                            userId,
+                                                            stateExists))
+                                            .subscribeOn(schedulers.journal())));
+                })
+                .flatMap(this::launch);
+    }
+
+    private Mono<StartedAgentRun> launch(PreparedRun prepared) {
+        return coordinator.start(prepared.admission())
+                .flatMap(started -> runtimeContexts.forRoot(
+                                started,
+                                prepared.spec().agentDefinitionStableKey(),
+                                prepared.project(),
+                                prepared.toolExecutionMode())
                                 .flatMap(runtime -> supervisor.start(
-                                                new StartAgentExecutionCommand(
-                                                        started,
-                                                        messages.toUserMessages(
-                                                                prepared.input(), prepared.multimodalInputs()),
-                                                        prepared.snapshot(),
-                                                        prepared.spec(),
-                                                        runtime))
-                                        .thenReturn(started))));
+                                        new StartAgentExecutionCommand(
+                                                started,
+                                                prepared.executionMessages(),
+                                                prepared.snapshot(),
+                                                prepared.spec(),
+                                                runtime))
+                                .thenReturn(started)));
     }
 
     private PreparedRun prepare(AiChatReqVO request, long userId) {
@@ -219,7 +293,100 @@ public final class AgentScopePipelineRunService {
                 ? List.of()
                 : List.copyOf(request.getMultimodalInputs());
         return new PreparedRun(
-                spec, snapshot, admission, input, multimodalInputs, project, toolExecutionMode);
+                spec,
+                snapshot,
+                admission,
+                messages.toUserMessages(input, multimodalInputs),
+                project,
+                toolExecutionMode);
+    }
+
+    private PreparedRun prepareContinuation(
+            AgentRun previous,
+            AgentKernelSpec spec,
+            AgentKernelSnapshot snapshot,
+            long userId,
+            boolean stateExists) {
+        if (!Objects.equals(spec.agentDefinitionStableKey(), previous.getAgentType())) {
+            throw new BusinessException(409, "历史 Pipeline 的 Agent 配置不一致");
+        }
+        String input = "继续";
+        conversations.createOrUpdate(
+                previous.getConversationId(),
+                userId,
+                previous.getProjectId(),
+                previous.getProjectId() == null ? null : "project",
+                previous.getProjectId(),
+                previous.getAgentType(),
+                null,
+                null);
+        Instant deadline = Instant.now()
+                .plus(properties.getExecution().getRunTimeout())
+                .truncatedTo(ChronoUnit.MILLIS);
+        StartAgentRunCommand admission = new StartAgentRunCommand(
+                IdUtil.fastSimpleUUID(),
+                previous.getConversationId(),
+                userId,
+                previous.getProjectId(),
+                previous.getAgentType(),
+                null,
+                null,
+                null,
+                requireText(previous.getAgentStateSessionId(),
+                        "previous.agentStateSessionId"),
+                snapshot,
+                instanceIdentity.value(),
+                properties.getExecution().getOwnerLease(),
+                deadline,
+                input,
+                null);
+        ProjectContext project = previous.getProjectId() == null
+                ? null
+                : new ProjectContext(previous.getProjectId());
+        List<Msg> executionMessages = stateExists
+                ? messages.toUserMessages(input)
+                : messages.toRecoveredContinuationMessages(
+                        persistedMessages.listByConversation(previous.getConversationId()),
+                        input);
+        return new PreparedRun(
+                spec,
+                snapshot,
+                admission,
+                executionMessages,
+                project,
+                ToolExecutionMode.FULL_ACCESS);
+    }
+
+    private void requireContinuableRoot(AgentRun previous, long userId) {
+        if (previous.getParentRunId() != null
+                || !Objects.equals(previous.getUserId(), userId)) {
+            throw new BusinessException(404, "历史 Pipeline 不存在");
+        }
+        AgentRunStatus status;
+        try {
+            status = AgentRunStatus.valueOf(previous.getStatus());
+        } catch (RuntimeException invalidStatus) {
+            throw new BusinessException(409, "历史 Pipeline 状态不可用");
+        }
+        if (status != AgentRunStatus.FAILED && status != AgentRunStatus.CANCELLED) {
+            throw new BusinessException(409, "只有失败或已取消的 Pipeline 可以继续执行");
+        }
+    }
+
+    private AgentKernelSnapshot persistedSnapshot(AgentRun previous) {
+        try {
+            String snapshotJson = requireText(
+                    previous.getAgentDefinitionSnapshotJson(),
+                    "previous.agentDefinitionSnapshotJson");
+            String fingerprint = requireText(
+                    previous.getKernelFingerprint(),
+                    "previous.kernelFingerprint");
+            AgentKernelSnapshotPayload payload = objectMapper.readValue(
+                    snapshotJson, AgentKernelSnapshotPayload.class);
+            return new AgentKernelSnapshot(payload, snapshotJson, fingerprint);
+        } catch (JsonProcessingException | IllegalArgumentException invalidSnapshot) {
+            throw new BusinessException(409, "历史 Pipeline 配置已不可用");
+        }
     }
 
     private ToolExecutionMode toolExecutionMode(AiChatReqVO request) {
@@ -479,16 +646,17 @@ public final class AgentScopePipelineRunService {
             AgentKernelSpec spec,
             AgentKernelSnapshot snapshot,
             StartAgentRunCommand admission,
-            String input,
-            List<AiMultimodalInputVO> multimodalInputs,
+            List<Msg> executionMessages,
             ProjectContext project,
             ToolExecutionMode toolExecutionMode) {
         private PreparedRun {
             Objects.requireNonNull(spec, "spec must not be null");
             Objects.requireNonNull(snapshot, "snapshot must not be null");
             Objects.requireNonNull(admission, "admission must not be null");
-            requireText(input, "input");
-            multimodalInputs = List.copyOf(multimodalInputs);
+            executionMessages = List.copyOf(executionMessages);
+            if (executionMessages.isEmpty()) {
+                throw new IllegalArgumentException("executionMessages must not be empty");
+            }
             Objects.requireNonNull(toolExecutionMode, "toolExecutionMode must not be null");
         }
     }

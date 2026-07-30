@@ -52,6 +52,33 @@ class AgentStatePreflightTests {
     }
 
     @Test
+    void reportsWhetherTheExactDurableStateSlotExists() {
+        AgentStateStore store = mock(AgentStateStore.class);
+        when(store.exists("42", "afv:v2:conversation-7:assistant-v3"))
+                .thenReturn(true);
+        AgentStatePreflight preflight = new AgentStatePreflight(store, failures, schedulers);
+
+        StepVerifier.create(preflight.exists(
+                        "42", "afv:v2:conversation-7:assistant-v3"))
+                .expectNext(true)
+                .verifyComplete();
+
+        verify(store).exists("42", "afv:v2:conversation-7:assistant-v3");
+    }
+
+    @Test
+    void deletesTheExactStaleStateSlotBeforeFailedRunRecovery() {
+        AgentStateStore store = mock(AgentStateStore.class);
+        AgentStatePreflight preflight = new AgentStatePreflight(store, failures, schedulers);
+
+        StepVerifier.create(preflight.deleteSession(
+                        "42", "afv:v2:conversation-7:assistant-v3"))
+                .verifyComplete();
+
+        verify(store).delete("42", "afv:v2:conversation-7:assistant-v3");
+    }
+
+    @Test
     void recordsAndPropagatesDelegateFailureWithoutFallingBack() {
         AgentStateStore delegate = mock(AgentStateStore.class);
         RuntimeContext context = runtime("42", "afv:v2:conversation-7:assistant-v3");

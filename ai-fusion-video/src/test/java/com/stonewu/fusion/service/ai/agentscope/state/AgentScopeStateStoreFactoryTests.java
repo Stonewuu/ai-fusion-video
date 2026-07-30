@@ -3,17 +3,18 @@ package com.stonewu.fusion.service.ai.agentscope.state;
 import com.stonewu.fusion.config.AgentScopeRuntimeConfiguration;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.state.InMemoryAgentStateStore;
-import io.agentscope.extensions.redis.state.RedisAgentStateStore;
+import io.agentscope.extensions.mysql.state.MysqlAgentStateStore;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.data.redis.core.StringRedisTemplate;
 
+import javax.sql.DataSource;
+import java.sql.Connection;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 class AgentScopeStateStoreFactoryTests {
@@ -39,35 +40,42 @@ class AgentScopeStateStoreFactoryTests {
     }
 
     @Test
-    void productionProfileBuildsOfficialRedisStoreWithExactPrefixAndNoFallback() {
-        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
-        when(redisTemplate.hasKey(anyString())).thenReturn(false);
+    void productionProfileBuildsOfficialMysqlStoreWithNoFallback() throws Exception {
+        DataSource dataSource = mock(DataSource.class);
+        Connection connection = mock(Connection.class);
+        PreparedStatement statement = mock(PreparedStatement.class);
+        ResultSet resultSet = mock(ResultSet.class);
+        when(dataSource.getConnection()).thenReturn(connection);
+        when(connection.prepareStatement(org.mockito.ArgumentMatchers.anyString()))
+                .thenReturn(statement);
+        when(statement.executeQuery()).thenReturn(resultSet);
+        when(resultSet.next()).thenReturn(true);
 
-        contextRunner("redis")
-                .withPropertyValues("fusion.agentscope.v2.state.key-prefix=test:agentscope:v2:")
-                .withBean(StringRedisTemplate.class, () -> redisTemplate)
+        contextRunner("mysql")
+                .withPropertyValues(
+                        "fusion.agentscope.v2.state.database-name=ai_fusion_video",
+                        "fusion.agentscope.v2.state.table-name=afv_agent_state")
+                .withBean(DataSource.class, () -> dataSource)
                 .run(context -> {
                     assertThat(context.getStartupFailure()).isNull();
                     assertThat(context.getBeansOfType(AgentStateStore.class)).hasSize(1);
 
                     AgentStateStore store = context.getBean(AgentStateStore.class);
                     assertThat(store).isInstanceOf(FailClosedAgentStateStore.class);
-                    assertThat(delegate(store)).isInstanceOf(RedisAgentStateStore.class);
-                    assertThat(store.exists("42", "afv:v2:conversation-7:assistant-v3")).isFalse();
-
-                    verify(redisTemplate).hasKey(org.mockito.ArgumentMatchers.argThat(
-                            key -> key.startsWith("test:agentscope:v2:")
-                                    && key.contains("42")
-                                    && key.contains("afv:v2:conversation-7:assistant-v3")));
+                    assertThat(delegate(store))
+                            .isInstanceOfSatisfying(MysqlAgentStateStore.class, mysql -> {
+                                assertThat(mysql.getDatabaseName()).isEqualTo("ai_fusion_video");
+                                assertThat(mysql.getTableName()).isEqualTo("afv_agent_state");
+                            });
                 });
     }
 
     @Test
-    void productionProfileFailsStartupWhenRedisDependencyIsMissing() {
-        contextRunner("redis").run(context ->
+    void productionProfileFailsStartupWhenDataSourceIsMissing() {
+        contextRunner("mysql").run(context ->
                 assertThat(context.getStartupFailure())
                         .isNotNull()
-                        .hasMessageContaining("StringRedisTemplate"));
+                        .hasMessageContaining("DataSource"));
     }
 
     private ApplicationContextRunner contextRunner(String stateMode) {

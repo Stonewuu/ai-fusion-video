@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import {
+  continuePipelineStream,
   pipelineStream,
   reconnectPipelineStream,
   cancelPipeline,
@@ -87,16 +88,20 @@ export interface PipelineState {
   runStatus?: PipelineRunStatus;
   /** 取消请求已提交，等待 durable terminal event。 */
   cancelRequested?: boolean;
+  /** 新一轮输出需要与上一轮末尾的文本分开渲染。 */
+  separateNextRootContent?: boolean;
 }
 
 export interface PipelineTask {
   id: string;
   label: string;
-  projectId: number;
+  projectId: number | null;
   status: "running" | "done" | "error" | "cancelled";
   state: PipelineState;
   createdAt: number;
   cancellable?: boolean;
+  /** 当前浏览器仍持有启动配置，可在失败后继续同一会话。 */
+  continuable?: boolean;
   /** 任务结束时间（done/error/cancelled 时记录） */
   finishedAt?: number;
 }
@@ -121,6 +126,12 @@ interface PipelineStoreState {
     projectId: number;
     request: AiChatReq;
     onComplete?: () => void;
+  }) => string;
+  addPipelineContinuation: (config: {
+    label: string;
+    projectId: number | null;
+    conversationId: string;
+    initialTimeline?: TimelineItem[];
   }) => string;
   attachTaskStream: (config: {
     label: string;
@@ -150,6 +161,7 @@ interface PipelineStoreState {
     }
   ) => void;
   cancelPipeline: (id: string) => Promise<void>;
+  continuePipeline: (id: string) => void;
   removePipeline: (id: string) => void;
   clearCompleted: () => void;
   setNotificationOpen: (open: boolean) => void;
@@ -165,6 +177,7 @@ interface PipelineStoreState {
 
 // 简单任务的完成回调（不放在 zustand state 里避免序列化问题）
 const simpleTaskCallbacks = new Map<string, () => void>();
+const pipelineCompleteCallbacks = new Map<string, () => void>();
 
 // 存储 AbortController 的 map（不放在 zustand state 里避免序列化问题）
 const abortControllers = new Map<string, AbortController>();
@@ -551,7 +564,11 @@ function createEventHandler(
                   );
                 } else {
                   const last = next.timeline[next.timeline.length - 1];
-                  if (last && last.type === "content") {
+                  if (
+                    last &&
+                    last.type === "content" &&
+                    !next.separateNextRootContent
+                  ) {
                     next.timeline[next.timeline.length - 1] = {
                       ...last,
                       text: mergeContentText(
@@ -566,6 +583,7 @@ function createEventHandler(
                       text: content,
                     });
                   }
+                  next.separateNextRootContent = false;
                 }
               }
               break;
@@ -682,7 +700,11 @@ function createEventHandler(
               next.cancelRequested = false;
               if (event.content) {
                 const last = next.timeline[next.timeline.length - 1];
-                if (last && last.type === "content") {
+                if (
+                  last &&
+                  last.type === "content" &&
+                  !next.separateNextRootContent
+                ) {
                   next.timeline[next.timeline.length - 1] = {
                     ...last,
                     text: mergeContentText(
@@ -694,6 +716,7 @@ function createEventHandler(
                 } else {
                   next.timeline.push({ type: "content", text: event.content });
                 }
+                next.separateNextRootContent = false;
               }
               break;
 
@@ -875,6 +898,47 @@ function settleTaskIfRunning(
   }
 }
 
+function startPipelineContinuationStream(
+  id: string,
+  conversationId: string,
+  set: (fn: (state: PipelineStoreState) => Partial<PipelineStoreState>) => void,
+  get: () => PipelineStoreState,
+  onComplete?: () => void,
+) {
+  const handleEvent = createEventHandler(id, set, onComplete);
+  const controller = continuePipelineStream(conversationId, {
+    onEvent: handleEvent,
+    onError: (error) => {
+      const current = get().tasks.find((candidate) => candidate.id === id);
+      if (current?.status !== "running") return;
+      if (!current.state.runId) {
+        settleTaskIfRunning(set, id, "error", {
+          error: `继续执行失败：${error.message}`,
+        });
+        return;
+      }
+      set((state) => ({
+        tasks: state.tasks.map((candidate) =>
+          candidate.id === id
+            ? {
+                ...candidate,
+                state: {
+                  ...candidate.state,
+                  error: `Pipeline 连接中断：${error.message}`,
+                },
+              }
+            : candidate,
+        ),
+      }));
+      abortControllers.delete(id);
+    },
+    onComplete: () => {
+      abortControllers.delete(id);
+    },
+  });
+  abortControllers.set(id, controller);
+}
+
 export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
   tasks: [],
   notificationOpen: false,
@@ -965,6 +1029,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       reasoningText: "",
       timeline: [],
       lastSequence: 0,
+      conversationId: request.conversationId,
     };
 
     const task: PipelineTask = {
@@ -975,9 +1040,11 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       state: initialState,
       createdAt: Date.now(),
       cancellable: true,
+      continuable: true,
     };
 
     set((s) => ({ tasks: [...s.tasks, task] }));
+    if (onComplete) pipelineCompleteCallbacks.set(id, onComplete);
 
     const handleEvent = createEventHandler(id, set, onComplete);
 
@@ -985,6 +1052,13 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     const controller = pipelineStream(request, {
       onEvent: handleEvent,
       onError: (err) => {
+        const current = get().tasks.find((candidate) => candidate.id === id);
+        if (current?.status === "running" && !current.state.runId) {
+          settleTaskIfRunning(set, id, "error", {
+            error: `Pipeline 启动失败：${err.message}`,
+          });
+          return;
+        }
         // 传输失败不是 Agent 终态；保留 cursor 供 durable reconnect。
         set((s) => ({
           tasks: s.tasks.map((t) =>
@@ -1010,6 +1084,85 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     abortControllers.set(id, controller);
 
     return id;
+  },
+
+  addPipelineContinuation: ({
+    label,
+    projectId,
+    conversationId,
+    initialTimeline = [],
+  }) => {
+    const id = generateId();
+    const task: PipelineTask = {
+      id,
+      label,
+      projectId,
+      status: "running",
+      state: {
+        status: "running",
+        reasoningText: "",
+        timeline: [...initialTimeline],
+        lastSequence: 0,
+        conversationId,
+        separateNextRootContent: initialTimeline.length > 0,
+      },
+      createdAt: Date.now(),
+      cancellable: true,
+      continuable: true,
+    };
+    set((state) => ({ tasks: [...state.tasks, task] }));
+    startPipelineContinuationStream(id, conversationId, set, get);
+    return id;
+  },
+
+  continuePipeline: (id: string) => {
+    const task = get().tasks.find((candidate) => candidate.id === id);
+    if (
+      !task ||
+      (task.status !== "error" && task.status !== "cancelled")
+    ) {
+      return;
+    }
+    if (!task.continuable || !task.state.conversationId) {
+      throw new Error("当前 Pipeline 缺少继续执行所需的会话配置");
+    }
+    abortControllers.get(id)?.abort();
+    abortControllers.delete(id);
+    set((state) => ({
+      tasks: state.tasks.map((candidate) =>
+        candidate.id === id
+          ? {
+              ...candidate,
+              status: "running",
+              finishedAt: undefined,
+              state: {
+                ...candidate.state,
+                status: "running",
+                reasoningText: "",
+                reasoningStartTime: undefined,
+                reasoningDurationMs: undefined,
+                runId: undefined,
+                lastSequence: 0,
+                error: undefined,
+                runStatus: undefined,
+                cancelRequested: false,
+                contentLoaded: true,
+                contentLoading: false,
+                reconnectOnSelect: false,
+                separateNextRootContent: true,
+              },
+            }
+          : candidate,
+      ),
+    }));
+
+    startPipelineContinuationStream(
+      id,
+      task.state.conversationId,
+      set,
+      get,
+      pipelineCompleteCallbacks.get(id),
+    );
   },
 
   attachTaskStream: ({
@@ -1167,6 +1320,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     abortControllers.get(id)?.abort();
     abortControllers.delete(id);
     simpleTaskCallbacks.delete(id);
+    pipelineCompleteCallbacks.delete(id);
     set((s) => ({
       tasks: s.tasks.filter((t) => t.id !== id),
       expandedTaskId: s.expandedTaskId === id ? null : s.expandedTaskId,
@@ -1180,6 +1334,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     for (const id of removableIds) {
       abortControllers.delete(id);
       simpleTaskCallbacks.delete(id);
+      pipelineCompleteCallbacks.delete(id);
     }
     set((s) => ({
       tasks: s.tasks.filter((t) => t.status === "running"),
@@ -1345,6 +1500,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
             },
             createdAt: new Date(run.startedAt).getTime(),
             cancellable: true,
+            continuable: true,
           };
           set((s) => ({ tasks: [...s.tasks, placeholder] }));
         }

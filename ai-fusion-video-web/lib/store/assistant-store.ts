@@ -64,9 +64,10 @@ const defaultLauncher = getDefaultLauncherPosition();
 function initialConversationToolExecutionMode(
   modes: Record<string, ToolExecutionMode>,
   conversationId: string,
+  preferredMode: ToolExecutionMode,
 ): ToolExecutionMode {
   const persisted = modes[conversationId];
-  return persisted === undefined ? "DEFAULT" : persisted;
+  return persisted === undefined ? preferredMode : persisted;
 }
 
 export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
@@ -166,6 +167,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
                 initialConversationToolExecutionMode(
                   persisted.toolExecutionModes,
                   conversation.conversationId,
+                  persisted.newToolExecutionMode,
                 ),
               );
             }
@@ -257,6 +259,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
                     initialConversationToolExecutionMode(
                       persisted.toolExecutionModes,
                       conversation.conversationId,
+                      persisted.newToolExecutionMode,
                     ),
                   );
             }
@@ -329,9 +332,8 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
 
     setToolExecutionMode: (mode) => {
       const conversationId = get().selectedConversationId;
-      if (!conversationId) {
-        set({ newToolExecutionMode: mode });
-      } else {
+      set({ newToolExecutionMode: mode });
+      if (conversationId) {
         updateRuntime(conversationId, (runtime) => ({
           ...runtime,
           toolExecutionMode: mode,

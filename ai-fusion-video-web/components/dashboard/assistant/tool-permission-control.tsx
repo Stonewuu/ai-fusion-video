@@ -97,7 +97,11 @@ export function AssistantToolPermissionControl({
         data-assistant-interactive="true"
       >
         <SelectValue className="sr-only" placeholder="工具权限" />
-        <ActiveIcon className="size-4" style={{ color: active.iconColor }} aria-hidden="true" />
+        <ActiveIcon
+          className="size-4"
+          style={{ color: active.iconColor, stroke: active.iconColor }}
+          aria-hidden="true"
+        />
         <span className="min-w-0 flex-1 truncate text-left text-[11px] font-medium">
           {active.label}
         </span>
@@ -120,7 +124,7 @@ export function AssistantToolPermissionControl({
                 >
                   <OptionIcon
                     className="size-4"
-                    style={{ color: option.iconColor }}
+                    style={{ color: option.iconColor, stroke: option.iconColor }}
                     aria-hidden="true"
                   />
                 </span>

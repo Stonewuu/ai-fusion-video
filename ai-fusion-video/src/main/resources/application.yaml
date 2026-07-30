@@ -65,7 +65,9 @@ fusion:
         expire-after-access: 30m
         capacity-wait: 5s
       state:
-        key-prefix: "afv:agentscope:v2:"
+        mode: mysql
+        database-name: "ai_fusion_video"
+        table-name: "afv_agent_state"
       ingress:
         max-events: 4096
         max-bytes: 8388608

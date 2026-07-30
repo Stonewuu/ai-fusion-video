@@ -34,7 +34,7 @@ class AgentScopeGaDependencyContractTests {
 
     private static final List<String> EXPECTED_AGENTSCOPE_DEPENDENCIES = List.of(
             "agentscope-harness:${agentscope.version}",
-            "agentscope-extensions-redis:${agentscope.version}",
+            "agentscope-extensions-mysql:${agentscope.version}",
             "agentscope-extensions-model-openai:${agentscope.version}",
             "agentscope-extensions-model-anthropic:${agentscope.version}",
             "agentscope-extensions-model-gemini:${agentscope.version}",
@@ -185,7 +185,7 @@ class AgentScopeGaDependencyContractTests {
     }
 
     @Test
-    void allOfficialModelExtensionsAndRedisApisLoad() throws Exception {
+    void allOfficialModelExtensionsAndMysqlApisLoad() throws Exception {
         for (String type : List.of(
                 "io.agentscope.harness.agent.HarnessAgent",
                 "io.agentscope.extensions.model.openai.OpenAIChatModel",
@@ -193,10 +193,7 @@ class AgentScopeGaDependencyContractTests {
                 "io.agentscope.extensions.model.gemini.GeminiChatModel",
                 "io.agentscope.extensions.model.dashscope.DashScopeChatModel",
                 "io.agentscope.extensions.model.ollama.OllamaChatModel",
-                "io.agentscope.extensions.redis.state.RedisAgentStateStore",
-                "io.lettuce.core.RedisClient",
-                "redis.clients.jedis.Jedis",
-                "org.redisson.api.RedissonClient")) {
+                "io.agentscope.extensions.mysql.state.MysqlAgentStateStore")) {
             assertThat(Class.forName(type)).isNotNull();
         }
     }

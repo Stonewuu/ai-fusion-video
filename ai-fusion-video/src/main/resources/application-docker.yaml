@@ -30,4 +30,5 @@ fusion:
   agentscope:
     v2:
       state:
-        mode: redis
+        mode: mysql
+        database-name: ${MYSQL_DATABASE:ai_fusion_video}

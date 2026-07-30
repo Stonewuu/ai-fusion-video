@@ -1,10 +1,13 @@
 package com.stonewu.fusion.service.ai.agentscope.message;
 
 import com.stonewu.fusion.controller.ai.vo.AiMultimodalInputVO;
+import com.stonewu.fusion.entity.ai.AgentMessage;
 import io.agentscope.core.message.AudioBlock;
 import io.agentscope.core.message.Base64Source;
 import io.agentscope.core.message.DataBlock;
 import io.agentscope.core.message.ImageBlock;
+import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.MsgRole;
 import io.agentscope.core.message.TextBlock;
 import io.agentscope.core.message.URLSource;
 import io.agentscope.core.message.UserMessage;
@@ -68,6 +71,59 @@ class AgentScopeMessageMapperTests {
             assertThat(block.getName()).isEqualTo("sample.pdf");
             assertThat(block.getSource()).isInstanceOf(URLSource.class);
         });
+    }
+
+    @Test
+    void rebuildsDurableContinuationContextWithoutLeavingPendingToolCalls() {
+        AgentScopeMessageMapper mapper = new AgentScopeMessageMapper();
+        List<Msg> recovered = mapper.toRecoveredContinuationMessages(List.of(
+                AgentMessage.builder().role("user").content("生成第一集分镜").build(),
+                AgentMessage.builder()
+                        .role("tool")
+                        .toolCallId("call-1")
+                        .toolName("get_script_episode")
+                        .toolStatus("running")
+                        .content("{\"scriptEpisodeId\":13}")
+                        .build(),
+                AgentMessage.builder()
+                        .role("tool")
+                        .toolCallId("call-1")
+                        .toolName("get_script_episode")
+                        .toolStatus("success")
+                        .content("{\"title\":\"第一集\"}")
+                        .build(),
+                AgentMessage.builder()
+                        .role("tool")
+                        .toolCallId("call-2")
+                        .toolName("save_storyboard_scene_shots")
+                        .toolStatus("running")
+                        .content("{\"sceneNumber\":\"1-2\"}")
+                        .build(),
+                AgentMessage.builder()
+                        .role("assistant")
+                        .reasoningContent("第一场已保存，第二场尚未完成")
+                        .build(),
+                AgentMessage.builder()
+                        .role("assistant")
+                        .parentToolCallId("sub-agent-call")
+                        .content("子 Agent 内部明细")
+                        .build()), "继续");
+
+        assertThat(recovered).extracting(Msg::getRole)
+                .containsExactly(
+                        MsgRole.USER,
+                        MsgRole.ASSISTANT,
+                        MsgRole.ASSISTANT,
+                        MsgRole.ASSISTANT,
+                        MsgRole.USER);
+        assertThat(recovered.get(1).getTextContent())
+                .contains("get_script_episode", "状态：success", "第一集");
+        assertThat(recovered.get(2).getTextContent())
+                .contains("未完成", "save_storyboard_scene_shots", "1-2");
+        assertThat(recovered.get(3).getTextContent())
+                .contains("第一场已保存，第二场尚未完成")
+                .doesNotContain("子 Agent 内部明细");
+        assertThat(recovered.getLast().getTextContent()).isEqualTo("继续");
     }
 
     private AiMultimodalInputVO input(String id, String name, String inputType, String mimeType,

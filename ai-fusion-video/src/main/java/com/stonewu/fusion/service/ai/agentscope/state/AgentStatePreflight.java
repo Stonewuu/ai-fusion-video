@@ -39,6 +39,27 @@ public final class AgentStatePreflight {
                 .then();
     }
 
+    public Mono<Boolean> exists(String runtimeUserId, String sessionId) {
+        return Mono.fromCallable(() -> {
+                    StateStoreSlot slot = new StateStoreSlot(
+                            requireText(runtimeUserId, "runtimeUserId"),
+                            requireText(sessionId, "sessionId"));
+                    failures.clear(slot);
+                    boolean exists = store.exists(slot.userId(), slot.sessionId());
+                    failures.throwIfFailed(slot);
+                    return exists;
+                })
+                .subscribeOn(schedulers.state());
+    }
+
+    public Mono<Void> deleteSession(String runtimeUserId, String sessionId) {
+        return Mono.fromRunnable(() -> deleteWholeSession(
+                        requireText(runtimeUserId, "runtimeUserId"),
+                        requireText(sessionId, "sessionId")))
+                .subscribeOn(schedulers.state())
+                .then();
+    }
+
     public Mono<Void> deleteConversationSessions(String runtimeUserId, String conversationId) {
         return Mono.defer(() -> {
             String safeUserId = requireText(runtimeUserId, "runtimeUserId");

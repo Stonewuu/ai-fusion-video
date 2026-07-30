@@ -276,6 +276,7 @@ class AgentScopeNoToolKernelIntegrationTests {
         new ApplicationContextRunner()
                 .withInitializer(new ConfigDataApplicationContextInitializer())
                 .withPropertyValues(
+                        "fusion.agentscope.v2.state.mode=IN_MEMORY",
                         "app.agentscope.runtime.state-threads=1",
                         "app.agentscope.runtime.journal-threads=1",
                         "app.agentscope.runtime.model-threads=1",
@@ -301,7 +302,8 @@ class AgentScopeNoToolKernelIntegrationTests {
                     assertThat(properties.getCache().getCapacityWait()).isEqualTo(Duration.ofSeconds(5));
                     assertThat(properties.getState().getMode())
                             .isEqualTo(AgentScopeV2Properties.Mode.IN_MEMORY);
-                    assertThat(properties.getState().getKeyPrefix()).isEqualTo("afv:agentscope:v2:");
+                    assertThat(properties.getState().getDatabaseName()).isEqualTo("ai_fusion_video");
+                    assertThat(properties.getState().getTableName()).isEqualTo("afv_agent_state");
                     assertThat(properties.getSkills().isEnabled()).isTrue();
                     assertThat(properties.getSkills().getRepositories())
                             .containsKey("bundled");

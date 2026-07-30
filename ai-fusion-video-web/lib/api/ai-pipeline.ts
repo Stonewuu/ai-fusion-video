@@ -308,6 +308,29 @@ export function pipelineStream(
   return controller;
 }
 
+export function continuePipelineStream(
+  conversationId: string,
+  callbacks: StreamCallbacks
+): AbortController {
+  const normalizedConversationId = conversationId.trim();
+  if (!normalizedConversationId) {
+    throw new Error("conversationId is required for Pipeline continuation");
+  }
+  const controller = new AbortController();
+  const cursor: StreamCursor = { lastSequence: 0, terminalSeen: false };
+  const query = new URLSearchParams({ conversationId: normalizedConversationId });
+  runStreamRequest(
+    () => authenticatedFetch(
+      `${API_BASE_URL}/api/ai/pipeline/continue?${query.toString()}`,
+      { method: "POST", signal: controller.signal }
+    ),
+    callbacks,
+    cursor,
+    controller
+  );
+  return controller;
+}
+
 export function reconnectPipelineStream(
   runId: string,
   afterSequence: number,

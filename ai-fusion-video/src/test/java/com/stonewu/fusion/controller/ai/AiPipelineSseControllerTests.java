@@ -216,6 +216,26 @@ class AiPipelineSseControllerTests {
     }
 
     @Test
+    void continueFailedStreamsFramesAndUsesCurrentUser() throws Exception {
+        AiChatStreamRespVO projection = projection(
+                "run-continued", 1, "CONTENT", "continued", false);
+        when(pipelineRuns.streamContinuation(
+                "conversation-failed", CURRENT_USER_ID))
+                .thenReturn(Flux.just(projection));
+
+        MvcResult result = dispatch(mockMvc.perform(post(
+                        "/api/ai/pipeline/continue")
+                .param("conversationId", "conversation-failed")));
+
+        assertThat(result.getResponse().getContentAsString())
+                .contains("id:run-continued:1")
+                .contains("event:pipeline-event")
+                .contains("\"content\":\"continued\"");
+        verify(pipelineRuns).streamContinuation(
+                "conversation-failed", CURRENT_USER_ID);
+    }
+
+    @Test
     void cancelAndStatusUseTheCurrentUserAuthorizedRun() {
         AgentRun run = run("run-ops", "conversation-ops", AgentRunStatus.RUNNING);
         when(queries.resolveAuthorizedTarget(

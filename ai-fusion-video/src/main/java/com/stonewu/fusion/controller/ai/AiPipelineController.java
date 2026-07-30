@@ -58,6 +58,15 @@ public class AiPipelineController {
                 .map(this::toSse);
     }
 
+    @Operation(summary = "继续失败或已取消的 Pipeline")
+    @PostMapping(value = "/continue", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public Flux<ServerSentEvent<AiChatStreamRespVO>> continueFailed(
+            @RequestParam String conversationId) {
+        long currentUserId = requireCurrentUserId();
+        return pipelineRuns.streamContinuation(conversationId, currentUserId)
+                .map(this::toSse);
+    }
+
     @Operation(summary = "取消 Pipeline")
     @PostMapping("/cancel")
     public Mono<CommonResult<Boolean>> cancel(

@@ -103,8 +103,9 @@ public class AgentScopeV2Properties {
     }
 
     public static final class State {
-        private Mode mode = Mode.REDIS;
-        private String keyPrefix = "afv:agentscope:v2:";
+        private Mode mode = Mode.MYSQL;
+        private String databaseName = "ai_fusion_video";
+        private String tableName = "afv_agent_state";
 
         public Mode getMode() {
             return mode;
@@ -114,15 +115,26 @@ public class AgentScopeV2Properties {
             this.mode = Objects.requireNonNull(mode, "mode must not be null");
         }
 
-        public String getKeyPrefix() {
-            return keyPrefix;
+        public String getDatabaseName() {
+            return databaseName;
         }
 
-        public void setKeyPrefix(String keyPrefix) {
-            if (keyPrefix == null || keyPrefix.isBlank()) {
-                throw new IllegalArgumentException("keyPrefix must not be blank");
+        public void setDatabaseName(String databaseName) {
+            if (databaseName == null || databaseName.isBlank()) {
+                throw new IllegalArgumentException("databaseName must not be blank");
             }
-            this.keyPrefix = keyPrefix.trim();
+            this.databaseName = databaseName.trim();
+        }
+
+        public String getTableName() {
+            return tableName;
+        }
+
+        public void setTableName(String tableName) {
+            if (tableName == null || tableName.isBlank()) {
+                throw new IllegalArgumentException("tableName must not be blank");
+            }
+            this.tableName = tableName.trim();
         }
     }
 
@@ -451,7 +463,7 @@ public class AgentScopeV2Properties {
 
     public enum Mode {
         IN_MEMORY,
-        REDIS
+        MYSQL
     }
 
     private static Duration requirePositive(Duration value, String name) {
