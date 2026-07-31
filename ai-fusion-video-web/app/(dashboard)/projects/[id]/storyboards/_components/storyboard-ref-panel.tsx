@@ -1454,10 +1454,12 @@ function LinkedAssetGroup({
 function StoryboardOverview({
   storyboard,
   items,
+  projectName,
   onBatchGenerateFrames,
 }: {
   storyboard: Storyboard;
   items: StoryboardItem[];
+  projectName?: string;
   onBatchGenerateFrames?: BatchFrameGenerateHandler;
 }) {
   const totalDuration = items.reduce(
@@ -1475,7 +1477,7 @@ function StoryboardOverview({
           <Info className="h-3 w-3" /> 分镜概览
         </h4>
         <p className="text-sm font-semibold mb-1">
-          {storyboard.title || "分镜表"}
+          {projectName || "未命名项目"}
         </p>
         {storyboard.description && (
           <p className="text-xs text-muted-foreground leading-relaxed">
@@ -1599,6 +1601,7 @@ export function StoryboardRefPanel({
         <StoryboardOverview
           storyboard={storyboard}
           items={items}
+          projectName={project?.name}
           onBatchGenerateFrames={onBatchGenerateFrames}
         />
       )}

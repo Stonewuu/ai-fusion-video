@@ -99,7 +99,7 @@ test("parallel tool confirmations merge into one exact batch", () => {
       replyId: "reply-batch",
       toolCalls: [
         { id: "tool-1", name: "get_project_script", arguments: "{\"projectId\":1}" },
-        { id: "tool-2", name: "list_project_storyboards", arguments: "{\"projectId\":1}" },
+        { id: "tool-2", name: "get_project_storyboard", arguments: "{\"projectId\":1}" },
       ],
     }),
   );
@@ -122,7 +122,7 @@ test("parallel tool confirmations merge into one exact batch", () => {
       expiresAt: "2026-07-30T12:00:00Z",
       pendingToolCalls: [{
         toolCallId: "tool-2",
-        toolName: "list_project_storyboards",
+        toolName: "get_project_storyboard",
         argumentsPreview: "{\"projectId\":1}",
       }],
     }),

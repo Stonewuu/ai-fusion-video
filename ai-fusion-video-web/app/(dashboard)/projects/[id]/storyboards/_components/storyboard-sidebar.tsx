@@ -15,6 +15,7 @@ import {
   PanelLeftOpen,
   AlertCircle,
   Sparkles,
+  RotateCw,
 } from "lucide-react";
 import {
   DndContext,
@@ -132,6 +133,8 @@ interface StoryboardSidebarProps {
   onSelect: (selection: SidebarSelection) => void;
   /** 切换桌面端目录收起状态 */
   onCollapsedChange?: (collapsed: boolean) => void;
+  onRefresh?: () => Promise<void> | void;
+  isRefreshing?: boolean;
   /** 初始加载完成时调用，传递第一集 episodeId（避免通过 onSelect 触发 page 的重复加载） */
   onInitialLoad?: (firstEpisodeId: number) => void;
   onDeleteEpisode?: (id: number) => Promise<boolean | void> | boolean | void;
@@ -150,6 +153,8 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
     collapsed = false,
     onSelect,
     onCollapsedChange,
+    onRefresh,
+    isRefreshing,
     onDeleteEpisode,
     onDeleteScene,
     scriptEpisodes = [],
@@ -165,6 +170,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
   );
   const [loading, setLoading] = useState(true);
   const [bindingEpisodeIds, setBindingEpisodeIds] = useState<Set<number>>(new Set());
+  const isInitialLoadedRef = useRef(false);
 
   // 监听 invalidation 自动强刷
   const storyboardsInvalidation = usePipelineStore((s) => s.invalidation.storyboards);
@@ -202,7 +208,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       const eps = await storyboardApi.listEpisodes(storyboardId);
       setEpisodes(eps);
       if (eps.length > 0) {
-        setExpandedEpisodes(new Set(eps.map((e) => e.id)));
+        setExpandedEpisodes((prev) => (prev.size > 0 ? prev : new Set(eps.map((e) => e.id))));
         const newScenesMap: Record<number, StoryboardScene[]> = {};
         await Promise.all(
           eps.map(async (e) => {
@@ -353,6 +359,18 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
           分镜目录
         </h3>
         <div className="flex items-center gap-1">
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={() => void onRefresh()}
+              disabled={isRefreshing}
+              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground/70 hover:text-primary hover:bg-primary/8 transition-colors disabled:opacity-50"
+              title="刷新分镜目录"
+              aria-label="刷新分镜目录"
+            >
+              <RotateCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+            </button>
+          )}
           <span className="text-[10px] text-primary/50 bg-primary/6 px-1.5 py-0.5 rounded-full tabular-nums font-medium">
             {episodes.length} 集
           </span>

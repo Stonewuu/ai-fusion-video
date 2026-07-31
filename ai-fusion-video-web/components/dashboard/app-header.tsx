@@ -88,6 +88,9 @@ export function AppHeader() {
   const restoreRunningPipelines = usePipelineStore(
     (s) => s.restoreRunningPipelines
   );
+  const resumePipelineConnections = usePipelineStore(
+    (s) => s.resumePipelineConnections
+  );
   const [mobileMenuRoute, setMobileMenuRoute] = useState<string | null>(null);
   const [displayMode, setDisplayMode] = useState<MenuDisplayMode>("full");
   const headerRef = useRef<HTMLDivElement>(null);
@@ -109,6 +112,16 @@ export function AppHeader() {
   useEffect(() => {
     restoreRunningPipelines();
   }, [restoreRunningPipelines]);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        resumePipelineConnections();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, [resumePipelineConnections]);
 
   // 点击外部区域关闭移动端菜单
   useEffect(() => {

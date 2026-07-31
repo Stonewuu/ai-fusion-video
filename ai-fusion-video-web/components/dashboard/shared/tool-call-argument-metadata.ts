@@ -1,12 +1,20 @@
+import { getToolResourceLabel } from "./tool-resource-metadata";
+
 const TOOL_ARGUMENT_LABELS: Readonly<Record<string, string>> = {
   action: "操作",
   aiPrompt: "AI 提示词",
+  aiGenerated: "AI 生成",
   appearance: "外观",
   assetId: "资产 ID",
   assetIds: "资产 ID 列表",
+  assetItemId: "子资产 ID",
   assetName: "资产名称",
   assets: "资产列表",
   assetType: "资产类型",
+  artStyle: "项目画风",
+  artStyleDescription: "画风描述",
+  artStyleImagePrompt: "画风图片提示词",
+  artStyleImageUrl: "画风参考图",
   atmosphere: "氛围",
   cameraAngle: "机位角度",
   cameraEquipment: "摄影设备",
@@ -23,6 +31,7 @@ const TOOL_ARGUMENT_LABELS: Readonly<Record<string, string>> = {
   content: "内容",
   coverUrl: "封面链接",
   createdCount: "创建数量",
+  customData: "自定义数据",
   description: "描述",
   detailLevel: "详情级别",
   dialogue: "对白",
@@ -37,6 +46,8 @@ const TOOL_ARGUMENT_LABELS: Readonly<Record<string, string>> = {
   framePrompt: "画面提示词",
   frameType: "帧类型",
   genre: "题材类型",
+  generatedImageUrl: "生成图片链接",
+  generatedVideoUrl: "生成视频链接",
   hairstyle: "发型",
   height: "高度",
   imageUrl: "图片链接",
@@ -66,10 +77,13 @@ const TOOL_ARGUMENT_LABELS: Readonly<Record<string, string>> = {
   propIds: "道具 ID 列表",
   ratio: "画面比例",
   rawContent: "原始内容",
+  referenceImageUrl: "参考图片链接",
   referenceAudioUrls: "参考音频",
   referenceImageUrls: "参考图片",
   referenceVideoUrls: "参考视频",
   remark: "备注",
+  resourceId: "资源 ID",
+  resourceType: "资源类型",
   scene_asset_id: "场景资产 ID",
   scene_description: "场景描述",
   scene_heading: "场次标题",
@@ -86,6 +100,7 @@ const TOOL_ARGUMENT_LABELS: Readonly<Record<string, string>> = {
   scriptSceneItemId: "剧本场次 ID",
   scriptSceneItemIds: "剧本场次 ID 列表",
   shotCount: "镜头数量",
+  shotNumber: "镜头编号",
   shots: "镜头列表",
   shotType: "景别",
   sortOrder: "排序",
@@ -102,6 +117,7 @@ const TOOL_ARGUMENT_LABELS: Readonly<Record<string, string>> = {
   synopsis: "本集梗概",
   time_of_day: "时间段",
   timeOfDay: "时间段",
+  thumbnailUrl: "缩略图链接",
   title: "标题",
   transition: "转场方式",
   type: "类型",
@@ -109,6 +125,11 @@ const TOOL_ARGUMENT_LABELS: Readonly<Record<string, string>> = {
   videoUrl: "视频链接",
   width: "宽度",
 };
+
+interface ToolArgumentLabelContext {
+  arguments?: Readonly<Record<string, unknown>>;
+  toolName?: string;
+}
 
 const ARGUMENT_VALUE_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   action: {
@@ -160,8 +181,10 @@ const ARGUMENT_VALUE_LABELS: Readonly<Record<string, Readonly<Record<string, str
   },
   overwriteMode: {
     append: "追加",
+    false: "追加写入",
     overwrite: "覆盖",
     replace: "替换",
+    true: "覆盖已有数据",
   },
   sourceType: {
     ai: "AI 生成",
@@ -174,7 +197,59 @@ const ARGUMENT_VALUE_LABELS: Readonly<Record<string, Readonly<Record<string, str
   },
 };
 
-export function getToolArgumentLabel(key: string): string {
+const TOOL_ARGUMENT_VALUE_LABELS: Readonly<
+  Record<string, Readonly<Record<string, Readonly<Record<string, string>>>>>
+> = {
+  save_project: {
+    status: {
+      0: "筹备中",
+      1: "进行中",
+      2: "已完成",
+      3: "已归档",
+    },
+  },
+  save_script_episode: {
+    sourceType: {
+      0: "手动创建",
+      1: "AI 创作",
+      2: "文本解析",
+    },
+  },
+  update_asset_item: {
+    sourceType: {
+      1: "用户上传",
+      2: "AI 生成",
+    },
+  },
+  update_storyboard_item: {
+    status: {
+      0: "草稿",
+      1: "正常",
+    },
+  },
+  update_storyboard_scene: {
+    status: {
+      0: "草稿",
+      1: "正常",
+    },
+  },
+};
+
+export function getToolArgumentLabel(
+  key: string,
+  context: ToolArgumentLabelContext = {},
+): string {
+  if (key === "resourceType" && context.toolName?.startsWith("delete_")) {
+    return "删除对象";
+  }
+  if (key === "resourceId") {
+    const resourceType = context.arguments?.resourceType;
+    const resourceLabel = getToolResourceLabel(
+      context.toolName,
+      typeof resourceType === "string" ? resourceType : undefined,
+    );
+    if (resourceLabel) return `${resourceLabel} ID`;
+  }
   const declaredLabel = TOOL_ARGUMENT_LABELS[key];
   if (declaredLabel !== undefined) return declaredLabel;
 
@@ -191,7 +266,14 @@ export function getToolArgumentLabel(key: string): string {
 
 export function getToolArgumentValueLabel(
   key: string,
-  value: string,
+  value: number | string,
+  toolName?: string,
 ): string | undefined {
-  return ARGUMENT_VALUE_LABELS[key]?.[value];
+  const normalizedValue = String(value);
+  if (key === "resourceType") {
+    const resourceLabel = getToolResourceLabel(toolName, normalizedValue);
+    if (resourceLabel) return resourceLabel;
+  }
+  return TOOL_ARGUMENT_VALUE_LABELS[toolName ?? ""]?.[key]?.[normalizedValue]
+    ?? ARGUMENT_VALUE_LABELS[key]?.[normalizedValue];
 }

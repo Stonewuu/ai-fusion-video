@@ -51,14 +51,15 @@ export function AssetItemTabs({
           </span>
         </div>
         <Button
-          variant="ghost"
-          size="xs"
+          variant="secondary"
+          size="sm"
           onClick={onGenerate}
-          title="为当前主资产生成图片"
+          disabled={!items.length}
+          title="批量生成当前主资产下的全部子资产图片"
           className="shrink-0"
         >
-          <Images className="h-3 w-3" />
-          当前资产生图
+          <Images className="h-4 w-4" />
+          批量子资产生图
         </Button>
       </div>
 

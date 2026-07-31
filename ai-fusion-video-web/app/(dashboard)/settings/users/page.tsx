@@ -8,7 +8,7 @@ import { useAuthStore } from "@/lib/store/auth-store";
 import { userApi } from "@/lib/api/user";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import type { UserRespVO } from "@/lib/api/types";
-import { containerVariants, itemVariants } from "../_shared";
+import { containerVariants, itemVariants, settingsTypography } from "../_shared";
 
 function formatDateTime(value?: string | null): string {
   if (!value) return "--";
@@ -81,8 +81,8 @@ export default function SettingsUsersPage() {
         animate="visible"
       >
         <motion.div variants={itemVariants} className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-6">
-          <h1 className="text-2xl font-bold tracking-tight">用户列表</h1>
-          <p className="text-muted-foreground mt-2 text-sm">
+          <h1 className={settingsTypography.pageTitle}>用户列表</h1>
+          <p className={settingsTypography.pageDescription}>
             只有管理员可以查看全部用户。普通用户仅可在个人设置中维护自己的资料。
           </p>
         </motion.div>
@@ -99,8 +99,8 @@ export default function SettingsUsersPage() {
     >
       <motion.div variants={itemVariants} className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">用户列表</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <h1 className={settingsTypography.pageTitle}>用户列表</h1>
+          <p className={settingsTypography.pageDescription}>
             查看、搜索和管理系统中的全部用户。
           </p>
         </div>

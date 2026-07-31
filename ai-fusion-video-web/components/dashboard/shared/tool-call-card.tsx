@@ -165,6 +165,7 @@ function ToolCallItem({
           <div className="px-3 pb-3">
             <ToolCallArguments
               argumentsText={item.argumentsText}
+              toolName={item.toolName}
               view={jsonView ? "json" : "friendly"}
             />
           </div>

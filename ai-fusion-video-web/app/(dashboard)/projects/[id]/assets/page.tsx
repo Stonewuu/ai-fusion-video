@@ -229,22 +229,6 @@ export default function ProjectAssetsPage() {
         </div>
         <div className="flex items-center gap-2">
           <Button
-            variant="image"
-            size="sm"
-            onClick={() =>
-              enqueueAssetGeneration(
-                projectId,
-                assets.map((asset) => asset.id),
-                undefined,
-                "批量生成全部资产图",
-              )
-            }
-            disabled={!assets.length}
-          >
-            <Images className="h-3.5 w-3.5" />
-            批量生图
-          </Button>
-          <Button
             size="sm"
             onClick={() => {
               setCreatingAsset(true);
@@ -280,6 +264,14 @@ export default function ProjectAssetsPage() {
           onSearchChange={setSearch}
           onTypeFilterChange={setTypeFilter}
           onSelect={selectAsset}
+          onBatchGenerate={() =>
+            enqueueAssetGeneration(
+              projectId,
+              assets.map((asset) => asset.id),
+              undefined,
+              "批量生成全部资产图",
+            )
+          }
           onRefresh={() => void loadAssets(true)}
         />
         <main className="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-[30px] border border-border/50 bg-card/75 shadow-[0_24px_70px_-42px_rgba(15,23,42,.45)]">
@@ -315,8 +307,8 @@ export default function ProjectAssetsPage() {
                   enqueueAssetGeneration(
                     projectId,
                     [selectedAsset.id],
-                    undefined,
-                    `生成 ${selectedAsset.name} 全部资产图`,
+                    selectedAsset.items.map((item) => item.id),
+                    `批量生成 ${selectedAsset.name} 的子资产图`,
                   )
                 }
               />

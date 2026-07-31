@@ -11,6 +11,7 @@ import {
   type AgentStateCleanupPolicy,
 } from "@/lib/api/agent-config";
 import { toastApiError } from "@/lib/api/toast-api-error";
+import { settingsTypography } from "../../_shared";
 
 interface StateRetentionSectionProps {
   policy: AgentStateCleanupPolicy;
@@ -79,8 +80,8 @@ export function StateRetentionSection({
             <Database className="size-5" />
           </div>
           <div>
-            <h2 className="font-medium">AgentState 生命周期</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <h2 className={settingsTypography.sectionTitle}>AgentState 生命周期</h2>
+            <p className={settingsTypography.sectionDescription}>
               定期删除长期未活动的模型会话状态；消息记录仍会保留，但过期会话不能继续执行。
             </p>
           </div>
@@ -95,7 +96,7 @@ export function StateRetentionSection({
 
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
-          <Label htmlFor="agent-state-cleanup-interval">清理周期（天）</Label>
+          <Label htmlFor="agent-state-cleanup-interval" className={settingsTypography.fieldLabel}>清理周期（天）</Label>
           <Input
             id="agent-state-cleanup-interval"
             type="number"
@@ -111,7 +112,7 @@ export function StateRetentionSection({
           </p>
         </div>
         <div className="space-y-2">
-          <Label htmlFor="agent-state-retention-days">保留期限（天）</Label>
+          <Label htmlFor="agent-state-retention-days" className={settingsTypography.fieldLabel}>保留期限（天）</Label>
           <Input
             id="agent-state-retention-days"
             type="number"

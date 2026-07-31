@@ -25,6 +25,19 @@ export const itemVariants = {
   },
 };
 
+// 设置模块统一的文字层级。状态色仍由具体业务语义决定，常规文字只使用
+// foreground / muted-foreground，避免页面之间出现不同的灰阶与字号体系。
+export const settingsTypography = {
+  pageTitle: "text-2xl font-bold tracking-tight text-foreground",
+  pageDescription: "mt-1 text-sm leading-relaxed text-muted-foreground",
+  sectionTitle: "text-sm font-semibold text-foreground",
+  sectionDescription: "mt-1 text-xs leading-relaxed text-muted-foreground",
+  fieldLabel: "text-xs font-medium text-muted-foreground",
+  body: "text-sm leading-relaxed text-foreground",
+  metadata: "text-xs leading-relaxed text-muted-foreground",
+  metric: "text-lg font-semibold tracking-tight text-foreground tabular-nums",
+} as const;
+
 // ---------- 密钥脱敏 ----------
 
 export function maskSecret(value: string | null | undefined): string {

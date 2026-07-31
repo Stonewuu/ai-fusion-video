@@ -6,9 +6,11 @@ import type { Script, ScriptEpisode } from "@/lib/api/script";
 export function ScriptOverview({
   script,
   episodes,
+  projectName,
 }: {
   script: Script;
   episodes: ScriptEpisode[];
+  projectName?: string;
 }) {
   // 解析角色
   let characters: Array<{ name: string; description?: string; importance?: string }> = [];
@@ -31,7 +33,7 @@ export function ScriptOverview({
         </h4>
         <div className="space-y-2">
           {[
-            { label: "标题", value: script.title },
+            { label: "项目", value: projectName },
             { label: "类型", value: script.genre },
             { label: "集数", value: String(episodes.length) },
             {

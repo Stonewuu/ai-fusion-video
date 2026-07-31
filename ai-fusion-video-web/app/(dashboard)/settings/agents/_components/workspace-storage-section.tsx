@@ -32,6 +32,7 @@ import {
   type AgentWorkspaceTarget,
 } from "@/lib/api/agent-config";
 import type { StorageConfig } from "@/lib/api/storage";
+import { settingsTypography } from "../../_shared";
 
 const BACKEND_ITEMS = [
   { value: "database", label: "数据库" },
@@ -184,8 +185,8 @@ export function WorkspaceStorageSection({
             <ServerCog className="size-5" />
           </div>
           <div>
-            <h2 className="font-medium">工作空间存储</h2>
-            <p className="mt-1 text-sm text-muted-foreground">选择智能体工作文件的持久化位置，并在不同后端之间安全迁移。</p>
+            <h2 className={settingsTypography.sectionTitle}>工作空间存储</h2>
+            <p className={settingsTypography.sectionDescription}>选择智能体工作文件的持久化位置，并在不同后端之间安全迁移。</p>
           </div>
         </div>
         <Badge variant={config.migrationStatus === "failed" ? "destructive" : "outline"}>
@@ -231,8 +232,8 @@ export function WorkspaceStorageSection({
               {config.backendType === "object_storage" && <Cloud className="size-5" />}
             </div>
             <div className="min-w-0">
-              <p className="font-medium">{BACKEND_LABELS[config.backendType]}</p>
-              <p className="mt-1 truncate text-sm text-muted-foreground">
+              <p className="text-sm font-medium text-foreground">{BACKEND_LABELS[config.backendType]}</p>
+              <p className="mt-1 truncate text-xs leading-relaxed text-muted-foreground">
                 {config.backendType === "database" && "随业务数据库部署，无需额外依赖"}
                 {config.backendType === "local" && (config.localPath || "使用服务端默认目录")}
                 {config.backendType === "object_storage" && currentStorageName}
@@ -242,11 +243,11 @@ export function WorkspaceStorageSection({
           <div className="mt-4 grid grid-cols-2 gap-3">
             <div className="rounded-lg border border-border/20 bg-card p-3">
               <p className="text-xs text-muted-foreground">工作条目</p>
-              <p className="mt-1 text-lg font-semibold">{config.entryCount}</p>
+              <p className={`mt-1 ${settingsTypography.metric}`}>{config.entryCount}</p>
             </div>
             <div className="rounded-lg border border-border/20 bg-card p-3">
               <p className="text-xs text-muted-foreground">内容容量</p>
-              <p className="mt-1 text-lg font-semibold">{formatBytes(config.contentBytes)}</p>
+              <p className={`mt-1 ${settingsTypography.metric}`}>{formatBytes(config.contentBytes)}</p>
             </div>
           </div>
           {canRollback && isAdmin && (
@@ -264,12 +265,12 @@ export function WorkspaceStorageSection({
 
         <div className="rounded-lg border border-border/20 bg-background/70 p-4">
           <div>
-            <h3 className="font-medium">迁移目标</h3>
-            <p className="mt-1 text-sm text-muted-foreground">先完成连接与读写测试，再复制、校验并原子切换。</p>
+            <h3 className={settingsTypography.sectionTitle}>迁移目标</h3>
+            <p className={settingsTypography.sectionDescription}>先完成连接与读写测试，再复制、校验并原子切换。</p>
           </div>
           <div className="mt-4 space-y-4">
             <div className="space-y-1.5">
-              <Label htmlFor="agent-workspace-backend">目标存储</Label>
+              <Label htmlFor="agent-workspace-backend" className={settingsTypography.fieldLabel}>目标存储</Label>
               <Select
                 items={BACKEND_ITEMS}
                 value={backendType}
@@ -284,7 +285,7 @@ export function WorkspaceStorageSection({
             </div>
 
             {backendType === "database" && (
-              <div className="flex items-start gap-3 rounded-lg border border-border/20 bg-card p-3 text-sm">
+              <div className="flex items-start gap-3 rounded-lg border border-border/20 bg-card p-3 text-xs leading-relaxed">
                 <Database className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
                 <p className="text-muted-foreground">数据写入项目数据库，适合默认部署，也便于统一备份和运维。</p>
               </div>
@@ -292,7 +293,7 @@ export function WorkspaceStorageSection({
 
             {backendType === "local" && (
               <div className="space-y-1.5">
-                <Label htmlFor="agent-workspace-local-path">本地目录</Label>
+                <Label htmlFor="agent-workspace-local-path" className={settingsTypography.fieldLabel}>本地目录</Label>
                 <div className="relative">
                   <Folder className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
@@ -310,7 +311,7 @@ export function WorkspaceStorageSection({
 
             {backendType === "object_storage" && (
               <div className="space-y-1.5">
-                <Label htmlFor="agent-workspace-object-storage">对象存储配置</Label>
+                <Label htmlFor="agent-workspace-object-storage" className={settingsTypography.fieldLabel}>对象存储配置</Label>
                 <Select
                   items={objectStorageItems}
                   value={storageConfigId || null}

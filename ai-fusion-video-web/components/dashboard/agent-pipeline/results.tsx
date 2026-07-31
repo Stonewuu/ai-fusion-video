@@ -7,21 +7,10 @@ import {
   ThumbImage,
   VideoGenerateResult,
 } from "@/components/dashboard/generation-media-result";
+import { ToolMutationResult } from "@/components/dashboard/shared/tool-mutation-result";
 import { assetTypeNames } from "../shared/ai-task-display";
 
 // ========== 常量 ==========
-
-/** 子资产视角类型中文映射 */
-const itemTypeNames: Record<string, string> = {
-  front: "正面",
-  side: "侧面",
-  back: "背面",
-  detail: "细节",
-  expression: "表情",
-  pose: "姿态",
-  variant: "变体",
-  original: "原始",
-};
 
 /** 各工具字段中文标签 */
 const toolResultLabels: Record<string, Record<string, string>> = {
@@ -222,45 +211,6 @@ function BatchCreateResult({ data }: { data: unknown }) {
   );
 }
 
-/** 写入/更新操作结果 — save_script_episode / update_asset_image / add_asset_item 等 */
-function MutationResult({ data, toolName }: { data: unknown; toolName: string }) {
-  const obj = data as Obj;
-  const status = obj.status as string | undefined;
-  const message = obj.message as string | undefined;
-  // 收集所有 ID 类字段展示
-  const idFields = Object.entries(obj).filter(
-    ([k, v]) => /id$/i.test(k) && typeof v === "number"
-  );
-  // itemType 友好化
-  const itemType = obj.itemType as string | undefined;
-  const assetName = obj.assetName as string | undefined;
-  return (
-    <div className="space-y-0.5">
-      {status ? (
-        <p className="text-xs text-muted-foreground">
-          {status === "success" || status === "ok" ? "✅" : "⚠️"}{" "}
-          {message ?? (status === "success" ? "操作成功" : status)}
-        </p>
-      ) : message ? (
-        <p className="text-xs text-muted-foreground">✅ {message}</p>
-      ) : null}
-      {assetName && (
-        <p className="text-xs text-muted-foreground/80">资产：{assetName}</p>
-      )}
-      {itemType && (
-        <p className="text-xs text-muted-foreground/80">
-          子资产类型：{itemTypeNames[itemType] ?? itemType}
-        </p>
-      )}
-      {idFields.map(([k, v]) => (
-        <p key={k} className="text-[10px] text-muted-foreground/60">
-          {getFieldLabel(toolName, k)}: {String(v)}
-        </p>
-      ))}
-    </div>
-  );
-}
-
 /** 通用结果展示 */
 function GenericResult({ data, toolName }: { data: unknown; toolName: string }) {
   if (typeof data !== "object" || data === null) {
@@ -367,7 +317,21 @@ export function ToolResultDisplay({ toolName, result }: { toolName: string; resu
     case "save_script_episode":
     case "save_script_scene_items":
     case "update_script_info":
-      return <MutationResult data={parsed} toolName={toolName} />;
+    case "save_project":
+    case "delete_project":
+    case "update_asset_item":
+    case "delete_asset_resource":
+    case "delete_script_child_resource":
+    case "update_storyboard_scene":
+    case "update_storyboard_item":
+    case "update_storyboard_item_frame":
+    case "update_storyboard_item_video":
+    case "delete_storyboard_child_resource":
+    case "update_script_scene":
+    case "manage_script_scenes":
+    case "update_script":
+    case "update_asset":
+      return <ToolMutationResult data={parsed} toolName={toolName} />;
     default:
       return <GenericResult data={parsed} toolName={toolName} />;
   }

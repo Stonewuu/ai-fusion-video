@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.script;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.script.Script;
@@ -10,8 +11,6 @@ import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
 import com.stonewu.fusion.mapper.script.ScriptEpisodeMapper;
 import com.stonewu.fusion.mapper.script.ScriptMapper;
-import com.stonewu.fusion.security.SecurityUtils;
-import com.stonewu.fusion.service.team.TeamService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -28,12 +27,14 @@ import java.util.List;
 public class ScriptService {
 
     /** BeanUtil 更新时需要排除的基础字段（不应由前端覆盖） */
-    private static final String[] IGNORE_FIELDS = { "id", "createTime", "updateTime", "deleted" };
+    private static final String[] IGNORE_FIELDS = {
+            "id", "projectId", "title", "scope", "ownerType", "ownerId",
+            "createTime", "updateTime", "deleted"
+    };
 
     private final ScriptMapper scriptMapper;
     private final ScriptEpisodeMapper episodeMapper;
     private final ScriptSceneItemMapper sceneItemMapper;
-    private final TeamService teamService;
 
     // ========== 剧本 ==========
 
@@ -45,28 +46,13 @@ public class ScriptService {
         return script;
     }
 
-    @Cacheable(value = "script", key = "'project:' + #projectId")
+    @Cacheable(value = "script", key = "'project:' + #projectId", unless = "#result == null")
     public Script getByProjectId(Long projectId) {
-        return scriptMapper.selectOne(new LambdaQueryWrapper<Script>().eq(Script::getProjectId, projectId));
-    }
-
-    public List<Script> listByProject(Long projectId) {
-        return scriptMapper.selectList(new LambdaQueryWrapper<Script>()
+        return scriptMapper.selectOne(new LambdaQueryWrapper<Script>()
                 .eq(Script::getProjectId, projectId)
-                .orderByDesc(Script::getCreateTime));
-    }
-
-    @CacheEvict(value = "script", allEntries = true)
-    @Transactional
-    public Script create(Script script) {
-        // 一个项目只能有一个总剧本
-        List<Script> existing = listByProject(script.getProjectId());
-        if (!existing.isEmpty()) {
-            throw new BusinessException("该项目已有剧本，一个项目只能有一个总剧本");
-        }
-        applyCurrentTeamOwnership(script);
-        scriptMapper.insert(script);
-        return script;
+                .orderByDesc(Script::getCreateTime)
+                .orderByDesc(Script::getId)
+                .last("LIMIT 1"));
     }
 
     @CacheEvict(value = "script", allEntries = true)
@@ -91,10 +77,31 @@ public class ScriptService {
         scriptMapper.updateById(script);
     }
 
-    @CacheEvict(value = "script", allEntries = true)
+    @CacheEvict(value = { "script", "episode", "scene" }, allEntries = true)
     @Transactional
-    public void delete(Long id) {
-        scriptMapper.deleteById(id);
+    public Script replaceSourceAndReset(Long scriptId, String rawContent) {
+        getById(scriptId);
+        sceneItemMapper.delete(new LambdaQueryWrapper<ScriptSceneItem>()
+                .eq(ScriptSceneItem::getScriptId, scriptId));
+        episodeMapper.delete(new LambdaQueryWrapper<ScriptEpisode>()
+                .eq(ScriptEpisode::getScriptId, scriptId));
+
+        UpdateWrapper<Script> update = new UpdateWrapper<Script>()
+                .eq("id", scriptId)
+                .set("raw_content", rawContent)
+                .set("content", null)
+                .set("total_episodes", 0)
+                .set("story_synopsis", null)
+                .set("characters_json", null)
+                .set("parsing_status", 0)
+                .set("parsing_progress", null)
+                .set("summary", null)
+                .set("genre", null)
+                .set("target_audience", null)
+                .set("duration_estimate", null)
+                .setSql("version = version + 1");
+        scriptMapper.update(null, update);
+        return getById(scriptId);
     }
 
     // ========== 分集 ==========
@@ -135,9 +142,12 @@ public class ScriptService {
         return existing;
     }
 
-    @CacheEvict(value = "episode", allEntries = true)
+    @CacheEvict(value = { "episode", "scene" }, allEntries = true)
     @Transactional
     public void deleteEpisode(Long id) {
+        getEpisodeById(id);
+        sceneItemMapper.delete(new LambdaQueryWrapper<ScriptSceneItem>()
+                .eq(ScriptSceneItem::getEpisodeId, id));
         episodeMapper.deleteById(id);
     }
 
@@ -183,16 +193,6 @@ public class ScriptService {
             throw new BusinessException("更新失败，数据已被其他操作修改，请刷新后重试");
         }
         return existing;
-    }
-
-    private void applyCurrentTeamOwnership(Script script) {
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        if (currentUserId == null) {
-            return;
-        }
-        TeamService.OwnerScope ownerScope = teamService.getRequiredCurrentOwnerScopeByUser(currentUserId);
-        script.setOwnerType(ownerScope.getOwnerType());
-        script.setOwnerId(ownerScope.getOwnerId());
     }
 
     @CacheEvict(value = "scene", allEntries = true)
@@ -288,7 +288,7 @@ public class ScriptService {
         }
 
         // 更新集的场次计数
-    if (!overwriteMode) {
+        if (!overwriteMode) {
             // 追加模式：重新查询实际场次总数
             Long totalCount = sceneItemMapper.selectCount(
                     new LambdaQueryWrapper<ScriptSceneItem>().eq(ScriptSceneItem::getEpisodeId, episodeId));

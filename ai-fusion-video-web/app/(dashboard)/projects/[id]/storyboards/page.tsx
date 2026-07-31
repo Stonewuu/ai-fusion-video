@@ -5,7 +5,6 @@ import { useParams } from "next/navigation";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import {
   Film,
-  Plus,
   Loader2,
   Sparkles,
   Table2,
@@ -18,6 +17,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -42,7 +42,6 @@ import {
   StoryboardFrameReferenceDialog,
   buildDefaultBatchFramePrompt,
 } from "./_components/storyboard-frame-reference-dialog";
-import { CreateStoryboardDialog } from "./_components/create-dialog";
 import { EditItemAssetsDialog } from "./_components/edit-assets-dialog";
 import { assetApi } from "@/lib/api/asset";
 import { useProject } from "../project-context";
@@ -76,9 +75,9 @@ export default function StoryboardTabPage() {
   } = usePipelineStore();
 
   const [loading, setLoading] = useState(true);
+  const [isRefreshingStoryboard, setIsRefreshingStoryboard] = useState(false);
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
   const [scriptEpisodes, setScriptEpisodes] = useState<ScriptEpisode[]>([]);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
 
   // 关联资产状态
   const [assetsList, setAssetsList] = useState<import("@/lib/api/asset").AssetWithItems[]>([]);
@@ -236,9 +235,8 @@ export default function StoryboardTabPage() {
   const loadStoryboard = useCallback(async () => {
     try {
       setLoading(true);
-      const list = await storyboardApi.list(projectId);
-      if (list.length > 0) {
-        const activeStoryboard = list[0];
+      const activeStoryboard = await storyboardApi.getByProject(projectId);
+      if (activeStoryboard) {
         setStoryboard(activeStoryboard);
         if (activeStoryboard.scriptId) {
           const episodes = await scriptApi.listEpisodes(activeStoryboard.scriptId);
@@ -265,24 +263,15 @@ export default function StoryboardTabPage() {
 
   const handleAiStoryboard = useCallback(async () => {
     try {
-      const scripts = await scriptApi.list(projectId);
-      const currentScript = scripts[0] ?? null;
+      const currentScript = await scriptApi.getByProject(projectId);
 
-      if (!currentScript) {
-        alert("请先创建剧本后再使用 AI 生成分镜");
+      if (!currentScript || !storyboard) {
+        alert("项目剧本或分镜工作区未初始化");
         return;
       }
 
-      const storyboardTitle =
-        currentScript.title?.trim() || project?.name?.trim() || "AI 分镜";
       const scriptDisplayTitle =
-        currentScript.title?.trim() || project?.name?.trim() || "未命名项目";
-
-      const newStoryboard = await storyboardApi.create({
-        projectId,
-        scriptId: currentScript.id,
-        title: storyboardTitle,
-      });
+        project?.name?.trim() || "未命名项目";
 
       const pipelineId = addPipeline({
         label: `AI 生成分镜 - ${scriptDisplayTitle}`,
@@ -295,7 +284,7 @@ export default function StoryboardTabPage() {
           projectId,
           context: {
             scriptId: currentScript.id,
-            storyboardId: newStoryboard.id,
+            storyboardId: storyboard.id,
           },
         },
         onComplete: () => {
@@ -307,8 +296,8 @@ export default function StoryboardTabPage() {
       setExpandedTaskId(pipelineId);
       await loadStoryboard();
     } catch (err) {
-      console.error("创建分镜记录失败:", err);
-      toastApiError(err, "创建分镜记录失败，请重试");
+      console.error("启动分镜生成失败:", err);
+      toastApiError(err, "启动分镜生成失败，请重试");
     }
   }, [
     addPipeline,
@@ -317,6 +306,7 @@ export default function StoryboardTabPage() {
     projectId,
     setExpandedTaskId,
     setPanelExpanded,
+    storyboard,
   ]);
 
   const refreshStoryboardData = useCallback(async () => {
@@ -324,11 +314,11 @@ export default function StoryboardTabPage() {
       void loadProjectAssets();
       void refreshCurrentEpisode();
 
-      const list = await storyboardApi.list(projectId);
+      const loadedStoryboard = await storyboardApi.getByProject(projectId);
       let activeStoryboard = storyboard;
-      if (list.length > 0) {
-        activeStoryboard = list[0];
-        setStoryboard(list[0]);
+      if (loadedStoryboard) {
+        activeStoryboard = loadedStoryboard;
+        setStoryboard(loadedStoryboard);
         if (activeStoryboard.scriptId) {
           const episodes = await scriptApi.listEpisodes(activeStoryboard.scriptId);
           setScriptEpisodes(episodes);
@@ -366,6 +356,15 @@ export default function StoryboardTabPage() {
       toastApiError(err, "刷新分镜页数据失败");
     }
   }, [projectId, storyboard, loadProjectAssets, refreshCurrentEpisode]);
+
+  const handleManualRefreshStoryboard = useCallback(async () => {
+    setIsRefreshingStoryboard(true);
+    try {
+      await refreshStoryboardData();
+    } finally {
+      setIsRefreshingStoryboard(false);
+    }
+  }, [refreshStoryboardData]);
 
   const handleBindScriptEpisode = useCallback(async (
     storyboardEpisodeId: number,
@@ -432,7 +431,8 @@ export default function StoryboardTabPage() {
   ]);
 
   // AI 工具执行后自动刷新
-  const storyboardsInvalidation = usePipelineStore((s) => s.invalidation.storyboards);
+
+    const storyboardsInvalidation = usePipelineStore((s) => s.invalidation.storyboards);
   const storyboardsInvRef = useRef(storyboardsInvalidation);
   useEffect(() => {
     if (storyboardsInvRef.current !== storyboardsInvalidation) {
@@ -1044,59 +1044,13 @@ export default function StoryboardTabPage() {
     );
   }
 
-  // 空状态：没有分镜
+  // 固定容器缺失属于项目初始化异常，不提供运行时创建入口
   if (!storyboard) {
     return (
-      <>
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="flex flex-col items-center justify-center py-20"
-        >
-          <div className="h-20 w-20 rounded-2xl bg-linear-to-br from-cyan-500/10 via-blue-500/10 to-indigo-500/10 flex items-center justify-center mb-6 border border-cyan-500/10">
-            <Film className="h-10 w-10 text-cyan-400/60" />
-          </div>
-          <h2 className="text-xl font-semibold mb-2">还没有分镜</h2>
-          <p className="text-muted-foreground text-sm mb-6 max-w-md text-center">
-            手动创建分镜表并逐条添加镜头，或使用 AI 根据剧本自动生成分镜
-          </p>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setShowCreateDialog(true)}
-              className={cn(
-                "flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium",
-                "bg-primary text-primary-foreground",
-                "hover:opacity-90 hover:scale-[1.02]",
-                "active:scale-[0.98] transition-all duration-200"
-              )}
-            >
-              <Plus className="h-4 w-4" />
-              手动创建
-            </button>
-            <button
-              onClick={handleAiStoryboard}
-              className={cn(
-                "flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-medium",
-                "bg-linear-to-r from-cyan-600 to-blue-600",
-                "text-white shadow-lg shadow-cyan-500/20",
-                "hover:shadow-cyan-500/30 hover:scale-[1.02]",
-                "active:scale-[0.98] transition-all duration-200"
-              )}
-            >
-              <Sparkles className="h-4 w-4" />
-              AI 生成分镜
-            </button>
-          </div>
-        </motion.div>
-        <CreateStoryboardDialog
-          open={showCreateDialog}
-          projectId={projectId}
-          projectName={project?.name}
-          onClose={() => setShowCreateDialog(false)}
-          onCreated={loadStoryboard}
-        />
-      </>
+      <div className="rounded-xl border border-destructive/30 bg-card p-6">
+        <p className="font-medium">项目分镜工作区未初始化</p>
+        <p className="mt-1 text-sm text-muted-foreground">请检查项目创建流程后重试。</p>
+      </div>
     );
   }
 
@@ -1111,6 +1065,8 @@ export default function StoryboardTabPage() {
       {/* 左栏：分镜目录 */}
       <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="shrink-0 hidden xl:block">
       <StoryboardSidebar
+        onRefresh={handleManualRefreshStoryboard}
+        isRefreshing={isRefreshingStoryboard}
         storyboardId={storyboard.id}
         selection={sidebarSelection}
         activeSceneId={activeSceneId}
@@ -1142,7 +1098,9 @@ export default function StoryboardTabPage() {
               />
               <SheetContent side="left" className="w-[300px] p-0 border-r-0 flex flex-col pt-12">
                 <StoryboardSidebar
-                  storyboardId={storyboard.id}
+        onRefresh={handleManualRefreshStoryboard}
+        isRefreshing={isRefreshingStoryboard}
+        storyboardId={storyboard.id}
                   selection={sidebarSelection}
                   activeSceneId={activeSceneId}
                   onSelect={setSidebarSelection}
@@ -1158,13 +1116,17 @@ export default function StoryboardTabPage() {
             </Sheet>
             <h2 className="text-base font-semibold flex items-center gap-2 overflow-hidden">
               <Film className="h-4 w-4 text-primary shrink-0" />
-              <span className="truncate">{storyboard.title || "分镜表"}</span>
+              <span className="truncate">{project?.name || "未命名项目"}</span>
               <span className="hidden sm:inline text-xs text-muted-foreground font-normal ml-1 shrink-0">
                 · {sceneGroups.length} 场次 · {allItems.length} 镜头
               </span>
             </h2>
           </div>
           <div className="flex items-center gap-2">
+            <Button variant="ai" size="sm" onClick={() => void handleAiStoryboard()}>
+              <Sparkles className="h-4 w-4" />
+              {sceneGroups.length > 0 ? "AI 补全" : "AI 生成"}
+            </Button>
             {/* 合成本集视频 */}
             {currentEpisodeId && currentEpisode && (() => {
               const cs = currentEpisode.composeStatus;
@@ -1336,7 +1298,7 @@ export default function StoryboardTabPage() {
             <div className="text-center py-16">
               <Camera className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">
-                暂无场次，请在左侧目录创建分镜集和场次
+                暂无分镜内容，请在左侧创建分集和场次，或使用顶部 AI 生成
               </p>
             </div>
           ) : (

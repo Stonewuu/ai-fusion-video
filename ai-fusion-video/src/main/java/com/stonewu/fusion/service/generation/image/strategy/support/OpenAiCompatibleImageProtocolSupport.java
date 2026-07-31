@@ -185,8 +185,11 @@ public class OpenAiCompatibleImageProtocolSupport {
         }
     }
 
-    /** Build an official OpenAI multipart image edit request. */
+    /** Build an official OpenAI image edit request using the model's declared reference-image transports. */
     public OpenAiCompatibleImageRequest buildOpenAiEditsRequest(OpenAiCompatibleImageProtocolContext context) {
+        if (supportsReferenceImageUrlInput(context.modelConfig())) {
+            return buildOpenAiJsonEditsRequest(context);
+        }
         MultipartBody.Builder builder = createEditsRequestBuilder(context);
         appendOptionalFormField(builder, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
         appendOptionalFormField(builder, "background", getString(context.modelConfig(), "background"));
@@ -205,6 +208,9 @@ public class OpenAiCompatibleImageProtocolSupport {
 
     /** Build an image edit request with fields commonly accepted by NewAPI-compatible gateways. */
     public OpenAiCompatibleImageRequest buildNewApiEditsRequest(OpenAiCompatibleImageProtocolContext context) {
+        if (supportsReferenceImageUrlInput(context.modelConfig())) {
+            return buildNewApiJsonEditsRequest(context);
+        }
         MultipartBody.Builder builder = createEditsRequestBuilder(context);
 
         appendOptionalFormField(builder, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
@@ -218,6 +224,68 @@ public class OpenAiCompatibleImageProtocolSupport {
 
         appendReferenceImages(builder, context);
         return new OpenAiCompatibleImageRequest(resolveImagesEditUrl(context.apiConfig()), builder.build());
+    }
+
+    private OpenAiCompatibleImageRequest buildOpenAiJsonEditsRequest(
+            OpenAiCompatibleImageProtocolContext context) {
+        try {
+            ObjectNode root = createJsonEditsRoot(context);
+            appendOptionalString(root, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
+            appendOptionalString(root, "background", getString(context.modelConfig(), "background"));
+            appendOptionalString(root, "moderation", getString(context.modelConfig(), "moderation"));
+            appendOptionalString(root, "output_format",
+                    getString(context.modelConfig(), "outputFormat", "output_format"));
+            appendOptionalInteger(root, "output_compression",
+                    getInteger(context.modelConfig(), "outputCompression", "output_compression"));
+            if (!"gpt-image-2".equalsIgnoreCase(StrUtil.trim(context.modelCode()))) {
+                appendOptionalString(root, "input_fidelity",
+                        getString(context.modelConfig(), "inputFidelity", "input_fidelity"));
+            }
+            appendOptionalString(root, "user", getString(context.modelConfig(), "user", "endUser", "end_user"));
+            return jsonRequest(resolveImagesEditUrl(context.apiConfig()), root);
+        } catch (IOException e) {
+            throw new RuntimeException("构建 OpenAI 图片编辑 JSON 请求失败: " + e.getMessage(), e);
+        }
+    }
+
+    private OpenAiCompatibleImageRequest buildNewApiJsonEditsRequest(
+            OpenAiCompatibleImageProtocolContext context) {
+        try {
+            ObjectNode root = createJsonEditsRoot(context);
+            appendOptionalString(root, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
+            appendOptionalString(root, "resolution",
+                    getString(context.modelConfig(), "resolution", "defaultResolution"));
+            appendOptionalString(root, "background", getString(context.modelConfig(), "background"));
+            appendOptionalString(root, "moderation", getString(context.modelConfig(), "moderation"));
+            appendOptionalString(root, "output_format",
+                    getString(context.modelConfig(), "outputFormat", "output_format"));
+            appendOptionalInteger(root, "output_compression",
+                    getInteger(context.modelConfig(), "outputCompression", "output_compression"));
+            appendOptionalString(root, "style", getString(context.modelConfig(), "style"));
+            return jsonRequest(resolveImagesEditUrl(context.apiConfig()), root);
+        } catch (IOException e) {
+            throw new RuntimeException("构建 NewAPI 图片编辑 JSON 请求失败: " + e.getMessage(), e);
+        }
+    }
+
+    private ObjectNode createJsonEditsRoot(OpenAiCompatibleImageProtocolContext context) {
+        ObjectNode root = OBJECT_MAPPER.createObjectNode();
+        root.put("model", StrUtil.blankToDefault(context.modelCode(), DEFAULT_IMAGE_MODEL));
+        root.put("prompt", StrUtil.blankToDefault(context.prompt(), ""));
+        root.put("n", Math.max(context.count(), 1));
+        root.put("size", mapSize(context.modelCode(), context.width(), context.height(), context.modelConfig()));
+        var images = root.putArray("images");
+        context.imageUrls().stream()
+                .filter(StrUtil::isNotBlank)
+                .map(String::trim)
+                .forEach(imageUrl -> images.addObject().put("image_url", imageUrl));
+        return root;
+    }
+
+    private boolean supportsReferenceImageUrlInput(JSONObject config) {
+        return getStringList(config, "referenceImageInputFormats").stream()
+                .map(value -> StrUtil.blankToDefault(value, "").trim())
+                .anyMatch("url"::equalsIgnoreCase);
     }
 
     private MultipartBody.Builder createEditsRequestBuilder(OpenAiCompatibleImageProtocolContext context) {

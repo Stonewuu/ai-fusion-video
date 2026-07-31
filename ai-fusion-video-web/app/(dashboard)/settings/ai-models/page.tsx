@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
   ChevronRight,
@@ -17,7 +17,7 @@ import {
   Trash2,
   Upload,
 } from "lucide-react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { getModelDisplayParts } from "@/lib/model-display";
@@ -47,6 +47,7 @@ import {
   containerVariants,
   itemVariants,
   maskSecret,
+  settingsTypography,
 } from "../_shared";
 import { AiModelDialog } from "./_components/ai-model-dialog";
 import { ApiConfigDialog } from "./_components/api-config-dialog";
@@ -71,6 +72,8 @@ function isAiModelViewMode(value: string | null): value is AiModelViewMode {
 }
 
 export default function AiModelsPage() {
+  const shouldReduceMotion = useReducedMotion();
+
   // AI 模型列表
   const [models, setModels] = useState<AiModel[]>([]);
   const [modelPresets, setModelPresets] = useState<ModelPreset[]>([]);
@@ -91,6 +94,7 @@ export default function AiModelsPage() {
   const [viewMode, setViewMode] = useState<AiModelViewMode>("list");
   const [collapsedConfigIds, setCollapsedConfigIds] = useState<Set<number>>(new Set());
   const importInputRef = useRef<HTMLInputElement>(null);
+  const cardGridRef = useRef<HTMLDivElement>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportIncludeSecrets, setExportIncludeSecrets] = useState(false);
 
@@ -139,6 +143,98 @@ export default function AiModelsPage() {
       setViewMode(storedViewMode);
     }
   }, []);
+
+  useLayoutEffect(() => {
+    const grid = cardGridRef.current;
+    if (!grid) return;
+
+    const cards = Array.from(grid.querySelectorAll<HTMLElement>("[data-api-config-card]"));
+    const desktopColumns = window.matchMedia("(min-width: 1024px)");
+    let layoutFrame: number | undefined;
+
+    const resetLayout = () => {
+      if (layoutFrame !== undefined) window.cancelAnimationFrame(layoutFrame);
+      grid.style.gridAutoRows = "";
+      cards.forEach(card => {
+        card.getAnimations().forEach(animation => animation.cancel());
+        card.style.gridRowEnd = "";
+      });
+    };
+
+    const layoutCard = (card: HTMLElement) => {
+      const gridStyle = window.getComputedStyle(grid);
+      const rowHeight = Number.parseFloat(gridStyle.gridAutoRows);
+      const rowGap = Number.parseFloat(gridStyle.rowGap);
+      if (!Number.isFinite(rowHeight) || !Number.isFinite(rowGap)) return;
+
+      const cardHeight = card.getBoundingClientRect().height;
+      const rowSpan = Math.ceil((cardHeight + rowGap) / (rowHeight + rowGap));
+      card.style.gridRowEnd = `span ${rowSpan}`;
+    };
+
+    const layoutCards = (animate: boolean) => {
+      if (viewMode !== "card" || configsLoading || cards.length === 0 || !desktopColumns.matches) {
+        resetLayout();
+        return;
+      }
+
+      const previousRects = animate && !shouldReduceMotion
+        ? new Map(cards.map(card => [card, card.getBoundingClientRect()]))
+        : null;
+
+      cards.forEach(card => {
+        card.getAnimations().forEach(animation => animation.cancel());
+      });
+      grid.style.gridAutoRows = "1px";
+      cards.forEach(layoutCard);
+
+      if (!previousRects) return;
+      cards.forEach(card => {
+        const previousRect = previousRects.get(card);
+        if (!previousRect) return;
+
+        const nextRect = card.getBoundingClientRect();
+        const deltaX = previousRect.left - nextRect.left;
+        const deltaY = previousRect.top - nextRect.top;
+        if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return;
+
+        card.animate(
+          [
+            { transform: `translate(${deltaX}px, ${deltaY}px)` },
+            { transform: "translate(0, 0)" },
+          ],
+          {
+            duration: 220,
+            easing: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
+          }
+        );
+      });
+    };
+
+    const scheduleAnimatedLayout = () => {
+      if (layoutFrame !== undefined) window.cancelAnimationFrame(layoutFrame);
+      layoutFrame = window.requestAnimationFrame(() => {
+        layoutFrame = undefined;
+        layoutCards(true);
+      });
+    };
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (viewMode !== "card" || !desktopColumns.matches) return;
+      scheduleAnimatedLayout();
+    });
+
+    cards.forEach(card => resizeObserver.observe(card));
+    const handleColumnsChange = () => layoutCards(false);
+    desktopColumns.addEventListener("change", handleColumnsChange);
+    layoutCards(false);
+
+    return () => {
+      resizeObserver.disconnect();
+      desktopColumns.removeEventListener("change", handleColumnsChange);
+      resetLayout();
+    };
+  }, [configs, configsLoading, shouldReduceMotion, viewMode]);
 
   const handleTestTextModel = async (model: AiModel) => {
     setTestingModelIds((prev) => {
@@ -310,16 +406,15 @@ export default function AiModelsPage() {
     return (
       <div
         key={config.id}
+        data-api-config-card
         className={cn(
           "rounded-xl border overflow-hidden",
-          "bg-card/50 backdrop-blur-sm border-border/50",
-          viewMode === "card" && "h-full"
+          "bg-card/50 backdrop-blur-sm border-border/50"
         )}
       >
         {/* ── API 配置头部 ── */}
         <div className={cn(
-          "flex items-start gap-3 px-4 py-3 group bg-muted/30",
-          !collapsed && "border-b border-border/40"
+          "flex items-start gap-3 px-4 py-3 group bg-muted/30"
         )}>
           <button
             type="button"
@@ -332,7 +427,7 @@ export default function AiModelsPage() {
             )}
           >
             <ChevronRight className={cn(
-              "h-3.5 w-3.5 transition-transform duration-200",
+              "h-3.5 w-3.5 transition-transform duration-200 motion-reduce:transition-none",
               !collapsed && "rotate-90"
             )} />
           </button>
@@ -405,8 +500,19 @@ export default function AiModelsPage() {
           </div>
         </div>
 
-        {!collapsed && (
-          <div className="px-4 py-2 pr-3">
+        <AnimatePresence initial={false}>
+          {!collapsed && (
+            <motion.div
+              key="config-models"
+              initial={shouldReduceMotion ? false : { height: 0, opacity: 0 }}
+              animate={{ height: "auto", opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              transition={shouldReduceMotion
+                ? { duration: 0 }
+                : { duration: 0.24, ease: [0.25, 0.46, 0.45, 0.94] }}
+              className="overflow-hidden border-t border-border/40"
+            >
+              <div className="px-4 py-2 pr-3">
             {modelTypeGroups.length === 0 ? (
               <p className="text-xs text-muted-foreground/50 text-center py-3">
                 暂无模型
@@ -642,8 +748,10 @@ export default function AiModelsPage() {
               <Plus className="h-3.5 w-3.5" />
               添加模型
             </button>
-          </div>
-        )}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
     );
   };
@@ -657,8 +765,8 @@ export default function AiModelsPage() {
     >
       {/* 页面标题 */}
       <motion.div variants={itemVariants} className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">AI 配置</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className={settingsTypography.pageTitle}>AI 配置</h1>
+        <p className={settingsTypography.pageDescription}>
           管理提供商与模型。
         </p>
       </motion.div>
@@ -666,7 +774,7 @@ export default function AiModelsPage() {
       {/* ========== AI 服务管理（统一卡片式） ========== */}
       <motion.div variants={itemVariants}>
         <div className="flex items-center justify-between gap-3 mb-3 px-1 flex-wrap">
-          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+          <h3 className={settingsTypography.sectionTitle}>
             API 配置与模型
           </h3>
           <div className="flex items-center gap-2 shrink-0">
@@ -748,6 +856,7 @@ export default function AiModelsPage() {
         </div>
 
         <div
+          ref={cardGridRef}
           className={cn(
             viewMode === "card"
               ? "grid grid-cols-1 lg:grid-cols-2 gap-4 items-start"

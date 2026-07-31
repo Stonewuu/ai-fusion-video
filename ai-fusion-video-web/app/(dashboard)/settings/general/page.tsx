@@ -27,7 +27,7 @@ import {
   getIgnoredVersion,
   setIgnoredVersion,
 } from "@/lib/version-update";
-import { containerVariants, itemVariants } from "../_shared";
+import { containerVariants, itemVariants, settingsTypography } from "../_shared";
 
 interface SystemConfigs {
   site_base_url: string;
@@ -380,8 +380,8 @@ export default function GeneralSettingsPage() {
       <motion.div variants={itemVariants} className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">通用设置</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
+            <h1 className={settingsTypography.pageTitle}>通用设置</h1>
+            <p className={settingsTypography.pageDescription}>
               管理系统全局参数
             </p>
             {!isAdmin ? (
@@ -424,7 +424,7 @@ export default function GeneralSettingsPage() {
               <div>
                 <div className="flex items-center gap-2">
                   <Globe className="h-4 w-4 text-primary" />
-                  <h3 className="text-sm font-semibold">公网访问地址</h3>
+                  <h3 className={settingsTypography.sectionTitle}>公网访问地址</h3>
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
                   已根据当前访问环境自动识别，通常无需修改。
@@ -545,7 +545,7 @@ export default function GeneralSettingsPage() {
           >
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold">公开注册</h3>
+                <h3 className={settingsTypography.sectionTitle}>公开注册</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed max-w-[520px]">
                   仅在系统完成管理员初始化后生效。开启后，访客可以通过用户名和密码注册账号。
                 </p>
@@ -596,7 +596,7 @@ export default function GeneralSettingsPage() {
           >
             <div className="flex items-center gap-2 mb-4">
               <Mail className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-semibold">邮箱 SMTP 配置</h3>
+              <h3 className={settingsTypography.sectionTitle}>邮箱 SMTP 配置</h3>
             </div>
 
             <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
@@ -740,7 +740,7 @@ export default function GeneralSettingsPage() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Download className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold">版本更新</h3>
+                <h3 className={settingsTypography.sectionTitle}>版本更新</h3>
                 <span
                   className={cn(
                     "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium border",

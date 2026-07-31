@@ -14,8 +14,6 @@ public class StoryboardUpdateReqVO {
     @NotNull(message = "分镜ID不能为空")
     private Long id;
 
-    private String title;
-
     private String description;
 
     private String customColumns;

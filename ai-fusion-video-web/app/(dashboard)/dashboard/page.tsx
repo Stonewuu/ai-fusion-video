@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { projectApi, type Project } from "@/lib/api/project";
@@ -8,14 +8,12 @@ import { assetApi, type Asset, type AssetPageResp } from "@/lib/api/asset";
 import {
   FolderKanban,
   Images,
-  Sparkles,
   Clock,
   Film,
   Loader2,
   ArrowRight,
   Plus,
   Package,
-  Zap,
   TrendingUp,
   Users,
   MapPin,
@@ -26,7 +24,8 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { resolveMediaUrl } from "@/lib/api/client";
-import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
+import { AssistantBrandIcon } from "@/components/dashboard/assistant/assistant-brand-icon";
+import { requestAssistantOpen } from "@/components/dashboard/assistant/open-assistant";
 import { SafeImage } from "@/components/ui/safe-image";
 
 // ============================================================
@@ -59,6 +58,10 @@ const ASSET_TYPE_CONFIG: Record<string, { label: string; icon: typeof Users; col
   scene: { label: "场景", icon: MapPin, color: "text-green-400", bg: "bg-green-500/10" },
   prop: { label: "道具", icon: Wrench, color: "text-amber-400", bg: "bg-amber-500/10" },
 };
+
+function DashboardAssistantIcon({ className }: { className?: string }) {
+  return <AssistantBrandIcon className={className} loading="eager" />;
+}
 
 // ============================================================
 // 工具
@@ -249,7 +252,10 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* ========== 快捷操作 ========== */}
-      <motion.div variants={itemVariants} className="grid grid-cols-3 gap-3 mb-8">
+      <motion.div
+        variants={itemVariants}
+        className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+      >
         <QuickAction
           icon={FolderKanban}
           label="新建项目"
@@ -267,12 +273,19 @@ export default function DashboardPage() {
           onClick={() => router.push("/assets")}
         />
         <QuickAction
-          icon={Sparkles}
-          label="AI 助手"
+          icon={DashboardAssistantIcon}
+          label="融光助手"
           desc="智能辅助创作"
-          color="text-purple-400"
           bg="bg-purple-500/10"
-          onClick={() => router.push("/projects")}
+          onClick={requestAssistantOpen}
+        />
+        <QuickAction
+          icon={Wrench}
+          label="工具"
+          desc="使用 AI 创作工具"
+          color="text-cyan-400"
+          bg="bg-cyan-500/10"
+          onClick={() => router.push("/generate/image")}
         />
       </motion.div>
 
@@ -405,10 +418,10 @@ function QuickAction({
   bg,
   onClick,
 }: {
-  icon: typeof Film;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   desc: string;
-  color: string;
+  color?: string;
   bg: string;
   onClick: () => void;
 }) {
@@ -495,10 +508,8 @@ function AssetCard({ asset, onClick }: { asset: Asset; onClick: () => void }) {
           alt={asset.name}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        {coverSrc && (
-          /* 底部渐变遮罩 */
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-black/70 to-transparent pointer-events-none" />
-        )}
+        {/* 主题自适应遮罩，确保封面与占位图上的名称始终清晰 */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-background/95 via-background/70 to-transparent" />
 
         {/* 类型标签 */}
         <div className={cn(
@@ -511,7 +522,7 @@ function AssetCard({ asset, onClick }: { asset: Asset; onClick: () => void }) {
 
         {/* 名称 */}
         <div className="absolute bottom-0 inset-x-0 px-2.5 pb-2">
-          <p className="text-[11px] font-medium text-white truncate">{asset.name}</p>
+          <p className="truncate text-[11px] font-semibold text-foreground">{asset.name}</p>
         </div>
       </div>
     </div>

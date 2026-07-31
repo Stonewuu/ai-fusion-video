@@ -87,15 +87,17 @@ public class AiAgentRegistry {
                                 .type("ai_media")
                                 .name("默认助手")
                                 .toolNames(List.of(
-                                                "list_my_projects", "get_project",
-                                                "get_project_script", "list_project_assets", "list_project_storyboards",
+                                                "list_my_projects", "get_project", "save_project", "delete_project",
+                                                "get_project_script", "list_project_assets", "get_project_storyboard",
                                                 "get_script", "get_script_structure", "get_script_episode",
                                                 "update_script", "update_script_info", "save_script_episode",
                                                 "save_script_scene_items", "update_script_scene",
-                                                "manage_script_scenes",
+                                                "manage_script_scenes", "delete_script_child_resource",
                                                 "get_asset", "create_asset", "batch_create_assets", "update_asset",
-                                                "add_asset_item",
+                                                "add_asset_item", "update_asset_item", "delete_asset_resource",
                                                 "get_storyboard", "insert_storyboard_item",
+                                                "update_storyboard_scene", "update_storyboard_item",
+                                                "delete_storyboard_child_resource",
                                                 "get_generation_model_capabilities",
                                                 "generate_image",
                                                 "query_asset_metadata"))
@@ -263,7 +265,7 @@ public class AiAgentRegistry {
                                 .toolNames(List.of(
                                                 "get_project", "get_script_structure",
                                                 "list_project_assets", "get_storyboard",
-                                                "list_project_storyboards"))
+                                                "get_project_storyboard"))
                                 .subAgentTools(List.of(
                                                 // 子资产预处理子 Agent（串行，先执行）
                                                 AiAgentDefinition.SubAgentToolDef.builder()

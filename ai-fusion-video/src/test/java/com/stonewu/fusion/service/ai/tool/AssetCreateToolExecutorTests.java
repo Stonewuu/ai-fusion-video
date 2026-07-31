@@ -2,6 +2,9 @@ package com.stonewu.fusion.service.ai.tool;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.ai.tool.asset.AssetCreateToolExecutor;
+import com.stonewu.fusion.service.ai.tool.script.ManageScriptSceneItemsToolExecutor;
+import com.stonewu.fusion.service.ai.tool.script.UpdateScriptSceneItemToolExecutor;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
 import com.stonewu.fusion.service.asset.AssetService;
 import com.stonewu.fusion.service.project.ProjectService;
@@ -23,9 +26,10 @@ class AssetCreateToolExecutorTests {
     @Test
     void dialogueArraysExposeProviderCompatibleItemSchemas() {
         ScriptService scripts = mock(ScriptService.class);
+        ToolResourceAccessGuard accessGuard = mock(ToolResourceAccessGuard.class);
 
-        assertValid(new UpdateScriptSceneItemToolExecutor(scripts));
-        assertValid(new ManageScriptSceneItemsToolExecutor(scripts));
+        assertValid(new UpdateScriptSceneItemToolExecutor(scripts, accessGuard));
+        assertValid(new ManageScriptSceneItemsToolExecutor(scripts, accessGuard));
     }
 
     private void assertValid(ToolExecutor executor) {

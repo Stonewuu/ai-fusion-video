@@ -34,6 +34,7 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { agentConfigApi, type AgentMcpServer } from "@/lib/api/agent-config";
+import { settingsTypography } from "../../_shared";
 
 const TRANSPORT_ITEMS = [
   { value: "http", label: "Streamable HTTP" },
@@ -190,10 +191,10 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-medium">我的 MCP</h2>
+              <h2 className={settingsTypography.sectionTitle}>我的 MCP</h2>
               <Badge variant="secondary">{servers.length}</Badge>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">连接远程 HTTP/SSE 服务，发现的工具可通过 / 加入当前对话。</p>
+            <p className={settingsTypography.sectionDescription}>连接远程 HTTP/SSE 服务，发现的工具可通过 / 加入当前对话。</p>
           </div>
         </div>
         <Button onClick={() => showEditor()}><Plus />添加 MCP</Button>
@@ -213,7 +214,7 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
           >
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="truncate font-medium">{server.name}</span>
+                <span className="truncate text-sm font-medium">{server.name}</span>
                 <Badge variant="outline">{server.transport.toUpperCase()}</Badge>
                 <Badge variant={server.status === 1 ? "secondary" : "outline"}>
                   {server.status === 1 ? "已启用" : "已停用"}
@@ -222,7 +223,7 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
                   {server.enabledTools.length > 0 ? `${server.enabledTools.length} 个工具` : "全部工具"}
                 </Badge>
               </div>
-              <div className="mt-1 truncate text-sm text-muted-foreground">{server.url}</div>
+              <div className="mt-1 truncate text-xs text-muted-foreground">{server.url}</div>
               {server.lastTestMessage && (
                 <div className={server.lastTestStatus === "success"
                   ? "mt-1 flex items-center gap-1 text-xs text-muted-foreground"
@@ -273,23 +274,23 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
             <div className="space-y-6">
               <section aria-labelledby="mcp-connection-heading" className="space-y-3">
                 <div>
-                  <h3 id="mcp-connection-heading" className="font-medium">连接信息</h3>
+                  <h3 id="mcp-connection-heading" className={settingsTypography.sectionTitle}>连接信息</h3>
                   <p className="mt-1 text-xs text-muted-foreground">填写服务标识、传输协议和可公开访问的端点。</p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="mcp-name">名称</Label>
+                    <Label htmlFor="mcp-name" className={settingsTypography.fieldLabel}>名称</Label>
                     <Input id="mcp-name" value={form.name} onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))} placeholder="notion-tools" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="mcp-transport">传输方式</Label>
+                    <Label htmlFor="mcp-transport" className={settingsTypography.fieldLabel}>传输方式</Label>
                     <Select items={TRANSPORT_ITEMS} value={form.transport} onValueChange={(value) => value && setForm((formValue) => ({ ...formValue, transport: value as "http" | "sse" }))}>
                       <SelectTrigger id="mcp-transport" className="w-full"><SelectValue placeholder="选择传输方式" /></SelectTrigger>
                       <SelectContent><SelectGroup>{TRANSPORT_ITEMS.map((item) => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="mcp-url">服务地址</Label>
+                    <Label htmlFor="mcp-url" className={settingsTypography.fieldLabel}>服务地址</Label>
                     <Input id="mcp-url" value={form.url} onChange={(event) => setForm((value) => ({ ...value, url: event.target.value }))} placeholder="https://mcp.example.com/mcp" />
                   </div>
                 </div>
@@ -297,16 +298,16 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
 
               <section aria-labelledby="mcp-auth-heading" className="space-y-3 border-t border-border/20 pt-5">
                 <div>
-                  <h3 id="mcp-auth-heading" className="font-medium">鉴权与参数</h3>
+                  <h3 id="mcp-auth-heading" className={settingsTypography.sectionTitle}>鉴权与参数</h3>
                   <p className="mt-1 text-xs text-muted-foreground">每行填写一个 key: value；不需要时保持为空。</p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="mcp-headers">请求头</Label>
+                    <Label htmlFor="mcp-headers" className={settingsTypography.fieldLabel}>请求头</Label>
                     <Textarea id="mcp-headers" value={form.headers} onChange={(event) => setForm((value) => ({ ...value, headers: event.target.value }))} placeholder="Authorization: Bearer ..." className="min-h-24 font-mono text-sm" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="mcp-query">查询参数</Label>
+                    <Label htmlFor="mcp-query" className={settingsTypography.fieldLabel}>查询参数</Label>
                     <Textarea id="mcp-query" value={form.queryParams} onChange={(event) => setForm((value) => ({ ...value, queryParams: event.target.value }))} placeholder="tenant: demo" className="min-h-24 font-mono text-sm" />
                   </div>
                 </div>
@@ -314,24 +315,24 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
 
               <section aria-labelledby="mcp-runtime-heading" className="space-y-3 border-t border-border/20 pt-5">
                 <div>
-                  <h3 id="mcp-runtime-heading" className="font-medium">运行设置</h3>
+                  <h3 id="mcp-runtime-heading" className={settingsTypography.sectionTitle}>运行设置</h3>
                   <p className="mt-1 text-xs text-muted-foreground">限制可用工具，并为初始化和单次调用设置超时。</p>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="mcp-tools">启用工具</Label>
+                    <Label htmlFor="mcp-tools" className={settingsTypography.fieldLabel}>启用工具</Label>
                     <Input id="mcp-tools" value={form.enabledTools} onChange={(event) => setForm((value) => ({ ...value, enabledTools: event.target.value }))} placeholder="留空启用全部；多个工具用逗号分隔" />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="mcp-init-timeout">初始化超时（秒）</Label>
+                    <Label htmlFor="mcp-init-timeout" className={settingsTypography.fieldLabel}>初始化超时（秒）</Label>
                     <Input id="mcp-init-timeout" type="number" min={1} max={600} value={form.initializationTimeoutSeconds} onChange={(event) => setForm((value) => ({ ...value, initializationTimeoutSeconds: event.target.value }))} />
                   </div>
                   <div className="space-y-1.5">
-                    <Label htmlFor="mcp-timeout">调用超时（秒）</Label>
+                    <Label htmlFor="mcp-timeout" className={settingsTypography.fieldLabel}>调用超时（秒）</Label>
                     <Input id="mcp-timeout" type="number" min={1} max={600} value={form.timeoutSeconds} onChange={(event) => setForm((value) => ({ ...value, timeoutSeconds: event.target.value }))} />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
-                    <Label htmlFor="mcp-status">状态</Label>
+                    <Label htmlFor="mcp-status" className={settingsTypography.fieldLabel}>状态</Label>
                     <Select items={STATUS_ITEMS} value={form.status} onValueChange={(value) => value && setForm((formValue) => ({ ...formValue, status: value }))}>
                       <SelectTrigger id="mcp-status" className="w-full"><SelectValue placeholder="选择状态" /></SelectTrigger>
                       <SelectContent><SelectGroup>

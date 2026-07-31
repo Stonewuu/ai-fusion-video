@@ -14,8 +14,6 @@ public class ScriptUpdateReqVO {
     @NotNull(message = "剧本ID不能为空")
     private Long id;
 
-    private String title;
-
     private String content;
 
     private String rawContent;

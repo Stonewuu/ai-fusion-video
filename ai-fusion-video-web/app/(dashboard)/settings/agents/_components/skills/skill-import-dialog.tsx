@@ -29,6 +29,7 @@ import {
   type AgentSkillImportPreview,
   type AgentSkillImportSelection,
 } from "@/lib/api/agent-config";
+import { settingsTypography } from "../../../_shared";
 
 interface SkillImportDialogProps {
   open: boolean;
@@ -228,7 +229,7 @@ export function SkillImportDialog({
 
             {skill.valid && (
               <div className="mt-3 space-y-1.5">
-                <Label htmlFor={`display-${skill.rootPath}`}>显示名称</Label>
+                <Label htmlFor={`display-${skill.rootPath}`} className={settingsTypography.fieldLabel}>显示名称</Label>
                 <Input
                   id={`display-${skill.rootPath}`}
                   value={draft?.displayName ?? skill.suggestedDisplayName}

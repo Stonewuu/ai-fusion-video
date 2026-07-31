@@ -74,15 +74,8 @@ export interface SceneItem {
   updateTime: string;
 }
 
-export interface ScriptCreateReq {
-  projectId: number;
-  title: string;
-  rawContent?: string;
-}
-
 export interface ScriptUpdateReq {
   id: number;
-  title?: string;
   content?: string;
   rawContent?: string;
   storySynopsis?: string;
@@ -145,21 +138,19 @@ export interface SceneUpdateReq {
 // ========== API ==========
 
 export const scriptApi = {
-  /** 按项目查询剧本列表 */
-  list: (projectId: number) =>
-    http.get<never, Script[]>(`/api/script/list?projectId=${projectId}`),
+  /** 按项目获取唯一剧本 */
+  getByProject: (projectId: number) =>
+    http.get<never, Script | null>(`/api/script/project/${projectId}`),
 
   /** 获取剧本详情 */
   get: (id: number) => http.get<never, Script>(`/api/script/${id}`),
 
-  /** 创建剧本 */
-  create: (data: ScriptCreateReq) => http.post<never, Script>("/api/script", data),
-
   /** 更新剧本 */
   update: (data: ScriptUpdateReq) => http.put<never, Script>("/api/script", data),
 
-  /** 删除剧本 */
-  delete: (id: number) => http.delete<never, boolean>(`/api/script/${id}`),
+  /** 替换原文并重置结构化分集与场次 */
+  replaceSource: (id: number, rawContent: string) =>
+    http.put<never, Script>(`/api/script/${id}/source`, { rawContent }),
 
   // ========== 分集 ==========
 

@@ -19,6 +19,14 @@ function StoryboardShotCard({
   index: number;
 }) {
   const shotNumber = item.shotNumber ?? item.autoShotNumber ?? index + 1;
+  const sceneNumber = typeof item.sceneNumber === "string"
+    ? item.sceneNumber.trim()
+    : "";
+  // Historical tool results do not contain sceneNumber, so retain their
+  // original shot label while new results use the unambiguous scene-shot form.
+  const displayNumber = sceneNumber
+    ? `${sceneNumber}-${String(shotNumber)}`
+    : String(shotNumber);
   const shotType = item.shotType as string | undefined;
   const cameraMovement = item.cameraMovement as string | undefined;
   const content =
@@ -43,12 +51,12 @@ function StoryboardShotCard({
       style={{ contentVisibility: "auto", containIntrinsicSize: "88px" }}
     >
       <div className="flex gap-2">
-        <div className="relative h-10 w-16 shrink-0 overflow-hidden rounded-md border border-border/20 bg-muted/20">
+        <div className="relative min-h-10 w-16 shrink-0 self-stretch overflow-hidden rounded-md border border-border/20 bg-muted/20">
           {hasVideo ? (
             <>
               <video
                 src={videoUrl || ""}
-                className="h-full w-full object-cover"
+                className="absolute inset-0 h-full w-full object-contain"
                 muted
                 playsInline
                 preload="none"
@@ -60,13 +68,13 @@ function StoryboardShotCard({
           ) : hasImage ? (
             <SafeImage
               src={imageUrl || ""}
-              alt={`镜头 ${String(shotNumber)}`}
-              className="h-full w-full object-cover"
+              alt={`镜头 ${displayNumber}`}
+              className="absolute inset-0 h-full w-full object-contain"
               loading="lazy"
               decoding="async"
             />
           ) : (
-            <div className="flex h-full w-full items-center justify-center">
+            <div className="absolute inset-0 flex items-center justify-center">
               <Film className="h-4 w-4 text-muted-foreground/35" />
             </div>
           )}
@@ -74,8 +82,8 @@ function StoryboardShotCard({
 
         <div className="min-w-0 flex-1 space-y-0.5">
           <div className="flex flex-wrap items-center gap-1">
-            <span className="text-xs font-semibold text-foreground">
-              #{String(shotNumber)}
+            <span className="text-xs font-semibold tabular-nums text-foreground">
+              {displayNumber}
             </span>
             {shotType ? (
               <span className="rounded bg-muted/50 px-1.5 py-0.5 text-[10px] text-muted-foreground">

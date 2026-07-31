@@ -5,13 +5,10 @@ import { useParams, useRouter } from "next/navigation";
 import {
   FileText,
   Clock,
-  Sparkles,
-  Trash2,
   Loader2,
   BookOpen,
   Eye,
   RefreshCw,
-  Plus,
   Film,
   Type,
   Palette,
@@ -23,22 +20,19 @@ import {
   Wrench,
 } from "lucide-react";
 import { motion } from "framer-motion";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
-import { scriptApi, type Script } from "@/lib/api/script";
-import {
-  storyboardApi,
-  type Storyboard,
-  type StoryboardStatistics,
-} from "@/lib/api/storyboard";
+import type { Script } from "@/lib/api/script";
+import type { Storyboard, StoryboardStatistics } from "@/lib/api/storyboard";
 import { assetApi, type Asset } from "@/lib/api/asset";
 import { artStyleApi, type ArtStylePreset } from "@/lib/api/art-style";
+import { projectApi } from "@/lib/api/project";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { MainContentFrame } from "@/components/dashboard/main-content-frame";
-import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
 import { SafeImage } from "@/components/ui/safe-image";
+import { Button } from "@/components/ui/button";
 import { useProject } from "./project-context";
-import { CreateScriptDialog } from "@/components/dashboard/create-script-dialog";
 import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 
@@ -93,11 +87,10 @@ export default function ProjectOverviewPage() {
   const properties = (project?.properties as Record<string, string>) || {};
 
   const [script, setScript] = useState<Script | null>(null);
+  const [scriptEpisodeCount, setScriptEpisodeCount] = useState(0);
+  const [scriptSceneCount, setScriptSceneCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [deletingScript, setDeletingScript] = useState(false);
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showParseDialog, setShowParseDialog] = useState(false);
-  const [parseMode, setParseMode] = useState<"create" | "reparse">("create");
 
   // 分镜状态
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
@@ -107,7 +100,7 @@ export default function ProjectOverviewPage() {
     itemCount: 0,
   });
   const [loadingStoryboard, setLoadingStoryboard] = useState(true);
-  const [deletingStoryboard, setDeletingStoryboard] = useState(false);
+  const [initializingWorkspace, setInitializingWorkspace] = useState(false);
 
   // 画风预设
   const [artPresets, setArtPresets] = useState<ArtStylePreset[]>([]);
@@ -126,41 +119,25 @@ export default function ProjectOverviewPage() {
 
   // 串行加载概览数据：剧本 → 分镜统计 → 资产
   const loadAllData = useCallback(async () => {
-    // 1. 加载剧本
+    // 1. 加载固定剧本、分镜容器及真实内容统计
     try {
       setLoading(true);
-      const scripts = await scriptApi.list(projectId);
-      setScript(scripts.length > 0 ? scripts[0] : null);
+      setLoadingStoryboard(true);
+      const overview = await projectApi.getWorkspaceOverview(projectId);
+      setScript(overview.script);
+      setScriptEpisodeCount(overview.scriptEpisodeCount);
+      setScriptSceneCount(overview.scriptSceneCount);
+      setStoryboard(overview.storyboard);
+      setStoryboardStatistics(overview.storyboardStatistics);
     } catch (err) {
-      console.error("加载剧本数据失败:", err);
-      toastApiError(err, "加载剧本数据失败");
+      console.error("加载项目工作区失败:", err);
+      toastApiError(err, "加载项目工作区失败");
     } finally {
       setLoading(false);
-    }
-
-    // 2. 加载分镜
-    try {
-      setLoadingStoryboard(true);
-      const list = await storyboardApi.list(projectId);
-      if (list.length > 0) {
-        const sb = list[0];
-        setStoryboard(sb);
-
-        // 3. 只加载概览所需的聚合数量，避免下载完整分集、场次和镜头列表
-        const statistics = await storyboardApi.getStatistics(sb.id);
-        setStoryboardStatistics(statistics);
-      } else {
-        setStoryboard(null);
-        setStoryboardStatistics({ episodeCount: 0, sceneCount: 0, itemCount: 0 });
-      }
-    } catch (err) {
-      console.error("加载分镜数据失败:", err);
-      toastApiError(err, "加载分镜数据失败");
-    } finally {
       setLoadingStoryboard(false);
     }
 
-    // 3. 加载资产
+    // 2. 加载资产
     try {
       setLoadingAssets(true);
       const data = await assetApi.list(projectId);
@@ -183,42 +160,12 @@ export default function ProjectOverviewPage() {
     loadAllData();
   }, [loadAllData]);
 
-  const handleDeleteScript = async () => {
-    if (!script) return;
-    if (!confirm("确定要删除该剧本吗？所有分集和场次数据将一并删除。")) return;
-    setDeletingScript(true);
-    try {
-      await scriptApi.delete(script.id);
-      await loadAllData();
-    } catch (err) {
-      console.error("删除剧本失败:", err);
-      toastApiError(err, "删除剧本失败");
-    } finally {
-      setDeletingScript(false);
-    }
-  };
-
-  const handleDeleteStoryboard = async () => {
-    if (!storyboard) return;
-    if (!confirm("确定要删除该分镜吗？所有分镜集、场次和镜头数据将一并删除。")) return;
-    setDeletingStoryboard(true);
-    try {
-      await storyboardApi.delete(storyboard.id);
-      await loadAllData();
-    } catch (err) {
-      console.error("删除分镜失败:", err);
-      toastApiError(err, "删除分镜失败");
-    } finally {
-      setDeletingStoryboard(false);
-    }
-  };
-
   // AI 生成剧本：创建成功后触发 pipeline
   const { addPipeline, setPanelExpanded, setExpandedTaskId } =
     usePipelineStore();
 
   const handleAiScriptCreated = (script: { id: number; title: string }) => {
-    const scriptDisplayTitle = script.title?.trim() || project?.name?.trim() || "未命名项目";
+    const scriptDisplayTitle = project?.name?.trim() || "未命名项目";
 
     // 刷新列表
     loadAllData();
@@ -253,15 +200,14 @@ export default function ProjectOverviewPage() {
   const handleAiStoryboard = async () => {
     if (!script) return;
 
-    const scriptDisplayTitle = script.title?.trim() || project?.name?.trim() || "未命名项目";
+    const scriptDisplayTitle = project?.name?.trim() || "未命名项目";
 
     try {
-      // 优先复用当前分镜，避免重新解析时删除已有高质量分镜集。
-      const targetStoryboard = storyboard ?? await storyboardApi.create({
-        projectId,
-        scriptId: script.id,
-        title: script.title?.trim() || project?.name?.trim() || "AI 分镜",
-      });
+      // 固定复用项目唯一分镜容器，生成过程只补充内部集、场次和镜头。
+      if (!storyboard) {
+        throw new Error("项目分镜工作区未初始化");
+      }
+      const targetStoryboard = storyboard;
 
       const pipelineId = addPipeline({
         label: `AI 生成分镜 - ${scriptDisplayTitle}`,
@@ -287,8 +233,30 @@ export default function ProjectOverviewPage() {
       // 跳转到分镜页
       router.push(`/projects/${projectId}/storyboards`);
     } catch (err) {
-      console.error("创建分镜记录失败:", err);
-      toastApiError(err, "创建分镜记录失败，请重试");
+      console.error("生成分镜失败:", err);
+      toastApiError(err, "生成分镜失败，请重试");
+    }
+  };
+
+  const handleInitializeWorkspace = async () => {
+    if (!confirm("将只补齐缺失的剧本或分镜工作区，不会删除或覆盖任何现有数据。确定继续？")) {
+      return;
+    }
+
+    try {
+      setInitializingWorkspace(true);
+      const overview = await projectApi.initializeWorkspace(projectId);
+      setScript(overview.script);
+      setScriptEpisodeCount(overview.scriptEpisodeCount);
+      setScriptSceneCount(overview.scriptSceneCount);
+      setStoryboard(overview.storyboard);
+      setStoryboardStatistics(overview.storyboardStatistics);
+      toast.success("项目工作区初始化完成");
+    } catch (err) {
+      console.error("初始化项目工作区失败:", err);
+      toastApiError(err, "初始化项目工作区失败");
+    } finally {
+      setInitializingWorkspace(false);
     }
   };
 
@@ -307,6 +275,11 @@ export default function ProjectOverviewPage() {
   const sbStatus = storyboard
     ? storyboardStatusMap[storyboard.status] || storyboardStatusMap[0]
     : null;
+  const scriptHasContent = Boolean(script?.rawContent?.trim())
+    || scriptEpisodeCount > 0
+    || scriptSceneCount > 0;
+  const storyboardHasContent = storyboardStatistics.episodeCount > 0
+    || storyboardStatistics.sceneCount > 0;
 
   return (
     <MainContentFrame>
@@ -317,12 +290,14 @@ export default function ProjectOverviewPage() {
       >
       {/* 项目详情概览条 */}
       <motion.div variants={itemVariants} className="mb-8">
-        <div
+        <button
+          type="button"
           onClick={() => router.push(`/projects/${projectId}/settings`)}
           className={cn(
             "rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm",
-            "px-5 py-4 flex items-center gap-6 cursor-pointer group",
-            "hover:border-primary/30 hover:bg-primary/2 transition-all duration-200"
+            "w-full px-5 py-4 flex items-center gap-6 cursor-pointer group text-left",
+            "hover:border-primary/30 hover:bg-primary/2 transition-colors duration-200",
+            "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
           )}
         >
           {/* 项目名称 */}
@@ -381,7 +356,7 @@ export default function ProjectOverviewPage() {
             修改设置
             <ChevronRight className="h-3.5 w-3.5" />
           </div>
-        </div>
+        </button>
       </motion.div>
 
       {/* 剧本区域 */}
@@ -407,10 +382,10 @@ export default function ProjectOverviewPage() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-lg font-semibold truncate">
-                    {script.title || "未命名剧本"}
+                    {project?.name || "未命名项目"}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
-                    {script.storySynopsis || script.genre || "暂无描述"}
+                    {script.storySynopsis || script.genre || (scriptHasContent ? "剧本内容待完善" : "尚未添加剧本内容")}
                   </p>
                 </div>
               </div>
@@ -426,9 +401,8 @@ export default function ProjectOverviewPage() {
 
             {/* 元信息 */}
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              {script.totalEpisodes > 0 && (
-                <span>{script.totalEpisodes} 集</span>
-              )}
+              <span>{scriptEpisodeCount} 集</span>
+              <span>{scriptSceneCount} 场次</span>
               <span className="flex items-center gap-1">
                 <Clock className="h-3 w-3" />
                 {formatTime(script.updateTime)}
@@ -437,117 +411,40 @@ export default function ProjectOverviewPage() {
 
             {/* 操作按钮 */}
             <div className="flex items-center gap-2 pt-2 border-t border-border/20">
-              <button
-                onClick={() =>
-                  router.push(`/projects/${projectId}/scripts`)
-                }
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium",
-                  "bg-primary text-primary-foreground",
-                  "hover:opacity-90 transition-opacity"
-                )}
-              >
+              <Button onClick={() => router.push(`/projects/${projectId}/scripts`)}>
                 <Eye className="h-4 w-4" />
                 查看剧本
-              </button>
-              <button
-                onClick={async () => {
-                  if (!confirm("重新解析将删除当前剧本及其所有分集、场次数据，确定继续？")) return;
-                  try {
-                    await scriptApi.delete(script.id);
-                    setParseMode("reparse");
-                    setShowParseDialog(true);
-                  } catch (err) {
-                    console.error("删除旧剧本失败:", err);
-                    toastApiError(err, "删除旧剧本失败");
-                  }
-                }}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium",
-                  "bg-linear-to-r from-purple-600 to-pink-600",
-                  "text-white shadow-lg shadow-purple-500/20",
-                  "hover:shadow-purple-500/30 transition-all duration-200"
-                )}
-              >
+              </Button>
+              <Button variant="ai" onClick={() => setShowParseDialog(true)}>
                 <RefreshCw className="h-4 w-4" />
-                重新解析
-              </button>
-              <button
-                onClick={handleDeleteScript}
-                disabled={deletingScript}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium",
-                  "border border-destructive/30 text-destructive",
-                  "hover:bg-destructive/10 transition-colors ml-auto"
-                )}
-              >
-                {deletingScript ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                删除剧本
-              </button>
+                {scriptHasContent ? "重新解析内容" : "AI 解析"}
+              </Button>
             </div>
           </div>
         ) : (
-          /* 没有剧本：引导创建 */
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* 手动创建 */}
-            <div
-              onClick={() => setShowCreateDialog(true)}
-              className={cn(
-                "rounded-xl border border-dashed border-border/40 p-10",
-                "flex flex-col items-center justify-center text-center",
-                "bg-card/20 hover:border-primary/40 hover:bg-primary/5 transition-all cursor-pointer"
-              )}
-            >
-              <div className="h-14 w-14 rounded-xl bg-primary/10 flex items-center justify-center mb-4">
-                <Plus className="h-7 w-7 text-primary" />
-              </div>
-              <p className="text-lg font-medium mb-1">手动创建剧本</p>
-              <p className="text-muted-foreground text-sm">
-                创建空白剧本，手动添加分集和场次
-              </p>
-            </div>
-            {/* AI 生成 */}
-            <div
-              onClick={() => {
-                setParseMode("create");
-                setShowParseDialog(true);
-              }}
-              className={cn(
-                "rounded-xl border border-dashed border-border/40 p-10",
-                "flex flex-col items-center justify-center text-center",
-                "bg-card/20 hover:border-purple-500/40 hover:bg-purple-500/5 transition-all cursor-pointer"
-              )}
-            >
-              <div className="h-14 w-14 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4">
-                <Sparkles className="h-7 w-7 text-purple-400" />
-              </div>
-              <p className="text-lg font-medium mb-1">AI 生成剧本</p>
-              <p className="text-muted-foreground text-sm">
-                粘贴剧本原文，AI 将自动解析为结构化数据
-              </p>
+          <div className="rounded-xl border border-destructive/30 bg-card p-6">
+            <p className="font-medium">项目剧本工作区未初始化</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              可补齐缺失的剧本和分镜容器，不会删除或覆盖任何现有数据。
+            </p>
+            <div className="mt-4">
+              <Button onClick={handleInitializeWorkspace} disabled={initializingWorkspace}>
+                <RefreshCw className={cn("h-4 w-4", initializingWorkspace && "animate-spin")} />
+                {initializingWorkspace ? "正在初始化" : "重新初始化项目"}
+              </Button>
             </div>
           </div>
         )}
 
-        <CreateScriptDialog
-          open={showCreateDialog}
-          projectId={projectId}
-          projectName={project?.name}
-          onClose={() => setShowCreateDialog(false)}
-          onCreated={() => loadAllData()}
-        />
-        <ParseScriptDialog
-          open={showParseDialog}
-          projectId={projectId}
-          projectName={project?.name}
-          mode={parseMode}
-          onClose={() => setShowParseDialog(false)}
-          onCreated={handleAiScriptCreated}
-        />
+        {script && (
+          <ParseScriptDialog
+            open={showParseDialog}
+            scriptId={script.id}
+            mode={scriptHasContent ? "reparse" : "create"}
+            onClose={() => setShowParseDialog(false)}
+            onCreated={handleAiScriptCreated}
+          />
+        )}
       </motion.div>
 
       {/* 分镜区域 */}
@@ -577,10 +474,15 @@ export default function ProjectOverviewPage() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-lg font-semibold truncate">
-                    {storyboard.title || "未命名分镜"}
+                    {project?.name || "未命名项目"}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
-                    {storyboard.description || "暂无描述"}
+                    {storyboard.description
+                      || (!storyboardHasContent
+                        ? "暂无分镜内容"
+                        : storyboardStatistics.sceneCount === 0
+                          ? "已创建分集，待添加场次"
+                          : "分镜内容已建立")}
                   </p>
                 </div>
               </div>
@@ -596,9 +498,7 @@ export default function ProjectOverviewPage() {
 
             {/* 统计信息 */}
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
-              {storyboardStatistics.episodeCount > 0 && (
-                <span>{storyboardStatistics.episodeCount} 集</span>
-              )}
+              <span>{storyboardStatistics.episodeCount} 集</span>
               <span>{storyboardStatistics.sceneCount} 场次</span>
               <span>{storyboardStatistics.itemCount} 镜头</span>
               <span className="flex items-center gap-1">
@@ -609,101 +509,41 @@ export default function ProjectOverviewPage() {
 
             {/* 操作按钮 */}
             <div className="flex items-center gap-2 pt-2 border-t border-border/20">
-              <button
-                onClick={() =>
-                  router.push(`/projects/${projectId}/storyboards`)
-                }
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium",
-                  "bg-primary text-primary-foreground",
-                  "hover:opacity-90 transition-opacity"
-                )}
-              >
+              <Button onClick={() => router.push(`/projects/${projectId}/storyboards`)}>
                 <Eye className="h-4 w-4" />
                 查看分镜
-              </button>
-              <button
-                onClick={async () => {
+              </Button>
+              <Button
+                variant="ai"
+                onClick={() => {
                   if (!script) {
-                    alert("请先创建剧本后再生成分镜");
+                    alert("项目剧本工作区未初始化");
                     return;
                   }
-                  if (!confirm("重新解析将补齐缺失的分镜集，不会删除已有分镜内容。确定继续？")) return;
-                  handleAiStoryboard();
+                  if (storyboardHasContent
+                    && !confirm("AI 将补齐缺失的分镜集，不会删除已有分镜内容。确定继续？")) return;
+                  void handleAiStoryboard();
                 }}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium",
-                  "bg-linear-to-r from-purple-600 to-pink-600",
-                  "text-white shadow-lg shadow-purple-500/20",
-                  "hover:shadow-purple-500/30 transition-all duration-200"
-                )}
               >
                 <RefreshCw className="h-4 w-4" />
-                重新解析
-              </button>
-              <button
-                onClick={handleDeleteStoryboard}
-                disabled={deletingStoryboard}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium",
-                  "border border-destructive/30 text-destructive",
-                  "hover:bg-destructive/10 transition-colors ml-auto"
-                )}
-              >
-                {deletingStoryboard ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Trash2 className="h-4 w-4" />
-                )}
-                删除分镜
-              </button>
+                {storyboardHasContent ? "AI 补全" : "AI 生成"}
+              </Button>
             </div>
           </div>
         ) : (
-          /* 没有分镜：引导 */
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {/* 手动创建 */}
-            <div
-              onClick={() =>
-                router.push(`/projects/${projectId}/storyboards`)
-              }
-              className={cn(
-                "rounded-xl border border-dashed border-border/40 p-10",
-                "flex flex-col items-center justify-center text-center",
-                "bg-card/20 hover:border-cyan-500/40 hover:bg-cyan-500/5 transition-all cursor-pointer"
-              )}
-            >
-              <div className="h-14 w-14 rounded-xl bg-cyan-500/10 flex items-center justify-center mb-4">
-                <Plus className="h-7 w-7 text-cyan-400" />
+          <div className="rounded-xl border border-destructive/30 bg-card p-6">
+            <p className="font-medium">项目分镜工作区未初始化</p>
+            <p className="mt-1 text-sm text-muted-foreground">
+              可补齐缺失的分镜容器，不会删除或覆盖任何现有数据。
+            </p>
+            {script && (
+              <div className="mt-4">
+                <Button onClick={handleInitializeWorkspace} disabled={initializingWorkspace}>
+                  <RefreshCw className={cn("h-4 w-4", initializingWorkspace && "animate-spin")} />
+                  {initializingWorkspace ? "正在初始化" : "重新初始化项目"}
+                </Button>
               </div>
-              <p className="text-lg font-medium mb-1">创建分镜</p>
-              <p className="text-muted-foreground text-sm">
-                进入分镜管理页面，手动创建分镜表
-              </p>
-            </div>
-            {/* AI 生成 */}
-            <div
-              onClick={() => {
-                if (!script) {
-                  alert("请先创建剧本后再使用 AI 生成分镜");
-                  return;
-                }
-                handleAiStoryboard();
-              }}
-              className={cn(
-                "rounded-xl border border-dashed border-border/40 p-10",
-                "flex flex-col items-center justify-center text-center",
-                "bg-card/20 hover:border-purple-500/40 hover:bg-purple-500/5 transition-all cursor-pointer"
-              )}
-            >
-              <div className="h-14 w-14 rounded-xl bg-purple-500/10 flex items-center justify-center mb-4">
-                <Sparkles className="h-7 w-7 text-purple-400" />
-              </div>
-              <p className="text-lg font-medium mb-1">AI 生成分镜</p>
-              <p className="text-muted-foreground text-sm">
-                基于剧本内容，AI 将自动生成结构化分镜表
-              </p>
-            </div>
+            )}
           </div>
         )}
       </motion.div>

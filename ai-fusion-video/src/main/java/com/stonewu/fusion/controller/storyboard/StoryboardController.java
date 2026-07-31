@@ -2,7 +2,6 @@ package com.stonewu.fusion.controller.storyboard;
 
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeBindReqVO;
-import com.stonewu.fusion.controller.storyboard.vo.StoryboardCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeUpdateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardFrameUpdateReqVO;
@@ -52,17 +51,10 @@ public class StoryboardController {
         return CommonResult.success(storyboardService.getById(id));
     }
 
-    @Operation(summary = "按项目查询分镜列表")
-    @GetMapping("/list")
-    public CommonResult<List<Storyboard>> list(@RequestParam Long projectId) {
-        return CommonResult.success(storyboardService.listByProject(projectId));
-    }
-
-    @Operation(summary = "创建分镜")
-    @PostMapping
-    public CommonResult<Storyboard> create(@Valid @RequestBody StoryboardCreateReqVO reqVO) {
-        Storyboard storyboard = StoryboardConvert.INSTANCE.convert(reqVO);
-        return CommonResult.success(storyboardService.create(storyboard));
+    @Operation(summary = "按项目获取唯一分镜")
+    @GetMapping("/project/{projectId}")
+    public CommonResult<Storyboard> getByProject(@PathVariable Long projectId) {
+        return CommonResult.success(storyboardService.getByProjectId(projectId));
     }
 
     @Operation(summary = "更新分镜")
@@ -72,10 +64,10 @@ public class StoryboardController {
         return CommonResult.success(storyboardService.update(storyboard));
     }
 
-    @Operation(summary = "删除分镜")
-    @DeleteMapping("/{id}")
-    public CommonResult<Boolean> delete(@PathVariable Long id) {
-        storyboardService.delete(id);
+    @Operation(summary = "清空分镜内部内容")
+    @PostMapping("/{id}/clearContent")
+    public CommonResult<Boolean> clearContent(@PathVariable Long id) {
+        storyboardService.clearContent(id);
         return CommonResult.success(true);
     }
 

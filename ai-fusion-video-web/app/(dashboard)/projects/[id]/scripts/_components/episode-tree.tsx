@@ -11,6 +11,7 @@ import {
   Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
+  RotateCw,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -116,6 +117,8 @@ export function EpisodeTree({
   loadingEpisodes,
   episodeScenes,
   collapsed = false,
+  onRefresh,
+  isRefreshing = false,
   onToggleEpisode,
   onSelectEpisode,
   onSelectScene,
@@ -135,6 +138,8 @@ export function EpisodeTree({
   loadingEpisodes: Set<number>;
   episodeScenes: Record<number, SceneItem[]>;
   collapsed?: boolean;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
   onToggleEpisode: (id: number) => void;
   onSelectEpisode: (id: number) => void;
   onSelectScene: (sceneId: number, episodeId: number) => void;
@@ -189,6 +194,18 @@ export function EpisodeTree({
           剧本目录
         </h3>
         <div className="flex items-center gap-1">
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              disabled={isRefreshing}
+              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground/70 hover:text-primary hover:bg-primary/8 transition-colors disabled:opacity-50"
+              title="刷新剧本目录"
+              aria-label="刷新剧本目录"
+            >
+              <RotateCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+            </button>
+          )}
           <span className="text-[10px] text-primary/50 bg-primary/6 px-1.5 py-0.5 rounded-full tabular-nums font-medium">
             {episodes.length} 集
           </span>

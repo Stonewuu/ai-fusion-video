@@ -103,6 +103,54 @@ class OpenAiImageProtocolTests {
     }
 
     @Test
+    void urlCapableEditsUseJsonImageReferences() throws IOException {
+        JSONObject config = JSONUtil.parseObj("""
+                {
+                  "referenceImageInputFormats": ["url", "data_uri"],
+                  "quality": "high",
+                  "inputFidelity": "high"
+                }
+                """);
+
+        OpenAiCompatibleImageRequest request = adapter.buildRequest(context(
+                "gpt-image-1.5",
+                List.of(
+                        "https://cdn.example.com/reference.png",
+                        "data:image/png;base64,cmVmZXJlbmNl"
+                ),
+                config
+        ));
+        JSONObject body = JSONUtil.parseObj(readBody(request));
+
+        assertThat(request.body().contentType().toString()).startsWith("application/json");
+        assertThat(body.getJSONArray("images").getJSONObject(0).getStr("image_url"))
+                .isEqualTo("https://cdn.example.com/reference.png");
+        assertThat(body.getJSONArray("images").getJSONObject(1).getStr("image_url"))
+                .isEqualTo("data:image/png;base64,cmVmZXJlbmNl");
+        assertThat(body.getStr("input_fidelity")).isEqualTo("high");
+        assertThat(body.keySet()).doesNotContain("image_urls");
+    }
+
+    @Test
+    void gptImage2UrlCapableEditsJsonOmitsUnsupportedInputFidelity() throws IOException {
+        JSONObject config = JSONUtil.parseObj("""
+                {
+                  "referenceImageInputFormats": ["url"],
+                  "inputFidelity": "high"
+                }
+                """);
+
+        JSONObject body = JSONUtil.parseObj(readBody(adapter.buildRequest(context(
+                "gpt-image-2",
+                List.of("https://cdn.example.com/reference.png"),
+                config
+        ))));
+
+        assertThat(body.getJSONArray("images")).hasSize(1);
+        assertThat(body.keySet()).doesNotContain("input_fidelity");
+    }
+
+    @Test
     void responseParserDoesNotAcceptCompatibilityOnlyImageUrlAlias() {
         assertThatThrownBy(() -> adapter.parseImageUrls(null, """
                 {"data":[{"image_url":"https://example.com/result.png"}]}

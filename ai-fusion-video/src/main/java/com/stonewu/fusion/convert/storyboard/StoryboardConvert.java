@@ -1,6 +1,5 @@
 package com.stonewu.fusion.convert.storyboard;
 
-import com.stonewu.fusion.controller.storyboard.vo.StoryboardCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeCreateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardEpisodeUpdateReqVO;
 import com.stonewu.fusion.controller.storyboard.vo.StoryboardItemCreateReqVO;
@@ -28,16 +27,9 @@ public interface StoryboardConvert {
 
     // ========== 分镜脚本 ==========
 
-    @Mapping(target = "scope", ignore = true)
-    @Mapping(target = "ownerType", ignore = true)
-    @Mapping(target = "ownerId", ignore = true)
-    @Mapping(target = "totalDuration", ignore = true)
-    @Mapping(target = "id", ignore = true)
-    @Mapping(target = "status", ignore = true)
-    Storyboard convert(StoryboardCreateReqVO reqVO);
-
     @Mapping(target = "projectId", ignore = true)
     @Mapping(target = "scriptId", ignore = true)
+    @Mapping(target = "title", ignore = true)
     @Mapping(target = "scope", ignore = true)
     @Mapping(target = "ownerType", ignore = true)
     @Mapping(target = "ownerId", ignore = true)

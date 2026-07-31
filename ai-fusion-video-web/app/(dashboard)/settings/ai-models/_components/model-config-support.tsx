@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { Check, ChevronRight, Trash2 } from "lucide-react";
+import { Check, ChevronRight, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { AiModel, ApiConfig, ModelPreset } from "@/lib/api/ai-model";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
@@ -473,7 +474,9 @@ export function SupportedSizesEditor({
   value: SizesMap | undefined;
   onChange: (v: SizesMap | undefined) => void;
 }) {
-  const [collapsedTiers, setCollapsedTiers] = useState<Set<string>>(new Set());
+  const [collapsedTiers, setCollapsedTiers] = useState<Set<string>>(
+    () => new Set(Object.keys(value || {}).slice(1))
+  );
   const [newTierName, setNewTierName] = useState("");
 
   const sizes = value || {};
@@ -496,6 +499,11 @@ export function SupportedSizesEditor({
     if (!name || sizes[name]) return;
     const next = { ...sizes, [name]: {} };
     onChange(next);
+    setCollapsedTiers(prev => {
+      const collapsed = new Set(prev);
+      collapsed.delete(name);
+      return collapsed;
+    });
     setNewTierName("");
   };
 
@@ -534,10 +542,8 @@ export function SupportedSizesEditor({
   const availableTierChips = COMMON_TIERS.filter(t => !sizes[t]);
 
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between">
-        <label className="text-[11px] text-muted-foreground">支持的尺寸 (supportedSizes)</label>
-      </div>
+    <div className="space-y-3">
+      <label className="text-xs text-muted-foreground">支持的尺寸 (supportedSizes)</label>
 
       {tierNames.map(tier => {
         const isCollapsed = collapsedTiers.has(tier);
@@ -545,73 +551,96 @@ export function SupportedSizesEditor({
         const ratioEntries = Object.entries(ratios);
 
         return (
-          <div key={tier} className="rounded-lg border border-border/30 bg-background overflow-hidden">
-            <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30 border-b border-border/20">
+          <div key={tier} className="overflow-hidden rounded-lg border border-border/20 bg-background/70">
+            <div className={cn(
+              "flex min-h-10 items-center justify-between gap-3 px-3",
+              !isCollapsed && "border-b border-border/20"
+            )}>
               <button
                 type="button"
                 onClick={() => toggleCollapse(tier)}
-                className="flex items-center gap-1.5 text-[11px] font-medium text-foreground/80 hover:text-foreground transition-colors"
+                className="flex min-w-0 items-center gap-2 rounded-md text-sm font-medium text-foreground/80 outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
               >
-                <ChevronRight className={cn("h-3 w-3 transition-transform duration-200", !isCollapsed && "rotate-90")} />
-                {tier}
-                <span className="text-[10px] text-muted-foreground font-normal">({ratioEntries.length} 项)</span>
+                <ChevronRight className={cn("size-4 shrink-0 transition-transform duration-200", !isCollapsed && "rotate-90")} />
+                <span className="truncate">{tier}</span>
+                <span className="shrink-0 text-xs font-normal text-muted-foreground">{ratioEntries.length} 项</span>
               </button>
-              <div className="flex items-center gap-1">
-                <button
+              <div className="flex shrink-0 items-center gap-2">
+                <Button
                   type="button"
+                  variant="ghost"
+                  size="xs"
                   onClick={() => fillCommonRatios(tier)}
-                  className="text-[9px] text-muted-foreground hover:text-primary transition-colors px-1"
                   title="填充常见比例"
                 >
-                  +常见比例
-                </button>
-                <button
+                  补齐常见比例
+                </Button>
+                <Button
                   type="button"
+                  variant="destructive-ghost"
+                  size="icon-xs"
                   onClick={() => removeTier(tier)}
-                  className="text-[9px] text-muted-foreground hover:text-destructive transition-colors"
+                  aria-label={`删除 ${tier} 档位`}
                   title="删除档位"
                 >
-                  <Trash2 className="h-3 w-3" />
-                </button>
+                  <Trash2 />
+                </Button>
               </div>
             </div>
 
             {!isCollapsed && (
-              <div className="p-2 space-y-1">
-                {ratioEntries.map(([ratio, resolution]) => (
-                  <div key={ratio} className="flex items-center gap-1.5">
-                    <span className="text-[10px] text-muted-foreground w-10 shrink-0 text-right font-mono">{ratio}</span>
-                    <Input
-                      placeholder="例如：1024x1024"
-                      value={resolution}
-                      onChange={e => updateResolution(tier, ratio, e.target.value)}
-                      className="text-[10px] font-mono h-6 flex-1"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => removeRatio(tier, ratio)}
-                      className="text-[9px] text-muted-foreground hover:text-destructive transition-colors shrink-0"
-                    >
-                      ✕
-                    </button>
+              <div className="space-y-2 p-3">
+                {ratioEntries.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                    {ratioEntries.map(([ratio, resolution]) => (
+                      <div
+                        key={ratio}
+                        className="group flex h-9 min-w-0 items-center gap-2 rounded-lg border border-border/20 bg-background/70 pl-2 pr-1 transition-colors focus-within:border-border/50"
+                      >
+                        <span className="w-10 shrink-0 text-right font-mono text-xs text-muted-foreground">{ratio}</span>
+                        <Input
+                          aria-label={`${tier} ${ratio} 尺寸`}
+                          placeholder="1024x1024"
+                          value={resolution}
+                          onChange={e => updateResolution(tier, ratio, e.target.value)}
+                          className="h-7 min-w-0 flex-1 border-0 bg-transparent px-0 font-mono text-xs shadow-none focus-visible:ring-0"
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive-ghost"
+                          size="icon-xs"
+                          onClick={() => removeRatio(tier, ratio)}
+                          aria-label={`删除 ${ratio} 比例`}
+                          title={`删除 ${ratio}`}
+                        >
+                          <X />
+                        </Button>
+                      </div>
+                    ))}
                   </div>
-                ))}
+                ) : (
+                  <div className="rounded-lg border border-dashed border-border/40 py-4 text-center text-xs text-muted-foreground">
+                    暂无尺寸比例
+                  </div>
+                )}
 
                 {(() => {
                   const existingRatios = new Set(Object.keys(ratios));
                   const available = COMMON_ASPECT_RATIOS.filter(r => !existingRatios.has(r));
                   if (available.length === 0) return null;
                   return (
-                    <div className="flex flex-wrap gap-1 pt-1 border-t border-border/10 mt-1">
+                    <div className="flex flex-wrap items-center gap-2 border-t border-border/20 pt-2">
+                      <span className="text-xs text-muted-foreground">添加比例</span>
                       {available.map(r => (
-                        <button
+                        <Button
                           key={r}
                           type="button"
+                          variant="ghost"
+                          size="xs"
                           onClick={() => addRatio(tier, r)}
-                          className="text-[9px] px-1.5 py-0.5 rounded border border-dashed border-border/40 text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
                         >
-                          +{r}
-                        </button>
+                          + {r}
+                        </Button>
                       ))}
                     </div>
                   );
@@ -622,33 +651,35 @@ export function SupportedSizesEditor({
         );
       })}
 
-      <div className="flex items-center gap-1.5">
+      <div className="flex flex-wrap items-center gap-2">
         {availableTierChips.map(t => (
-          <button
+          <Button
             key={t}
             type="button"
+            variant="outline"
+            size="xs"
             onClick={() => addTier(t)}
-            className="text-[10px] px-2 py-0.5 rounded-md border border-dashed border-border/40 text-muted-foreground hover:border-primary/40 hover:text-primary transition-colors"
           >
-            +{t}
-          </button>
+            + {t}
+          </Button>
         ))}
-        <div className="flex items-center gap-1 ml-auto">
+        <div className="ml-auto flex items-center gap-2">
           <Input
             placeholder="自定义档位"
             value={newTierName}
             onChange={e => setNewTierName(e.target.value)}
             onKeyDown={e => e.key === "Enter" && addTier(newTierName)}
-            className="text-[10px] h-5 w-20 font-mono"
+            className="h-8 w-28 font-mono text-xs"
           />
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="xs"
             onClick={() => addTier(newTierName)}
             disabled={!newTierName.trim()}
-            className="text-[10px] px-1.5 py-0.5 rounded text-primary hover:bg-primary/10 transition-colors disabled:opacity-40"
           >
             添加
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -673,6 +704,8 @@ export function AspectRatiosEditor({
   const [customRatio, setCustomRatio] = useState("");
   const selected = new Set(value || []);
   const commonOptions = presetOptions || COMMON_ASPECT_RATIOS;
+  const selectedValues = Array.from(selected);
+  const availableOptions = commonOptions.filter(ratio => !selected.has(ratio));
 
   const toggle = (ratio: string) => {
     const next = new Set(selected);
@@ -693,57 +726,81 @@ export function AspectRatiosEditor({
   };
 
   return (
-    <div className="space-y-2.5">
-      <label className="text-[11px] text-muted-foreground">{label || "支持的比例 (supportedAspectRatios)"}</label>
-      {hint && <p className="text-[10px] text-muted-foreground/70 -mt-1">{hint}</p>}
-      <div className="flex flex-wrap gap-1.5">
-        {commonOptions.map(ratio => (
-          <button
-            key={ratio}
-            type="button"
-            onClick={() => toggle(ratio)}
-            className={cn(
-              "inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full border transition-all duration-150",
-              selected.has(ratio)
-                ? "border-primary/40 bg-primary/15 text-primary font-medium shadow-sm shadow-primary/5"
-                : "border-dashed border-border/50 text-muted-foreground/60 hover:border-primary/30 hover:text-foreground"
-            )}
-          >
-            {selected.has(ratio) && <Check className="h-2.5 w-2.5" />}
-            {ratio}
-          </button>
-        ))}
-        {Array.from(selected)
-          .filter(r => !commonOptions.includes(r))
-          .map(ratio => (
-            <button
-              key={ratio}
-              type="button"
-              onClick={() => toggle(ratio)}
-              className="inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full border border-primary/40 bg-primary/15 text-primary font-medium shadow-sm shadow-primary/5 transition-all duration-150"
-            >
-              <Check className="h-2.5 w-2.5" />
-              {ratio}
-              <span className="text-primary/50 ml-0.5">✕</span>
-            </button>
-          ))}
+    <div className="space-y-3">
+      <div className="space-y-1">
+        <label className="text-xs text-muted-foreground">{label || "支持的比例 (supportedAspectRatios)"}</label>
+        {hint && <p className="text-xs text-muted-foreground/70">{hint}</p>}
       </div>
-      <div className="flex items-center gap-2 pt-1 border-t border-border/20">
-        <Input
-          placeholder="自定义值，如：16:9"
-          value={customRatio}
-          onChange={e => setCustomRatio(e.target.value)}
-          onKeyDown={e => e.key === "Enter" && addCustom()}
-          className="text-[10px] h-6 w-50 font-mono"
-        />
-        <button
-          type="button"
-          onClick={addCustom}
-          disabled={!customRatio.trim()}
-          className="text-[10px] px-2 py-0.5 rounded-md text-primary hover:bg-primary/10 transition-colors disabled:opacity-30"
-        >
-          + 添加
-        </button>
+
+      {selectedValues.length > 0 ? (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-7">
+          {selectedValues.map(ratio => (
+            <div
+              key={ratio}
+              className="group flex h-9 min-w-0 items-center gap-2 rounded-lg border border-border/20 bg-background/70 pl-2 pr-1 transition-colors focus-within:border-border/50"
+            >
+              <Check className="size-4 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1 truncate font-mono text-xs text-foreground/80">{ratio}</span>
+              <Button
+                type="button"
+                variant="destructive-ghost"
+                size="icon-xs"
+                onClick={() => toggle(ratio)}
+                aria-label={`删除 ${ratio}`}
+                title={`删除 ${ratio}`}
+              >
+                <X />
+              </Button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="rounded-lg border border-dashed border-border/40 py-4 text-center text-xs text-muted-foreground">
+          暂无已选项
+        </div>
+      )}
+
+      <div className="flex flex-wrap items-center gap-2 border-t border-border/20 pt-2">
+        {availableOptions.length > 0 && (
+          <>
+            <span className="text-xs text-muted-foreground">添加选项</span>
+            {availableOptions.map(ratio => (
+              <Button
+                key={ratio}
+                type="button"
+                variant="ghost"
+                size="xs"
+                onClick={() => toggle(ratio)}
+              >
+                + {ratio}
+              </Button>
+            ))}
+          </>
+        )}
+        <div className="ml-auto flex items-center gap-2">
+          <Input
+            aria-label="自定义选项"
+            placeholder="自定义值，如：16:9"
+            value={customRatio}
+            onChange={e => setCustomRatio(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addCustom();
+              }
+            }}
+            className="h-8 w-40 font-mono text-xs"
+          />
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            onClick={addCustom}
+            disabled={!customRatio.trim() || selected.has(customRatio.trim())}
+          >
+            添加
+          </Button>
+        </div>
       </div>
     </div>
   );

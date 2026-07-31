@@ -18,6 +18,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { agentConfigApi, type AgentUserSkill } from "@/lib/api/agent-config";
 import { SkillImportDialog } from "./skills/skill-import-dialog";
+import { settingsTypography } from "../../_shared";
 
 interface SkillsSectionProps {
   skills: AgentUserSkill[];
@@ -92,10 +93,10 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="font-medium">我的 Skills</h2>
+              <h2 className={settingsTypography.sectionTitle}>我的 Skills</h2>
               <Badge variant="secondary">{skills.length}</Badge>
             </div>
-            <p className="mt-1 text-sm text-muted-foreground">保存个人工作规范，在助手输入框中输入 / 即可主动引用。</p>
+            <p className={settingsTypography.sectionDescription}>保存个人工作规范，在助手输入框中输入 / 即可主动引用。</p>
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
@@ -119,14 +120,14 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
             <div className="min-w-0">
               <div className="flex min-w-0 items-center gap-2">
                 {skill.displayName === null ? (
-                  <span className="truncate font-medium text-destructive">未设置显示名称</span>
+                  <span className="truncate text-sm font-medium text-destructive">未设置显示名称</span>
                 ) : (
-                  <span className="truncate font-medium">{skill.displayName}</span>
+                  <span className="truncate text-sm font-medium">{skill.displayName}</span>
                 )}
                 <Badge variant="outline">SKILL.md</Badge>
               </div>
               <div className="mt-1 truncate font-mono text-xs text-muted-foreground">{skill.name}</div>
-              <div className="mt-1 line-clamp-2 text-sm text-muted-foreground">{skill.description}</div>
+              <div className="mt-1 line-clamp-2 text-xs leading-relaxed text-muted-foreground">{skill.description}</div>
             </div>
             <div className="flex shrink-0 gap-2">
               <Button variant="ghost" size="icon-sm" aria-label={`编辑 ${skill.name}`} title="编辑" onClick={() => showEditor(skill)}>
@@ -156,7 +157,7 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
           <div className="-mx-1 min-h-0 overflow-y-auto px-1 py-1">
             <div className="space-y-5">
               <div className="space-y-1.5">
-                <Label htmlFor="skill-display-name">显示名称</Label>
+                <Label htmlFor="skill-display-name" className={settingsTypography.fieldLabel}>显示名称</Label>
                 <Input
                   id="skill-display-name"
                   value={form.displayName}
@@ -166,7 +167,7 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
                 <p className="text-xs text-muted-foreground">显示在引用选择器、输入区标签和历史消息中。</p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="skill-name">调用名称</Label>
+                <Label htmlFor="skill-name" className={settingsTypography.fieldLabel}>调用名称</Label>
                 <Input
                   id="skill-name"
                   value={form.name}
@@ -176,7 +177,7 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
                 <p className="text-xs text-muted-foreground">使用小写字母、数字或短横线，不能包含连续短横线，最长 64 位。</p>
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="skill-description">描述</Label>
+                <Label htmlFor="skill-description" className={settingsTypography.fieldLabel}>描述</Label>
                 <Input
                   id="skill-description"
                   value={form.description}
@@ -187,7 +188,7 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
               </div>
               <div className="space-y-1.5 border-t border-border/20 pt-5">
                 <div>
-                  <Label htmlFor="skill-content">SKILL.md 正文</Label>
+                  <Label htmlFor="skill-content" className={settingsTypography.fieldLabel}>SKILL.md 正文</Label>
                   <p className="mt-1 text-xs text-muted-foreground">建议包含工作步骤、限制条件和明确的输出格式。</p>
                 </div>
                 <Textarea

@@ -32,7 +32,6 @@
 6. 调用 update_script_info 保存剧本信息：
    - storySynopsis: 基于已提供的剧本内容生成故事梗概（仅概括已有内容，不要推测后续剧情）
    - charactersJson: 人物表快照数组，每人含 name、assetId（来自第2-5步）、description、importance（主角/配角/龙套）
-   - title: 提取剧本标题
    - genre: 提取类型/风格
 7. 识别集数分界，仅对有原文内容的集，逐集调用 save_script_episode 写入集记录（必须传入 scriptId、episodeNumber、title、synopsis、rawContent 以及 sortOrder，其中 sortOrder 默认必须直接设为对应的物理集数 episodeNumber，例如第一集传 1，第二集传 2，以此类推）
    - 一次最多同时发起5个调用，如果超过5集则分批，每批最多5个同时调用

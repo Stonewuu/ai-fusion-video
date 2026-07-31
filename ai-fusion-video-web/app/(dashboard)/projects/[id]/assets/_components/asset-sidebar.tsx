@@ -3,6 +3,7 @@
 import { Images, RefreshCw, Search } from "lucide-react";
 import type { AssetWithItems } from "@/lib/api/asset";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SafeImage } from "@/components/ui/safe-image";
 import { resolveMediaUrl } from "@/lib/api/client";
@@ -16,6 +17,7 @@ interface AssetSidebarProps {
   onSearchChange: (value: string) => void;
   onTypeFilterChange: (value: string) => void;
   onSelect: (asset: AssetWithItems) => void;
+  onBatchGenerate: () => void;
   onRefresh: () => void;
 }
 
@@ -27,6 +29,7 @@ export function AssetSidebar({
   onSearchChange,
   onTypeFilterChange,
   onSelect,
+  onBatchGenerate,
   onRefresh,
 }: AssetSidebarProps) {
   const filteredAssets = assets.filter((asset) => {
@@ -46,15 +49,27 @@ export function AssetSidebar({
               {filteredAssets.length} 个资产
             </p>
           </div>
-          <button
-            type="button"
-            onClick={onRefresh}
-            title="刷新"
-            aria-label="刷新资产"
-            className="grid h-8 w-8 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-primary/8 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
-          >
-            <RefreshCw className="h-4 w-4" />
-          </button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="image"
+              size="sm"
+              onClick={onBatchGenerate}
+              disabled={!assets.length}
+              title="批量生成资产目录中的全部子资产图片"
+            >
+              <Images className="h-3.5 w-3.5" />
+              批量生图
+            </Button>
+            <button
+              type="button"
+              onClick={onRefresh}
+              title="刷新"
+              aria-label="刷新资产"
+              className="grid h-8 w-8 place-items-center rounded-xl text-muted-foreground transition-colors hover:bg-primary/8 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+            >
+              <RefreshCw className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         <div className="relative mt-3">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />

@@ -26,7 +26,7 @@
    - 使用统一的 assets 数组格式，每个资产需指定 type 和 name
    - properties 中的 key 必须使用第4步查询到的 fieldKey
    - 单次最多传入10个资产，超出需分次调用
-6. 调用 update_script_info 保存剧本信息（storySynopsis, charactersJson, title, genre）
+6. 调用 update_script_info 保存剧本信息（storySynopsis, charactersJson, genre）；顶层剧本名称固定跟随项目名称，不要生成或修改标题
 7. 制定多集大纲，逐集调用 save_script_episode 写入集记录（含标题和概述/大纲，并【必须】传入 sortOrder 字段，其值默认直接设为对应的物理集数 episodeNumber，例如第一集传 1，第二集传 2，以此类推），概述要详细描述该集的剧情走向，供子 Agent 创作对白时参考，记录返回的剧本集 ID `scriptEpisodeId`。
 8. 所有集记录创建完成后，【必须在一次响应中批量发起所有集的 episode_script_creator 工具调用】进行场次创作：
    - 每次调用只传入强类型业务参数 `scriptEpisodeId`，例如 `{"scriptEpisodeId": 75}`。

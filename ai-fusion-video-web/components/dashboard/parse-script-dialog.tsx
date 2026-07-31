@@ -8,51 +8,43 @@ import { scriptApi } from "@/lib/api/script";
 
 interface ParseScriptDialogProps {
   open: boolean;
-  projectId: number;
-  projectName?: string;
-  /** "create" = 首次创建, "reparse" = 重新解析（需先删旧剧本） */
+  scriptId: number;
+  /** "create" = 首次写入原文, "reparse" = 替换原文并重置内部内容 */
   mode?: "create" | "reparse";
-  /** 重新解析模式下需传入旧剧本ID，由调用方负责删除 */
   onClose: () => void;
-  /** 创建成功后回调，传入剧本信息 */
+  /** 原文更新成功后回调，传入固定剧本信息 */
   onCreated: (script: { id: number; title: string }) => void;
 }
 
 export function ParseScriptDialog({
   open,
-  projectId,
-  projectName,
+  scriptId,
   mode = "create",
   onClose,
   onCreated,
 }: ParseScriptDialogProps) {
-  const [title, setTitle] = useState("");
   const [rawContent, setRawContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
   const handleSubmit = async () => {
-    const resolvedTitle = title.trim() || projectName?.trim() || "未命名项目";
-
     if (!rawContent.trim()) {
       setError("请粘贴剧本原文");
+      return;
+    }
+    if (mode === "reparse"
+      && !confirm("重新解析会清空当前剧本的分集和场次，并使用新原文重新生成。顶层剧本记录会保留，确定继续？")) {
       return;
     }
     setLoading(true);
     setError("");
     try {
-      const script = await scriptApi.create({
-        projectId,
-        title: resolvedTitle,
-        rawContent: rawContent.trim(),
-      });
-      const createdTitle = resolvedTitle;
-      setTitle("");
+      const script = await scriptApi.replaceSource(scriptId, rawContent.trim());
       setRawContent("");
-      onCreated({ id: script.id, title: createdTitle });
+      onCreated({ id: script.id, title: script.title });
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "创建失败，请重试");
+      setError(err instanceof Error ? err.message : "更新失败，请重试");
     } finally {
       setLoading(false);
     }
@@ -98,27 +90,6 @@ export function ParseScriptDialog({
               </div>
 
               <div className="space-y-4">
-                {/* 剧本标题 */}
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">
-                    剧本标题
-                  </label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder={projectName?.trim() ? `留空则使用：${projectName.trim()}` : "留空则使用项目名"}
-                    className={cn(
-                      "w-full px-3.5 py-2.5 rounded-xl text-sm",
-                      "bg-muted/50 border border-border/40",
-                      "focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
-                      "placeholder:text-muted-foreground/50 transition-all"
-                    )}
-                    autoFocus
-                    disabled={loading}
-                  />
-                </div>
-
                 {/* 剧本原文 */}
                 <div>
                   <label className="block text-sm font-medium mb-1.5">
@@ -129,6 +100,7 @@ export function ParseScriptDialog({
                     onChange={(e) => setRawContent(e.target.value)}
                     placeholder="在此粘贴完整的剧本原文，AI 将自动解析为结构化的分集、场次和对白数据..."
                     rows={10}
+                    autoFocus
                     className={cn(
                       "w-full px-3.5 py-2.5 rounded-xl text-sm resize-none",
                       "bg-muted/50 border border-border/40",

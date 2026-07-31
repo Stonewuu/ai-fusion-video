@@ -20,6 +20,7 @@
 - 不修改 `components/ui/` 下的组件源码；差异通过使用处的 `className` 等公开接口实现。
 - Select 基于 `@base-ui/react`（base-maia）：必须传 `items: { value, label }[]`；`SelectValue` 使用 `placeholder`，不传 children；结构为 `SelectContent > SelectGroup > SelectItem`。
 - 调整 Select 字号时同时覆盖 `SelectTrigger`、`SelectContent`、`SelectItem`；不使用 `rounded-lg!` 等强制圆角覆盖，保留默认 `rounded-4xl`。
+- 所有除了列表和表格的区域，设计必须要有主次性，禁止盒子平铺。
 
 ### 按钮
 

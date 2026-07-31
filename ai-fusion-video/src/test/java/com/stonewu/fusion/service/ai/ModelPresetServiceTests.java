@@ -86,6 +86,20 @@ class ModelPresetServiceTests {
     }
 
     @Test
+    void shouldEnableUrlAndDataUriForGptImagePresetsByDefault() {
+        List.of(
+                "gpt-image-1",
+                "gpt-image-1-mini",
+                "gpt-image-1.5",
+                "gpt-image-2"
+        ).forEach(code -> assertEquals(
+                List.of("url", "data_uri"),
+                JSONUtil.toList(service.getPreset(code).getJSONObject("config")
+                        .getJSONArray("referenceImageInputFormats"), String.class),
+                code));
+    }
+
+    @Test
     void shouldExposeCorrectedVolcengineAndSoraCapabilities() {
         var seedance = service.getPreset("doubao-seedance-2-0-260128").getJSONObject("config");
         assertEquals(List.of("480p", "720p", "1080p", "4k"),

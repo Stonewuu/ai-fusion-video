@@ -5,7 +5,7 @@ import com.stonewu.fusion.controller.script.vo.EpisodeCreateReqVO;
 import com.stonewu.fusion.controller.script.vo.EpisodeUpdateReqVO;
 import com.stonewu.fusion.controller.script.vo.SceneCreateReqVO;
 import com.stonewu.fusion.controller.script.vo.SceneUpdateReqVO;
-import com.stonewu.fusion.controller.script.vo.ScriptCreateReqVO;
+import com.stonewu.fusion.controller.script.vo.ScriptSourceReplaceReqVO;
 import com.stonewu.fusion.controller.script.vo.ScriptUpdateReqVO;
 import com.stonewu.fusion.convert.script.ScriptConvert;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
@@ -39,17 +39,10 @@ public class ScriptController {
         return CommonResult.success(scriptService.getById(id));
     }
 
-    @Operation(summary = "按项目查询剧本列表")
-    @GetMapping("/list")
-    public CommonResult<List<Script>> list(@RequestParam Long projectId) {
-        return CommonResult.success(scriptService.listByProject(projectId));
-    }
-
-    @Operation(summary = "创建剧本")
-    @PostMapping
-    public CommonResult<Script> create(@Valid @RequestBody ScriptCreateReqVO reqVO) {
-        Script script = ScriptConvert.INSTANCE.convert(reqVO);
-        return CommonResult.success(scriptService.create(script));
+    @Operation(summary = "按项目获取唯一剧本")
+    @GetMapping("/project/{projectId}")
+    public CommonResult<Script> getByProject(@PathVariable Long projectId) {
+        return CommonResult.success(scriptService.getByProjectId(projectId));
     }
 
     @Operation(summary = "更新剧本")
@@ -59,11 +52,12 @@ public class ScriptController {
         return CommonResult.success(scriptService.update(script));
     }
 
-    @Operation(summary = "删除剧本")
-    @DeleteMapping("/{id}")
-    public CommonResult<Boolean> delete(@PathVariable Long id) {
-        scriptService.delete(id);
-        return CommonResult.success(true);
+    @Operation(summary = "替换剧本原文并重置分集与场次")
+    @PutMapping("/{id}/source")
+    public CommonResult<Script> replaceSource(
+            @PathVariable Long id,
+            @Valid @RequestBody ScriptSourceReplaceReqVO reqVO) {
+        return CommonResult.success(scriptService.replaceSourceAndReset(id, reqVO.getRawContent()));
     }
 
     // ========== 分集 ==========

@@ -46,12 +46,14 @@ function LongTextValue({ value }: { value: string }) {
 
 function ScalarValue({
   fieldKey,
+  toolName,
   value,
 }: {
   fieldKey: string;
+  toolName: string;
   value: null | boolean | number | string;
 }) {
-  const formatted = formatToolArgumentScalar(fieldKey, value);
+  const formatted = formatToolArgumentScalar(fieldKey, value, toolName);
   if (typeof value === "string" && isUrl(value)) {
     return (
       <a
@@ -70,8 +72,16 @@ function ScalarValue({
   return <span className="whitespace-pre-wrap break-words leading-relaxed">{formatted}</span>;
 }
 
-function ObjectValue({ value, depth }: { value: ToolArguments; depth: number }) {
-  const entries = listToolArgumentEntries(value);
+function ObjectValue({
+  value,
+  depth,
+  toolName,
+}: {
+  value: ToolArguments;
+  depth: number;
+  toolName: string;
+}) {
+  const entries = listToolArgumentEntries(value, toolName);
   if (entries.length === 0) {
     return <p className="text-xs text-muted-foreground">无内容</p>;
   }
@@ -79,7 +89,12 @@ function ObjectValue({ value, depth }: { value: ToolArguments; depth: number }) 
   return (
     <div className={depth === 0 ? "divide-y divide-border/20" : "divide-y divide-border/20 rounded-lg border border-border/20 px-2"}>
       {entries.map((entry) => (
-        <ArgumentEntryView key={entry.key} entry={entry} depth={depth} />
+        <ArgumentEntryView
+          key={entry.key}
+          entry={entry}
+          depth={depth}
+          toolName={toolName}
+        />
       ))}
     </div>
   );
@@ -87,10 +102,12 @@ function ObjectValue({ value, depth }: { value: ToolArguments; depth: number }) 
 
 function ArrayValue({
   fieldKey,
+  toolName,
   value,
   depth,
 }: {
   fieldKey: string;
+  toolName: string;
   value: ToolArgumentValue[];
   depth: number;
 }) {
@@ -108,6 +125,7 @@ function ArrayValue({
           >
             <ScalarValue
               fieldKey={fieldKey}
+              toolName={toolName}
               value={item as null | boolean | number | string}
             />
           </span>
@@ -123,7 +141,12 @@ function ArrayValue({
           <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">
             第 {index + 1} 项
           </p>
-          <ArgumentValueView fieldKey={fieldKey} value={item} depth={depth + 1} />
+          <ArgumentValueView
+            fieldKey={fieldKey}
+            value={item}
+            depth={depth + 1}
+            toolName={toolName}
+          />
         </div>
       ))}
     </div>
@@ -132,18 +155,27 @@ function ArrayValue({
 
 function ArgumentValueView({
   fieldKey,
+  toolName,
   value,
   depth,
 }: {
   fieldKey: string;
+  toolName: string;
   value: ToolArgumentValue;
   depth: number;
 }) {
   if (Array.isArray(value)) {
-    return <ArrayValue fieldKey={fieldKey} value={value} depth={depth} />;
+    return (
+      <ArrayValue
+        fieldKey={fieldKey}
+        value={value}
+        depth={depth}
+        toolName={toolName}
+      />
+    );
   }
   if (isObject(value)) {
-    return <ObjectValue value={value} depth={depth} />;
+    return <ObjectValue value={value} depth={depth} toolName={toolName} />;
   }
   if (typeof value === "string") {
     const embeddedJson = parseEmbeddedJsonArgument(fieldKey, value);
@@ -153,19 +185,22 @@ function ArgumentValueView({
           fieldKey={fieldKey}
           value={embeddedJson}
           depth={depth + 1}
+          toolName={toolName}
         />
       );
     }
   }
-  return <ScalarValue fieldKey={fieldKey} value={value} />;
+  return <ScalarValue fieldKey={fieldKey} value={value} toolName={toolName} />;
 }
 
 function ArgumentEntryView({
   entry,
   depth,
+  toolName,
 }: {
   entry: ToolArgumentEntry;
   depth: number;
+  toolName: string;
 }) {
   const collection = Array.isArray(entry.value) || isObject(entry.value);
   return (
@@ -177,7 +212,12 @@ function ArgumentEntryView({
         ) : null}
       </div>
       <div className="min-w-0 text-foreground/80">
-        <ArgumentValueView fieldKey={entry.key} value={entry.value} depth={depth + 1} />
+        <ArgumentValueView
+          fieldKey={entry.key}
+          value={entry.value}
+          depth={depth + 1}
+          toolName={toolName}
+        />
       </div>
     </div>
   );
@@ -185,16 +225,18 @@ function ArgumentEntryView({
 
 export function ToolCallArguments({
   argumentsText,
+  toolName,
   view,
 }: {
   argumentsText: string;
+  toolName: string;
   view: "friendly" | "json";
 }) {
   const argumentsValue = useMemo(
     () => parseToolArguments(argumentsText),
     [argumentsText],
   );
-  const entries = listToolArgumentEntries(argumentsValue);
+  const entries = listToolArgumentEntries(argumentsValue, toolName);
 
   return (
     <div>
@@ -202,7 +244,7 @@ export function ToolCallArguments({
         entries.length === 0 ? (
           <p className="py-2 text-xs text-muted-foreground">此工具无需调用参数</p>
         ) : (
-          <ObjectValue value={argumentsValue} depth={0} />
+          <ObjectValue value={argumentsValue} depth={0} toolName={toolName} />
         )
       ) : (
         <ToolCallJson

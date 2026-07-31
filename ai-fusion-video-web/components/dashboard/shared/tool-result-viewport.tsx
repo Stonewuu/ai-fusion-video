@@ -203,7 +203,7 @@ export function ToolResultViewport({
 
       {!expanded && canExpand ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center">
-          <span className="pointer-events-auto inline-flex rounded-2xl border border-border/40 bg-popover/80 backdrop-blur-xl shadow-xl">
+          <span className="pointer-events-auto inline-flex rounded-xl border border-border/30 bg-popover/70 backdrop-blur-sm shadow-sm">
             <Button
               type="button"
               variant="ghost"
@@ -212,7 +212,7 @@ export function ToolResultViewport({
               aria-expanded={false}
             >
               <ChevronDown />
-              展开结果
+              展开工具结果
             </Button>
           </span>
         </div>

@@ -19,6 +19,9 @@ import okhttp3.Response;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.net.Inet6Address;
+import java.net.InetAddress;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -130,16 +133,17 @@ public class ReferenceImageTransportService {
         }
 
         if (isHttpUrl(normalizedSource)) {
-            if (capability.supportsUrl()) {
+            if (capability.supportsUrl() && isPotentiallyPublicHttpUrl(normalizedSource)) {
                 return new TransportSelection(ReferenceImageTransport.URL, normalizedSource);
             }
             if (capability.supportsDataUri()) {
                 return new TransportSelection(ReferenceImageTransport.DATA_URI, normalizedSource);
             }
+            throw unsupported(model, "当前参考图 URL 指向本机、回环或内网地址，远端模型无法访问，且模型未启用 base64/Data URI 传递模式");
         } else {
             if (capability.supportsUrl()) {
                 String publicUrl = systemConfigService.resolvePublicUrl(normalizedSource);
-                if (StrUtil.isNotBlank(publicUrl)) {
+                if (StrUtil.isNotBlank(publicUrl) && isPotentiallyPublicHttpUrl(publicUrl)) {
                     return new TransportSelection(ReferenceImageTransport.URL, publicUrl);
                 }
             }
@@ -244,6 +248,54 @@ public class ReferenceImageTransportService {
     private boolean isHttpUrl(String value) {
         return StrUtil.startWithIgnoreCase(value, "http://")
                 || StrUtil.startWithIgnoreCase(value, "https://");
+    }
+
+    private boolean isPotentiallyPublicHttpUrl(String value) {
+        try {
+            URI uri = URI.create(value);
+            String host = StrUtil.blankToDefault(uri.getHost(), "").trim().toLowerCase(Locale.ROOT);
+            while (host.endsWith(".")) {
+                host = host.substring(0, host.length() - 1);
+            }
+            if (StrUtil.isBlank(host)
+                    || "localhost".equals(host)
+                    || host.endsWith(".localhost")
+                    || host.endsWith(".local")
+                    || "host.docker.internal".equals(host)
+                    || "gateway.docker.internal".equals(host)) {
+                return false;
+            }
+            if (!isIpLiteral(host)) {
+                return true;
+            }
+
+            InetAddress address = InetAddress.getByName(host);
+            if (address.isAnyLocalAddress()
+                    || address.isLoopbackAddress()
+                    || address.isLinkLocalAddress()
+                    || address.isSiteLocalAddress()
+                    || address.isMulticastAddress()) {
+                return false;
+            }
+            return !(address instanceof Inet6Address) || !isUniqueLocalIpv6(address);
+        } catch (Exception ignored) {
+            return false;
+        }
+    }
+
+    private boolean isIpLiteral(String host) {
+        if (host.indexOf(':') >= 0) return true;
+        if (host.isEmpty()) return false;
+        for (int i = 0; i < host.length(); i++) {
+            char current = host.charAt(i);
+            if (current != '.' && !Character.isDigit(current)) return false;
+        }
+        return true;
+    }
+
+    private boolean isUniqueLocalIpv6(InetAddress address) {
+        byte[] bytes = address.getAddress();
+        return bytes.length == 16 && (bytes[0] & 0xFE) == 0xFC;
     }
 
     public record ReferenceImageTransportCapability(List<String> formats,

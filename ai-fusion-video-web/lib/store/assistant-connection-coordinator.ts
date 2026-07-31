@@ -1,3 +1,4 @@
+import { triggerToolInvalidation, usePipelineStore } from "./pipeline-store";
 import type { StoreApi } from "zustand";
 import {
   getPipelineStatus,
@@ -343,6 +344,15 @@ export function createAssistantConnectionCoordinator(
                 : event.outputType === "EXTERNAL_EXECUTION_REQUIRED"
                   ? "WAITING_EXTERNAL"
                   : "running";
+          if (event.outputType === "TOOL_FINISHED" && event.toolName && event.toolStatus !== "error") {
+            triggerToolInvalidation(event.toolName);
+          } else if (terminal) {
+            const pStore = usePipelineStore.getState();
+            pStore.triggerInvalidation("scripts");
+            pStore.triggerInvalidation("storyboards");
+            pStore.triggerInvalidation("assets");
+          }
+
           updateRuntime(conversationId, (runtimeValue) => ({
             ...runtimeValue,
             pipeline: {

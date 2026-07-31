@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { create } from "zustand";
 import {
@@ -23,6 +23,7 @@ import {
 import {
   createPipelineEventHandler,
   generatePipelineTaskId,
+  TOOL_INVALIDATION_MAP,
   type PipelineEventLifecycle,
 } from "@/lib/store/pipeline-event-handler";
 import {
@@ -93,6 +94,7 @@ export interface PipelineStoreState {
   runningPipelinesRestored: boolean;
   /** 数据失效计数器 —— 页面监听对应 key 触发刷新 */
   invalidation: Record<InvalidationType, number>;
+  triggerInvalidation: (type: InvalidationType) => void;
 
   // actions
   addPipeline: (config: {
@@ -147,6 +149,8 @@ export interface PipelineStoreState {
   disconnectPipelineContent: (id: string) => void;
   /** 页面加载时调用：查询 running 对话并轮询状态，不建立 SSE。 */
   restoreRunningPipelines: () => void;
+  /** 页面重新可见时，从 durable cursor 恢复本地实时内容流。 */
+  resumePipelineConnections: () => void;
 }
 
 // 简单任务的完成回调（不放在 zustand state 里避免序列化问题）
@@ -156,10 +160,49 @@ const notifiedPipelineSettlements = new Set<string>();
 
 // 存储 AbortController 的 map（不放在 zustand state 里避免序列化问题）
 const abortControllers = new Map<string, AbortController>();
+const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 const PIPELINE_STATUS_POLL_INTERVAL_MS = 3000;
+const PIPELINE_RECONNECT_DELAY_MS = 1000;
+
+function clearPipelineReconnect(id: string): void {
+  const timer = reconnectTimers.get(id);
+  if (timer) clearTimeout(timer);
+  reconnectTimers.delete(id);
+}
+
+function schedulePipelineReconnect(id: string): void {
+  if (reconnectTimers.has(id)) return;
+  const timer = setTimeout(() => {
+    reconnectTimers.delete(id);
+    usePipelineStore.getState().loadPipelineContent(id);
+  }, PIPELINE_RECONNECT_DELAY_MS);
+  reconnectTimers.set(id, timer);
+}
 
 function schedulePipelineStatusSync(delayMs?: number): void {
   pipelineStatusSynchronizer.schedule(delayMs);
+}
+
+function bindPipelineRunId(
+  id: string,
+  runId: string,
+  set: (fn: (state: PipelineStoreState) => Partial<PipelineStoreState>) => void,
+  get: () => PipelineStoreState,
+): void {
+  const task = get().tasks.find((candidate) => candidate.id === id);
+  if (!task) return;
+  if (task.state.runId && task.state.runId !== runId) {
+    throw new Error("Pipeline stream switched to a different run");
+  }
+  if (task.state.runId) return;
+  set((state) => ({
+    tasks: state.tasks.map((candidate) => candidate.id === id
+      ? {
+          ...candidate,
+          state: { ...candidate.state, runId },
+        }
+      : candidate),
+  }));
 }
 
 function notifyPipelineSettlement(
@@ -170,6 +213,7 @@ function notifyPipelineSettlement(
 ): void {
   if (notifiedPipelineSettlements.has(id)) return;
   notifiedPipelineSettlements.add(id);
+  clearPipelineReconnect(id);
   abortControllers.delete(id);
   if (status === "done") onComplete?.();
   onSettled?.(status);
@@ -262,7 +306,10 @@ function startPipelineContinuationStream(
     onComplete,
   );
   const controller = continuePipelineStream(conversationId, {
-    onEvent: handleEvent,
+    onEvent: (event) => {
+      bindPipelineRunId(id, event.runId, set, get);
+      handleEvent(event);
+    },
     onError: (error) => {
       const current = get().tasks.find((candidate) => candidate.id === id);
       if (current?.status !== "running") return;
@@ -280,12 +327,15 @@ function startPipelineContinuationStream(
                 state: {
                   ...candidate.state,
                   error: `Pipeline 连接中断：${error.message}`,
+                  contentLoaded: false,
+                  contentLoading: false,
                 },
               }
             : candidate,
         ),
       }));
       abortControllers.delete(id);
+      schedulePipelineReconnect(id);
     },
     onComplete: () => {
       abortControllers.delete(id);
@@ -301,6 +351,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
   expandedTaskId: null,
   runningPipelinesRestored: false,
   invalidation: { assets: 0, scripts: 0, storyboards: 0 },
+  triggerInvalidation: (type: InvalidationType) => set((s) => ({ invalidation: { ...s.invalidation, [type]: (s.invalidation[type] || 0) + 1 } })),
 
   addSimpleTask: ({ label, projectId, initialNote, onComplete }) => {
     const id = generatePipelineTaskId();
@@ -385,6 +436,8 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       timeline: [],
       lastSequence: 0,
       conversationId: request.conversationId,
+      contentLoaded: true,
+      contentLoading: false,
     };
 
     const task: PipelineTask = {
@@ -410,7 +463,10 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
 
     // 启动 SSE 流
     const controller = pipelineStream(request, {
-      onEvent: handleEvent,
+      onEvent: (event) => {
+        bindPipelineRunId(id, event.runId, set, get);
+        handleEvent(event);
+      },
       onError: (err) => {
         const current = get().tasks.find((candidate) => candidate.id === id);
         if (current?.status === "running" && !current.state.runId) {
@@ -428,13 +484,15 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
                   state: {
                     ...t.state,
                     error: `Pipeline 连接中断：${err.message}`,
+                    contentLoaded: false,
+                    contentLoading: false,
                   },
                 }
               : t
           ),
         }));
         abortControllers.delete(id);
-        schedulePipelineStatusSync(0);
+        schedulePipelineReconnect(id);
       },
       onComplete: () => {
         // 业务终态已由 journal terminal event 在 handleEvent 中处理。
@@ -465,6 +523,8 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
         timeline: [...initialTimeline],
         lastSequence: 0,
         conversationId,
+        contentLoaded: true,
+        contentLoading: false,
         separateNextRootContent: initialTimeline.length > 0,
       },
       createdAt: Date.now(),
@@ -683,6 +743,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
   removePipeline: (id: string) => {
     abortControllers.get(id)?.abort();
     abortControllers.delete(id);
+    clearPipelineReconnect(id);
     simpleTaskCallbacks.delete(id);
     pipelineCompleteCallbacks.delete(id);
     notifiedPipelineSettlements.delete(id);
@@ -698,6 +759,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       .map((t) => t.id);
     for (const id of removableIds) {
       abortControllers.delete(id);
+      clearPipelineReconnect(id);
       simpleTaskCallbacks.delete(id);
       pipelineCompleteCallbacks.delete(id);
       notifiedPipelineSettlements.delete(id);
@@ -730,15 +792,18 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
 
   loadPipelineContent: (id: string) => {
     const task = get().tasks.find((candidate) => candidate.id === id);
+    const canHydrate = task?.state.reconnectOnSelect === true
+      || task?.status === "running";
     if (
       !task?.state.runId ||
-      !task.state.reconnectOnSelect ||
-      task.state.contentLoaded === true ||
+      !canHydrate ||
+      task.state.contentLoaded !== false ||
       task.state.contentLoading
     ) {
       return;
     }
 
+    clearPipelineReconnect(id);
     abortControllers.get(id)?.abort();
     abortControllers.delete(id);
     const afterSequence = task.state.lastSequence;
@@ -784,6 +849,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
                     state: {
                       ...candidate.state,
                       contentLoading: false,
+                      contentLoaded: false,
                       error: `Pipeline 内容加载中断：${error.message}`,
                     },
                   }
@@ -791,7 +857,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
             ),
           }));
           abortControllers.delete(id);
-          schedulePipelineStatusSync(0);
+          schedulePipelineReconnect(id);
         },
         onComplete: () => {
           set((s) => ({
@@ -882,11 +948,48 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       }
     })();
   },
+
+  resumePipelineConnections: () => {
+    const resumableIds = get().tasks
+      .filter((task) => task.status === "running"
+        && task.state.runId
+        && (task.state.reconnectOnSelect !== true
+          || task.state.contentLoading
+          || abortControllers.has(task.id)))
+      .map((task) => task.id);
+    if (resumableIds.length === 0) {
+      schedulePipelineStatusSync(0);
+      return;
+    }
+
+    for (const id of resumableIds) {
+      clearPipelineReconnect(id);
+      abortControllers.get(id)?.abort();
+      abortControllers.delete(id);
+    }
+    const resumableSet = new Set(resumableIds);
+    set((state) => ({
+      tasks: state.tasks.map((task) => resumableSet.has(task.id)
+        ? {
+            ...task,
+            state: {
+              ...task.state,
+              contentLoaded: false,
+              contentLoading: false,
+              error: undefined,
+            },
+          }
+        : task),
+    }));
+    for (const id of resumableIds) get().loadPipelineContent(id);
+    schedulePipelineStatusSync(0);
+  },
 }));
 
 function trackedPipelineStatuses(): PipelineStatusSyncTarget[] {
   return usePipelineStore.getState().tasks.flatMap((task) =>
     task.status === "running"
+      && task.state.reconnectOnSelect === true
       && !task.state.contentLoading
       && task.state.runId
       ? [{ taskId: task.id, runId: task.state.runId }]
@@ -901,7 +1004,7 @@ function applyPipelineStatus(
   const terminalStatus = toTerminalTaskStatus(status.status);
   let transitioned = false;
   let removed = false;
-  usePipelineStore.setState((state) => {
+  usePipelineStore.setState((state): Partial<PipelineStoreState> => {
     const current = state.tasks.find(
       (candidate) => candidate.id === target.taskId,
     );
@@ -984,3 +1087,12 @@ const pipelineStatusSynchronizer = new PipelineStatusSynchronizer({
     console.error(`[Pipeline] 查询 ${target.runId} 状态失败:`, error);
   },
 });
+
+export function triggerToolInvalidation(toolName?: string): void {
+  if (!toolName) return;
+  const target = TOOL_INVALIDATION_MAP[toolName];
+  if (target) {
+    usePipelineStore.getState().triggerInvalidation(target);
+  }
+}
+

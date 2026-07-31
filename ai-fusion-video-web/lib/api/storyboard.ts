@@ -108,18 +108,9 @@ export interface StoryboardItem {
 
 // ========== 请求类型 ==========
 
-/** 创建分镜请求 */
-export interface StoryboardCreateReq {
-  projectId: number;
-  scriptId?: number;
-  title: string;
-  description?: string;
-}
-
 /** 更新分镜请求 */
 export interface StoryboardUpdateReq {
   id: number;
-  title?: string;
   description?: string;
   status?: number;
 }
@@ -245,20 +236,17 @@ export const storyboardApi = {
   /** 获取分镜详情 */
   get: (id: number) => http.get<never, Storyboard>(`/api/storyboard/${id}`),
 
-  /** 按项目查询分镜列表 */
-  list: (projectId: number) =>
-    http.get<never, Storyboard[]>(`/api/storyboard/list?projectId=${projectId}`),
-
-  /** 创建分镜 */
-  create: (data: StoryboardCreateReq) =>
-    http.post<never, Storyboard>("/api/storyboard", data),
+  /** 按项目获取唯一分镜 */
+  getByProject: (projectId: number) =>
+    http.get<never, Storyboard | null>(`/api/storyboard/project/${projectId}`),
 
   /** 更新分镜 */
   update: (data: StoryboardUpdateReq) =>
     http.put<never, Storyboard>("/api/storyboard", data),
 
-  /** 删除分镜 */
-  delete: (id: number) => http.delete<never, boolean>(`/api/storyboard/${id}`),
+  /** 清空分镜内部的分集、场次与镜头 */
+  clearContent: (id: number) =>
+    http.post<never, boolean>(`/api/storyboard/${id}/clearContent`),
 
   /** 获取分镜概览统计 */
   getStatistics: (storyboardId: number) =>

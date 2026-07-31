@@ -51,7 +51,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { containerVariants, itemVariants } from "../_shared";
+import { containerVariants, itemVariants, settingsTypography } from "../_shared";
 
 // ============================================================
 // 存储配置 Dialog
@@ -648,8 +648,8 @@ export default function StoragePage() {
     >
       {/* 页面标题 */}
       <motion.div variants={itemVariants} className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">存储配置</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className={settingsTypography.pageTitle}>存储配置</h1>
+        <p className={settingsTypography.pageDescription}>
           管理文件存储后端，支持本地磁盘和 S3 兼容存储
         </p>
       </motion.div>
@@ -657,7 +657,7 @@ export default function StoragePage() {
       {/* ========== 存储配置管理 ========== */}
       <motion.div variants={itemVariants}>
         <div className="flex items-center justify-between mb-3 px-1">
-          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+          <h3 className={settingsTypography.sectionTitle}>
             存储后端
           </h3>
           <button

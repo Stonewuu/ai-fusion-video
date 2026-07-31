@@ -24,13 +24,15 @@ export interface PipelineEventLifecycle {
   scheduleStatusSync: () => void;
 }
 
-const TOOL_INVALIDATION_MAP: Record<string, InvalidationType> = {
+export const TOOL_INVALIDATION_MAP: Record<string, InvalidationType> = {
   // assets 相关的工具
   create_asset: "assets",
   add_asset_item: "assets",
   update_asset: "assets",
+  update_asset_item: "assets",
   batch_create_assets: "assets",
   batch_create_asset_items: "assets",
+  delete_asset_resource: "assets",
   update_asset_image: "assets",
   generate_image: "assets",
 
@@ -43,14 +45,19 @@ const TOOL_INVALIDATION_MAP: Record<string, InvalidationType> = {
   update_script_scene: "scripts",
   update_script_scene_item: "scripts",
   manage_script_scene_items: "scripts",
+  delete_script_child_resource: "scripts",
 
   // storyboards 相关的工具
   save_storyboard_episode: "storyboards",
   save_storyboard_scene_shots: "storyboards",
   insert_storyboard_item: "storyboards",
+  update_storyboard_item: "storyboards",
   update_storyboard_item_video: "storyboards",
   update_storyboard_item_frame: "storyboards",
+  update_storyboard_scene: "storyboards",
+  delete_storyboard_child_resource: "storyboards",
   generate_video: "storyboards",
+  script_to_storyboard: "storyboards",
 };
 
 function isMainAgentTerminalEvent(event: GenericStreamEvent): boolean {
@@ -356,14 +363,7 @@ export function createPipelineEventHandler(
                   );
                 }
               }
-              // 收集 invalidation
-              if (
-                event.toolName &&
-                event.toolStatus !== "error" &&
-                TOOL_INVALIDATION_MAP[event.toolName]
-              ) {
-                invalidations.push(TOOL_INVALIDATION_MAP[event.toolName]);
-              }
+              
               break;
 
             case "CONTENT":
@@ -517,6 +517,14 @@ export function createPipelineEventHandler(
                   }
                 }
               }
+              // 收集 invalidation
+              if (
+                event.toolName &&
+                event.toolStatus !== "error" &&
+                TOOL_INVALIDATION_MAP[event.toolName]
+              ) {
+                invalidations.push(TOOL_INVALIDATION_MAP[event.toolName]);
+              }
               break;
 
             case "SUB_AGENT_FINISHED":
@@ -667,6 +675,13 @@ export function createPipelineEventHandler(
       acceptedSequence = event.sequence;
     }
     eventQueue.push(event);
+    // A hidden browser tab suspends requestAnimationFrame. Commit the entire
+    // pending batch as soon as the durable terminal event arrives so task
+    // metadata can never become terminal while its timeline is still stale.
+    if (isMainAgentTerminalEvent(event)) {
+      flushEvents();
+      return;
+    }
     if (!rafScheduled) {
       rafScheduled = true;
       if (typeof requestAnimationFrame !== "undefined") {

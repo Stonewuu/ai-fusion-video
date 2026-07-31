@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.ai.tool;
 
+import com.stonewu.fusion.service.ai.tool.generation.GetGenerationModelCapabilitiesToolExecutor;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.ai.AiModel;

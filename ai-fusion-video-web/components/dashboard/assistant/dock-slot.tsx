@@ -10,6 +10,7 @@ import {
 import { createPortal } from "react-dom";
 import { AnimatePresence, motion, useMotionValue, useReducedMotion } from "framer-motion";
 import { AssistantLauncher, type AssistantLauncherStatus } from "./launcher";
+import { subscribeToAssistantOpenRequest } from "./open-assistant";
 import { AssistantWindow } from "./assistant-window";
 import { useAssistantDockLayout } from "./use-assistant-dock-layout";
 import {
@@ -172,6 +173,12 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
       }
     }
   }, [canDock, dockTransition.phase, mobileViewport, reducedMotion]);
+
+  useEffect(() => subscribeToAssistantOpenRequest(() => {
+    if (useAssistantStore.getState().mode === "collapsed") {
+      openAssistantWindow(false);
+    }
+  }), [openAssistantWindow]);
 
   const closeAssistantWindow = useCallback(() => {
     if (overlayContentRevealTimerRef.current !== null) {

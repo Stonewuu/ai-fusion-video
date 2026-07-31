@@ -71,6 +71,46 @@ test("formats tool results as strict indented JSON", () => {
   assert.throws(() => formatToolResultJson("plain text"), /not valid JSON/);
 });
 
+test("renders lifecycle delete arguments with tool-specific Chinese semantics", () => {
+  const parsed = parseToolArguments('{"resourceType":"episode","resourceId":140}');
+  assert.deepEqual(
+    listToolArgumentEntries(parsed, "delete_storyboard_child_resource"),
+    [
+      { key: "resourceType", label: "删除对象", value: "episode" },
+      { key: "resourceId", label: "分镜集 ID", value: 140 },
+    ],
+  );
+  assert.equal(
+    formatToolArgumentScalar(
+      "resourceType",
+      "episode",
+      "delete_storyboard_child_resource",
+    ),
+    "分镜集",
+  );
+  assert.equal(
+    formatToolArgumentScalar("resourceType", "scene", "delete_script_child_resource"),
+    "剧本场次",
+  );
+  assert.equal(
+    formatToolArgumentScalar("resourceType", "item", "delete_asset_resource"),
+    "子资产",
+  );
+});
+
+test("formats lifecycle mutation enum and boolean arguments", () => {
+  assert.equal(formatToolArgumentScalar("status", 2, "save_project"), "已完成");
+  assert.equal(
+    formatToolArgumentScalar("sourceType", 2, "update_asset_item"),
+    "AI 生成",
+  );
+  assert.equal(
+    formatToolArgumentScalar("status", 0, "update_storyboard_item"),
+    "草稿",
+  );
+  assert.equal(formatToolArgumentScalar("overwriteMode", true), "覆盖已有数据");
+});
+
 test("rejects malformed JSON and non-object roots explicitly", () => {
   assert.throws(() => parseToolArguments("{invalid"), /not valid JSON/);
   assert.throws(() => parseToolArguments("[]"), /root must be a JSON object/);

@@ -64,10 +64,13 @@ export function parseToolArguments(argumentsText: string): ToolArguments {
   return parsed;
 }
 
-export function listToolArgumentEntries(argumentsValue: ToolArguments): ToolArgumentEntry[] {
+export function listToolArgumentEntries(
+  argumentsValue: ToolArguments,
+  toolName?: string,
+): ToolArgumentEntry[] {
   return Object.entries(argumentsValue).map(([key, value]) => ({
     key,
-    label: getToolArgumentLabel(key),
+    label: getToolArgumentLabel(key, { arguments: argumentsValue, toolName }),
     value,
   }));
 }
@@ -75,10 +78,16 @@ export function listToolArgumentEntries(argumentsValue: ToolArguments): ToolArgu
 export function formatToolArgumentScalar(
   key: string,
   value: null | boolean | number | string,
+  toolName?: string,
 ): string {
   if (value === null) return "未设置";
-  if (typeof value === "boolean") return value ? "是" : "否";
+  if (typeof value === "boolean") {
+    return getToolArgumentValueLabel(key, String(value), toolName)
+      ?? (value ? "是" : "否");
+  }
   if (typeof value === "number") {
+    const declaredLabel = getToolArgumentValueLabel(key, value, toolName);
+    if (declaredLabel) return declaredLabel;
     if (key === "duration") return `${value} 秒`;
     if (key === "width" || key === "height") return `${value} px`;
     return String(value);
@@ -87,7 +96,7 @@ export function formatToolArgumentScalar(
   if (key === "scriptEpisodeIds") {
     return value.split(",").map((item) => item.trim()).join("、");
   }
-  return getToolArgumentValueLabel(key, value) ?? value;
+  return getToolArgumentValueLabel(key, value, toolName) ?? value;
 }
 
 export function parseEmbeddedJsonArgument(

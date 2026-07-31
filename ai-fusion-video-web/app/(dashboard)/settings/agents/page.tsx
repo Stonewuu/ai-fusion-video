@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Bot, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { storageConfigApi, type StorageConfig } from "@/lib/api/storage";
@@ -18,6 +18,7 @@ import { McpServersSection } from "./_components/mcp-servers-section";
 import { SkillsSection } from "./_components/skills-section";
 import { WorkspaceStorageSection } from "./_components/workspace-storage-section";
 import { StateRetentionSection } from "./_components/state-retention-section";
+import { settingsTypography } from "../_shared";
 
 const WORKSPACE_LABELS = {
   database: "数据库",
@@ -87,16 +88,11 @@ export default function AgentSettingsPage() {
   return (
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
-          <div className="rounded-xl bg-primary/10 p-2 text-primary">
-            <Bot className="size-6" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">智能体配置</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
-              管理 AgentScope 工作空间、状态生命周期，以及助手可主动引用的 Skill 和 MCP 工具。
-            </p>
-          </div>
+        <div className="min-w-0">
+          <h1 className={settingsTypography.pageTitle}>智能体配置</h1>
+          <p className={settingsTypography.pageDescription}>
+            管理 AgentScope 工作空间、状态生命周期，以及助手可主动引用的 Skill 和 MCP 工具。
+          </p>
         </div>
         {workspace && (
           <div className="flex flex-wrap items-center gap-2" aria-label="智能体配置摘要">
