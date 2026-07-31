@@ -18,6 +18,7 @@ import {
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { toastApiError } from "@/lib/api/toast-api-error";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import {
   getStorageProviderOption,
@@ -596,6 +597,7 @@ function StorageConfigDialog({ open, onOpenChange, editingConfig, onSaved }: Sto
 // ============================================================
 
 export default function StoragePage() {
+  const { confirm } = useConfirm();
   const [storageConfigs, setStorageConfigs] = useState<StorageConfigType[]>([]);
   const [storageLoading, setStorageLoading] = useState(true);
   const [storageDialogOpen, setStorageDialogOpen] = useState(false);
@@ -619,7 +621,7 @@ export default function StoragePage() {
   }, [loadStorageConfigs]);
 
   const handleDeleteStorageConfig = async (id: number) => {
-    if (!confirm("确定要删除该存储配置吗？")) return;
+    const ok = await confirm({ title: "删除存储配置", description: "确定要删除该存储配置吗？此操作不可撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await storageConfigApi.delete(id);
       await loadStorageConfigs();

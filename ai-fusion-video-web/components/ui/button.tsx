@@ -22,7 +22,7 @@ const buttonVariants = cva(
         "destructive-ghost":
           "text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:border-destructive/30 focus-visible:ring-destructive/15",
         ai:
-          "border-violet-500/20 bg-violet-500/10 text-violet-600 shadow-sm hover:border-violet-500/35 hover:bg-violet-500/15 dark:text-violet-300",
+          "border-violet-500/30 bg-violet-500/10 text-violet-600 shadow-xs hover:border-violet-500/45 hover:bg-violet-500/15 dark:text-violet-300 dark:border-violet-400/30 dark:bg-violet-400/10 dark:hover:bg-violet-400/20",
         image:
           "border-transparent bg-linear-to-r from-cyan-600 to-blue-600 text-white shadow-lg shadow-cyan-500/20 hover:scale-[1.01] hover:shadow-xl hover:shadow-cyan-500/25 active:scale-[0.99]",
         frame:
@@ -35,11 +35,11 @@ const buttonVariants = cva(
         default:
           "h-9 gap-1.5 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
         xs: "h-6 gap-1 px-2.5 text-xs has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2 [&_svg:not([class*='size-'])]:size-3",
-        sm: "h-9 gap-1.5 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5",
+        sm: "h-8 gap-1.5 px-3 text-xs has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5 [&_svg:not([class*='size-'])]:size-3.5",
         lg: "h-10 gap-1.5 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
         icon: "size-9",
         "icon-xs": "size-6 [&_svg:not([class*='size-'])]:size-3",
-        "icon-sm": "size-8",
+        "icon-sm": "size-8 [&_svg:not([class*='size-'])]:size-3.5",
         "icon-lg": "size-10",
       },
     },

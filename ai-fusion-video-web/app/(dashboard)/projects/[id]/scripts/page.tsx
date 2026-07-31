@@ -22,6 +22,7 @@ import { SceneDetail } from "./_components/scene-detail";
 import { ScriptOverview } from "./_components/script-overview";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { useProject } from "../project-context";
 
@@ -31,6 +32,7 @@ export default function ScriptTabPage() {
   const params = useParams();
   const projectId = Number(params.id);
   const { project } = useProject();
+  const { confirm, alert } = useConfirm();
 
   const [loading, setLoading] = useState(true);
   const [isRefreshingScript, setIsRefreshingScript] = useState(false);
@@ -313,7 +315,7 @@ export default function ScriptTabPage() {
   };
 
   const handleDeleteEpisode = async (episodeId: number) => {
-    if (!confirm("确定要删除该分集及其所有场次吗？")) return;
+    const ok = await confirm({ title: "删除剧本分集", description: "确定要删除该分集及其所有场次吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await scriptApi.deleteEpisode(episodeId);
       setEpisodes((prev) => prev.filter((ep) => ep.id !== episodeId));
@@ -393,7 +395,7 @@ export default function ScriptTabPage() {
   };
 
   const handleDeleteScene = async (sceneId: number, episodeId: number) => {
-    if (!confirm("确定要删除该场次吗？")) return;
+    const ok = await confirm({ title: "删除场次", description: "确定要删除该场次吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await scriptApi.deleteScene(sceneId);
       setEpisodeScenes((prev) => ({
@@ -517,12 +519,12 @@ export default function ScriptTabPage() {
       );
 
       if (!boundEpisode && legacyUnboundEpisode) {
-        alert(`分镜中存在未绑定的第 ${ep.episodeNumber} 集，请先到分镜页将旧分镜集绑定到当前剧本集后再重新生成。`);
+        await alert({ title: "未绑定分镜集", description: `分镜中存在未绑定的第 ${ep.episodeNumber} 集，请先到分镜页将旧分镜集绑定到当前剧本集后再重新生成。`, variant: "warning" });
         return;
       }
 
       if (boundEpisode) {
-        const confirmed = confirm(`将覆盖第 ${ep.episodeNumber} 集已有分镜内容，不影响其它集。确定继续？`);
+        const confirmed = await confirm({ title: "覆盖生成本集分镜", description: `将覆盖第 ${ep.episodeNumber} 集已有分镜内容，不影响其它集。确定继续？`, variant: "ai", confirmText: "确定覆盖生成" });
         if (!confirmed) return;
         await storyboardApi.clearEpisodeContent(boundEpisode.id);
       }

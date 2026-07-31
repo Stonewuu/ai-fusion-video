@@ -20,7 +20,7 @@ interface ImageInputProps {
   onPreviewClick?: () => void;
   placeholder?: string;
   uploadSubDir?: string;
-  beforeUpload?: () => boolean;
+  beforeUpload?: () => boolean | Promise<boolean>;
 }
 
 /**
@@ -58,19 +58,19 @@ export default function ImageInput({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (beforeUpload && !beforeUpload()) return;
+    if (beforeUpload && !(await beforeUpload())) return;
     void handleUpload(file);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
-    if (beforeUpload && !beforeUpload()) return;
+    if (beforeUpload && !(await beforeUpload())) return;
     void handleUpload(file);
   };
 

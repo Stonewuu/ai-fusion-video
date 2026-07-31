@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { Images, Loader2, Plus, X } from "lucide-react";
@@ -36,6 +37,7 @@ function enqueueAssetGeneration(
 }
 
 export default function ProjectAssetsPage() {
+  const { confirm } = useConfirm();
   const params = useParams();
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -164,13 +166,13 @@ export default function ProjectAssetsPage() {
   };
 
   const deleteAsset = async (asset: Asset) => {
-    if (!confirm(`确定删除主资产“${asset.name}”及其子资产吗？`)) return;
+    const ok = await confirm({ title: "删除主资产", description: `确定删除主资产“${asset.name}”及其所有子资产吗？此操作无法撤销。`, variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     await assetApi.delete(asset.id);
     await loadAssets(false);
   };
 
   const deleteItem = async (item: AssetItem) => {
-    if (!confirm(`确定删除子资产“${item.name || "未命名"}”吗？`)) return;
+    const ok = await confirm({ title: "删除子资产", description: `确定删除子资产“${item.name || "未命名"}”吗？此操作无法撤销。`, variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     const nextItem = selectedAsset?.items.find((candidate) => candidate.id !== item.id);
     await assetApi.deleteItem(item.id);
     await loadAssets(true);

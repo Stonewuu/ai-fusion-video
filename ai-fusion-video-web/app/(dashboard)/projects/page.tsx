@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -74,6 +75,7 @@ function formatTime(iso: string) {
 }
 
 export default function ProjectsPage() {
+  const { confirm } = useConfirm();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -100,7 +102,7 @@ export default function ProjectsPage() {
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
-    if (!confirm("确定要删除该项目吗？此操作不可撤销。")) return;
+    const ok = await confirm({ title: "删除项目", description: "确定要删除该项目吗？此操作不可撤销，相关的剧本、分镜与资产数据将被永久移除。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     setDeletingId(id);
     try {
       await projectApi.delete(id);

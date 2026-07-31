@@ -21,6 +21,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useProject } from "../project-context";
 import { projectApi } from "@/lib/api/project";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { artStyleApi } from "@/lib/api/art-style";
 import type { ArtStylePreset } from "@/lib/api/art-style";
 import { storageConfigApi, uploadFile } from "@/lib/api/storage";
@@ -58,6 +59,7 @@ const aspectRatios = [
 type ArtStyleTab = "preset" | "custom";
 
 export default function ProjectSettingsPage() {
+  const { confirm } = useConfirm();
   const router = useRouter();
   const { project, refresh } = useProject();
 
@@ -230,7 +232,7 @@ export default function ProjectSettingsPage() {
 
   const handleDeleteProject = async () => {
     if (!project) return;
-    if (!confirm("确定要删除该项目吗？此操作将永久移除所有剧本、分镜、资产等数据，不可恢复。")) return;
+    const ok = await confirm({ title: "彻底删除项目", description: "确定要删除该项目吗？此操作将永久移除所有剧本、分镜、资产等数据，不可恢复。", variant: "destructive", confirmText: "彻底删除项目" }); if (!ok) return;
     setDeleting(true);
     try {
       await projectApi.delete(project.id);

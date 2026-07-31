@@ -35,6 +35,7 @@ import { Button } from "@/components/ui/button";
 import { useProject } from "./project-context";
 import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -84,6 +85,7 @@ export default function ProjectOverviewPage() {
   const router = useRouter();
   const projectId = Number(params.id);
   const { project } = useProject();
+  const { confirm, alert } = useConfirm();
   const properties = (project?.properties as Record<string, string>) || {};
 
   const [script, setScript] = useState<Script | null>(null);
@@ -239,9 +241,13 @@ export default function ProjectOverviewPage() {
   };
 
   const handleInitializeWorkspace = async () => {
-    if (!confirm("将只补齐缺失的剧本或分镜工作区，不会删除或覆盖任何现有数据。确定继续？")) {
-      return;
-    }
+    const ok = await confirm({
+      title: "初始化项目工作区",
+      description: "将只补齐缺失的剧本或分镜工作区，不会删除或覆盖任何现有数据。确定继续？",
+      variant: "ai",
+      confirmText: "确定初始化",
+    });
+    if (!ok) return;
 
     try {
       setInitializingWorkspace(true);
@@ -515,13 +521,32 @@ export default function ProjectOverviewPage() {
               </Button>
               <Button
                 variant="ai"
-                onClick={() => {
+                onClick={async () => {
                   if (!script) {
-                    alert("项目剧本工作区未初始化");
+                    await alert({
+                      title: "工作区未初始化",
+                      description: "项目剧本工作区未初始化，请先初始化工作区。",
+                      variant: "warning",
+                    });
                     return;
                   }
-                  if (storyboardHasContent
-                    && !confirm("AI 将补齐缺失的分镜集，不会删除已有分镜内容。确定继续？")) return;
+                  if (storyboardHasContent) {
+                    const ok = await confirm({
+                      title: "确认 AI 补全分镜？",
+                      description: "AI 将补齐缺失的分镜集，不会删除已有分镜内容。确定继续？",
+                      variant: "ai",
+                      confirmText: "开始 AI 补全",
+                    });
+                    if (!ok) return;
+                  } else {
+                    const ok = await confirm({
+                      title: "确认 AI 生成分镜？",
+                      description: "AI 将基于当前剧本内容，自动分析剧情并生成全套分镜与镜头结构。确定继续？",
+                      variant: "ai",
+                      confirmText: "开始 AI 生成",
+                    });
+                    if (!ok) return;
+                  }
                   void handleAiStoryboard();
                 }}
               >

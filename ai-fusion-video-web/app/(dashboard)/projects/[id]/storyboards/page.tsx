@@ -17,6 +17,8 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { motion } from "framer-motion";
@@ -66,6 +68,7 @@ export default function StoryboardTabPage() {
   const params = useParams();
   const projectId = Number(params.id);
   const { project } = useProject();
+  const { confirm, alert } = useConfirm();
   const {
     addPipeline,
     attachTaskStream,
@@ -76,6 +79,7 @@ export default function StoryboardTabPage() {
 
   const [loading, setLoading] = useState(true);
   const [isRefreshingStoryboard, setIsRefreshingStoryboard] = useState(false);
+  const [showAiConfirmDialog, setShowAiConfirmDialog] = useState(false);
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
   const [scriptEpisodes, setScriptEpisodes] = useState<ScriptEpisode[]>([]);
 
@@ -266,7 +270,7 @@ export default function StoryboardTabPage() {
       const currentScript = await scriptApi.getByProject(projectId);
 
       if (!currentScript || !storyboard) {
-        alert("项目剧本或分镜工作区未初始化");
+        await alert({ title: "工作区未初始化", description: "项目剧本或分镜工作区未初始化，请检查后重试。", variant: "warning" });
         return;
       }
 
@@ -378,17 +382,17 @@ export default function StoryboardTabPage() {
   const handleGenerateEpisodeStoryboard = useCallback(async (episode: StoryboardEpisode) => {
     if (!storyboard) return;
     if (!storyboard.scriptId) {
-      alert("当前分镜未关联剧本，无法按单集重新生成");
+      await alert({ title: "未关联剧本", description: "当前分镜未关联剧本，无法按单集重新生成。", variant: "warning" });
       return;
     }
     if (!episode.scriptEpisodeId) {
-      alert("请先绑定剧本集后再重新生成本集分镜");
+      await alert({ title: "未绑定剧本集", description: "请先绑定剧本集后再重新生成本集分镜。", variant: "warning" });
       return;
     }
 
     const scriptEpisode = scriptEpisodes.find((item) => item.id === episode.scriptEpisodeId);
     const displayNumber = scriptEpisode?.episodeNumber ?? episode.episodeNumber ?? "?";
-    const confirmed = confirm(`将覆盖第 ${displayNumber} 集已有分镜内容，不影响其它集。确定继续？`);
+    const confirmed = await confirm({ title: "覆盖生成本集分镜", description: `将覆盖第 ${displayNumber} 集已有分镜内容，不影响其它集。确定继续？`, variant: "ai", confirmText: "确定覆盖生成" });
     if (!confirmed) return;
 
     try {
@@ -640,7 +644,7 @@ export default function StoryboardTabPage() {
   };
 
   const handleDeleteEpisode = async (episodeId: number) => {
-    if (!confirm("确定要删除该分镜集吗？相关的分镜内容也将被删除。")) return false;
+    const ok = await confirm({ title: "删除分镜集", description: "确定要删除该分镜集吗？相关的分镜内容也将被一并删除，此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return false;
     try {
       await storyboardApi.deleteEpisode(episodeId);
       if (
@@ -658,7 +662,7 @@ export default function StoryboardTabPage() {
   };
 
   const handleDeleteScene = async (sceneId: number, episodeId: number) => {
-    if (!confirm("确定要删除该分镜场次吗？")) return false;
+    const ok = await confirm({ title: "删除分镜场次", description: "确定要删除该分镜场次吗？场次内的所有镜头将被一并删除。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return false;
     try {
       await storyboardApi.deleteScene(sceneId);
       if (sidebarSelection.sceneId === sceneId) {
@@ -693,7 +697,7 @@ export default function StoryboardTabPage() {
   };
 
   const handleDeleteItem = async (itemId: number) => {
-    if (!confirm("确定要删除该镜头吗？")) return;
+    const ok = await confirm({ title: "删除镜头", description: "确定要删除该镜头吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await storyboardApi.deleteItem(itemId);
       setSceneGroups((prev) =>
@@ -819,12 +823,12 @@ export default function StoryboardTabPage() {
         throw new Error("缺少分镜上下文，无法生成首尾帧");
       }
       if (!episodeId || !sceneId) {
-        alert("请先选择场次后再批量生成首尾帧");
+        await alert({ title: "未选择场次", description: "请先选择场次后再批量生成首尾帧。", variant: "info" });
         return;
       }
       const sceneGroup = sceneGroups.find((group) => group.scene.id === sceneId);
       if (!sceneGroup) {
-        alert("当前场次数据未加载，请重新选择场次后再试");
+        await alert({ title: "数据未加载", description: "当前场次数据未加载，请重新选择场次后再试。", variant: "warning" });
         return;
       }
       const allowedItemIds = new Set(sceneGroup.items.map((item) => item.id));
@@ -846,7 +850,7 @@ export default function StoryboardTabPage() {
       ].filter((task) => task.itemIds.length > 0);
 
       if (tasks.length === 0) {
-        alert("当前场次首尾帧已完整，无需生成");
+        await alert({ title: "无需生成", description: "当前场次首尾帧已完整，无需重复生成。", variant: "info" });
         return;
       }
 
@@ -1081,7 +1085,47 @@ export default function StoryboardTabPage() {
         onBindScriptEpisode={handleBindScriptEpisode}
         onGenerateEpisodeStoryboard={handleGenerateEpisodeStoryboard}
       />
-      </motion.div>
+  
+      <Dialog open={showAiConfirmDialog} onOpenChange={setShowAiConfirmDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Sparkles className="h-4 w-4 text-violet-500" />
+              {sceneGroups.length > 0 ? "确认 AI 补全分镜？" : "确认 AI 生成分镜？"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground pt-1">
+              {sceneGroups.length > 0
+                ? "系统将基于当前剧本内容，智能分析并补全尚未生成分镜的场次与镜头。"
+                : "系统将基于当前剧本内容，自动分析剧本并生成全套分镜结构与镜头信息。"}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="rounded-xl border border-border/30 bg-muted/20 p-3 text-xs text-muted-foreground space-y-1">
+            <p className="font-medium text-foreground">💡 提示</p>
+            <p>
+              生成任务启动后将在后台自动运行，您可在右上角任务中心实时查看进度。
+            </p>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setShowAiConfirmDialog(false)}>
+              取消
+            </Button>
+            <Button
+              variant="ai"
+              size="sm"
+              onClick={() => {
+                setShowAiConfirmDialog(false);
+                void handleAiStoryboard();
+              }}
+            >
+              <Sparkles className="h-3.5 w-3.5" />
+              {sceneGroups.length > 0 ? "开始 AI 补全" : "开始 AI 生成"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </motion.div>
 
       {/* 中栏：按场次分组的分镜内容 */}
       <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="flex-1 flex flex-col min-w-0">
@@ -1123,7 +1167,7 @@ export default function StoryboardTabPage() {
             </h2>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="ai" size="sm" onClick={() => void handleAiStoryboard()}>
+            <Button variant="ai" size="sm" onClick={() => setShowAiConfirmDialog(true)}>
               <Sparkles className="h-4 w-4" />
               {sceneGroups.length > 0 ? "AI 补全" : "AI 生成"}
             </Button>

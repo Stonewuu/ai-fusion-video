@@ -4,6 +4,7 @@ import Script from "next/script";
 import "./globals.css";
 import { ThemeProvider } from "@/components/theme-provider";
 import { Toaster } from "@/components/ui/sonner";
+import { ConfirmProvider } from "@/components/ui/confirm-dialog";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const inter = Inter({
@@ -49,7 +50,9 @@ export default function RootLayout({
           enableSystem
         >
           <TooltipProvider>
-            {children}
+            <ConfirmProvider>
+              {children}
+            </ConfirmProvider>
             <Toaster richColors position="top-center" />
           </TooltipProvider>
         </ThemeProvider>

@@ -20,6 +20,7 @@ import {
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { getModelDisplayParts } from "@/lib/model-display";
 import {
   aiModelApi,
@@ -72,6 +73,7 @@ function isAiModelViewMode(value: string | null): value is AiModelViewMode {
 }
 
 export default function AiModelsPage() {
+  const { confirm } = useConfirm();
   const shouldReduceMotion = useReducedMotion();
 
   // AI 模型列表
@@ -269,7 +271,7 @@ export default function AiModelsPage() {
   };
 
   const handleDeleteModel = async (id: number) => {
-    if (!confirm("确定要删除该 AI 模型吗？")) return;
+    const ok = await confirm({ title: "删除 AI 模型", description: "确定要删除该 AI 模型吗？", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await aiModelApi.delete(id);
       await loadModels();
@@ -280,7 +282,7 @@ export default function AiModelsPage() {
   };
 
   const handleDeleteConfig = async (id: number) => {
-    if (!confirm("确定要删除该 API 配置吗？")) return;
+    const ok = await confirm({ title: "删除 API 配置", description: "确定要删除该 API 配置吗？", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await apiConfigApi.delete(id);
       await loadConfigs();

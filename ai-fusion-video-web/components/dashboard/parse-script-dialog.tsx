@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useState } from "react";
 import { X, Sparkles, Loader2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -23,6 +24,7 @@ export function ParseScriptDialog({
   onClose,
   onCreated,
 }: ParseScriptDialogProps) {
+  const { confirm } = useConfirm();
   const [rawContent, setRawContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -32,9 +34,9 @@ export function ParseScriptDialog({
       setError("请粘贴剧本原文");
       return;
     }
-    if (mode === "reparse"
-      && !confirm("重新解析会清空当前剧本的分集和场次，并使用新原文重新生成。顶层剧本记录会保留，确定继续？")) {
-      return;
+    if (mode === "reparse") {
+      const ok = await confirm({ title: "重新解析剧本", description: "重新解析会清空当前剧本的分集和场次，并使用新原文重新生成。顶层剧本记录会保留，确定继续？", variant: "ai", confirmText: "确定重新解析" });
+      if (!ok) return;
     }
     setLoading(true);
     setError("");

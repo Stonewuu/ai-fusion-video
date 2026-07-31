@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useState } from "react";
 import { BookOpen, Loader2, Pencil, Plus, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -28,6 +29,7 @@ interface SkillsSectionProps {
 const EMPTY_FORM = { name: "", displayName: "", description: "", content: "" };
 
 export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
+  const { confirm } = useConfirm();
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<AgentUserSkill | null>(null);
@@ -71,7 +73,7 @@ export function SkillsSection({ skills, onRefresh }: SkillsSectionProps) {
   };
 
   const remove = async (skill: AgentUserSkill) => {
-    if (!window.confirm(`确认删除 Skill「${skill.name}」？`)) return;
+    const ok = await confirm({ title: "删除 Skill", description: `确认删除 Skill「${skill.name}」？`, variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     setDeleting(skill.name);
     try {
       await agentConfigApi.deleteSkill(skill.name);

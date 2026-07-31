@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useState } from "react";
 import {
   Cable,
@@ -92,6 +93,7 @@ function linesToMap(value: string) {
 }
 
 export function McpServersSection({ servers, onRefresh }: McpServersSectionProps) {
+  const { confirm } = useConfirm();
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<AgentMcpServer | null>(null);
   const [form, setForm] = useState<McpForm>(EMPTY_FORM);
@@ -169,7 +171,7 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
   };
 
   const remove = async (server: AgentMcpServer) => {
-    if (!window.confirm(`确认删除 MCP 服务「${server.name}」？`)) return;
+    const ok = await confirm({ title: "删除 MCP 服务", description: `确认删除 MCP 服务「${server.name}」？`, variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     setDeletingId(server.id);
     try {
       await agentConfigApi.deleteMcpServer(server.id);

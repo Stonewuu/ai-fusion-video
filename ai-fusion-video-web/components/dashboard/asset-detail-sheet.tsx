@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Select,
   SelectContent,
@@ -285,6 +286,7 @@ function CoverSelectorDialog({
 
 // ========== 子资产编辑面板（滑入式） ==========
 function AssetItemEditPanel({
+  confirm,
   item,
   assetId,
   assetType,
@@ -293,6 +295,7 @@ function AssetItemEditPanel({
   onUpdated,
   onDeleted,
 }: {
+  confirm: ReturnType<typeof useConfirm>["confirm"];
   item: AssetItem;
   assetId: number;
   assetType: string;
@@ -368,7 +371,7 @@ function AssetItemEditPanel({
   };
 
   const handleDelete = async () => {
-    if (!confirm("确定删除该子资产？")) return;
+    const ok = await confirm({ title: "删除子资产", description: "确定删除该子资产吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await assetApi.deleteItem(item.id);
       onDeleted();
@@ -853,6 +856,7 @@ function AssetItemCreatePanel({
 
 // ========== 主面板 ==========
 export default function AssetDetailPanel(props: Props) {
+  const { confirm } = useConfirm();
   const { onClose, onSaved } = props;
   const isCreating = props.isCreating === true;
   const asset = isCreating ? null : props.asset;
@@ -967,7 +971,7 @@ export default function AssetDetailPanel(props: Props) {
 
   const handleDelete = async () => {
     if (!asset || !props.onDeleted) return;
-    if (!confirm("确定要删除该资产及其所有子资产吗？")) return;
+    const ok = await confirm({ title: "删除主资产", description: "确定要删除该资产及其所有子资产吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await assetApi.delete(asset.id);
       props.onDeleted();
@@ -1378,9 +1382,9 @@ export default function AssetDetailPanel(props: Props) {
                         />
                         {/* 删除按钮 */}
                         <button
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            if (!confirm("确定删除该子资产？")) return;
+                            const ok = await confirm({ title: "删除子资产", description: "确定删除该子资产吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
                             assetApi.deleteItem(item.id).then(() => {
                               if (selectedItem?.id === item.id) setSelectedItem(null);
                               loadItems(asset.id);
@@ -1430,6 +1434,7 @@ export default function AssetDetailPanel(props: Props) {
           />
         ) : selectedItem ? (
           <AssetItemEditPanel
+            confirm={confirm}
             key={selectedItem.id}
             item={selectedItem}
             assetId={asset.id}

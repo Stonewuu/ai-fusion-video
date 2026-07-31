@@ -7,6 +7,7 @@ import { SafeImage } from "@/components/ui/safe-image";
 import { Textarea } from "@/components/ui/textarea";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { toastApiError } from "@/lib/api/toast-api-error";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/api/project";
 import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
@@ -191,11 +192,17 @@ export function FrameReferenceSection({
   const [submitting, setSubmitting] = useState(false);
   const skipNextChangeConfirmRef = useRef(false);
   const defaultPrompt = buildDefaultFramePrompt(item, project, frameType);
+  const { confirm } = useConfirm();
 
-  const confirmOverwrite = useCallback(() => {
+  const confirmOverwrite = useCallback(async () => {
     if (!imageUrl) return true;
-    return confirm(`${label}参考图已存在，确认覆盖吗？`);
-  }, [imageUrl, label]);
+    return await confirm({
+      title: "覆盖参考图",
+      description: `${label}参考图已存在，确认覆盖吗？`,
+      variant: "warning",
+      confirmText: "确认覆盖",
+    });
+  }, [confirm, imageUrl, label]);
 
   const handleChange = async (nextValue: string) => {
     if (!onUpdateFrame) return;
@@ -206,7 +213,7 @@ export function FrameReferenceSection({
       currentUrl &&
       nextUrl !== currentUrl &&
       !skipNextChangeConfirmRef.current &&
-      !confirmOverwrite()
+      !(await confirmOverwrite())
     ) {
       return;
     }
@@ -222,9 +229,9 @@ export function FrameReferenceSection({
     }
   };
 
-  const handleOpenPrompt = () => {
+  const handleOpenPrompt = async () => {
     if (!onGenerateFrame) return;
-    if (!confirmOverwrite()) return;
+    if (!(await confirmOverwrite())) return;
     setPromptOpen(true);
   };
 
@@ -294,8 +301,8 @@ export function FrameReferenceSection({
           }
           uploadSubDir="storyboard-frames"
           placeholder={`粘贴${label}图片链接...`}
-          beforeUpload={() => {
-            const ok = confirmOverwrite();
+          beforeUpload={async () => {
+            const ok = await confirmOverwrite();
             skipNextChangeConfirmRef.current = ok;
             if (ok) {
               window.setTimeout(() => {
