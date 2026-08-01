@@ -27,7 +27,7 @@ import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-/** Coalesces only identity-contiguous text/thinking deltas with a bounded output queue. */
+/** Coalesces identity-contiguous streaming deltas with a bounded output queue. */
 @Component
 public final class AgentEventChunkCoalescer {
 
@@ -176,6 +176,9 @@ public final class AgentEventChunkCoalescer {
             pending = new DeltaAccumulator(event, identity, delta);
             if (delta.length() >= policy.maxChars()) {
                 flushLocked();
+                return;
+            }
+            if (!identity.flushOnDelay()) {
                 return;
             }
             timer = timerScheduler.schedule(
@@ -411,16 +414,22 @@ public final class AgentEventChunkCoalescer {
             String source,
             String replyId,
             String blockId,
+            String toolCallId,
             String parentToolCallId,
             String agentName,
-            String outputType) {
+            String outputType,
+            boolean flushOnDelay) {
 
         private static DeltaIdentity of(AgentEventEnvelope event) {
             boolean text = "TEXT_BLOCK_DELTA".equals(event.rawEventType())
                     && "CONTENT".equals(event.outputType());
             boolean thinking = "THINKING_BLOCK_DELTA".equals(event.rawEventType())
                     && "REASONING".equals(event.outputType());
-            if (!text && !thinking) {
+            boolean toolCall = "TOOL_CALL_DELTA".equals(event.rawEventType())
+                    && event.outputType() == null
+                    && event.toolCallId() != null
+                    && !event.toolCallId().isBlank();
+            if (!text && !thinking && !toolCall) {
                 return null;
             }
             return new DeltaIdentity(
@@ -428,9 +437,11 @@ public final class AgentEventChunkCoalescer {
                     event.source(),
                     event.replyId(),
                     event.blockId(),
+                    event.toolCallId(),
                     event.parentToolCallId(),
                     event.agentName(),
-                    event.outputType());
+                    event.outputType(),
+                    !toolCall);
         }
     }
 

@@ -11,6 +11,8 @@ import com.stonewu.fusion.mapper.ai.AgentEventMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
+import com.stonewu.fusion.service.ai.run.AgentConfirmationExpiryCoordinator;
+import com.stonewu.fusion.service.ai.run.AgentRunRedisSignalService;
 import com.stonewu.fusion.service.ai.run.AgentWaitingStatePort;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
@@ -24,10 +26,12 @@ import com.stonewu.fusion.service.ai.run.model.StartAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
 import com.stonewu.fusion.service.ai.run.model.WaitingCheckpoint;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -50,6 +54,12 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers(disabledWithoutDocker = false)
@@ -89,6 +99,9 @@ class AgentWaitingStateIT {
     private AgentRunCoordinator coordinator;
 
     @Autowired
+    private AgentConfirmationExpiryCoordinator confirmationExpiry;
+
+    @Autowired
     private AgentConversationService conversationService;
 
     @Autowired
@@ -97,12 +110,20 @@ class AgentWaitingStateIT {
     @Autowired
     private AgentEventMapper eventMapper;
 
+    @MockitoBean
+    private AgentRunRedisSignalService signals;
+
+    @BeforeEach
+    void stubRedisSignals() {
+        when(signals.publishWakeup(anyString(), anyLong())).thenReturn(Mono.empty());
+    }
+
     @Test
     void confirmationIsInvisibleUntilCheckpointAndResumesOnceAcrossNodes()
             throws Exception {
         StartedAgentRun started = startRun(Duration.ofMinutes(2));
         PendingConfirmation candidate = confirmation(
-                started.deadline().minusSeconds(30));
+                started.deadline().plus(Duration.ofDays(1)));
 
         await(waiting.recordConfirmationCandidate(started.runId(), candidate));
         await(waiting.recordConfirmationCandidate(started.runId(), candidate));
@@ -129,6 +150,10 @@ class AgentWaitingStateIT {
         assertThat(persistedWaiting.getOwnerEpoch()).isEqualTo(started.ownerEpoch());
         assertThat(persistedWaiting.getPausedThroughSequence())
                 .isEqualTo(checkpoint.pausedThroughSequence());
+        assertThat(persistedWaiting.getWaitExpiresAt().toInstant(ZoneOffset.UTC))
+                .isEqualTo(candidate.expiresAt());
+        assertThat(persistedWaiting.getDeadlineAt().toInstant(ZoneOffset.UTC))
+                .isEqualTo(candidate.expiresAt());
         AgentEvent actionable = events(
                 started.runId(), "PLATFORM_USER_CONFIRM_REQUIRED").getFirst();
         assertThat(actionable.getOutputType()).isEqualTo("USER_CONFIRMATION_REQUIRED");
@@ -170,6 +195,9 @@ class AgentWaitingStateIT {
                 .findFirst()
                 .orElseThrow();
         assertResumedIdentity(started, checkpoint, resumed);
+        assertThat(resumed.deadline())
+                .isAfter(Instant.now().plus(Duration.ofMinutes(29)))
+                .isBefore(Instant.now().plus(Duration.ofMinutes(31)));
         assertThat(resumed.newOwnerEpoch()).isEqualTo(started.ownerEpoch() + 1);
         assertThat(resumed.newOwnerInstanceId())
                 .isIn("waiting-node-b", "waiting-node-c");
@@ -189,6 +217,42 @@ class AgentWaitingStateIT {
                 .contains("\"toolCallId\":\"tool-a\"")
                 .contains("\"approved\":true")
                 .contains("\"pendingToolCalls\"");
+    }
+
+    @Test
+    void confirmationEventsPublishOnlyAfterTheirTransactionsCommit() {
+        StartedAgentRun started = startRun(Duration.ofMinutes(2));
+        PendingConfirmation candidate = confirmation(
+                started.deadline().minusSeconds(30));
+        when(signals.publishWakeup(eq(started.runId()), anyLong()))
+                .thenAnswer(invocation -> {
+                    assertCommittedVisibleEvent(
+                            started.runId(), invocation.getArgument(1));
+                    return Mono.empty();
+                });
+
+        await(waiting.recordConfirmationCandidate(started.runId(), candidate));
+        AgentRun running = run(started.runId());
+        assertThat(await(waiting.enterWaitingConfirmation(
+                started.runId(), started.ownerEpoch(), checkpoint(running)))).isTrue();
+        AgentEvent confirmationRequired = events(
+                started.runId(), "PLATFORM_USER_CONFIRM_REQUIRED").getFirst();
+
+        await(waiting.resumeConfirmation(new ResumeConfirmationCommand(
+                started.runId(),
+                USER_ID,
+                candidate.replyId(),
+                candidate.decisionIds(),
+                Map.of("tool-a", true),
+                "waiting-node-b",
+                Duration.ofSeconds(30))));
+        AgentEvent confirmationResult = events(
+                started.runId(), "USER_CONFIRM_RESULT").getFirst();
+
+        verify(signals).publishWakeup(
+                started.runId(), confirmationRequired.getSequenceNo());
+        verify(signals).publishWakeup(
+                started.runId(), confirmationResult.getSequenceNo());
     }
 
     @Test
@@ -228,6 +292,7 @@ class AgentWaitingStateIT {
                         "waiting-node-z",
                         Duration.ofSeconds(30))));
         assertResumedIdentity(started, checkpoint, resumed);
+        assertThat(resumed.deadline()).isEqualTo(started.deadline());
         assertThat(resumed.newOwnerInstanceId()).isEqualTo("waiting-node-z");
         assertThat(resumed.newOwnerEpoch()).isEqualTo(started.ownerEpoch() + 1);
         AgentEvent result = events(
@@ -235,6 +300,17 @@ class AgentWaitingStateIT {
         assertThat(result.getToolCallId()).isEqualTo(requested.toolCallId());
         assertThat(result.getOutputType()).isNull();
         assertThat(result.getPayloadJson()).contains("executor-production-1");
+        verifyNoInteractions(signals);
+    }
+
+    private void assertCommittedVisibleEvent(String runId, long sequence) {
+        AgentEvent event = eventMapper.selectOne(new LambdaQueryWrapper<AgentEvent>()
+                .eq(AgentEvent::getRunId, runId)
+                .eq(AgentEvent::getSequenceNo, sequence));
+        assertThat(event).isNotNull();
+        assertThat(event.getOutputType()).isNotNull();
+        assertThat(event.getPublishRequired()).isTrue();
+        assertThat(run(runId).getNextSequence()).isGreaterThan(sequence);
     }
 
     @Test
@@ -287,6 +363,16 @@ class AgentWaitingStateIT {
                         Duration.ofSeconds(30)))));
         assertThat(run(started.runId()).getStatus())
                 .isEqualTo(AgentRunStatus.WAITING_CONFIRMATION.name());
+        assertThat(await(confirmationExpiry.expireAuthorized(
+                started.runId(), candidate.replyId(), USER_ID))).isTrue();
+        assertThat(run(started.runId()).getStatus())
+                .isEqualTo(AgentRunStatus.CANCELLED.name());
+        AgentEvent expiredEvent = events(
+                started.runId(), AgentConfirmationExpiryCoordinator.REASON).getFirst();
+        assertThat(expiredEvent.getOutputType()).isEqualTo("CANCELLED");
+        assertThat(expiredEvent.getPayloadJson())
+                .contains(AgentConfirmationExpiryCoordinator.MESSAGE)
+                .contains("\"pendingToolCalls\"");
     }
 
     private Object resumeConfirmation(
@@ -384,7 +470,6 @@ class AgentWaitingStateIT {
                 .isEqualTo(checkpoint.agentDefinitionSnapshotJson());
         assertThat(resumed.pausedThroughSequence())
                 .isEqualTo(checkpoint.pausedThroughSequence());
-        assertThat(resumed.deadline()).isEqualTo(started.deadline());
     }
 
     private AgentRun run(String runId) {

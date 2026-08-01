@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.entity.ai.AgentEvent;
 import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
@@ -27,6 +28,7 @@ import reactor.core.publisher.Mono;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
@@ -37,6 +39,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /** MySQL-backed, owner-fenced WAITING state transitions. */
 @Service
@@ -52,6 +55,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
     private final AgentEventEnvelopeSanitizer sanitizer;
     private final TransactionTemplate transactions;
     private final AgentRuntimeSchedulers schedulers;
+    private final AgentRunRedisSignalService signals;
+    private final Duration runTimeout;
     private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
 
     @Autowired
@@ -65,7 +70,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
             ObjectMapper objectMapper,
             AgentEventEnvelopeSanitizer sanitizer,
             TransactionTemplate transactions,
-            AgentRuntimeSchedulers schedulers) {
+            AgentRuntimeSchedulers schedulers,
+            AgentRunRedisSignalService signals,
+            AgentScopeV2Properties properties) {
         this.runMapper = Objects.requireNonNull(runMapper, "runMapper must not be null");
         this.eventMapper = Objects.requireNonNull(
                 eventMapper, "eventMapper must not be null");
@@ -76,6 +83,11 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 transactions, "transactions must not be null");
         this.schedulers = Objects.requireNonNull(
                 schedulers, "schedulers must not be null");
+        this.signals = Objects.requireNonNull(signals, "signals must not be null");
+        this.runTimeout = Objects.requireNonNull(
+                properties, "properties must not be null")
+                .getExecution()
+                .getRunTimeout();
     }
 
     @Override
@@ -100,6 +112,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 checkpoint, "checkpoint must not be null");
         return transactional(() -> enterWaitingConfirmationTx(
                 safeRunId, expectedOwnerEpoch, safeCheckpoint))
+                .flatMap(transition -> publishCommitted(transition.signal())
+                        .thenReturn(transition.entered()))
                 .doOnNext(entered -> {
                     if (entered) metrics.waitingEntered();
                 });
@@ -153,6 +167,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         requireText(safeCommand.replyId(), 128, "replyId");
         requireText(safeCommand.newOwnerInstanceId(), 128, "newOwnerInstanceId");
         return transactional(() -> resumeConfirmationTx(safeCommand))
+                .flatMap(transition -> publishCommitted(transition.signal())
+                        .thenReturn(transition.resumed()))
                 .doOnNext(ignored -> metrics.waitingResumed());
     }
 
@@ -176,7 +192,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         if (!isCurrentRunningOwner(run, run.getOwnerEpoch(), now)) {
             throw conflict("Agent 运行已不接受确认候选");
         }
-        PendingConfirmation normalized = normalize(candidate, run, now);
+        PendingConfirmation normalized = normalize(candidate, now);
         AgentEvent existing = eventMapper.selectConfirmationCandidate(
                 runId, normalized.replyId());
         if (existing != null) {
@@ -210,12 +226,12 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         }
     }
 
-    private boolean enterWaitingConfirmationTx(
+    private WaitingConfirmationTransition enterWaitingConfirmationTx(
             String runId, long expectedOwnerEpoch, WaitingCheckpoint checkpoint) {
         AgentRun run = requireRunForUpdate(runId);
         LocalDateTime now = runMapper.selectDatabaseNow();
         if (!isCurrentRunningOwner(run, expectedOwnerEpoch, now)) {
-            return false;
+            return WaitingConfirmationTransition.notEntered();
         }
         requireCheckpoint(run, checkpoint);
         AgentEvent candidateEvent = eventMapper.selectLatestConfirmationCandidate(runId);
@@ -223,8 +239,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
             throw conflict("Agent 运行没有可恢复的确认候选");
         }
         PendingConfirmation candidate = confirmation(candidateEvent);
-        LocalDateTime expiresAt = requireActionableExpiry(
-                candidate.expiresAt(), run, now);
+        LocalDateTime expiresAt = requireActionableConfirmationExpiry(
+                candidate.expiresAt(), now);
         long sequence = nextSequence(run);
         ObjectNode payload = JsonNodeFactory.instance.objectNode()
                 .put("outputType", "USER_CONFIRMATION_REQUIRED")
@@ -256,7 +272,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         if (updated != 1) {
             throw conflict("Agent 运行所有权已变更");
         }
-        return true;
+        return WaitingConfirmationTransition.entered(runId, sequence);
     }
 
     private boolean enterWaitingExternalTx(
@@ -320,7 +336,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
             String runId, long currentUserId, String replyId) {
         AgentRun run = requireAuthorizedRun(runId, currentUserId);
         LocalDateTime now = runMapper.selectDatabaseNow();
-        requireWaiting(run, AgentRunStatus.WAITING_CONFIRMATION, now);
+        requireWaitingConfirmation(run, now);
         if (!Objects.equals(run.getWaitingReplyId(), replyId)) {
             throw conflict("确认请求已处理或 replyId 不匹配");
         }
@@ -353,10 +369,11 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         return pending;
     }
 
-    private ResumedAgentRun resumeConfirmationTx(ResumeConfirmationCommand command) {
+    private ResumeConfirmationTransition resumeConfirmationTx(
+            ResumeConfirmationCommand command) {
         AgentRun run = requireAuthorizedRun(command.runId(), command.currentUserId());
         LocalDateTime now = runMapper.selectDatabaseNow();
-        requireWaiting(run, AgentRunStatus.WAITING_CONFIRMATION, now);
+        requireWaitingConfirmation(run, now);
         if (!Objects.equals(run.getWaitingReplyId(), command.replyId())) {
             throw conflict("确认请求已处理或 replyId 不匹配");
         }
@@ -372,7 +389,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         requireSameExpiry(run, pending.expiresAt());
 
         long newEpoch = incrementOwnerEpoch(run);
-        LocalDateTime leaseUntil = leaseUntil(now, command.ownerLease(), run.getDeadlineAt());
+        LocalDateTime deadline = now.plus(runTimeout).truncatedTo(ChronoUnit.MILLIS);
+        LocalDateTime leaseUntil = leaseUntil(now, command.ownerLease(), deadline);
         long sequence = nextSequence(run);
         ObjectNode payload = JsonNodeFactory.instance.objectNode()
                 .put("outputType", "USER_CONFIRM_RESULT")
@@ -406,11 +424,22 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 command.newOwnerInstanceId(),
                 newEpoch,
                 leaseUntil,
+                deadline,
                 increment(sequence),
                 now) != 1) {
             throw conflict("确认请求已由其他节点处理");
         }
-        return resumed(run, command.newOwnerInstanceId(), newEpoch, leaseUntil);
+        return new ResumeConfirmationTransition(
+                resumed(run, command.newOwnerInstanceId(), newEpoch, leaseUntil, deadline),
+                new EventSignal(command.runId(), sequence));
+    }
+
+    private Mono<Void> publishCommitted(EventSignal signal) {
+        if (signal == null) {
+            return Mono.empty();
+        }
+        return signals.publishWakeup(signal.runId(), signal.sequence())
+                .onErrorResume(failure -> Mono.empty());
     }
 
     private ResumedAgentRun resumeExternalTx(ResumeExternalCommand command) {
@@ -463,7 +492,12 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 now) != 1) {
             throw conflict("外部执行请求已由其他节点处理");
         }
-        return resumed(run, command.newOwnerInstanceId(), newEpoch, leaseUntil);
+        return resumed(
+                run,
+                command.newOwnerInstanceId(),
+                newEpoch,
+                leaseUntil,
+                run.getDeadlineAt());
     }
 
     private void requireCheckpoint(AgentRun run, WaitingCheckpoint checkpoint) {
@@ -481,8 +515,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
     }
 
     private PendingConfirmation normalize(
-            PendingConfirmation candidate, AgentRun run, LocalDateTime now) {
-        LocalDateTime expiresAt = clampedExpiry(candidate.expiresAt(), run, now);
+            PendingConfirmation candidate, LocalDateTime now) {
+        LocalDateTime expiresAt = requireActionableConfirmationExpiry(
+                candidate.expiresAt(), now);
         return new PendingConfirmation(
                 candidate.replyId(),
                 candidate.decisionIds(),
@@ -514,6 +549,15 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         return expiresAt;
     }
 
+    private LocalDateTime requireActionableConfirmationExpiry(
+            Instant persistedExpiry, LocalDateTime now) {
+        LocalDateTime expiresAt = toDatabaseTime(persistedExpiry);
+        if (!expiresAt.isAfter(now)) {
+            throw conflict("审批时间已结束，相关操作未执行");
+        }
+        return expiresAt;
+    }
+
     private void requireWaiting(
             AgentRun run, AgentRunStatus expected, LocalDateTime now) {
         if (!expected.name().equals(run.getStatus())) {
@@ -523,7 +567,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 || !run.getWaitExpiresAt().isAfter(now)
                 || run.getDeadlineAt() == null
                 || !run.getDeadlineAt().isAfter(now)) {
-            throw conflict("WAITING 请求已过期");
+            throw conflict(expected == AgentRunStatus.WAITING_CONFIRMATION
+                    ? "审批时间已结束，相关操作未执行"
+                    : "外部执行等待已过期");
         }
     }
 
@@ -673,7 +719,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
             AgentRun run,
             String ownerInstanceId,
             long ownerEpoch,
-            LocalDateTime leaseUntil) {
+            LocalDateTime leaseUntil,
+            LocalDateTime deadline) {
         Long pausedThrough = run.getPausedThroughSequence();
         if (pausedThrough == null || pausedThrough < 0) {
             throw new IllegalStateException(
@@ -689,7 +736,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 ownerInstanceId,
                 ownerEpoch,
                 toInstant(leaseUntil),
-                toInstant(run.getDeadlineAt()));
+                toInstant(deadline));
     }
 
     private long nextSequence(AgentRun run) {
@@ -718,7 +765,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
 
     private LocalDateTime leaseUntil(
             LocalDateTime now,
-            java.time.Duration lease,
+            Duration lease,
             LocalDateTime deadline) {
         LocalDateTime requested = now.plus(lease).truncatedTo(ChronoUnit.MILLIS);
         return requested.isAfter(deadline) ? deadline : requested;
@@ -857,10 +904,60 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         return new BusinessException(409, message);
     }
 
-    private <T> Mono<T> transactional(java.util.function.Supplier<T> operation) {
+    private <T> Mono<T> transactional(Supplier<T> operation) {
         return Mono.fromCallable(() -> Objects.requireNonNull(
                         transactions.execute(ignored -> operation.get()),
                         "WAITING transaction returned no result"))
                 .subscribeOn(schedulers.journal());
+    }
+
+    private void requireWaitingConfirmation(AgentRun run, LocalDateTime now) {
+        if (!AgentRunStatus.WAITING_CONFIRMATION.name().equals(run.getStatus())
+                || run.getWaitExpiresAt() == null
+                || !run.getWaitExpiresAt().isAfter(now)
+                || run.getDeadlineAt() == null
+                || !run.getDeadlineAt().isAfter(now)) {
+            throw conflict("该审批已结束，相关操作未执行");
+        }
+    }
+
+    private record EventSignal(String runId, long sequence) {
+
+        private EventSignal {
+            if (runId == null || runId.isBlank()) {
+                throw new IllegalArgumentException("runId must not be blank");
+            }
+            if (sequence <= 0) {
+                throw new IllegalArgumentException("sequence must be positive");
+            }
+        }
+    }
+
+    private record WaitingConfirmationTransition(boolean entered, EventSignal signal) {
+
+        private WaitingConfirmationTransition {
+            if (entered != (signal != null)) {
+                throw new IllegalArgumentException(
+                        "entered confirmation transitions require exactly one signal");
+            }
+        }
+
+        private static WaitingConfirmationTransition notEntered() {
+            return new WaitingConfirmationTransition(false, null);
+        }
+
+        private static WaitingConfirmationTransition entered(String runId, long sequence) {
+            return new WaitingConfirmationTransition(
+                    true, new EventSignal(runId, sequence));
+        }
+    }
+
+    private record ResumeConfirmationTransition(
+            ResumedAgentRun resumed, EventSignal signal) {
+
+        private ResumeConfirmationTransition {
+            Objects.requireNonNull(resumed, "resumed must not be null");
+            Objects.requireNonNull(signal, "signal must not be null");
+        }
     }
 }

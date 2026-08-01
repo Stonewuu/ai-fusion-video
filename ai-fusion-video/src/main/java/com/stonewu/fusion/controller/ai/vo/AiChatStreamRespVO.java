@@ -30,7 +30,7 @@ public class AiChatStreamRespVO {
     /** 会话 ID */
     private String conversationId;
 
-    /** 输出类型：REASONING / CONTENT / TOOL_CALL / TOOL_FINISHED / SUB_AGENT_FINISHED / DONE / ERROR / CANCELLED */
+    /** 输出类型：REASONING / CONTENT / TOOL_CALL_STARTED / TOOL_CALL / TOOL_FINISHED / SUB_AGENT_FINISHED / DONE / ERROR / CANCELLED */
     private String outputType;
 
     /** 文本内容（增量） */
@@ -101,6 +101,9 @@ public class AiChatStreamRespVO {
 
     /** Server-authoritative action expiry. */
     private Instant expiresAt;
+
+    /** Machine-readable reason for a terminal cancellation. */
+    private String cancellationReason;
 
     @Data
     @Accessors(chain = true)

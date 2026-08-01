@@ -1,8 +1,10 @@
 export type ToolTimelineStatus =
+  | "preparing"
   | "calling"
   | "awaiting_approval"
   | "approved"
   | "rejected"
+  | "expired"
   | "done"
   | "error"
   | "cancelled";
@@ -46,7 +48,8 @@ export type TimelineItem =
   | { type: "content"; text: string };
 
 function isInProgressToolStatus(status: ToolTimelineStatus): boolean {
-  return status === "calling"
+  return status === "preparing"
+    || status === "calling"
     || status === "awaiting_approval"
     || status === "approved";
 }
@@ -148,5 +151,6 @@ export function finishedToolTimelineStatus(
 export function persistedToolTimelineStatus(status?: string): ToolTimelineStatus {
   if (status === "running") return "calling";
   if (status === "rejected") return "rejected";
+  if (status === "expired") return "expired";
   return finishedToolTimelineStatus(status);
 }

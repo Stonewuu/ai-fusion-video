@@ -15,6 +15,7 @@ import com.stonewu.fusion.service.ai.agentscope.AgentScopePipelineRunService;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
 import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
 import com.stonewu.fusion.service.ai.run.CancellationCoordinator;
+import com.stonewu.fusion.service.ai.run.AgentConfirmationExpiryCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentConfirmationService;
 import com.stonewu.fusion.service.ai.run.PipelineCursorParser;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
@@ -57,6 +58,7 @@ class AiPipelineSseControllerTests {
     private AgentRunReplayService replay;
     private CancellationCoordinator cancellations;
     private AgentConfirmationService confirmations;
+    private AgentConfirmationExpiryCoordinator confirmationExpiry;
     private AiPipelineController controller;
     private MockMvc mockMvc;
 
@@ -67,13 +69,15 @@ class AiPipelineSseControllerTests {
         replay = mock(AgentRunReplayService.class);
         cancellations = mock(CancellationCoordinator.class);
         confirmations = mock(AgentConfirmationService.class);
+        confirmationExpiry = mock(AgentConfirmationExpiryCoordinator.class);
         controller = new AiPipelineController(
                 pipelineRuns,
                 queries,
                 replay,
                 new PipelineCursorParser(),
                 cancellations,
-                confirmations);
+                confirmations,
+                confirmationExpiry);
         mockMvc = MockMvcBuilders.standaloneSetup(controller)
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();
@@ -87,6 +91,25 @@ class AiPipelineSseControllerTests {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void expiresElapsedConfirmationForCurrentUser() throws Exception {
+        when(confirmationExpiry.expireAuthorized(
+                "run-1", "reply-1", CURRENT_USER_ID))
+                .thenReturn(Mono.just(true));
+
+        MvcResult pending = mockMvc.perform(post("/api/ai/pipeline/confirm/expire")
+                        .contentType("application/json")
+                        .content("{\"runId\":\"run-1\",\"replyId\":\"reply-1\"}"))
+                .andExpect(request().asyncStarted())
+                .andReturn();
+        mockMvc.perform(asyncDispatch(pending))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data").value(true));
+
+        verify(confirmationExpiry).expireAuthorized(
+                "run-1", "reply-1", CURRENT_USER_ID);
     }
 
     @Test

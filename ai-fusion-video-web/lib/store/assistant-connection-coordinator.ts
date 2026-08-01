@@ -14,6 +14,7 @@ import type {
   AssistantStoreState,
 } from "./assistant-types";
 import {
+  hasLiveTranscript,
   hasTerminal,
   reduceAssistantEvent,
   statusFromPipeline,
@@ -84,6 +85,18 @@ export function createAssistantConnectionCoordinator(
     pendingEnsure = null;
     if (ensureRetryTimer) clearTimeout(ensureRetryTimer);
     ensureRetryTimer = null;
+  };
+
+  const loadTerminalMessagesWithoutReplacingLiveTranscript = (
+    conversationId: string,
+  ) => {
+    const state = get();
+    if (state.mode === "collapsed" || state.selectedConversationId !== conversationId) {
+      return;
+    }
+    const runtime = state.conversationStates[conversationId];
+    if (!runtime || hasLiveTranscript(runtime)) return;
+    void state.loadMessagesIfNeeded(conversationId);
   };
 
   const scheduleEnsureRetry = (delay = 5000) => {
@@ -185,11 +198,8 @@ export function createAssistantConnectionCoordinator(
     });
     if (!applied) return;
 
-    const latest = get();
     if (terminal) {
-      if (latest.mode !== "collapsed" && latest.selectedConversationId === conversationId) {
-        void latest.loadMessagesIfNeeded(conversationId);
-      }
+      loadTerminalMessagesWithoutReplacingLiveTranscript(conversationId);
     }
   };
 
@@ -427,13 +437,9 @@ export function createAssistantConnectionCoordinator(
           || current.connectionGeneration !== generation
           || current.conversationId !== conversationId) return;
         clearConnection(generation);
-        const latest = get();
-        const latestRuntime = latest.conversationStates[conversationId];
-        if (latest.mode !== "collapsed"
-          && latest.selectedConversationId === conversationId
-          && latestRuntime
-          && !statusIsRunning(latestRuntime.status)) {
-          void latest.loadMessagesIfNeeded(conversationId);
+        const latestRuntime = get().conversationStates[conversationId];
+        if (latestRuntime && !statusIsRunning(latestRuntime.status)) {
+          loadTerminalMessagesWithoutReplacingLiveTranscript(conversationId);
         }
         scheduleStatusPolling();
       },
@@ -513,9 +519,7 @@ export function createAssistantConnectionCoordinator(
 
         const latest = get();
         if (!statusIsRunning(nextStatus)) {
-          if (latest.mode !== "collapsed" && latest.selectedConversationId === conversationId) {
-            void latest.loadMessagesIfNeeded(conversationId);
-          }
+          loadTerminalMessagesWithoutReplacingLiveTranscript(conversationId);
           scheduleStatusPolling();
           return;
         }

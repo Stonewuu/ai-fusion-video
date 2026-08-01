@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
@@ -36,6 +37,7 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.Duration;
 import java.util.List;
 import java.util.LinkedHashSet;
 import java.util.Objects;
@@ -54,6 +56,7 @@ public final class AgentExecutionFactory {
     private final AiModelMetadataResolver modelMetadataResolver;
     private final ObjectMapper objectMapper;
     private final AgentKernelSpecFactory specFactory;
+    private final Duration confirmationTimeout;
 
     public AgentExecutionFactory(
             AgentScopeHarnessInvoker harnessInvoker,
@@ -64,7 +67,8 @@ public final class AgentExecutionFactory {
             AgentRuntimeSchedulers schedulers,
             AiModelMetadataResolver modelMetadataResolver,
             ObjectMapper objectMapper,
-            AgentKernelSpecFactory specFactory) {
+            AgentKernelSpecFactory specFactory,
+            AgentScopeV2Properties properties) {
         this.harnessInvoker = Objects.requireNonNull(harnessInvoker, "harnessInvoker must not be null");
         this.runtimeContextFactory = Objects.requireNonNull(
                 runtimeContextFactory, "runtimeContextFactory must not be null");
@@ -76,6 +80,10 @@ public final class AgentExecutionFactory {
                 modelMetadataResolver, "modelMetadataResolver must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.specFactory = Objects.requireNonNull(specFactory, "specFactory must not be null");
+        this.confirmationTimeout = Objects.requireNonNull(
+                properties, "properties must not be null")
+                .getExecution()
+                .getConfirmationTimeout();
         this.snapshotResolver = new PersistedAgentKernelSnapshotResolver(this.objectMapper);
     }
 
@@ -117,7 +125,7 @@ public final class AgentExecutionFactory {
             return mapped;
         }
         PendingConfirmation candidate = confirmationCandidate(
-                confirmation, mapped.payload(), deadline);
+                confirmation, mapped.payload());
         ObjectNode payload = mapped.payload().deepCopy();
         ObjectNode candidatePayload = JsonNodeFactory.instance.objectNode()
                 .put("replyId", candidate.replyId())
@@ -143,7 +151,7 @@ public final class AgentExecutionFactory {
     }
 
     private PendingConfirmation confirmationCandidate(
-            RequireUserConfirmEvent event, JsonNode sanitizedPayload, Instant deadline) {
+            RequireUserConfirmEvent event, JsonNode sanitizedPayload) {
         if (event.getReplyId() == null || event.getReplyId().isBlank()
                 || event.getToolCalls().isEmpty()) {
             throw new IllegalStateException(
@@ -185,7 +193,7 @@ public final class AgentExecutionFactory {
                 decisionIds,
                 writeJson(previews),
                 writeJson(suspendedToolCalls(event.getToolCalls())),
-                deadline);
+                Instant.now().plus(confirmationTimeout));
     }
 
     private ArrayNode suspendedToolCalls(List<ToolUseBlock> toolCalls) {

@@ -182,6 +182,11 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
             case CANCELLATION_COORDINATOR ->
                     current == AgentRunStatus.CANCEL_REQUESTED
                             && request.terminalStatus() == AgentRunStatus.CANCELLED;
+            case CONFIRMATION_EXPIRER ->
+                    current == AgentRunStatus.WAITING_CONFIRMATION
+                            && run.getWaitExpiresAt() != null
+                            && !run.getWaitExpiresAt().isAfter(databaseNow)
+                            && request.terminalStatus() == AgentRunStatus.CANCELLED;
             case OWNER_RECONCILER ->
                     run.getLeaseUntil() != null
                             && !run.getLeaseUntil().isAfter(databaseNow)

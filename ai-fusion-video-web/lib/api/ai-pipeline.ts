@@ -57,6 +57,7 @@ export interface AiChatStreamEvent extends BaseAiChatStreamEvent {
   pendingToolCalls?: PendingToolCallInfo[];
   decisions?: ToolConfirmationDecision[];
   expiresAt?: string;
+  cancellationReason?: string;
 }
 
 export interface StreamCallbacks {
@@ -108,6 +109,7 @@ interface StreamCursor {
 const OUTPUT_TYPES = new Set([
   "REASONING",
   "CONTENT",
+  "TOOL_CALL_STARTED",
   "TOOL_CALL",
   "TOOL_FINISHED",
   "SUB_AGENT_STARTED",
@@ -389,6 +391,13 @@ export async function confirmPipelineTools(request: {
   decisions: ToolConfirmationDecision[];
 }): Promise<void> {
   await http.post("/api/ai/pipeline/confirm", request);
+}
+
+export async function expirePipelineConfirmation(request: {
+  runId: string;
+  replyId: string;
+}): Promise<void> {
+  await http.post("/api/ai/pipeline/confirm/expire", request);
 }
 
 export async function getPipelineStatus(

@@ -31,6 +31,45 @@ function toolCallState() {
   );
 }
 
+test("tool call start renders immediately and completion fills the same card", () => {
+  const started = reducePipelineEvent(
+    createInitialPipelineState(),
+    event(1, "TOOL_CALL_STARTED", {
+      replyId: "reply-1",
+      toolCalls: [{
+        id: "tool-1",
+        name: "update_script_info",
+        arguments: "",
+      }],
+    }),
+  );
+  assert.equal(started.timeline.length, 1);
+  assert.equal(started.timeline[0]?.type, "tool");
+  if (started.timeline[0]?.type !== "tool") throw new Error("Expected tool timeline item");
+  assert.equal(started.timeline[0].status, "preparing");
+  assert.equal(started.timeline[0].name, "update_script_info");
+  assert.equal(started.timeline[0].arguments, "");
+
+  const completedDefinition = reducePipelineEvent(
+    started,
+    event(2, "TOOL_CALL", {
+      replyId: "reply-1",
+      toolCalls: [{
+        id: "tool-1",
+        name: "update_script_info",
+        arguments: "{\"scriptId\":1}",
+      }],
+    }),
+  );
+  assert.equal(completedDefinition.timeline.length, 1);
+  assert.equal(completedDefinition.timeline[0]?.type, "tool");
+  if (completedDefinition.timeline[0]?.type !== "tool") {
+    throw new Error("Expected tool timeline item");
+  }
+  assert.equal(completedDefinition.timeline[0].status, "calling");
+  assert.equal(completedDefinition.timeline[0].arguments, "{\"scriptId\":1}");
+});
+
 function pendingConfirmationState() {
   return reducePipelineEvent(
     toolCallState(),
@@ -195,4 +234,23 @@ test("cancelled terminal clears a pending batch and cancels every tool", () => {
     cancelled.timeline.map((item) => item.type === "tool" ? item.status : item.type),
     ["cancelled", "cancelled"],
   );
+});
+
+test("expired approval marks tools as not executed and closes the run", () => {
+  const expired = reducePipelineEvent(
+    pendingConfirmationState(),
+    event(3, "CANCELLED", {
+      cancellationReason: "CONFIRMATION_EXPIRED",
+      content: "审批时间已结束，相关操作未执行。",
+    }),
+  );
+
+  assert.equal(expired.status, "cancelled");
+  assert.equal(expired.pendingConfirmation, undefined);
+  assert.equal(expired.timeline[0]?.type, "tool");
+  if (expired.timeline[0]?.type !== "tool") {
+    throw new Error("Expected tool timeline item");
+  }
+  assert.equal(expired.timeline[0].status, "expired");
+  assert.equal(expired.timeline[1]?.type, "content");
 });

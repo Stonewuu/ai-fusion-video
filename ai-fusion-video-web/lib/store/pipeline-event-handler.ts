@@ -423,6 +423,53 @@ export function createPipelineEventHandler(
               }
               break;
 
+            case "TOOL_CALL_STARTED":
+              if (!event.replyId || !event.toolCalls?.length) {
+                throw new Error("TOOL_CALL_STARTED event has no replyId or tool calls");
+              }
+              for (const toolCall of event.toolCalls) {
+                if (isSubAgent) {
+                  next.timeline = appendToToolChildren(
+                    next.timeline,
+                    event.parentToolCallId!,
+                    (children) => {
+                      if (children.some(
+                        (child) => child.type === "tool" && child.id === toolCall.id
+                      )) {
+                        throw new Error(`Tool call already started: ${toolCall.id}`);
+                      }
+                      return [
+                        ...children,
+                        {
+                          type: "tool" as const,
+                          id: toolCall.id,
+                          name: toolCall.name,
+                          arguments: "",
+                          batchId: event.replyId,
+                          status: "preparing" as const,
+                        },
+                      ];
+                    },
+                  );
+                } else {
+                  if (next.timeline.some(
+                    (item) => item.type === "tool" && item.id === toolCall.id
+                  )) {
+                    throw new Error(`Tool call already started: ${toolCall.id}`);
+                  }
+                  next.timeline.push({
+                    type: "tool",
+                    id: toolCall.id,
+                    name: toolCall.name,
+                    arguments: "",
+                    batchId: event.replyId,
+                    status: "preparing",
+                    agentName: event.agentName,
+                  });
+                }
+              }
+              break;
+
             case "TOOL_CALL":
               if (event.toolCalls) {
                 for (const tc of event.toolCalls) {
@@ -431,10 +478,24 @@ export function createPipelineEventHandler(
                       next.timeline,
                       event.parentToolCallId!,
                       (children) => {
-                        const exists = children.some(
-                          (c) => c.type === "tool" && c.id === tc.id
+                        const existing = children.find(
+                          (child) => child.type === "tool" && child.id === tc.id
                         );
-                        if (exists) return children;
+                        if (existing?.type === "tool") {
+                          if (existing.status !== "preparing" || existing.name !== tc.name) {
+                            throw new Error(`Invalid completed tool call definition: ${tc.id}`);
+                          }
+                          return children.map((child) =>
+                            child.type === "tool" && child.id === tc.id
+                              ? {
+                                  ...child,
+                                  arguments: tc.arguments,
+                                  batchId: event.replyId,
+                                  status: "calling" as const,
+                                }
+                              : child
+                          );
+                        }
                         return [
                           ...children,
                           {
@@ -449,10 +510,24 @@ export function createPipelineEventHandler(
                       }
                     );
                   } else {
-                    const exists = next.timeline.some(
+                    const existing = next.timeline.find(
                       (item) => item.type === "tool" && item.id === tc.id
                     );
-                    if (!exists) {
+                    if (existing?.type === "tool") {
+                      if (existing.status !== "preparing" || existing.name !== tc.name) {
+                        throw new Error(`Invalid completed tool call definition: ${tc.id}`);
+                      }
+                      next.timeline = next.timeline.map((item) =>
+                        item.type === "tool" && item.id === tc.id
+                          ? {
+                              ...item,
+                              arguments: tc.arguments,
+                              batchId: event.replyId,
+                              status: "calling" as const,
+                            }
+                          : item
+                      );
+                    } else {
                       next.timeline.push({
                         type: "tool",
                         id: tc.id,

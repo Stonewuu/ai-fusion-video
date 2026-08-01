@@ -22,6 +22,7 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -37,11 +38,12 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
     private final AgentRunMapper runMapper;
     private final StateStoreFailureGuard stateStoreFailureGuard;
     private final AgentRuntimeSchedulers schedulers;
+    private final AgentRunRedisSignalService signals;
     private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
 
     @Autowired
     void setMetrics(AgentRuntimeMetrics metrics) {
-        this.metrics = java.util.Objects.requireNonNull(
+        this.metrics = Objects.requireNonNull(
                 metrics, "metrics must not be null");
     }
 
@@ -53,7 +55,7 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
         return Mono.fromCallable(() -> repository.terminateOwnedTx(
                         failClosedCompletion(request), ownerInstanceId, ownerEpoch))
                 .subscribeOn(schedulers.journal())
-                .doOnNext(this::recordTerminal);
+                .flatMap(this::afterTerminalCommit);
     }
 
     @Override
@@ -62,7 +64,17 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
             SystemTerminalActor actor) {
         return Mono.fromCallable(() -> repository.terminateSystemTx(request, actor))
                 .subscribeOn(schedulers.journal())
-                .doOnNext(this::recordTerminal);
+                .flatMap(this::afterTerminalCommit);
+    }
+
+    private Mono<Optional<CommittedAgentEvent>> afterTerminalCommit(
+            Optional<CommittedAgentEvent> committed) {
+        recordTerminal(committed);
+        return committed.filter(CommittedAgentEvent::publishRequired)
+                .map(event -> signals.publishWakeup(event.runId(), event.sequence())
+                        .onErrorResume(failure -> Mono.empty())
+                        .thenReturn(committed))
+                .orElseGet(() -> Mono.just(committed));
     }
 
     private void recordTerminal(Optional<CommittedAgentEvent> committed) {

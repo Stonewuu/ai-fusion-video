@@ -180,6 +180,7 @@ public final class AgentScopeEventMapper {
         return switch (event.getType()) {
             case TEXT_BLOCK_DELTA -> "CONTENT";
             case THINKING_BLOCK_DELTA -> "REASONING";
+            case TOOL_CALL_START -> "TOOL_CALL_STARTED";
             case TOOL_CALL_END -> "TOOL_CALL";
             case TOOL_RESULT_END -> "TOOL_FINISHED";
             case SUBAGENT_EXPOSED -> "SUB_AGENT_STARTED";
@@ -205,7 +206,6 @@ public final class AgentScopeEventMapper {
                     DATA_BLOCK_START,
                     DATA_BLOCK_DELTA,
                     DATA_BLOCK_END,
-                    TOOL_CALL_START,
                     TOOL_CALL_DELTA,
                     TOOL_RESULT_START,
                     TOOL_RESULT_TEXT_DELTA,

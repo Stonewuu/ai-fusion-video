@@ -169,6 +169,7 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
                 waiting_tool_call_id = NULL,
                 waiting_tool_name = NULL,
                 wait_expires_at = #{expiresAt},
+                deadline_at = #{expiresAt},
                 paused_through_sequence = #{pausedThroughSequence},
                 next_sequence = #{nextSequence},
                 update_time = #{now}
@@ -223,6 +224,7 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
                 owner_instance_id = #{newOwnerInstanceId},
                 owner_epoch = #{newOwnerEpoch},
                 lease_until = #{leaseUntil},
+                deadline_at = #{deadlineAt},
                 heartbeat_at = #{now},
                 waiting_reply_id = NULL,
                 waiting_tool_call_id = NULL,
@@ -235,7 +237,6 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
               AND owner_epoch = #{oldOwnerEpoch}
               AND waiting_reply_id = #{replyId}
               AND wait_expires_at > #{now}
-              AND deadline_at > #{now}
             """)
     int resumeConfirmation(
             @Param("runId") long runId,
@@ -244,6 +245,7 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
             @Param("newOwnerInstanceId") String newOwnerInstanceId,
             @Param("newOwnerEpoch") long newOwnerEpoch,
             @Param("leaseUntil") LocalDateTime leaseUntil,
+            @Param("deadlineAt") LocalDateTime deadlineAt,
             @Param("nextSequence") long nextSequence,
             @Param("now") LocalDateTime now);
 

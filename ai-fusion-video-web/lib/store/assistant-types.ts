@@ -119,6 +119,8 @@ export interface AssistantStoreState {
     toolCallId: string,
     approved: boolean,
   ) => Promise<void>;
+  respondToAllToolConfirmations: (approved: boolean) => Promise<void>;
+  expireToolConfirmation: () => Promise<void>;
   markConversationRead: (conversationId: string) => void;
   deleteConversation: (conversationId: string, id: number) => Promise<void>;
   setMode: (mode: AssistantMode, canDock?: boolean) => void;

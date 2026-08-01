@@ -164,7 +164,56 @@ public class AgentMessageProjectionService {
             persistProjection(run, event, "tool-result", toolResultProjection(run, event));
         } else if ("USER_CONFIRM_RESULT".equals(outputType)) {
             projectRejectedTools(run, event);
+        } else if ("CANCELLED".equals(outputType)
+                && AgentConfirmationExpiryCoordinator.REASON.equals(
+                        payload(event).path("cancellationReason").asText())) {
+            projectExpiredConfirmation(run, event);
         }
+    }
+
+    private void projectExpiredConfirmation(AgentRun run, AgentEvent event) {
+        JsonNode eventPayload = payload(event);
+        JsonNode pendingNode = eventPayload.get("pendingToolCalls");
+        if (pendingNode == null || !pendingNode.isArray() || pendingNode.isEmpty()) {
+            throw new IllegalStateException(
+                    "Expired confirmation pendingToolCalls must be a non-empty array");
+        }
+        Set<String> toolCallIds = new LinkedHashSet<>();
+        for (JsonNode pending : pendingNode) {
+            if (!pending.isObject()) {
+                throw new IllegalStateException(
+                        "Expired confirmation pending tool call must be an object");
+            }
+            String toolCallId = requireText(
+                    firstText(pending, "toolCallId"), "pendingToolCallId");
+            String toolName = requireText(
+                    firstText(pending, "toolName"), "pendingToolName");
+            if (!toolCallIds.add(toolCallId)) {
+                throw new IllegalStateException(
+                        "Expired confirmation contains a duplicate tool call: "
+                                + toolCallId);
+            }
+            AgentMessage expired = AgentMessage.builder()
+                    .conversationId(run.getConversationId())
+                    .runId(run.getRunId())
+                    .role("tool")
+                    .toolName(toolName)
+                    .toolStatus("expired")
+                    .toolCallId(toolCallId)
+                    .parentToolCallId(projectedParentToolCallId(run, event))
+                    .build();
+            persistProjection(
+                    run, event, "tool-expired-" + toolCallId, expired);
+        }
+
+        AgentMessage notice = AgentMessage.builder()
+                .conversationId(run.getConversationId())
+                .runId(run.getRunId())
+                .role("assistant")
+                .content(AgentConfirmationExpiryCoordinator.MESSAGE)
+                .parentToolCallId(projectedParentToolCallId(run, event))
+                .build();
+        persistProjection(run, event, "confirmation-expired", notice);
     }
 
     private void projectRejectedTools(AgentRun run, AgentEvent event) {

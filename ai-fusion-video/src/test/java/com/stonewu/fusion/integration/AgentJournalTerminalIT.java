@@ -16,6 +16,7 @@ import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreSlot;
 import com.stonewu.fusion.service.ai.run.AgentEventJournal;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
+import com.stonewu.fusion.service.ai.run.AgentRunRedisSignalService;
 import com.stonewu.fusion.service.ai.run.RunTerminalCoordinator;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
@@ -26,14 +27,17 @@ import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
 import com.stonewu.fusion.service.ai.run.model.StartAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
 import com.stonewu.fusion.service.ai.run.model.SystemTerminalActor;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -53,6 +57,10 @@ import java.util.stream.LongStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers(disabledWithoutDocker = false)
@@ -97,6 +105,14 @@ class AgentJournalTerminalIT {
 
     @Autowired
     private StateStoreFailureGuard stateStoreFailures;
+
+    @MockitoBean
+    private AgentRunRedisSignalService signals;
+
+    @BeforeEach
+    void stubRedisSignals() {
+        when(signals.publishWakeup(anyString(), anyLong())).thenReturn(Mono.empty());
+    }
 
     @Test
     void allocatesGapFreePerRunSequenceUnderConcurrentAppends() throws Exception {
@@ -216,6 +232,41 @@ class AgentJournalTerminalIT {
             callers.shutdownNow();
             assertThat(callers.awaitTermination(20, TimeUnit.SECONDS)).isTrue();
         }
+    }
+
+    @Test
+    void publishesOwnedAndSystemTerminalWakeupsOnlyAfterCommit() {
+        when(signals.publishWakeup(anyString(), anyLong()))
+                .thenAnswer(invocation -> {
+                    String runId = invocation.getArgument(0);
+                    long sequence = invocation.getArgument(1);
+                    AgentEvent event = eventMapper.selectOne(
+                            new LambdaQueryWrapper<AgentEvent>()
+                                    .eq(AgentEvent::getRunId, runId)
+                                    .eq(AgentEvent::getSequenceNo, sequence));
+                    assertThat(event).isNotNull();
+                    assertThat(event.getOutputType())
+                            .isIn("DONE", "ERROR", "CANCELLED");
+                    assertThat(requireRun(runId).getTerminalSequence())
+                            .isEqualTo(sequence);
+                    return Mono.empty();
+                });
+
+        StartedAgentRun owned = startRoot("owned-terminal-signal");
+        CommittedAgentEvent ownedTerminal = await(terminalCoordinator.terminateOwned(
+                completed(owned, slot(owned)),
+                owned.ownerInstanceId(),
+                owned.ownerEpoch())).orElseThrow();
+
+        StartedAgentRun system = startRoot("system-terminal-signal");
+        updateRun(system.runId(), AgentRun::getStatus,
+                AgentRunStatus.CANCEL_REQUESTED.name());
+        CommittedAgentEvent systemTerminal = await(terminalCoordinator.terminateSystem(
+                cancelled(system, slot(system), Set.of(AgentRunStatus.CANCEL_REQUESTED)),
+                SystemTerminalActor.CANCELLATION_COORDINATOR)).orElseThrow();
+
+        verify(signals).publishWakeup(owned.runId(), ownedTerminal.sequence());
+        verify(signals).publishWakeup(system.runId(), systemTerminal.sequence());
     }
 
     @Test

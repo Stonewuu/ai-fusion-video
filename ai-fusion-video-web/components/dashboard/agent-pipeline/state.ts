@@ -444,6 +444,50 @@ export function reducePipelineEvent(
       }
       return next;
 
+    case "TOOL_CALL_STARTED":
+      next.status = prev.status === "cancelling" ? "cancelling" : "running";
+      if (!event.replyId || !event.toolCalls?.length) {
+        throw new Error("TOOL_CALL_STARTED event has no replyId or tool calls");
+      }
+      for (const toolCall of event.toolCalls) {
+        if (isSubAgent) {
+          next.timeline = appendToToolChildren(
+            next.timeline,
+            event.parentToolCallId!,
+            (children) => {
+              if (children.some((child) => child.type === "tool" && child.id === toolCall.id)) {
+                throw new Error(`Tool call already started: ${toolCall.id}`);
+              }
+              return [
+                ...children,
+                {
+                  type: "tool",
+                  id: toolCall.id,
+                  name: toolCall.name,
+                  arguments: "",
+                  batchId: event.replyId,
+                  status: "preparing",
+                },
+              ];
+            },
+          );
+        } else {
+          if (next.timeline.some((item) => item.type === "tool" && item.id === toolCall.id)) {
+            throw new Error(`Tool call already started: ${toolCall.id}`);
+          }
+          next.timeline.push({
+            type: "tool",
+            id: toolCall.id,
+            name: toolCall.name,
+            arguments: "",
+            batchId: event.replyId,
+            status: "preparing",
+            agentName: event.agentName,
+          });
+        }
+      }
+      return next;
+
     case "TOOL_CALL":
       next.status = prev.status === "cancelling" ? "cancelling" : "running";
       if (!event.replyId || !event.toolCalls?.length) {
@@ -456,12 +500,21 @@ export function reducePipelineEvent(
               next.timeline,
               event.parentToolCallId!,
               (children) => {
-                if (
-                  children.some(
-                    (child) => child.type === "tool" && child.id === toolCall.id
-                  )
-                ) {
-                  return children;
+                const existing = children.find(
+                  (child) => child.type === "tool" && child.id === toolCall.id,
+                );
+                if (existing?.type === "tool") {
+                  if (existing.status !== "preparing" || existing.name !== toolCall.name) {
+                    throw new Error(`Invalid completed tool call definition: ${toolCall.id}`);
+                  }
+                  return children.map((child) => child.type === "tool" && child.id === toolCall.id
+                    ? {
+                        ...child,
+                        arguments: toolCall.arguments,
+                        batchId: event.replyId,
+                        status: "calling" as const,
+                      }
+                    : child);
                 }
                 return [
                   ...children,
@@ -476,20 +529,33 @@ export function reducePipelineEvent(
                 ];
               }
             );
-          } else if (
-            !next.timeline.some(
-              (item) => item.type === "tool" && item.id === toolCall.id
-            )
-          ) {
-            next.timeline.push({
-              type: "tool",
-              id: toolCall.id,
-              name: toolCall.name,
-              arguments: toolCall.arguments,
-              batchId: event.replyId,
-              status: "calling",
-              agentName: event.agentName,
-            });
+          } else {
+            const existing = next.timeline.find(
+              (item) => item.type === "tool" && item.id === toolCall.id,
+            );
+            if (existing?.type === "tool") {
+              if (existing.status !== "preparing" || existing.name !== toolCall.name) {
+                throw new Error(`Invalid completed tool call definition: ${toolCall.id}`);
+              }
+              next.timeline = next.timeline.map((item) => item.type === "tool" && item.id === toolCall.id
+                ? {
+                    ...item,
+                    arguments: toolCall.arguments,
+                    batchId: event.replyId,
+                    status: "calling" as const,
+                  }
+                : item);
+            } else {
+              next.timeline.push({
+                type: "tool",
+                id: toolCall.id,
+                name: toolCall.name,
+                arguments: toolCall.arguments,
+                batchId: event.replyId,
+                status: "calling",
+                agentName: event.agentName,
+              });
+            }
           }
         }
       }
@@ -645,8 +711,30 @@ export function reducePipelineEvent(
     case "CANCELLED":
       if (!event.parentToolCallId && !event.agentName) {
         next.status = "cancelled";
+        if (
+          event.cancellationReason === "CONFIRMATION_EXPIRED"
+          && prev.pendingConfirmation
+        ) {
+          const updates = new Map<string, ToolStatusUpdate>();
+          for (const toolCall of prev.pendingConfirmation.toolCalls) {
+            updates.set(toolCall.toolCallId, {
+              status: "expired",
+              expectedStatus: "awaiting_approval",
+              expectedName: toolCall.toolName,
+            });
+          }
+          next.timeline = updateConfirmationToolStatuses(
+            next.timeline,
+            prev.pendingConfirmation.parentToolCallId,
+            updates,
+          );
+        } else {
+          next.timeline = cancelCallingTimelineTools(next.timeline);
+        }
         next.pendingConfirmation = undefined;
-        next.timeline = cancelCallingTimelineTools(next.timeline);
+        if (event.content) {
+          next.timeline = appendContentToTimeline(next.timeline, event.content);
+        }
       }
       return next;
 

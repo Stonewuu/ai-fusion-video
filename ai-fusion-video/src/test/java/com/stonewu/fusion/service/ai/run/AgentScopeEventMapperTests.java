@@ -143,6 +143,8 @@ class AgentScopeEventMapperTests {
                 .isEqualTo("CONTENT");
         assertThat(mapper.map(new ThinkingBlockDeltaEvent("r", "b", "thought")).outputType())
                 .isEqualTo("REASONING");
+        assertThat(mapper.map(new ToolCallStartEvent("r", "c", "tool")).outputType())
+                .isEqualTo("TOOL_CALL_STARTED");
         assertThat(mapper.map(new ToolCallEndEvent("r", "c", "tool")).outputType())
                 .isEqualTo("TOOL_CALL");
         assertThat(mapper.map(new ToolResultEndEvent(

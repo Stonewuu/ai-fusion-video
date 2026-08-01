@@ -26,6 +26,8 @@ export function statusFromPipeline(status: PipelineRunStatus | string): string {
     case "FAILED": return "failed";
     case "CANCELLED": return "cancelled";
     case "CANCEL_REQUESTED": return "CANCEL_REQUESTED";
+    case "WAITING_CONFIRMATION": return "WAITING_CONFIRMATION";
+    case "WAITING_EXTERNAL": return "WAITING_EXTERNAL";
     case "ERROR": return "failed";
     default: return "running";
   }
@@ -95,6 +97,11 @@ export function hasTerminal(event: AiChatStreamEvent) {
   return !event.parentToolCallId
     && !event.agentName
     && (event.outputType === "DONE" || event.outputType === "ERROR" || event.outputType === "CANCELLED");
+}
+
+export function hasLiveTranscript(runtime: AssistantConversationRuntime) {
+  return runtime.pipeline.timeline.length > 0
+    || runtime.pipeline.reasoningText.trim().length > 0;
 }
 
 export function terminalStatusForEvent(event: AiChatStreamEvent) {

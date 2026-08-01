@@ -6,11 +6,13 @@ import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
 import com.stonewu.fusion.controller.ai.vo.PipelineRunStatusRespVO;
 import com.stonewu.fusion.controller.ai.vo.RunningPipelineRunRespVO;
 import com.stonewu.fusion.controller.ai.vo.ToolConfirmationReqVO;
+import com.stonewu.fusion.controller.ai.vo.ToolConfirmationExpiryReqVO;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopePipelineRunService;
 import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
 import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
 import com.stonewu.fusion.service.ai.run.CancellationCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentConfirmationService;
+import com.stonewu.fusion.service.ai.run.AgentConfirmationExpiryCoordinator;
 import com.stonewu.fusion.service.ai.run.PipelineCursorParser;
 import com.stonewu.fusion.service.ai.run.model.RunCursor;
 import io.swagger.v3.oas.annotations.Operation;
@@ -45,6 +47,7 @@ public class AiPipelineController {
     private final PipelineCursorParser cursorParser;
     private final CancellationCoordinator cancellations;
     private final AgentConfirmationService confirmations;
+    private final AgentConfirmationExpiryCoordinator confirmationExpiry;
 
     @Operation(summary = "启动 Pipeline（SSE 流式）")
     @PostMapping(value = "/run", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -87,6 +90,16 @@ public class AiPipelineController {
         long currentUserId = requireCurrentUserId();
         return confirmations.respond(request, currentUserId)
                 .thenReturn(CommonResult.success(true));
+    }
+
+    @Operation(summary = "结束已超时的工具审批")
+    @PostMapping("/confirm/expire")
+    public Mono<CommonResult<Boolean>> expireConfirmation(
+            @RequestBody ToolConfirmationExpiryReqVO request) {
+        long currentUserId = requireCurrentUserId();
+        return confirmationExpiry.expireAuthorized(
+                        request.getRunId(), request.getReplyId(), currentUserId)
+                .map(CommonResult::success);
     }
 
     @Operation(summary = "重连 Pipeline")

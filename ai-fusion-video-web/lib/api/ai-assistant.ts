@@ -52,6 +52,7 @@ export interface AiChatReq {
 export type OutputType =
   | "REASONING"
   | "CONTENT"
+  | "TOOL_CALL_STARTED"
   | "TOOL_CALL"
   | "TOOL_FINISHED"
   | "SUB_AGENT_STARTED"
@@ -112,6 +113,7 @@ export interface AiChatStreamEvent {
   }>;
   decisions?: ToolConfirmationDecision[];
   expiresAt?: string;
+  cancellationReason?: string;
 }
 
 // ========== SSE 回调 ==========

@@ -3,6 +3,7 @@
 import {
   Fragment,
   memo,
+  useEffect,
   useMemo,
 } from "react";
 import { ArrowDown, Loader2, RefreshCw } from "lucide-react";
@@ -18,6 +19,7 @@ import type { TimelineItem } from "@/lib/store/pipeline-store";
 import { useAssistantStore, type AssistantConversationRuntime } from "@/lib/store/assistant-store";
 import { cn } from "@/lib/utils";
 import { AssistantBrandIcon } from "./assistant-brand-icon";
+import { ToolConfirmationBatchBar } from "./tool-confirmation-batch-bar";
 import { useAssistantMessageScroll } from "./use-assistant-message-scroll";
 import { UserMessageBubble } from "./user-message-bubble";
 
@@ -117,6 +119,12 @@ export function AssistantMessageList({
   const respondToToolConfirmation = useAssistantStore(
     (state) => state.respondToToolConfirmation,
   );
+  const respondToAllToolConfirmations = useAssistantStore(
+    (state) => state.respondToAllToolConfirmations,
+  );
+  const expireToolConfirmation = useAssistantStore(
+    (state) => state.expireToolConfirmation,
+  );
 
   const running = !!runtime && isRunning(runtime);
   const contentReady = !!runtime && (runtime.messagesLoaded || !!runtime.messagesError);
@@ -140,6 +148,36 @@ export function AssistantMessageList({
     : EMPTY_TIMELINE;
   const error = runtime?.messagesError || runtime?.pipeline.error || runtime?.connectionError;
   const pendingConfirmation = runtime?.pipeline.pendingConfirmation;
+  const batchConfirmation = pendingConfirmation && pendingConfirmation.toolCalls.length > 1
+    ? pendingConfirmation
+    : undefined;
+  const showBatchApprovalBar = !!batchConfirmation
+    && runtime?.pipeline.status !== "cancelling";
+
+  useEffect(() => {
+    if (!pendingConfirmation) return;
+    const expiresAt = Date.parse(pendingConfirmation.expiresAt);
+    if (!Number.isFinite(expiresAt)) {
+      throw new Error("Tool confirmation expiry is invalid");
+    }
+    const expireIfNeeded = () => {
+      if (Date.now() >= expiresAt) {
+        void expireToolConfirmation();
+      }
+    };
+    expireIfNeeded();
+    const timer = window.setTimeout(
+      expireIfNeeded,
+      Math.max(0, expiresAt - Date.now()),
+    );
+    window.addEventListener("focus", expireIfNeeded);
+    document.addEventListener("visibilitychange", expireIfNeeded);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("focus", expireIfNeeded);
+      document.removeEventListener("visibilitychange", expireIfNeeded);
+    };
+  }, [expireToolConfirmation, pendingConfirmation]);
 
   const {
     viewportRef,
@@ -184,8 +222,8 @@ export function AssistantMessageList({
         onScrollbarPointerDown={onScrollbarPointerDown}
         viewportClassName="assistant-message-viewport"
         viewportStyle={{
-          paddingBottom: inputHeight + 28,
-          scrollPaddingBottom: inputHeight + 28,
+          paddingBottom: inputHeight + (showBatchApprovalBar ? 124 : 28),
+          scrollPaddingBottom: inputHeight + (showBatchApprovalBar ? 124 : 28),
         }}
         onViewportScroll={onViewportScroll}
       >
@@ -232,6 +270,7 @@ export function AssistantMessageList({
               decisions: pendingConfirmation.decisions,
               submitting: pendingConfirmation.submitting,
               showActions: runtime.pipeline.status !== "cancelling",
+              expiresAt: pendingConfirmation.expiresAt,
               onDecision: (toolCallId, approved) =>
                 void respondToToolConfirmation(toolCallId, approved),
             } : undefined}
@@ -273,13 +312,34 @@ export function AssistantMessageList({
         <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> 加载消息
       </div>
 
+      {showBatchApprovalBar && batchConfirmation ? (
+        <div
+          className="pointer-events-none absolute inset-x-0 z-30 px-4"
+          style={{ bottom: inputHeight + 12 }}
+        >
+          <div className="pointer-events-auto mx-auto w-full max-w-3xl">
+            <ToolConfirmationBatchBar
+              toolCallIds={batchConfirmation.toolCalls.map(
+                (toolCall) => toolCall.toolCallId,
+              )}
+              decisions={batchConfirmation.decisions}
+              submitting={batchConfirmation.submitting}
+              showActions={runtime.pipeline.status !== "cancelling"}
+              expiresAt={batchConfirmation.expiresAt}
+              onDecision={(approved) =>
+                void respondToAllToolConfirmations(approved)}
+            />
+          </div>
+        </div>
+      ) : null}
+
       {showBackToBottom ? (
         <Button
           type="button"
           variant="secondary"
           size="sm"
           className="absolute left-1/2 z-10 -translate-x-1/2"
-          style={{ bottom: inputHeight + 16 }}
+          style={{ bottom: inputHeight + (showBatchApprovalBar ? 116 : 16) }}
           data-assistant-interactive="true"
           data-assistant-back-to-bottom
           onClick={scrollToBottom}

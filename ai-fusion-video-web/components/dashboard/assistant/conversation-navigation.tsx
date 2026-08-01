@@ -48,6 +48,8 @@ function relativeTime(value?: string) {
 
 function statusLabel(status?: string) {
   if (status === "CANCEL_REQUESTED") return "取消中";
+  if (status === "WAITING_CONFIRMATION") return "待确认";
+  if (status === "WAITING_EXTERNAL") return "等待执行";
   if (isRunningStatus(status)) return "运行中";
   if (status === "failed" || status === "error") return "失败";
   if (status === "cancelled") return "已取消";
@@ -56,6 +58,9 @@ function statusLabel(status?: string) {
 
 function StatusIcon({ status, unread }: { status?: string; unread: boolean }) {
   if (status === "CANCEL_REQUESTED") return <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none text-muted-foreground" />;
+  if (status === "WAITING_CONFIRMATION" || status === "WAITING_EXTERNAL") {
+    return <CircleAlert className="size-3.5 text-primary" />;
+  }
   if (isRunningStatus(status)) return <Loader2 className="size-3.5 animate-spin motion-reduce:animate-none text-primary" />;
   if (status === "failed" || status === "error") return <XCircle className="size-3.5 text-destructive" />;
   if (status === "cancelled") return <Ban className="size-3.5 text-muted-foreground" />;

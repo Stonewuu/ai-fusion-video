@@ -76,6 +76,7 @@ fusion:
       execution:
         owner-lease: 30s
         run-timeout: 30m
+        confirmation-timeout: 48h
         max-iters: 999
       skills:
         enabled: true

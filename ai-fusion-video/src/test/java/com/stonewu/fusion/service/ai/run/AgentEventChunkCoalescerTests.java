@@ -11,6 +11,7 @@ import reactor.test.scheduler.VirtualTimeScheduler;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -64,6 +65,34 @@ class AgentEventChunkCoalescerTests {
 
         StepVerifier.create(coalescer.coalesce(Flux.just(first, second, tool)))
                 .expectNext(first, second, tool)
+                .verifyComplete();
+    }
+
+    @Test
+    void coalescesLargeToolArgumentsBySizeUntilTheToolBoundary() {
+        AgentEventChunkCoalescer coalescer = coalescer(
+                VirtualTimeScheduler.create(), 128);
+        Flux<AgentEventEnvelope> fragments = Flux.fromStream(IntStream.range(0, 2000)
+                .mapToObj(index -> toolDelta(String.valueOf(index), "tool-call", "x")));
+
+        StepVerifier.create(coalescer.coalesce(Flux.concat(
+                                fragments,
+                                Flux.just(tool("end"))))
+                        .collectList())
+                .assertNext(events -> {
+                    assertThat(events).hasSize(17);
+                    assertThat(events.getLast().rawEventType()).isEqualTo("TOOL_CALL_END");
+                    assertThat(events.subList(0, events.size() - 1))
+                            .allSatisfy(event -> {
+                                assertThat(event.rawEventType()).isEqualTo("TOOL_CALL_DELTA");
+                                assertThat(event.toolCallId()).isEqualTo("tool-call");
+                                assertThat(event.payload().path("delta").asText()).hasSizeLessThanOrEqualTo(128);
+                            });
+                    String reassembled = events.subList(0, events.size() - 1).stream()
+                            .map(event -> event.payload().path("delta").asText())
+                            .reduce("", String::concat);
+                    assertThat(reassembled).isEqualTo("x".repeat(2000));
+                })
                 .verifyComplete();
     }
 
@@ -189,6 +218,24 @@ class AgentEventChunkCoalescerTests {
                 null,
                 "TOOL_CALL",
                 JsonNodeFactory.instance.objectNode().put("toolName", "lookup"),
+                Instant.parse("2026-07-21T00:00:00Z"));
+    }
+
+    private AgentEventEnvelope toolDelta(
+            String id, String toolCallId, String value) {
+        return new AgentEventEnvelope(
+                id,
+                "TOOL_CALL_DELTA",
+                "main",
+                "reply",
+                null,
+                toolCallId,
+                null,
+                null,
+                null,
+                JsonNodeFactory.instance.objectNode()
+                        .put("toolCallName", "__fragment__")
+                        .put("delta", value),
                 Instant.parse("2026-07-21T00:00:00Z"));
     }
 }

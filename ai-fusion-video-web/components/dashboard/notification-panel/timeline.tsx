@@ -166,6 +166,7 @@ export interface TimelineToolConfirmation {
   decisions: Readonly<Record<string, boolean>>;
   submitting: boolean;
   showActions: boolean;
+  expiresAt: string;
   onDecision: (toolCallId: string, approved: boolean) => void;
 }
 
@@ -279,6 +280,7 @@ const SubAgentCard = memo(function SubAgentCard({
       || child.status === "error"
       || child.status === "cancelled"
       || child.status === "rejected"
+      || child.status === "expired"
     )
   ).length;
   const activeToolCount = children.filter(
@@ -384,6 +386,8 @@ const SubAgentCard = memo(function SubAgentCard({
                         decision: confirmationDecision(toolConfirmation, child.id),
                         submitting: toolConfirmation.submitting,
                         showActions: toolConfirmation.showActions,
+                        showCountdown: toolConfirmation.toolCallIds.length === 1,
+                        expiresAt: toolConfirmation.expiresAt,
                         onApprove: () => toolConfirmation.onDecision(child.id, true),
                         onReject: () => toolConfirmation.onDecision(child.id, false),
                       }}
@@ -562,6 +566,8 @@ function MessageTimelineRowContent({
           decision: confirmationDecision(toolConfirmation, row.item.id),
           submitting: toolConfirmation.submitting,
           showActions: toolConfirmation.showActions,
+          showCountdown: toolConfirmation.toolCallIds.length === 1,
+          expiresAt: toolConfirmation.expiresAt,
           onApprove: () => toolConfirmation.onDecision(row.item.id, true),
           onReject: () => toolConfirmation.onDecision(row.item.id, false),
         }}

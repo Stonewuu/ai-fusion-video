@@ -126,6 +126,16 @@ const TOOL_ARGUMENT_LABELS: Readonly<Record<string, string>> = {
   width: "宽度",
 };
 
+const TOOL_ARGUMENT_ITEM_LABELS: Readonly<Record<string, string>> = {
+  assets: "资产",
+  characters: "角色",
+  charactersJson: "角色",
+  dialogues: "对白",
+  items: "子项",
+  scenes: "场次",
+  shots: "镜头",
+};
+
 interface ToolArgumentLabelContext {
   arguments?: Readonly<Record<string, unknown>>;
   toolName?: string;
@@ -276,4 +286,13 @@ export function getToolArgumentValueLabel(
   }
   return TOOL_ARGUMENT_VALUE_LABELS[toolName ?? ""]?.[key]?.[normalizedValue]
     ?? ARGUMENT_VALUE_LABELS[key]?.[normalizedValue];
+}
+
+export function getToolArgumentItemLabel(key: string): string | undefined {
+  const declaredLabel = TOOL_ARGUMENT_ITEM_LABELS[key];
+  if (declaredLabel) return declaredLabel;
+
+  const collectionLabel = TOOL_ARGUMENT_LABELS[key];
+  if (!collectionLabel?.endsWith("列表")) return undefined;
+  return collectionLabel.slice(0, -2).trimEnd();
 }

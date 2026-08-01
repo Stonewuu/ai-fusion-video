@@ -49,7 +49,8 @@ class AgentRunQueryServiceTests {
                 eventMapper,
                 mock(AgentEventRepository.class),
                 objectMapper,
-                schedulers);
+                schedulers,
+                mock(AgentConfirmationExpiryCoordinator.class));
     }
 
     @Test
@@ -106,6 +107,30 @@ class AgentRunQueryServiceTests {
                                 assertThat(tool.getName()).isEqualTo("asset_lookup");
                                 assertThat(tool.getArguments())
                                         .isEqualTo("{\"assetId\":7}");
+                            });
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void projectsToolCallStartWithoutReadingIncompleteArguments() {
+        AgentRun run = run();
+        ObjectNode payload = JsonNodeFactory.instance.objectNode()
+                .put("toolCallName", "update_script_info");
+        CommittedAgentEvent event = committed(
+                5, "TOOL_CALL_STARTED", "TOOL_CALL_START", "tool-1", payload);
+
+        StepVerifier.create(service.project(run, event))
+                .assertNext(projected -> {
+                    assertThat(projected.getOutputType()).isEqualTo("TOOL_CALL_STARTED");
+                    assertThat(projected.getToolCallId()).isEqualTo("tool-1");
+                    assertThat(projected.getToolName()).isEqualTo("update_script_info");
+                    assertThat(projected.getToolCalls())
+                            .singleElement()
+                            .satisfies(tool -> {
+                                assertThat(tool.getId()).isEqualTo("tool-1");
+                                assertThat(tool.getName()).isEqualTo("update_script_info");
+                                assertThat(tool.getArguments()).isEmpty();
                             });
                 })
                 .verifyComplete();

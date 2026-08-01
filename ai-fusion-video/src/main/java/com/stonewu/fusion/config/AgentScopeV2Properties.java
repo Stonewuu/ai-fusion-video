@@ -190,6 +190,7 @@ public class AgentScopeV2Properties {
         private String instanceId;
         private Duration ownerLease = Duration.ofSeconds(30);
         private Duration runTimeout = Duration.ofMinutes(30);
+        private Duration confirmationTimeout = Duration.ofHours(48);
         private int maxIters = 999;
 
         public String getInstanceId() {
@@ -216,6 +217,15 @@ public class AgentScopeV2Properties {
 
         public void setRunTimeout(Duration runTimeout) {
             this.runTimeout = requirePositive(runTimeout, "runTimeout");
+        }
+
+        public Duration getConfirmationTimeout() {
+            return confirmationTimeout;
+        }
+
+        public void setConfirmationTimeout(Duration confirmationTimeout) {
+            this.confirmationTimeout = requirePositive(
+                    confirmationTimeout, "confirmationTimeout");
         }
 
         public int getMaxIters() {

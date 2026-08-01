@@ -11,6 +11,7 @@ import {
 import {
   cancelPipeline,
   confirmPipelineTools,
+  expirePipelineConfirmation,
   type AiChatReq,
 } from "@/lib/api/ai-pipeline";
 import {
@@ -58,8 +59,13 @@ export type {
 } from "./assistant-types";
 
 const PAGE_SIZE = 20;
+const expiringConfirmations = new Set<string>();
 const defaultRect = getDefaultNormalRect();
 const defaultLauncher = getDefaultLauncherPosition();
+
+type ToolConfirmationDecisionTarget =
+  | { kind: "single"; toolCallId: string; approved: boolean }
+  | { kind: "all"; approved: boolean };
 
 function initialConversationToolExecutionMode(
   modes: Record<string, ToolExecutionMode>,
@@ -90,6 +96,122 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
   };
 
   const persist = () => scheduleAssistantPersist(get);
+
+  const respondToToolConfirmations = async (
+    target: ToolConfirmationDecisionTarget,
+  ) => {
+    const state = get();
+    const conversationId = state.selectedConversationId;
+    if (!conversationId) {
+      throw new Error("Tool confirmation requires a selected conversation");
+    }
+    const runtime = state.conversationStates[conversationId];
+    if (!runtime) {
+      throw new Error(`Missing assistant runtime for ${conversationId}`);
+    }
+    const pending = runtime.pipeline.pendingConfirmation;
+    if (!pending) {
+      throw new Error(`Conversation ${conversationId} has no pending tool confirmation`);
+    }
+    if (pending.submitting) {
+      throw new Error(`Conversation ${conversationId} is submitting tool decisions`);
+    }
+    const expiresAt = Date.parse(pending.expiresAt);
+    if (!Number.isFinite(expiresAt)) {
+      throw new Error("Tool confirmation expiry is invalid");
+    }
+    if (Date.now() >= expiresAt) {
+      connectionCoordinator.scheduleStatusPolling();
+      return;
+    }
+    const pendingIds = new Set(pending.toolCalls.map((toolCall) => toolCall.toolCallId));
+    if (pendingIds.size !== pending.toolCalls.length) {
+      throw new Error("Tool confirmation contains duplicate toolCallIds");
+    }
+    if (target.kind === "single" && !pendingIds.has(target.toolCallId)) {
+      throw new Error(`Tool confirmation does not contain ${target.toolCallId}`);
+    }
+    const existingDecisionIds = Object.keys(pending.decisions);
+    if (existingDecisionIds.some((decisionId) =>
+      !pendingIds.has(decisionId)
+      || typeof pending.decisions[decisionId] !== "boolean")) {
+      throw new Error("Pending tool confirmation contains invalid local decisions");
+    }
+    const decisionUpdates = target.kind === "all"
+      ? Object.fromEntries(pending.toolCalls.map((toolCall) => [
+          toolCall.toolCallId,
+          target.approved,
+        ]))
+      : { [target.toolCallId]: target.approved };
+    const decisions = {
+      ...pending.decisions,
+      ...decisionUpdates,
+    };
+    const submitting = Object.keys(decisions).length === pendingIds.size;
+    const decisionsToSubmit = submitting
+      ? pending.toolCalls.map((toolCall) => ({
+          toolCallId: toolCall.toolCallId,
+          approved: decisions[toolCall.toolCallId],
+        }))
+      : undefined;
+    updateRuntime(conversationId, (current) => {
+      const currentPending = current.pipeline.pendingConfirmation;
+      if (currentPending !== pending) {
+        throw new Error("Pending tool confirmation changed before submission");
+      }
+      return {
+        ...current,
+        connectionError: undefined,
+        pipeline: {
+          ...current.pipeline,
+          pendingConfirmation: {
+            ...currentPending,
+            decisions,
+            submitting,
+          },
+        },
+      };
+    });
+    if (!decisionsToSubmit) return;
+    try {
+      await confirmPipelineTools({
+        runId: pending.runId,
+        replyId: pending.replyId,
+        decisions: decisionsToSubmit,
+      });
+      // The SSE request that delivered REQUIRE_USER_CONFIRM can remain open
+      // while AgentScope is paused. It cannot be reused as the resumed run's
+      // event cursor, so replace it with an explicit reconnect after the
+      // atomic confirmation batch has been accepted.
+      connectionCoordinator.invalidateConnection();
+      connectionCoordinator.ensureConnection();
+      connectionCoordinator.scheduleStatusPolling();
+    } catch (error) {
+      const expired = Date.now() >= expiresAt;
+      updateRuntime(conversationId, (current) => {
+        const currentPending = current.pipeline.pendingConfirmation;
+        if (!currentPending
+          || currentPending.replyId !== pending.replyId
+          || !currentPending.submitting) {
+          throw new Error("Pending tool confirmation changed after submission failure");
+        }
+        return {
+          ...current,
+          connectionError: expired
+            ? undefined
+            : error instanceof Error ? error.message : String(error),
+          pipeline: {
+            ...current.pipeline,
+            pendingConfirmation: {
+              ...currentPending,
+              submitting: false,
+            },
+          },
+        };
+      });
+      if (expired) connectionCoordinator.scheduleStatusPolling();
+    }
+  };
 
   return {
     hydratedUserId: null,
@@ -556,96 +678,40 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       }
     },
 
-    respondToToolConfirmation: async (toolCallId, approved) => {
+    respondToToolConfirmation: (toolCallId, approved) =>
+      respondToToolConfirmations({ kind: "single", toolCallId, approved }),
+
+    respondToAllToolConfirmations: (approved) =>
+      respondToToolConfirmations({ kind: "all", approved }),
+
+    expireToolConfirmation: async () => {
       const state = get();
       const conversationId = state.selectedConversationId;
-      if (!conversationId) {
-        throw new Error("Tool confirmation requires a selected conversation");
+      if (!conversationId) return;
+      const pending = state.conversationStates[conversationId]
+        ?.pipeline.pendingConfirmation;
+      if (!pending) return;
+      const expiresAt = Date.parse(pending.expiresAt);
+      if (!Number.isFinite(expiresAt)) {
+        throw new Error("Tool confirmation expiry is invalid");
       }
-      const runtime = state.conversationStates[conversationId];
-      if (!runtime) {
-        throw new Error(`Missing assistant runtime for ${conversationId}`);
-      }
-      const pending = runtime.pipeline.pendingConfirmation;
-      if (!pending) {
-        throw new Error(`Conversation ${conversationId} has no pending tool confirmation`);
-      }
-      if (pending.submitting) {
-        throw new Error(`Conversation ${conversationId} is submitting tool decisions`);
-      }
-      const pendingIds = new Set(pending.toolCalls.map((toolCall) => toolCall.toolCallId));
-      if (pendingIds.size !== pending.toolCalls.length || !pendingIds.has(toolCallId)) {
-        throw new Error(`Tool confirmation does not contain ${toolCallId}`);
-      }
-      const existingDecisionIds = Object.keys(pending.decisions);
-      if (existingDecisionIds.some((decisionId) =>
-        !pendingIds.has(decisionId)
-        || typeof pending.decisions[decisionId] !== "boolean")) {
-        throw new Error("Pending tool confirmation contains invalid local decisions");
-      }
-      const decisions = {
-        ...pending.decisions,
-        [toolCallId]: approved,
-      };
-      const submitting = Object.keys(decisions).length === pendingIds.size;
-      const decisionsToSubmit = submitting
-        ? pending.toolCalls.map((toolCall) => ({
-            toolCallId: toolCall.toolCallId,
-            approved: decisions[toolCall.toolCallId],
-          }))
-        : undefined;
-      updateRuntime(conversationId, (current) => {
-        const currentPending = current.pipeline.pendingConfirmation;
-        if (currentPending !== pending) {
-          throw new Error("Pending tool confirmation changed before submission");
-        }
-        return {
-          ...current,
-          connectionError: undefined,
-          pipeline: {
-            ...current.pipeline,
-            pendingConfirmation: {
-              ...currentPending,
-              decisions,
-              submitting,
-            },
-          },
-        };
-      });
-      if (!decisionsToSubmit) return;
+      if (Date.now() < expiresAt) return;
+
+      const requestKey = `${pending.runId}:${pending.replyId}`;
+      if (expiringConfirmations.has(requestKey)) return;
+      expiringConfirmations.add(requestKey);
       try {
-        await confirmPipelineTools({
+        await expirePipelineConfirmation({
           runId: pending.runId,
           replyId: pending.replyId,
-          decisions: decisionsToSubmit,
         });
-        // The SSE request that delivered REQUIRE_USER_CONFIRM can remain open
-        // while AgentScope is paused. It cannot be reused as the resumed run's
-        // event cursor, so replace it with an explicit reconnect after the
-        // atomic confirmation batch has been accepted.
         connectionCoordinator.invalidateConnection();
         connectionCoordinator.ensureConnection();
-        connectionCoordinator.scheduleStatusPolling();
       } catch (error) {
-        updateRuntime(conversationId, (current) => {
-          const currentPending = current.pipeline.pendingConfirmation;
-          if (!currentPending
-            || currentPending.replyId !== pending.replyId
-            || !currentPending.submitting) {
-            throw new Error("Pending tool confirmation changed after submission failure");
-          }
-          return {
-            ...current,
-            connectionError: error instanceof Error ? error.message : String(error),
-            pipeline: {
-              ...current.pipeline,
-              pendingConfirmation: {
-                ...currentPending,
-                submitting: false,
-              },
-            },
-          };
-        });
+        console.warn("[Assistant] 审批超时状态同步失败", error);
+      } finally {
+        expiringConfirmations.delete(requestKey);
+        connectionCoordinator.scheduleStatusPolling();
       }
     },
 

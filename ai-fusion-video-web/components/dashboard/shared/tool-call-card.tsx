@@ -7,6 +7,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Clock3,
   ListTree,
   Loader2,
   ShieldAlert,
@@ -22,11 +23,14 @@ import { formatToolResultJson } from "./tool-call-argument-model";
 import { ToolCallArguments } from "./tool-call-arguments";
 import { ToolCallJson } from "./tool-call-json";
 import { ToolResultViewport } from "./tool-result-viewport";
+import { useToolConfirmationCountdown } from "./tool-confirmation-countdown";
 
 export interface ToolCallApproval {
   decision?: "approve" | "deny";
   submitting: boolean;
   showActions: boolean;
+  showCountdown?: boolean;
+  expiresAt: string;
   onApprove: () => void;
   onReject: () => void;
 }
@@ -59,6 +63,8 @@ function statusContent(
       : { label: "已选拒绝", icon: Ban, className: "text-muted-foreground" };
   }
   switch (status) {
+    case "preparing":
+      return { label: "正在发起工具调用", icon: Loader2, className: "animate-spin text-primary motion-reduce:animate-none" };
     case "calling":
       return { label: "执行中", icon: Loader2, className: "animate-spin text-primary motion-reduce:animate-none" };
     case "awaiting_approval":
@@ -67,6 +73,8 @@ function statusContent(
       return { label: "已允许，执行中", icon: Loader2, className: "animate-spin text-primary motion-reduce:animate-none" };
     case "rejected":
       return { label: "已拒绝", icon: Ban, className: "text-muted-foreground" };
+    case "expired":
+      return { label: "审批超时，未执行", icon: Clock3, className: "text-muted-foreground" };
     case "done":
       return { label: "已完成", icon: CheckCircle2, className: "text-primary" };
     case "error":
@@ -84,13 +92,26 @@ function ToolCallItem({
   approval?: ToolCallApproval;
 }) {
   const result = item.result;
-  const hasResult = result !== undefined;
+  const hasResult = result !== undefined
+    && item.status !== "rejected"
+    && item.status !== "expired"
+    && item.status !== "cancelled";
+  const argumentsReady = item.status !== "preparing";
   const [argumentsExpanded, setArgumentsExpanded] = useState(
     item.status === "awaiting_approval" && !hasResult,
   );
   const [jsonView, setJsonView] = useState(false);
+  const showCountdown = approval?.showCountdown !== false;
+  const approvalCountdown = useToolConfirmationCountdown(
+    approval?.expiresAt,
+    showCountdown,
+  );
+  const approvalExpired = item.status === "awaiting_approval"
+    && approvalCountdown?.expired === true;
 
-  const status = statusContent(item.status, approval);
+  const status = approvalExpired
+    ? { label: "审批已超时", icon: Clock3, className: "text-muted-foreground" }
+    : statusContent(item.status, approval);
   const StatusIcon = status.icon;
   const submissionPending = approval?.submitting === true;
 
@@ -100,7 +121,11 @@ function ToolCallItem({
         "group/tool-call overflow-hidden rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm",
         item.status === "error" && "border-destructive/30",
       )}
-      aria-live={item.status === "calling" || item.status === "approved" ? "polite" : undefined}
+      aria-live={item.status === "preparing"
+        || item.status === "calling"
+        || item.status === "approved"
+        ? "polite"
+        : undefined}
     >
       <div className="flex min-h-11 items-center gap-2 px-3 py-2.5">
         <Wrench className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -111,7 +136,10 @@ function ToolCallItem({
           type="button"
           variant="ghost"
           size="xs"
-          className="pointer-events-none ml-auto opacity-0 transition-opacity duration-150 group-focus-within/tool-call:pointer-events-auto group-focus-within/tool-call:opacity-100 group-hover/tool-call:pointer-events-auto group-hover/tool-call:opacity-100 motion-reduce:transition-none"
+          className={cn(
+            "pointer-events-none ml-auto opacity-0 transition-opacity duration-150 group-focus-within/tool-call:pointer-events-auto group-focus-within/tool-call:opacity-100 group-hover/tool-call:pointer-events-auto group-hover/tool-call:opacity-100 motion-reduce:transition-none",
+            !argumentsReady && "hidden",
+          )}
           onClick={() => setJsonView((current) => !current)}
         >
           {jsonView ? <ListTree /> : <Braces />}
@@ -120,6 +148,12 @@ function ToolCallItem({
         <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
           <StatusIcon className={cn("size-3.5", status.className)} aria-hidden="true" />
           {status.label}
+          {item.status === "awaiting_approval"
+            && approvalCountdown
+            && showCountdown
+            && !approvalCountdown.expired
+            ? ` · 剩余 ${approvalCountdown.label}`
+            : null}
         </span>
       </div>
 
@@ -148,31 +182,40 @@ function ToolCallItem({
         </div>
       ) : null}
 
-      <div className="border-t border-border/20">
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className="m-2"
-          onClick={() => setArgumentsExpanded((current) => !current)}
-          aria-expanded={argumentsExpanded}
-        >
-          {argumentsExpanded ? <ChevronDown /> : <ChevronRight />}
-          <ListTree />
-          调用参数
-        </Button>
-        {argumentsExpanded ? (
-          <div className="px-3 pb-3">
-            <ToolCallArguments
-              argumentsText={item.argumentsText}
-              toolName={item.toolName}
-              view={jsonView ? "json" : "friendly"}
-            />
-          </div>
-        ) : null}
-      </div>
+      {argumentsReady ? (
+        <div className="border-t border-border/20">
+          <Button
+            type="button"
+            variant="ghost"
+            size="xs"
+            className="m-2"
+            onClick={() => setArgumentsExpanded((current) => !current)}
+            aria-expanded={argumentsExpanded}
+          >
+            {argumentsExpanded ? <ChevronDown /> : <ChevronRight />}
+            <ListTree />
+            调用参数
+          </Button>
+          {argumentsExpanded ? (
+            <div className="px-3 pb-3">
+              <ToolCallArguments
+                argumentsText={item.argumentsText}
+                toolName={item.toolName}
+                view={jsonView ? "json" : "friendly"}
+              />
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
-      {approval?.showActions ? (
+      {approval?.showActions && approvalExpired ? (
+        <div className="flex items-center gap-2 border-t border-border/20 px-3 py-2.5 text-xs text-muted-foreground">
+          <Clock3 className="size-3.5 shrink-0" aria-hidden="true" />
+          审批时间已结束，系统将按未同意处理
+        </div>
+      ) : null}
+
+      {approval?.showActions && !approvalExpired ? (
         <div className="flex items-center justify-end gap-2 border-t border-border/20 px-3 py-2.5">
           <Button
             type="button"

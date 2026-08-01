@@ -13,7 +13,6 @@ import {
   GripVertical,
   PanelLeftClose,
   PanelLeftOpen,
-  AlertCircle,
   Sparkles,
   RotateCw,
 } from "lucide-react";
@@ -33,7 +32,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   storyboardApi,
@@ -41,6 +40,10 @@ import {
   StoryboardScene,
 } from "@/lib/api/storyboard";
 import type { ScriptEpisode } from "@/lib/api/script";
+import {
+  ScriptEpisodeBinding,
+  ScriptEpisodeBindingReminder,
+} from "./script-episode-binding";
 
 // ========== 可拖拽场次项 ==========
 
@@ -169,8 +172,14 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
     new Set()
   );
   const [loading, setLoading] = useState(true);
-  const [bindingEpisodeIds, setBindingEpisodeIds] = useState<Set<number>>(new Set());
+  const [bindingEpisodeIds, setBindingEpisodeIds] = useState<Set<number>>(
+    new Set()
+  );
+  const [openBindingEpisodeId, setOpenBindingEpisodeId] = useState<
+    number | null
+  >(null);
   const isInitialLoadedRef = useRef(false);
+  const shouldReduceMotion = useReducedMotion();
 
   // 监听 invalidation 自动强刷
   const storyboardsInvalidation = usePipelineStore((s) => s.invalidation.storyboards);
@@ -406,20 +415,26 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
                 (selection.type === "episode" || selection.type === "scene") &&
                 selection.episodeId === ep.id;
               const scenes = scenesMap[ep.id] || [];
-              const boundScriptEpisodeIds = new Set(
-                episodes
-                  .filter((item) => item.id !== ep.id && item.scriptEpisodeId != null)
-                  .map((item) => item.scriptEpisodeId)
+              const boundScriptEpisodeIds = new Set<number>(
+                episodes.flatMap((item) =>
+                  item.id !== ep.id && item.scriptEpisodeId != null
+                    ? [item.scriptEpisodeId]
+                    : []
+                )
               );
               const suggestedScriptEpisode = scriptEpisodes.find(
-                (item) => item.episodeNumber === ep.episodeNumber
+                (item) =>
+                  item.episodeNumber === ep.episodeNumber &&
+                  !boundScriptEpisodeIds.has(item.id)
               );
+              const bindingPanelId = `script-episode-binding-${ep.id}`;
+              const isBindingPanelOpen = openBindingEpisodeId === ep.id;
 
               return (
                 <div key={ep.id} className="group/ep mb-0.5">
                   {/* 集标题行 */}
                   <div className={cn(
-                    "flex items-center rounded-lg transition-colors overflow-hidden",
+                    "flex items-center rounded-lg transition-colors",
                     isEpisodeSelected ? "bg-primary/8" : "hover:bg-primary/5"
                   )}>
                     <button
@@ -497,37 +512,57 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
                     >
                       <Plus className="h-3 w-3" />
                     </button>
+                    {ep.scriptEpisodeId == null && onBindScriptEpisode && (
+                      <ScriptEpisodeBindingReminder
+                        isOpen={isBindingPanelOpen}
+                        isBinding={bindingEpisodeIds.has(ep.id)}
+                        panelId={bindingPanelId}
+                        onToggle={() =>
+                          setOpenBindingEpisodeId((current) =>
+                            current === ep.id ? null : ep.id
+                          )
+                        }
+                      />
+                    )}
                   </div>
 
-                  {ep.scriptEpisodeId == null && onBindScriptEpisode && (
-                    <div className="ml-8 mr-1 mb-1 rounded-md border border-amber-500/20 bg-amber-500/8 px-2 py-2">
-                      <div className="flex items-start gap-1.5 text-[10px] text-amber-300">
-                        <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
-                        <span>旧分镜集未绑定剧本集</span>
-                      </div>
-                      <select
-                        value=""
-                        disabled={bindingEpisodeIds.has(ep.id)}
-                        onChange={(event) => handleBindScriptEpisode(ep.id, event.target.value)}
-                        className="mt-1.5 w-full rounded-md border border-border/40 bg-background px-2 py-1 text-[11px] text-foreground outline-none focus:border-primary/50"
-                      >
-                        <option value="">
-                          {suggestedScriptEpisode
-                            ? `建议绑定第 ${suggestedScriptEpisode.episodeNumber} 集`
-                            : "选择剧本集绑定"}
-                        </option>
-                        {scriptEpisodes.map((scriptEpisode) => (
-                          <option
-                            key={scriptEpisode.id}
-                            value={scriptEpisode.id}
-                            disabled={boundScriptEpisodeIds.has(scriptEpisode.id)}
-                          >
-                            第 {scriptEpisode.episodeNumber} 集 {scriptEpisode.title || ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  <AnimatePresence initial={false}>
+                    {ep.scriptEpisodeId == null &&
+                      onBindScriptEpisode &&
+                      isBindingPanelOpen && (
+                        <motion.div
+                          id={bindingPanelId}
+                          initial={shouldReduceMotion ? false : { height: 0, opacity: 0 }}
+                          animate={{
+                            height: "auto",
+                            opacity: 1,
+                            transition: {
+                              duration: shouldReduceMotion ? 0 : 0.2,
+                              ease: "easeOut",
+                            },
+                          }}
+                          exit={{
+                            height: 0,
+                            opacity: 0,
+                            transition: {
+                              duration: shouldReduceMotion ? 0 : 0.15,
+                              ease: "easeIn",
+                            },
+                          }}
+                          className="overflow-hidden"
+                        >
+                          <ScriptEpisodeBinding
+                            episodes={scriptEpisodes}
+                            boundEpisodeIds={boundScriptEpisodeIds}
+                            suggestedEpisodeId={suggestedScriptEpisode?.id}
+                            isBinding={bindingEpisodeIds.has(ep.id)}
+                            onBind={(scriptEpisodeId) =>
+                              handleBindScriptEpisode(ep.id, String(scriptEpisodeId))
+                            }
+                          />
+                        </motion.div>
+                      )}
+                  </AnimatePresence>
 
                   {/* 展开的场次列表 */}
                   {isExpanded && (

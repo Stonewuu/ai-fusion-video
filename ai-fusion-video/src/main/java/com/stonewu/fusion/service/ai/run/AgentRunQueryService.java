@@ -46,6 +46,7 @@ public final class AgentRunQueryService {
     private final AgentEventRepository eventRepository;
     private final ObjectMapper objectMapper;
     private final AgentRuntimeSchedulers schedulers;
+    private final AgentConfirmationExpiryCoordinator confirmationExpiry;
 
     public AgentRunQueryService(
             AgentRunMapper runMapper,
@@ -53,7 +54,8 @@ public final class AgentRunQueryService {
             AgentEventMapper eventMapper,
             AgentEventRepository eventRepository,
             ObjectMapper objectMapper,
-            AgentRuntimeSchedulers schedulers) {
+            AgentRuntimeSchedulers schedulers,
+            AgentConfirmationExpiryCoordinator confirmationExpiry) {
         this.runMapper = Objects.requireNonNull(runMapper, "runMapper must not be null");
         this.conversationMapper = Objects.requireNonNull(
                 conversationMapper, "conversationMapper must not be null");
@@ -65,6 +67,8 @@ public final class AgentRunQueryService {
                 objectMapper, "objectMapper must not be null");
         this.schedulers = Objects.requireNonNull(
                 schedulers, "schedulers must not be null");
+        this.confirmationExpiry = Objects.requireNonNull(
+                confirmationExpiry, "confirmationExpiry must not be null");
     }
 
     public Mono<Void> authorizeConversationForStart(
@@ -136,6 +140,10 @@ public final class AgentRunQueryService {
             String conversationId,
             long currentUserId) {
         return resolveAuthorizedTarget(runId, conversationId, currentUserId)
+                .flatMap(run -> confirmationExpiry.expireIfNeeded(run)
+                        .flatMap(expired -> expired
+                                ? requireAuthorizedRun(run.getRunId(), currentUserId)
+                                : Mono.just(run)))
                 .flatMap(run -> terminalEvent(run)
                         .map(terminal -> status(run, terminal))
                         .defaultIfEmpty(status(run, null)));
@@ -273,6 +281,7 @@ public final class AgentRunQueryService {
                     payload, "content", "delta"));
             case "REASONING" -> response.setReasoningContent(firstText(
                     payload, "reasoningContent", "delta"));
+            case "TOOL_CALL_STARTED" -> projectToolCallStart(response, event, payload);
             case "TOOL_CALL" -> projectToolCall(response, event, payload);
             case "TOOL_FINISHED" -> projectToolResult(response, event, payload);
             default -> {
@@ -285,6 +294,22 @@ public final class AgentRunQueryService {
             response.setFinished(false);
         }
         return response;
+    }
+
+    private void projectToolCallStart(
+            AiChatStreamRespVO response,
+            CommittedAgentEvent event,
+            JsonNode payload) {
+        String toolCallId = requireText(
+                event.envelope().toolCallId(), "toolCallId");
+        String toolName = requireText(firstText(
+                payload, "toolCallName", "toolName", "name"), "toolName");
+        response.setToolCallId(toolCallId)
+                .setToolName(toolName)
+                .setToolCalls(List.of(new AiChatStreamRespVO.ToolCallVO()
+                        .setId(toolCallId)
+                        .setName(toolName)
+                        .setArguments("")));
     }
 
     private void projectToolCall(
