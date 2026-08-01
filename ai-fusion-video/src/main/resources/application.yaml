@@ -80,8 +80,7 @@ fusion:
       skills:
         enabled: true
         fail-fast: true
-        display-names:
-          fusion-video-workflow: 融光视频工作流
+        display-names: {}
         repositories:
           bundled:
             location: classpath:agentscope/skills

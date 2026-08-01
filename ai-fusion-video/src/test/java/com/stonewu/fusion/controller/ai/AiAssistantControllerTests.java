@@ -97,10 +97,10 @@ class AiAssistantControllerTests {
                 new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
         when(skillRegistry.catalog()).thenReturn(List.of(
                 new AgentScopeSkillRegistry.SkillReference(
-                        "fusion-video-workflow_bundled",
-                        "fusion-video-workflow",
-                        "融光视频工作流",
-                        "融光视频工作流",
+                        "test-skill_bundled",
+                        "test-skill",
+                        "测试技能",
+                        "测试技能",
                         "bundled")));
         when(mcpRegistry.catalogForAgent("ai_assistant_agent")).thenReturn(List.of(
                 new AgentScopeMcpRegistry.McpToolReference(

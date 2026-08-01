@@ -164,13 +164,13 @@ class AgentKernelSpecFactoryTests {
     @Test
     void activeReferenceContextUsesSupportedPromptVariableNames() {
         AiChatReqVO request = request().setContext(Map.of(
-                "activeSkillReferences", "fusion-video-workflow",
+                "activeSkillReferences", "test-skill",
                 "activeMcpReferences", "assets/search_assets"));
 
         AgentKernelSpec spec = factory.createRoot(request, model, "root prompt");
 
         assertThat(spec.promptVariables())
-                .containsEntry("activeSkillReferences", "fusion-video-workflow")
+                .containsEntry("activeSkillReferences", "test-skill")
                 .containsEntry("activeMcpReferences", "assets/search_assets");
     }
 

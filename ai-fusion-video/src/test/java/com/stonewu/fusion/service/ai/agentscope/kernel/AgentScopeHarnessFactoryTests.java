@@ -176,7 +176,7 @@ class AgentScopeHarnessFactoryTests {
             assertThat(resource.agent().getSkillRepositories())
                     .hasSize(1)
                     .allSatisfy(repository -> assertThat(repository.getAllSkillNames())
-                            .contains("fusion-video-workflow"));
+                            .contains("test-skill"));
             assertThat(resource.agent().getCompactionHook()).isNotNull();
         } finally {
             skills.destroy();

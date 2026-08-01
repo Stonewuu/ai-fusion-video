@@ -51,9 +51,10 @@ public final class AgentScopeSkillRegistry implements DisposableBean {
     public List<SkillReference> catalog() {
         return skills().stream()
                 .map(skill -> {
-                    String displayName = requireText(
-                            displayNames.get(skill.getName()),
-                            "display name for skill " + skill.getName());
+                    String configuredDisplayName = displayNames.get(skill.getName());
+                    String displayName = (configuredDisplayName != null && !configuredDisplayName.isBlank())
+                            ? configuredDisplayName.trim()
+                            : skill.getName();
                     return new SkillReference(
                             skill.getSkillId(),
                             skill.getName(),

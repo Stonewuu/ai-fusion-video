@@ -19,20 +19,20 @@ class AgentScopeSkillRegistryTests {
         bundled.setLocation("classpath:agentscope/skills");
         properties.getSkills().setRepositories(Map.of("bundled", bundled));
         properties.getSkills().setDisplayNames(Map.of(
-                "fusion-video-workflow", "融光视频工作流"));
+                "test-skill", "测试技能"));
 
         AgentScopeSkillRegistry registry = new AgentScopeSkillRegistry(properties);
         try {
             assertThat(registry.enabled()).isTrue();
             assertThat(registry.repositories()).hasSize(1);
             AgentSkill skill = registry.repositories().getFirst()
-                    .getSkill("fusion-video-workflow");
-            assertThat(skill.getName()).isEqualTo("fusion-video-workflow");
-            assertThat(skill.getDescription()).contains("融光");
+                    .getSkill("test-skill");
+            assertThat(skill.getName()).isEqualTo("test-skill");
+            assertThat(skill.getDescription()).contains("测试");
             assertThat(skill.getSource()).isEqualTo("bundled");
             assertThat(registry.catalog()).singleElement().satisfies(reference -> {
-                assertThat(reference.name()).isEqualTo("fusion-video-workflow");
-                assertThat(reference.displayName()).isEqualTo("融光视频工作流");
+                assertThat(reference.name()).isEqualTo("test-skill");
+                assertThat(reference.displayName()).isEqualTo("测试技能");
             });
         } finally {
             registry.destroy();
