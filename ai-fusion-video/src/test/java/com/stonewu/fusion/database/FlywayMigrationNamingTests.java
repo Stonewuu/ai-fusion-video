@@ -27,7 +27,7 @@ class FlywayMigrationNamingTests {
             "^V1\\.(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)__[a-z0-9]+(?:_[a-z0-9]+)*\\.sql$");
 
     private static final Pattern BASELINE_NAME = Pattern.compile(
-            "^B1\\.(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)__baseline_[a-z0-9]+(?:_[a-z0-9]+)*\\.sql$");
+            "^B1\\.(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)__baseline_(\\d+)\\.(\\d+)\\.(\\d+)\\.sql$");
 
     private static final Set<String> LEGACY_MIGRATIONS = Set.of(
             "V1__init_mysql.sql",
@@ -120,10 +120,17 @@ class FlywayMigrationNamingTests {
             assertTrue(major >= 1, () -> "new baselines must target product version 1.0.0 or later: "
                     + baselineFile);
 
-            String baselineFlywayVersion = "1."
-                    + matcher.group(1) + "."
+            String productVersion = matcher.group(1) + "."
                     + matcher.group(2) + "."
-                    + matcher.group(3) + "."
+                    + matcher.group(3);
+            String descriptionVersion = matcher.group(5) + "."
+                    + matcher.group(6) + "."
+                    + matcher.group(7);
+            assertEquals(productVersion, descriptionVersion,
+                    () -> "baseline description version must match its product version: " + baselineFile);
+
+            String baselineFlywayVersion = "1."
+                    + productVersion + "."
                     + matcher.group(4);
             assertTrue(versionedFlywayVersions.contains(baselineFlywayVersion),
                     () -> "baseline version must match an existing V migration: " + baselineFile);
