@@ -46,8 +46,8 @@ Docker 镜像在容器启动时读取 `PUBLIC_API_URL` 并生成浏览器运行�
 - 留空：统一入口部署，浏览器使用同源 `/api`。
 - `https://api.example.com`：前后端分域，浏览器直接访问该后端。
 
-该地址不包含末尾 `/api`。分域部署还必须在后端配置
-`CORS_ALLOWED_ORIGIN_PATTERNS=https://app.example.com`。不要使用 `NEXT_PUBLIC_API_BASE_URL`，它属于
+该地址不包含末尾 `/api`。后端默认允许所有来源跨域访问；生产环境建议配置
+`CORS_ALLOWED_ORIGIN_PATTERNS=https://app.example.com` 限制实际前端来源。不要使用 `NEXT_PUBLIC_API_BASE_URL`，它属于
 构建时变量，无法可靠配置已经发布的镜像。
 
 ## 目录说明

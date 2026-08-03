@@ -9,7 +9,6 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class SecurityConfigCorsTests {
@@ -32,14 +31,33 @@ class SecurityConfigCorsTests {
     }
 
     @Test
-    void rejectsWildcardOriginWhenCredentialsAreEnabled() {
+    void allowsAllOriginsWithoutCredentialsByDefault() {
         CorsProperties properties = new CorsProperties();
-        properties.setAllowedOriginPatterns(List.of("*"));
         SecurityConfig securityConfig = new SecurityConfig(
                 mock(TokenAuthenticationFilter.class), new ObjectMapper(), properties);
 
-        assertThatThrownBy(securityConfig::corsConfigurationSource)
-                .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("通配来源");
+        UrlBasedCorsConfigurationSource source =
+                (UrlBasedCorsConfigurationSource) securityConfig.corsConfigurationSource();
+        CorsConfiguration configuration = source.getCorsConfigurations().get("/**");
+
+        assertThat(configuration).isNotNull();
+        assertThat(configuration.getAllowedOriginPatterns()).containsExactly("*");
+        assertThat(configuration.getAllowCredentials()).isFalse();
+    }
+
+    @Test
+    void treatsLegacyEmptyComposeValueAsAllowAll() {
+        CorsProperties properties = new CorsProperties();
+        properties.setAllowedOriginPatterns(List.of(""));
+        SecurityConfig securityConfig = new SecurityConfig(
+                mock(TokenAuthenticationFilter.class), new ObjectMapper(), properties);
+
+        UrlBasedCorsConfigurationSource source =
+                (UrlBasedCorsConfigurationSource) securityConfig.corsConfigurationSource();
+        CorsConfiguration configuration = source.getCorsConfigurations().get("/**");
+
+        assertThat(configuration).isNotNull();
+        assertThat(configuration.getAllowedOriginPatterns()).containsExactly("*");
+        assertThat(configuration.getAllowCredentials()).isFalse();
     }
 }

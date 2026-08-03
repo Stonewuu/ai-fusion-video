@@ -154,7 +154,7 @@ FRONTEND_PORT=3000
 BACKEND_PORT=18080
 ```
 
-Set `PUBLIC_API_URL` to the backend root URL without a trailing `/api`. Separate multiple frontend origins with commas.
+Set `PUBLIC_API_URL` to the backend root URL without a trailing `/api`. The backend allows cross-origin requests globally by default. In production, restrict `CORS_ALLOWED_ORIGIN_PATTERNS` to the actual frontend origins as shown above; separate multiple origins with commas.
 
 Run prebuilt images:
 
@@ -225,11 +225,11 @@ Docker Compose automatically reads `.env` from the repository root. Each startup
 
 | Deployment mode | Compose files | Variables to review |
 | --- | --- | --- |
-| Default unified gateway | `docker-compose.yml` | Review the MySQL root password and Redis password; application credentials are optional; change `MYSQL_DATABASE`, `APP_PORT`, or `JAVA_OPTS` only when needed; keep `PUBLIC_API_URL` and `CORS_ALLOWED_ORIGIN_PATTERNS` empty |
+| Default unified gateway | `docker-compose.yml` | Review the MySQL root password and Redis password; application credentials are optional; change `MYSQL_DATABASE`, `APP_PORT`, `JAVA_OPTS`, or the CORS allowlist only when needed; keep `PUBLIC_API_URL` empty |
 | Locally built unified gateway | `docker-compose.build.yml` | Uses the same variables as the default unified gateway, but builds the images locally |
-| Separate frontend and backend | Base Compose file + `docker-compose.separated.yml` | Set `PUBLIC_API_URL` and `CORS_ALLOWED_ORIGIN_PATTERNS`; change `FRONTEND_PORT` and `BACKEND_PORT` when needed; `APP_PORT` is not used |
+| Separate frontend and backend | Base Compose file + `docker-compose.separated.yml` | Set `PUBLIC_API_URL`; setting `CORS_ALLOWED_ORIGIN_PATTERNS` is recommended in production; change `FRONTEND_PORT` and `BACKEND_PORT` when needed; `APP_PORT` is not used |
 
-Change the MySQL root password and Redis password before any public deployment. If a MySQL application account is enabled, give it a separate password as well. `FRONTEND_PORT`, `BACKEND_PORT`, `PUBLIC_API_URL`, and `CORS_ALLOWED_ORIGIN_PATTERNS` only take effect when `docker-compose.separated.yml` is included.
+Change the MySQL root password and Redis password before any public deployment. If a MySQL application account is enabled, give it a separate password as well. `FRONTEND_PORT`, `BACKEND_PORT`, and `PUBLIC_API_URL` only take effect when `docker-compose.separated.yml` is included; `CORS_ALLOWED_ORIGIN_PATTERNS` applies to every deployment mode.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -240,12 +240,12 @@ Change the MySQL root password and Redis password before any public deployment. 
 | `FRONTEND_PORT` | `3000` | Exposed frontend port for separate frontend and backend deployment |
 | `BACKEND_PORT` | `18080` | Exposed backend port for separate frontend and backend deployment |
 | `PUBLIC_API_URL` | Empty | Public backend root URL for separate deployment; do not include `/api` |
-| `CORS_ALLOWED_ORIGIN_PATTERNS` | Empty | Frontend origins allowed to call the separated backend; separate multiple origins with commas |
+| `CORS_ALLOWED_ORIGIN_PATTERNS` | `*` | Browser origins allowed to call the backend; `*` allows all origins. Use explicit production origins and separate multiple values with commas |
 | `JAVA_OPTS` | `-Xms512m -Xmx1024m` | Backend JVM options; normally do not need to be changed |
 | `MYSQL_USERNAME` | Empty | Optional MySQL application account; must not be set to `root`; leaving it empty preserves root access |
 | `MYSQL_PASSWORD` | Empty | Optional MySQL application password; must be configured together with `MYSQL_USERNAME` |
 
-Keep `PUBLIC_API_URL` and `CORS_ALLOWED_ORIGIN_PATTERNS` empty when you use the unified gateway.
+Keep `PUBLIC_API_URL` empty when you use the unified gateway. `CORS_ALLOWED_ORIGIN_PATTERNS` may remain `*` or be restricted to the site's actual origin.
 
 `MYSQL_USERNAME` and `MYSQL_PASSWORD` must either both be set or both remain empty. When `.env.example` is copied as-is, both variables are empty and the backend continues using `root` with `MYSQL_ROOT_PASSWORD`, matching the historical default. For a new database, setting both variables before the first startup makes MySQL create the regular account and grant it access to `MYSQL_DATABASE`. To move an existing database to a regular account, create and grant the user in MySQL before setting these variables; changing `.env` does not modify existing database accounts.
 

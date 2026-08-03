@@ -92,17 +92,21 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        List<String> allowedOriginPatterns = corsProperties.getAllowedOriginPatterns().stream()
+        List<String> configuredOriginPatterns = corsProperties.getAllowedOriginPatterns().stream()
                 .map(String::trim)
                 .filter(origin -> !origin.isEmpty())
                 .toList();
-        if (allowedOriginPatterns.contains("*")) {
-            throw new IllegalStateException("CORS 不允许在启用凭证时使用通配来源 *，请配置明确域名");
-        }
+        // 兼容已发布的 v1.0.0 Compose：未配置白名单时会显式传入空字符串。
+        List<String> allowedOriginPatterns = configuredOriginPatterns.isEmpty()
+                ? List.of("*")
+                : configuredOriginPatterns;
+        boolean allowsAllOrigins = allowedOriginPatterns.contains("*");
         configuration.setAllowedOriginPatterns(allowedOriginPatterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
-        configuration.setAllowCredentials(true);
+        // 前端使用 Authorization Bearer Token，不依赖跨域 Cookie。
+        // CORS 规范禁止将通配来源与凭证请求组合，因此全局放行时关闭凭证模式。
+        configuration.setAllowCredentials(!allowsAllOrigins);
         configuration.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

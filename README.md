@@ -156,7 +156,7 @@ FRONTEND_PORT=3000
 BACKEND_PORT=18080
 ```
 
-`PUBLIC_API_URL` 应填写后端根地址，末尾不要添加 `/api`。存在多个前端来源时，使用英文逗号分隔。
+`PUBLIC_API_URL` 应填写后端根地址，末尾不要添加 `/api`。后端默认全局允许跨域；生产环境建议像示例一样将 `CORS_ALLOWED_ORIGIN_PATTERNS` 限制为实际前端来源，多个来源使用英文逗号分隔。
 
 使用预构建镜像：
 
@@ -227,11 +227,11 @@ Docker Compose 会自动读取仓库根目录的 `.env`。不同启动方式使�
 
 | 部署方式 | Compose 文件 | 需要关注的变量 |
 | --- | --- | --- |
-| 默认统一入口 | `docker-compose.yml` | 必须关注 MySQL root 密码和 Redis 密码；应用账号可选；可按需修改 `MYSQL_DATABASE`、`APP_PORT` 和 `JAVA_OPTS`；`PUBLIC_API_URL` 与 `CORS_ALLOWED_ORIGIN_PATTERNS` 保持为空 |
+| 默认统一入口 | `docker-compose.yml` | 必须关注 MySQL root 密码和 Redis 密码；应用账号可选；可按需修改 `MYSQL_DATABASE`、`APP_PORT`、`JAVA_OPTS` 和 CORS 白名单；`PUBLIC_API_URL` 保持为空 |
 | 本地构建统一入口 | `docker-compose.build.yml` | 与默认统一入口相同，仅镜像改为本地构建 |
-| 前后端独立部署 | 基础 Compose 文件 + `docker-compose.separated.yml` | 必须填写 `PUBLIC_API_URL` 和 `CORS_ALLOWED_ORIGIN_PATTERNS`；可按需修改 `FRONTEND_PORT`、`BACKEND_PORT`；`APP_PORT` 不生效 |
+| 前后端独立部署 | 基础 Compose 文件 + `docker-compose.separated.yml` | 必须填写 `PUBLIC_API_URL`；生产环境建议填写 `CORS_ALLOWED_ORIGIN_PATTERNS`；可按需修改 `FRONTEND_PORT`、`BACKEND_PORT`；`APP_PORT` 不生效 |
 
-公网部署前必须修改 MySQL root 密码和 Redis 密码；如启用 MySQL 应用账号，也必须设置独立密码。`FRONTEND_PORT`、`BACKEND_PORT`、`PUBLIC_API_URL` 和 `CORS_ALLOWED_ORIGIN_PATTERNS` 仅在组合使用 `docker-compose.separated.yml` 时生效。
+公网部署前必须修改 MySQL root 密码和 Redis 密码；如启用 MySQL 应用账号，也必须设置独立密码。`FRONTEND_PORT`、`BACKEND_PORT` 和 `PUBLIC_API_URL` 仅在组合使用 `docker-compose.separated.yml` 时生效；`CORS_ALLOWED_ORIGIN_PATTERNS` 对所有部署方式生效。
 
 | 变量 | 默认值 | 用途 |
 | --- | --- | --- |
@@ -242,12 +242,12 @@ Docker Compose 会自动读取仓库根目录的 `.env`。不同启动方式使�
 | `FRONTEND_PORT` | `3000` | 前后端独立部署时暴露的前端端口 |
 | `BACKEND_PORT` | `18080` | 前后端独立部署时暴露的后端端口 |
 | `PUBLIC_API_URL` | 空 | 前后端独立部署时的后端公网根地址，不包含 `/api` |
-| `CORS_ALLOWED_ORIGIN_PATTERNS` | 空 | 前后端独立部署时允许访问后端的前端来源，多个来源用英文逗号分隔 |
+| `CORS_ALLOWED_ORIGIN_PATTERNS` | `*` | 允许访问后端的浏览器来源；`*` 表示全部，生产环境建议配置明确来源，多个来源用英文逗号分隔 |
 | `JAVA_OPTS` | `-Xms512m -Xmx1024m` | 后端 JVM 参数，通常无需修改 |
 | `MYSQL_USERNAME` | 空 | 可选的 MySQL 应用账号，不能设置为 `root`；留空时沿用 root 账号 |
 | `MYSQL_PASSWORD` | 空 | 可选的 MySQL 应用账号密码，必须与 `MYSQL_USERNAME` 同时配置 |
 
-使用统一入口部署时，`PUBLIC_API_URL` 和 `CORS_ALLOWED_ORIGIN_PATTERNS` 必须保持为空。
+使用统一入口部署时，`PUBLIC_API_URL` 必须保持为空；`CORS_ALLOWED_ORIGIN_PATTERNS` 可保留 `*`，也可限制为站点的实际来源。
 
 `MYSQL_USERNAME` 和 `MYSQL_PASSWORD` 必须同时配置或同时留空。直接复制 `.env.example` 时，这两个变量为空，后端仍使用 `root` 和 `MYSQL_ROOT_PASSWORD`，与历史版本默认行为一致。对于全新数据库，如在首次启动前填写这两个变量，MySQL 会自动创建普通账号并授予 `MYSQL_DATABASE` 的访问权限。已有数据库如需改用普通账号，请先在 MySQL 中创建用户并授权，再填写这两个变量；修改 `.env` 不会自动变更已有数据库账号。
 

@@ -9,9 +9,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 浏览器跨域访问配置。
- * <p>
- * 一体化部署和统一网关部署不需要配置；仅当前端直接访问不同域名的后端时配置允许来源。
+ * 浏览器跨域访问配置。默认允许所有来源；生产环境可以配置明确的来源白名单。
  */
 @Component
 @ConfigurationProperties(prefix = "app.cors")
@@ -19,6 +17,6 @@ import java.util.List;
 @Setter
 public class CorsProperties {
 
-    private List<String> allowedOriginPatterns = new ArrayList<>();
+    private List<String> allowedOriginPatterns = new ArrayList<>(List.of("*"));
 }
 
