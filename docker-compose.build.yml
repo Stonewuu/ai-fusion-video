@@ -1,6 +1,7 @@
 # ============================================
 # 融光 - Docker Compose (本地构建镜像)
 # ============================================
+# 部署配置: 基于 .env.example 创建 .env，并只修改 .env
 # 使用方式: docker compose -f docker-compose.build.yml up -d --build
 # ============================================
 
@@ -13,9 +14,14 @@ services:
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_fusion_video}
+      MYSQL_USER: "${MYSQL_USERNAME:-}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-}"
     command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
     volumes:
       - mysql_data:/var/lib/mysql
+    # 如需从宿主机访问 MySQL，取消以下注释：
+    # ports:
+    #   - "127.0.0.1:43306:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
       interval: 10s
@@ -29,6 +35,9 @@ services:
     command: redis-server --requirepass ${REDIS_PASSWORD:-123456}
     volumes:
       - redis_data:/data
+    # 如需从宿主机访问 Redis，取消以下注释：
+    # ports:
+    #   - "127.0.0.1:46379:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-123456}", "ping"]
       interval: 10s
@@ -48,12 +57,12 @@ services:
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_fusion_video}
-      MYSQL_USERNAME: root
-      MYSQL_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
+      # 兼容旧部署：未配置应用账号时继续使用 root 与 MYSQL_ROOT_PASSWORD。
+      MYSQL_USERNAME: "${MYSQL_USERNAME:-root}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD:-123456}}"
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
-      AI_DASHSCOPE_API_KEY: ${AI_DASHSCOPE_API_KEY:-sk-placeholder}
       CORS_ALLOWED_ORIGIN_PATTERNS: "${CORS_ALLOWED_ORIGIN_PATTERNS:-}"
       JAVA_OPTS: ${JAVA_OPTS:--Xms512m -Xmx1024m}
     volumes:

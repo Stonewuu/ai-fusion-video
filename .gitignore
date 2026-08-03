@@ -12,6 +12,9 @@ yarn-error.log*
 pnpm-debug.log*
 /.pnpm-store/
 
+# Local Docker Compose configuration (copy from .env.example)
+/.env
+
 # IDE and editor artifacts
 .idea/
 *.iml
