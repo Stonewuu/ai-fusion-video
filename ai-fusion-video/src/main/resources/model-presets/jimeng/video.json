@@ -1,0 +1,31 @@
+[
+  {
+    "code": "jimeng-video-3.0-pro",
+    "modelCode": "jimeng-video-3.0-pro",
+    "name": "即梦 Video 3.0 Pro",
+    "platform": "newapi",
+    "modelProtocol": "jimeng",
+    "modelType": 3,
+    "description": "即梦视频模型通用能力模板，支持文生视频与单首帧图生视频；具体参数上限以当前接入渠道为准。",
+    "capabilities": ["文生视频", "首帧图生视频", "720P/1080P"],
+    "config": {
+      "supportFirstFrame": true,
+      "supportLastFrame": false,
+      "supportReferenceImages": false,
+      "referenceImageInputFormats": ["url"],
+      "supportReferenceVideos": false,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 1,
+      "maxReferenceImages": 0,
+      "maxReferenceVideos": 0,
+      "maxReferenceAudios": 0,
+      "minDuration": 5,
+      "maxDuration": 10,
+      "defaultDuration": 5,
+      "supportedAspectRatios": ["16:9", "9:16", "1:1"],
+      "supportedResolutions": ["720p", "1080p"],
+      "supportCameraFixed": false
+    }
+  }
+]

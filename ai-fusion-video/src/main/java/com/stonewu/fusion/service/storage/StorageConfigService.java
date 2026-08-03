@@ -14,6 +14,7 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.List;
 
@@ -27,6 +28,7 @@ public class StorageConfigService {
 
     private final StorageConfigMapper storageConfigMapper;
     private final S3ClientFactory s3ClientFactory;
+    private final ObjectProvider<StorageConfigReferenceGuard> referenceGuards;
 
     @Cacheable(value = "storageConfig", key = "#id")
     public StorageConfig getById(Long id) {
@@ -91,6 +93,7 @@ public class StorageConfigService {
     @CacheEvict(value = "storageConfig", allEntries = true)
     @Transactional
     public void delete(Long id) {
+        referenceGuards.orderedStream().forEach(guard -> guard.assertDeletable(id));
         s3ClientFactory.invalidate(id);
         storageConfigMapper.deleteById(id);
     }

@@ -1,6 +1,7 @@
 "use client";
 
-import { AlertTriangle, CheckCircle2, XCircle } from "lucide-react";
+import { CheckCircle2, XCircle } from "lucide-react";
+import { ToolMutationResult } from "@/components/dashboard/shared/tool-mutation-result";
 import { assetTypeNames } from "../constants";
 import { GenericResult } from "./shared";
 
@@ -173,65 +174,7 @@ export function MutationResult({
   data: unknown;
   toolName: string;
 }) {
-  const obj = data as Record<string, unknown>;
-  const status = obj.status as string | undefined;
-  const message = obj.message as string | undefined;
-
-  const toolLabels: Record<string, string> = {
-    save_script_scene_items: "场次",
-    save_scene_items: "场次",
-    update_script_info: "剧本信息",
-    update_script_scene: "场次",
-    manage_script_scenes: "场次",
-    update_script: "剧本",
-    update_asset: "资产",
-    update_asset_image: "资产图片",
-  };
-  const label = toolLabels[toolName] || "数据";
-
-  // 动态决定显示的 ID 及其前缀 label，避免一刀切地将集 ID 等当作“场次 ID”或“数据 ID”
-  let displayId: unknown = undefined;
-  let idLabel = label;
-
-  if (obj.scriptEpisodeId !== undefined) {
-    idLabel = "剧本集";
-    displayId = obj.scriptEpisodeId;
-  } else if (obj.storyboardEpisodeId !== undefined) {
-    idLabel = "分镜集";
-    displayId = obj.storyboardEpisodeId;
-  } else if (obj.episodeId !== undefined) {
-    idLabel = "分集";
-    displayId = obj.episodeId;
-  } else if (obj.scriptId !== undefined) {
-    idLabel = "剧本";
-    displayId = obj.scriptId;
-  } else if (obj.id !== undefined) {
-    idLabel = label;
-    displayId = obj.id;
-  }
-
-  return (
-    <div className="space-y-1">
-      <p className="text-xs text-muted-foreground inline-flex items-center gap-1">
-        {status === "error" ? (
-          <AlertTriangle className="h-3.5 w-3.5 text-yellow-500 shrink-0" />
-        ) : (
-          <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
-        )}
-        {message || (status === "error" ? `${label}操作失败` : `${label}已更新`)}
-      </p>
-      {displayId !== undefined && (
-        <p className="text-[10px] text-muted-foreground/60">
-          {idLabel} ID: {String(displayId)}
-        </p>
-      )}
-      {obj.sceneCount !== undefined && (
-        <p className="text-[10px] text-muted-foreground/60">
-          场次数: {String(obj.sceneCount)}
-        </p>
-      )}
-    </div>
-  );
+  return <ToolMutationResult data={data} toolName={toolName} />;
 }
 
 export function AssetItemsResult({ data }: { data: unknown }) {

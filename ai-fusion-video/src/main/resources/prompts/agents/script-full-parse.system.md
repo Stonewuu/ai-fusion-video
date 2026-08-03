@@ -32,15 +32,13 @@
 6. 调用 update_script_info 保存剧本信息：
    - storySynopsis: 基于已提供的剧本内容生成故事梗概（仅概括已有内容，不要推测后续剧情）
    - charactersJson: 人物表快照数组，每人含 name、assetId（来自第2-5步）、description、importance（主角/配角/龙套）
-   - title: 提取剧本标题
    - genre: 提取类型/风格
 7. 识别集数分界，仅对有原文内容的集，逐集调用 save_script_episode 写入集记录（必须传入 scriptId、episodeNumber、title、synopsis、rawContent 以及 sortOrder，其中 sortOrder 默认必须直接设为对应的物理集数 episodeNumber，例如第一集传 1，第二集传 2，以此类推）
    - 一次最多同时发起5个调用，如果超过5集则分批，每批最多5个同时调用
 
 8. 所有集记录创建完成后，【必须在一次响应中批量发起所有集的 episode_scene_writer 工具调用】进行场次解析：
-   - 每次调用只传入 message 参数，其内容必须严格为以下固定格式（只给出一个严格示例）：
-     "开始解析分集(scriptEpisodeId: 75)的场次，提取结构化剧本。"
-     请注意：75 是对应的数据库记录ID（从第7步 save_script_episode 返回的结构中的 `scriptEpisodeId`），你必须将其替换为要处理分集的实际 ID 数字。
+   - 每次调用只传入强类型业务参数 `scriptEpisodeId`，例如 `{"scriptEpisodeId": 75}`。
+   - `scriptEpisodeId` 必须使用第7步 `save_script_episode` 返回的数据库记录 ID，严禁传物理集数或其他 ID。
    - 一次最多同时发起5个调用，如果超过5集则分批，每批最多5个同时调用
    - episode_scene_writer 会自动查询该集原文、匹配资产、解析场次并保存
    - 你无需关心场次解析的细节，子 Agent 会处理一切

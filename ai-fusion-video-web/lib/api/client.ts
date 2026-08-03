@@ -1,9 +1,10 @@
 import axios from "axios";
 import type { CommonResult } from "./types";
+import { getApiPayloadMessage, toApiError } from "./api-error";
+import { getApiBaseUrl } from "@/lib/runtime-config";
 
-// 后端基础地址（可通过环境变量 NEXT_PUBLIC_API_BASE_URL 覆盖）
-const API_BASE_URL =
-  (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:18080").replace(/\/$/, "");
+// 默认同源；Docker 可在容器启动时通过 PUBLIC_API_URL 注入分域后端地址。
+const API_BASE_URL = getApiBaseUrl();
 
 const PUBLIC_AUTH_PREFIXES = [
   "/api/auth/login",
@@ -113,7 +114,9 @@ http.interceptors.response.use(
   (response) => {
     const result = response.data as CommonResult<unknown>;
     if (result.code !== 0) {
-      return Promise.reject(new Error(result.msg || "请求失败"));
+      const message = getApiPayloadMessage(result);
+      if (!message) return Promise.reject(new Error("请求失败"));
+      return Promise.reject(new Error(message));
     }
     return result.data as never;
   },
@@ -126,21 +129,11 @@ http.interceptors.response.use(
 
     // 如果没有 config（例如网络错误），直接走通用错误处理
     if (!originalRequest || error.response?.status !== 401) {
-      const msg =
-        error.response?.data?.msg ||
-        error.response?.statusText ||
-        error.message ||
-        "网络异常";
-      return Promise.reject(new Error(msg));
+      return Promise.reject(toApiError(error));
     }
 
     if (isPublicAuthRequest(originalRequest)) {
-      const msg =
-        error.response?.data?.msg ||
-        error.response?.statusText ||
-        error.message ||
-        "请求失败";
-      return Promise.reject(new Error(msg));
+      return Promise.reject(toApiError(error));
     }
 
     // 已经是重试请求 → 不再重复刷新
@@ -216,9 +209,10 @@ http.interceptors.response.use(
       return http(originalRequest);
     } catch (refreshError) {
       // 刷新失败 → 清除认证状态，跳登录页
-      processQueue(refreshError as Error, null);
+      const normalizedError = toApiError(refreshError);
+      processQueue(normalizedError, null);
       handleAuthFailure();
-      return Promise.reject(new Error("登录已过期，请重新登录"));
+      return Promise.reject(normalizedError);
     } finally {
       isRefreshing = false;
     }

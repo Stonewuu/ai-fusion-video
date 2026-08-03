@@ -4,9 +4,10 @@ import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
-import io.agentscope.core.model.Model;
-import io.agentscope.core.model.OpenAIChatModel;
+import io.agentscope.core.model.transport.HttpTransport;
+import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import org.springframework.ai.chat.model.ChatModel;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.openai.OpenAiChatModel;
@@ -55,9 +56,9 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
         OpenAiApi.Builder apiBuilder = OpenAiApi.builder().apiKey(apiKey);
         apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
-            context.getApiConfig(), 60 * 1000, 3 * 60 * 1000));
+            context.getApiConfig(), 60 * 1000, 25 * 60 * 1000));
         apiBuilder.webClientBuilder(AiProxySupport.webClientBuilder(
-            context.getApiConfig(), "openai-compatible-provider", Duration.ofSeconds(60)));
+            context.getApiConfig(), "openai-compatible-provider", Duration.ofMinutes(25)));
         if (StrUtil.isNotBlank(baseUrl)) {
             apiBuilder.baseUrl(baseUrl);
         }
@@ -76,7 +77,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
     }
 
     @Override
-    public Model createAgentScopeModel(AiProviderContext context) {
+    public ChatModelBase createAgentScopeModel(AiProviderContext context) {
         String platform = context.getPlatform();
         String apiKey = context.getApiKey();
         String baseUrl = resolveRootBaseUrl(platform, context.getBaseUrl());
@@ -105,8 +106,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
             builder.baseUrl(baseUrl);
         }
         builder.endpointPath(endpointPath);
-        io.agentscope.core.model.transport.HttpTransport proxyTransport =
-                AiProxySupport.agentScopeHttpTransport(context.getApiConfig());
+        HttpTransport proxyTransport = AiProxySupport.agentScopeHttpTransport(context.getApiConfig());
         if (proxyTransport != null) {
             builder.httpTransport(proxyTransport);
         }

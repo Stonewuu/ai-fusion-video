@@ -5,7 +5,6 @@ import {
   Globe,
   Save,
   Loader2,
-  AlertTriangle,
   RefreshCw,
   ExternalLink,
   Download,
@@ -13,7 +12,9 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { http } from "@/lib/api/client";
+import { API_BASE_URL, http } from "@/lib/api/client";
+import { getApiErrorMessage } from "@/lib/api/api-error";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { useAuthStore } from "@/lib/store/auth-store";
 import {
   getSystemRuntimeVersion,
@@ -26,10 +27,11 @@ import {
   getIgnoredVersion,
   setIgnoredVersion,
 } from "@/lib/version-update";
-import { containerVariants, itemVariants } from "../_shared";
+import { containerVariants, itemVariants, settingsTypography } from "../_shared";
 
 interface SystemConfigs {
   site_base_url: string;
+  resource_base_url: string;
   allow_register: boolean;
   mail_smtp_host?: string;
   mail_smtp_port?: string;
@@ -54,11 +56,33 @@ function formatDateTime(value?: string | null): string {
   }).format(date);
 }
 
+function normalizePublicUrl(value: string): string {
+  return value.trim().replace(/\/+$/, "");
+}
+
+function isLocalOrPrivateUrl(value: string): boolean {
+  if (!value.trim()) return false;
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1") {
+      return true;
+    }
+    if (/^10\./.test(hostname) || /^192\.168\./.test(hostname)) {
+      return true;
+    }
+    const match = hostname.match(/^172\.(\d+)\./);
+    return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
+  } catch {
+    return false;
+  }
+}
+
 export default function GeneralSettingsPage() {
   const currentUser = useAuthStore((state) => state.user);
   const isAdmin = currentUser?.roles?.includes("admin") ?? false;
   const [configs, setConfigs] = useState<SystemConfigs>({
     site_base_url: "",
+    resource_base_url: "",
     allow_register: false,
     mail_smtp_host: "",
     mail_smtp_port: "",
@@ -69,6 +93,7 @@ export default function GeneralSettingsPage() {
   });
   const [original, setOriginal] = useState<SystemConfigs>({
     site_base_url: "",
+    resource_base_url: "",
     allow_register: false,
     mail_smtp_host: "",
     mail_smtp_port: "",
@@ -79,12 +104,15 @@ export default function GeneralSettingsPage() {
   });
   const [runtimeVersionInfo, setRuntimeVersionInfo] = useState<SystemRuntimeVersionInfo | null>(null);
   const [versionInfo, setVersionInfo] = useState<SystemVersionInfo | null>(null);
+  const [runtimeVersionError, setRuntimeVersionError] = useState<string | null>(null);
+  const [versionError, setVersionError] = useState<string | null>(null);
   const [loadingConfigs, setLoadingConfigs] = useState(true);
   const [loadingRuntimeVersion, setLoadingRuntimeVersion] = useState(true);
   const [loadingVersion, setLoadingVersion] = useState(true);
   const [saving, setSaving] = useState(false);
   const [checkingVersion, setCheckingVersion] = useState(false);
   const [ignoredVersion, setIgnoredVersionState] = useState<string | null>(null);
+  const [separatePublicOrigins, setSeparatePublicOrigins] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,9 +124,10 @@ export default function GeneralSettingsPage() {
           return;
         }
         setRuntimeVersionInfo(runtimeVersion);
+        setRuntimeVersionError(null);
       } catch (err) {
         if (!cancelled) {
-          console.error("加载当前运行版本失败:", err);
+          setRuntimeVersionError(getApiErrorMessage(err));
         }
       } finally {
         if (!cancelled) {
@@ -128,8 +157,9 @@ export default function GeneralSettingsPage() {
         configResult.forEach((c) => {
           map[c.configKey] = c.configValue || "";
         });
-        const loaded = {
+        const stored = {
           site_base_url: map.site_base_url || "",
+          resource_base_url: map.resource_base_url || "",
           allow_register: map.allow_register === "true",
           mail_smtp_host: map.mail_smtp_host || "",
           mail_smtp_port: map.mail_smtp_port || "",
@@ -138,11 +168,29 @@ export default function GeneralSettingsPage() {
           mail_ssl: map.mail_ssl === "true",
           mail_from: map.mail_from || "",
         };
+        const detectedSiteUrl = normalizePublicUrl(window.location.origin);
+        const detectedResourceUrl = normalizePublicUrl(
+          API_BASE_URL ? API_BASE_URL : detectedSiteUrl,
+        );
+        const loaded = {
+          ...stored,
+          site_base_url: stored.site_base_url
+            ? stored.site_base_url
+            : detectedSiteUrl,
+          resource_base_url: stored.resource_base_url
+            ? stored.resource_base_url
+            : detectedResourceUrl,
+        };
+        setSeparatePublicOrigins(
+          normalizePublicUrl(loaded.site_base_url) !==
+            normalizePublicUrl(loaded.resource_base_url),
+        );
         setConfigs(loaded);
-        setOriginal(loaded);
+        setOriginal(stored);
       } catch (err) {
         if (!cancelled) {
           console.error("加载系统配置失败:", err);
+          toastApiError(err, "加载系统配置失败");
         }
       } finally {
         if (!cancelled) {
@@ -170,10 +218,11 @@ export default function GeneralSettingsPage() {
           return;
         }
         setVersionInfo(latest);
+        setVersionError(null);
         setIgnoredVersionState(getIgnoredVersion());
       } catch (err) {
         if (!cancelled) {
-          console.error("加载版本信息失败:", err);
+          setVersionError(getApiErrorMessage(err));
         }
       } finally {
         if (!cancelled) {
@@ -189,6 +238,7 @@ export default function GeneralSettingsPage() {
 
   const hasChanges =
     configs.site_base_url !== original.site_base_url ||
+    configs.resource_base_url !== original.resource_base_url ||
     configs.allow_register !== original.allow_register ||
     configs.mail_smtp_host !== original.mail_smtp_host ||
     configs.mail_smtp_port !== original.mail_smtp_port ||
@@ -200,8 +250,14 @@ export default function GeneralSettingsPage() {
   const handleSave = async () => {
     setSaving(true);
     try {
+      const normalizedConfigs = {
+        ...configs,
+        site_base_url: normalizePublicUrl(configs.site_base_url),
+        resource_base_url: normalizePublicUrl(configs.resource_base_url),
+      };
       await http.put("/api/system/config", {
-        site_base_url: configs.site_base_url,
+        site_base_url: normalizedConfigs.site_base_url,
+        resource_base_url: normalizedConfigs.resource_base_url,
         allow_register: String(configs.allow_register),
         mail_smtp_host: configs.mail_smtp_host || "",
         mail_smtp_port: configs.mail_smtp_port || "",
@@ -210,9 +266,11 @@ export default function GeneralSettingsPage() {
         mail_ssl: String(!!configs.mail_ssl),
         mail_from: configs.mail_from || "",
       });
-      setOriginal({ ...configs });
+      setConfigs(normalizedConfigs);
+      setOriginal(normalizedConfigs);
     } catch (err) {
       console.error("保存系统配置失败:", err);
+      toastApiError(err, "保存系统配置失败");
     } finally {
       setSaving(false);
     }
@@ -220,15 +278,26 @@ export default function GeneralSettingsPage() {
 
   const handleCheckVersion = async () => {
     setCheckingVersion(true);
-    try {
-      const latest = await getSystemVersion(true);
-      setVersionInfo(latest);
-      setIgnoredVersionState(getIgnoredVersion());
-    } catch (err) {
-      console.error("检查更新失败:", err);
-    } finally {
-      setCheckingVersion(false);
+    setRuntimeVersionError(null);
+    setVersionError(null);
+    const [runtimeResult, versionResult] = await Promise.allSettled([
+      getSystemRuntimeVersion(),
+      getSystemVersion(true),
+    ]);
+
+    if (runtimeResult.status === "fulfilled") {
+      setRuntimeVersionInfo(runtimeResult.value);
+    } else {
+      setRuntimeVersionError(getApiErrorMessage(runtimeResult.reason));
     }
+
+    if (versionResult.status === "fulfilled") {
+      setVersionInfo(versionResult.value);
+      setIgnoredVersionState(getIgnoredVersion());
+    } else {
+      setVersionError(getApiErrorMessage(versionResult.reason));
+    }
+    setCheckingVersion(false);
   };
 
   const handleIgnoreVersion = () => {
@@ -251,12 +320,19 @@ export default function GeneralSettingsPage() {
   const ignoredCurrentVersion = Boolean(
     versionInfo?.latestVersion && ignoredVersion === versionInfo.latestVersion
   );
+  const versionFailed = Boolean(versionError) || versionInfo?.checkSucceeded === false;
   const versionStatus = loadingVersion
     ? {
         label: "检查中",
         className: "border-sky-500/30 bg-sky-500/10 text-sky-600",
         summary: "页面已加载，正在后台检查最新版本。",
       }
+    : versionError
+      ? {
+          label: "加载失败",
+          className: "border-rose-500/30 bg-rose-500/10 text-rose-600",
+          summary: "版本信息加载失败，可稍后重试。",
+        }
     : !versionInfo
     ? {
         label: "未加载",
@@ -295,18 +371,18 @@ export default function GeneralSettingsPage() {
 
   return (
     <motion.div
-      className="max-w-[800px]"
+      className="w-full"
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
     >
       {/* 标题 */}
       <motion.div variants={itemVariants} className="mb-8">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">通用设置</h1>
-            <p className="text-muted-foreground mt-1 text-sm">
-              配置站点访问域名等全局参数
+            <h1 className={settingsTypography.pageTitle}>通用设置</h1>
+            <p className={settingsTypography.pageDescription}>
+              管理系统全局参数
             </p>
             {!isAdmin ? (
               <p className="text-xs text-amber-600 mt-2">
@@ -344,54 +420,123 @@ export default function GeneralSettingsPage() {
             variants={itemVariants}
             className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-6"
           >
-          <div className="flex items-center gap-2 mb-4">
-            <Globe className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold">项目访问域名</h3>
-          </div>
-
-          <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
-            配置本项目部署后的完整访问域名（不含末尾斜杠）。
-            系统将使用该域名拼接内部资源的公网访问地址，供外部服务和 API 调用。
-          </p>
-
-          <input
-            type="url"
-            value={configs.site_base_url}
-            onChange={(e) =>
-              setConfigs((prev) => ({ ...prev, site_base_url: e.target.value }))
-            }
-            placeholder="https://fusion.example.com"
-            className={cn(
-              "w-full px-4 py-2.5 rounded-xl text-sm",
-              "bg-muted/30 border border-border/30",
-              "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-              "placeholder:text-muted-foreground/40"
-            )}
-          />
-
-          <div className="mt-4 space-y-3">
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/10 border border-border/20">
-              <div className="text-xs text-muted-foreground leading-relaxed">
-                <p className="mb-1">
-                  <strong>示例：</strong>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2">
+                  <Globe className="h-4 w-4 text-primary" />
+                  <h3 className={settingsTypography.sectionTitle}>公网访问地址</h3>
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
+                  已根据当前访问环境自动识别，通常无需修改。
                 </p>
-                <ul className="list-disc list-inside space-y-0.5">
-                  <li>本地开发：<code className="text-foreground/80">http://localhost:8080</code></li>
-                  <li>内网部署：<code className="text-foreground/80">http://192.168.1.100:8080</code></li>
-                  <li>公网部署：<code className="text-foreground/80">https://fusion.example.com</code></li>
-                </ul>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">前后端不同域名</span>
+                <button
+                  type="button"
+                  disabled={!isAdmin}
+                  onClick={() => {
+                    if (!isAdmin) return;
+                    setSeparatePublicOrigins((current) => {
+                      const next = !current;
+                      if (!next) {
+                        setConfigs((previous) => ({
+                          ...previous,
+                          resource_base_url: previous.site_base_url,
+                        }));
+                      }
+                      return next;
+                    });
+                  }}
+                  className={cn(
+                    "relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors",
+                    separatePublicOrigins
+                      ? "border-primary/40 bg-primary/20"
+                      : "border-border/40 bg-muted/30",
+                    !isAdmin ? "cursor-not-allowed opacity-60" : "cursor-pointer"
+                  )}
+                  aria-label="切换前后端不同域名"
+                  aria-pressed={separatePublicOrigins}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-0.5 h-5.5 w-5.5 rounded-full bg-white shadow transition-transform",
+                      separatePublicOrigins ? "translate-x-6" : "translate-x-0.5"
+                    )}
+                  />
+                </button>
               </div>
             </div>
 
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
-              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                <strong>备注：</strong>画风参考图生图功能依赖此配置或对象存储。
-                使用本地存储时，需要配置此域名才能将参考图传递给 AI API；
-                若已配置对象存储，上传的图片会自动获得公网 URL，此项可不填。
+            {separatePublicOrigins ? (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="block text-xs font-medium mb-1.5">前端站点地址</label>
+                  <input
+                    type="url"
+                    disabled={!isAdmin}
+                    value={configs.site_base_url}
+                    onChange={(e) =>
+                      setConfigs((prev) => ({ ...prev, site_base_url: e.target.value }))
+                    }
+                    placeholder="https://app.example.com"
+                    className={cn(
+                      "w-full px-4 py-2.5 rounded-xl text-sm",
+                      "bg-muted/30 border border-border/30",
+                      "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
+                      "placeholder:text-muted-foreground/40 disabled:opacity-60"
+                    )}
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium mb-1.5">后端资源地址</label>
+                  <input
+                    type="url"
+                    disabled={!isAdmin}
+                    value={configs.resource_base_url}
+                    onChange={(e) =>
+                      setConfigs((prev) => ({ ...prev, resource_base_url: e.target.value }))
+                    }
+                    placeholder="https://api.example.com"
+                    className={cn(
+                      "w-full px-4 py-2.5 rounded-xl text-sm",
+                      "bg-muted/30 border border-border/30",
+                      "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
+                      "placeholder:text-muted-foreground/40 disabled:opacity-60"
+                    )}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="mt-4">
+                <input
+                  type="url"
+                  aria-label="公网访问地址"
+                  disabled={!isAdmin}
+                  value={configs.site_base_url}
+                  onChange={(e) =>
+                    setConfigs((prev) => ({
+                      ...prev,
+                      site_base_url: e.target.value,
+                      resource_base_url: e.target.value,
+                    }))
+                  }
+                  placeholder="https://fusion.example.com"
+                  className={cn(
+                    "w-full px-4 py-2.5 rounded-xl text-sm",
+                    "bg-muted/30 border border-border/30",
+                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
+                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
+                  )}
+                />
+              </div>
+            )}
+
+            {isLocalOrPrivateUrl(configs.resource_base_url) ? (
+              <p className="mt-3 text-xs text-amber-600">
+                当前是本地或内网地址，云端 AI 无法直接读取本地资源；需要 URL 传图时请使用对象存储或公网隧道。
               </p>
-            </div>
-          </div>
+            ) : null}
           </motion.div>
 
           <motion.div
@@ -400,7 +545,7 @@ export default function GeneralSettingsPage() {
           >
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold">公开注册</h3>
+                <h3 className={settingsTypography.sectionTitle}>公开注册</h3>
                 <p className="text-xs text-muted-foreground leading-relaxed max-w-[520px]">
                   仅在系统完成管理员初始化后生效。开启后，访客可以通过用户名和密码注册账号。
                 </p>
@@ -451,7 +596,7 @@ export default function GeneralSettingsPage() {
           >
             <div className="flex items-center gap-2 mb-4">
               <Mail className="h-4 w-4 text-primary" />
-              <h3 className="text-sm font-semibold">邮箱 SMTP 配置</h3>
+              <h3 className={settingsTypography.sectionTitle}>邮箱 SMTP 配置</h3>
             </div>
 
             <p className="text-xs text-muted-foreground mb-4 leading-relaxed">
@@ -595,7 +740,7 @@ export default function GeneralSettingsPage() {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <Download className="h-4 w-4 text-primary" />
-                <h3 className="text-sm font-semibold">版本更新</h3>
+                <h3 className={settingsTypography.sectionTitle}>版本更新</h3>
                 <span
                   className={cn(
                     "inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium border",
@@ -635,6 +780,11 @@ export default function GeneralSettingsPage() {
               <p className="mt-2 text-xs text-muted-foreground">
                 最近检查：{formatDateTime(versionInfo?.checkedAt)}
               </p>
+              {runtimeVersionError ? (
+                <p className="mt-2 text-xs leading-relaxed text-rose-600" role="alert">
+                  {runtimeVersionError}
+                </p>
+              ) : null}
               {runtimeVersionInfo?.buildProfile ? (
                 <p className="mt-1 text-xs text-muted-foreground">
                   运行环境：{runtimeVersionInfo.buildProfile}
@@ -676,16 +826,24 @@ export default function GeneralSettingsPage() {
           <div
             className={cn(
               "mt-4 rounded-xl border p-4",
-              hasUpdate
+              versionFailed
+                ? "border-rose-500/20 bg-rose-500/5"
+                : hasUpdate
                 ? "border-amber-500/20 bg-amber-500/5"
                 : "border-emerald-500/20 bg-emerald-500/5"
             )}
           >
             <p className="text-sm font-medium">{versionStatus.summary}</p>
 
-            {versionInfo?.message ? (
-              <p className="mt-2 text-xs text-muted-foreground leading-relaxed">
-                {versionInfo.message}
+            {versionError || versionInfo?.message ? (
+              <p
+                className={cn(
+                  "mt-2 text-xs leading-relaxed",
+                  versionError ? "text-rose-600" : "text-muted-foreground",
+                )}
+                role={versionError ? "alert" : undefined}
+              >
+                {versionError || versionInfo?.message}
               </p>
             ) : null}
 

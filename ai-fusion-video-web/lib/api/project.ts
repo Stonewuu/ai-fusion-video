@@ -1,4 +1,6 @@
 import { http } from "./client";
+import type { Script } from "./script";
+import type { Storyboard, StoryboardStatistics } from "./storyboard";
 
 // ========== 类型定义 ==========
 
@@ -26,6 +28,14 @@ export interface ProjectCreateReq {
   properties?: string;
 }
 
+export interface ProjectWorkspaceOverview {
+  script: Script | null;
+  scriptEpisodeCount: number;
+  scriptSceneCount: number;
+  storyboard: Storyboard | null;
+  storyboardStatistics: StoryboardStatistics;
+}
+
 // ========== API ==========
 
 export const projectApi = {
@@ -34,6 +44,14 @@ export const projectApi = {
 
   /** 获取项目详情 */
   get: (id: number) => http.get<never, Project>(`/api/project/${id}`),
+
+  /** 获取项目固定剧本与分镜工作区概览 */
+  getWorkspaceOverview: (id: number) =>
+    http.get<never, ProjectWorkspaceOverview>(`/api/project/${id}/workspace-overview`),
+
+  /** 幂等补齐旧项目缺失的剧本与分镜容器，不修改已有数据 */
+  initializeWorkspace: (id: number) =>
+    http.post<never, ProjectWorkspaceOverview>(`/api/project/${id}/workspace/initialize`),
 
   /** 创建项目 */
   create: (data: ProjectCreateReq) => http.post<never, Project>("/api/project", data),

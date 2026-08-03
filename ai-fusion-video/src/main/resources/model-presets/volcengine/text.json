@@ -1,0 +1,38 @@
+[
+  {
+    "code": "doubao-seed-2-1-pro-260628",
+    "name": "Doubao Seed 2.1 Pro",
+    "platform": "volcengine",
+    "modelProtocol": "volcengine",
+    "modelType": 1,
+    "description": "火山方舟 2026 年旗舰级 Agent 通用模型，支持多模态理解、深度思考和工具调用。",
+    "capabilities": ["文本对话", "图片理解", "视频理解", "深度思考", "工具调用"],
+    "supportReasoning": true,
+    "reasoningEffortLevels": [],
+    "contextWindow": 262144,
+    "multimodalInputTypes": ["image", "video"],
+    "multimodalInputTransports": {
+      "image": ["url", "base64"],
+      "video": ["url", "base64"]
+    },
+    "config": {}
+  },
+  {
+    "code": "doubao-seed-2-1-turbo-260628",
+    "name": "Doubao Seed 2.1 Turbo",
+    "platform": "volcengine",
+    "modelProtocol": "volcengine",
+    "modelType": 1,
+    "description": "火山方舟 2026 年高吞吐通用模型，支持多模态理解、深度思考和工具调用。",
+    "capabilities": ["文本对话", "图片理解", "视频理解", "深度思考", "工具调用"],
+    "supportReasoning": true,
+    "reasoningEffortLevels": [],
+    "contextWindow": 262144,
+    "multimodalInputTypes": ["image", "video"],
+    "multimodalInputTransports": {
+      "image": ["url", "base64"],
+      "video": ["url", "base64"]
+    },
+    "config": {}
+  }
+]

@@ -1,31 +1,33 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, type ComponentType } from "react";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { projectApi, type Project } from "@/lib/api/project";
 import { assetApi, type Asset, type AssetPageResp } from "@/lib/api/asset";
+import { aiModelApi, type AiModel } from "@/lib/api/ai-model";
+import { storageConfigApi, type StorageConfig } from "@/lib/api/storage";
+import { http, resolveMediaUrl } from "@/lib/api/client";
 import {
   FolderKanban,
   Images,
-  Sparkles,
-  Clock,
   Film,
   Loader2,
   ArrowRight,
   Plus,
   Package,
-  Zap,
-  TrendingUp,
   Users,
   MapPin,
   Wrench,
   ChevronRight,
+  Cpu,
+  Globe,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { resolveMediaUrl } from "@/lib/api/client";
-import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
+import { toastApiError } from "@/lib/api/toast-api-error";
+import { AssistantBrandIcon } from "@/components/dashboard/assistant/assistant-brand-icon";
+import { requestAssistantOpen } from "@/components/dashboard/assistant/open-assistant";
 import { SafeImage } from "@/components/ui/safe-image";
 
 // ============================================================
@@ -58,6 +60,10 @@ const ASSET_TYPE_CONFIG: Record<string, { label: string; icon: typeof Users; col
   scene: { label: "场景", icon: MapPin, color: "text-green-400", bg: "bg-green-500/10" },
   prop: { label: "道具", icon: Wrench, color: "text-amber-400", bg: "bg-amber-500/10" },
 };
+
+function DashboardAssistantIcon({ className }: { className?: string }) {
+  return <AssistantBrandIcon className={className} loading="eager" />;
+}
 
 // ============================================================
 // 工具
@@ -96,18 +102,28 @@ export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [assetData, setAssetData] = useState<AssetPageResp | null>(null);
+  const [models, setModels] = useState<AiModel[]>([]);
+  const [resourceBaseUrl, setResourceBaseUrl] = useState<string | null>(null);
+  const [storageConfigs, setStorageConfigs] = useState<StorageConfig[]>([]);
 
   useEffect(() => {
     (async () => {
       try {
-        const [list, assets] = await Promise.all([
+        const [list, assets, aiModels, resUrl, storages] = await Promise.all([
           projectApi.list(),
           assetApi.listAll({ page: 1, size: 10 }),
+          aiModelApi.list().catch(() => []),
+          http.get<never, string | null>("/api/system/config/resource_base_url").catch(() => null),
+          storageConfigApi.list().catch(() => []),
         ]);
         setProjects(list);
         setAssetData(assets);
+        setModels(aiModels);
+        setResourceBaseUrl(resUrl);
+        setStorageConfigs(storages);
       } catch (err) {
         console.error("加载仪表盘数据失败:", err);
+        toastApiError(err, "加载仪表盘数据失败");
       } finally {
         setLoading(false);
       }
@@ -129,23 +145,33 @@ export default function DashboardPage() {
 
   const recentAssets = assetData?.records ?? [];
 
-  // 近 7 天活跃
-  const activityDots = useMemo(() => {
-    const now = new Date();
-    const result: { label: string; count: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const label = date.toLocaleDateString("zh-CN", { weekday: "short" }).replace("周", "");
-      const count = projects.filter(
-        (p) => new Date(p.updateTime).toDateString() === date.toDateString()
-      ).length;
-      result.push({ label, count });
-    }
-    return result;
-  }, [projects]);
+  // 模型配置状态 (modelType: 1-文本/对话, 2-图像生成, 3-视频生成)
+  const hasTextModel = useMemo(
+    () => models.some((m) => (m.status === 1 || m.status === undefined) && m.modelType === 1),
+    [models]
+  );
+  const hasImageModel = useMemo(
+    () => models.some((m) => (m.status === 1 || m.status === undefined) && m.modelType === 2),
+    [models]
+  );
+  const hasVideoModel = useMemo(
+    () => models.some((m) => (m.status === 1 || m.status === undefined) && m.modelType === 3),
+    [models]
+  );
+  const configuredModelCount = useMemo(
+    () => (hasTextModel ? 1 : 0) + (hasImageModel ? 1 : 0) + (hasVideoModel ? 1 : 0),
+    [hasTextModel, hasImageModel, hasVideoModel]
+  );
 
-  const maxActivity = Math.max(...activityDots.map((d) => d.count), 1);
+  // 外部访问就绪状态 (配置了公网 S3 或配置了公网访问地址 resourceBaseUrl)
+  const hasPublicS3 = useMemo(
+    () => storageConfigs.some((c) => c.isDefault && (c.status === 1 || c.status === undefined) && c.type === "s3"),
+    [storageConfigs]
+  );
+  const hasResourceUrl = useMemo(() => Boolean(resourceBaseUrl?.trim()), [resourceBaseUrl]);
+  const isExternalReady = useMemo(() => hasPublicS3 || hasResourceUrl, [hasPublicS3, hasResourceUrl]);
+
+
 
   if (loading) {
     return (
@@ -157,7 +183,7 @@ export default function DashboardPage() {
 
   return (
     <motion.div
-      className="max-w-[1200px] pb-12"
+      className="max-w-[1200px]"
       variants={containerVariants}
       initial="hidden"
       animate="visible"
@@ -176,7 +202,7 @@ export default function DashboardPage() {
       </motion.div>
 
       {/* ========== 统计 ========== */}
-      <motion.div variants={itemVariants} className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-8">
         {/* 项目 */}
         <StatCard
           label="项目"
@@ -195,59 +221,101 @@ export default function DashboardPage() {
           iconBg="bg-orange-500/10"
           onClick={() => router.push("/assets")}
         />
-        {/* 最近更新 */}
-        <StatCard
-          label="最近更新"
-          value={recentProjects.length > 0 ? formatTime(recentProjects[0].updateTime) : "—"}
-          icon={Clock}
-          iconColor="text-purple-400"
-          iconBg="bg-purple-500/10"
-          small
-        />
-        {/* 活跃度 */}
+        {/* 模型配置状态 */}
         <div
+          onClick={() => router.push("/settings/ai-models")}
           className={cn(
             "rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4",
-            "hover:border-border/50 transition-colors"
+            "hover:border-border/50 transition-colors cursor-pointer flex flex-col justify-between"
           )}
         >
-          <div className="flex items-center justify-between mb-2.5">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <div className="h-7 w-7 rounded-lg bg-green-500/10 flex items-center justify-center">
-                <TrendingUp className="h-3.5 w-3.5 text-green-400" />
+              <div className="h-7 w-7 rounded-lg bg-purple-500/10 flex items-center justify-center">
+                <Cpu className="h-3.5 w-3.5 text-purple-400" />
               </div>
-              <span className="text-xs text-muted-foreground">近 7 天</span>
+              <span className="text-xs text-muted-foreground">模型配置状态</span>
+            </div>
+            <span
+              className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded-full font-medium border",
+                configuredModelCount === 3
+                  ? "bg-green-500/10 text-green-400 border-green-500/20"
+                  : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+              )}
+            >
+              {configuredModelCount}/3 已配置
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5 mt-2.5">
+            <div className="flex flex-col items-center py-1 px-1 rounded-md bg-background/40 border border-border/15">
+              <span className="text-[10px] text-muted-foreground/70 mb-0.5">文本</span>
+              <span className={cn("text-[11px] font-medium", hasTextModel ? "text-green-400" : "text-muted-foreground/40")}>
+                {hasTextModel ? "已配置" : "未配置"}
+              </span>
+            </div>
+            <div className="flex flex-col items-center py-1 px-1 rounded-md bg-background/40 border border-border/15">
+              <span className="text-[10px] text-muted-foreground/70 mb-0.5">图片</span>
+              <span className={cn("text-[11px] font-medium", hasImageModel ? "text-green-400" : "text-muted-foreground/40")}>
+                {hasImageModel ? "已配置" : "未配置"}
+              </span>
+            </div>
+            <div className="flex flex-col items-center py-1 px-1 rounded-md bg-background/40 border border-border/15">
+              <span className="text-[10px] text-muted-foreground/70 mb-0.5">视频</span>
+              <span className={cn("text-[11px] font-medium", hasVideoModel ? "text-green-400" : "text-muted-foreground/40")}>
+                {hasVideoModel ? "已配置" : "未配置"}
+              </span>
             </div>
           </div>
-          <div className="flex items-end gap-[3px] h-7">
-            {activityDots.map((dot, i) => (
-              <div key={i} className="flex-1 flex flex-col items-center">
-                <div
-                  className={cn(
-                    "w-full rounded-[2px]",
-                    dot.count > 0 ? "bg-green-400/50" : "bg-border/20"
-                  )}
-                  style={{
-                    height: dot.count > 0
-                      ? `${Math.max(20, (dot.count / maxActivity) * 100)}%`
-                      : "3px",
-                  }}
-                />
+        </div>
+        {/* 外部访问就绪状态 */}
+        <div
+          onClick={() => router.push("/settings/storage")}
+          className={cn(
+            "rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-4",
+            "hover:border-border/50 transition-colors cursor-pointer flex flex-col justify-between"
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-7 w-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                <Globe className="h-3.5 w-3.5 text-emerald-400" />
               </div>
-            ))}
+              <span className="text-xs text-muted-foreground">外部访问就绪</span>
+            </div>
+            <span
+              className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded-full font-medium border",
+                isExternalReady
+                  ? "bg-green-500/10 text-green-400 border-green-500/20"
+                  : "bg-amber-500/10 text-amber-400 border-amber-500/20"
+              )}
+            >
+              {isExternalReady ? "已就绪" : "未就绪"}
+            </span>
           </div>
-          <div className="flex items-center gap-[3px] mt-1">
-            {activityDots.map((dot, i) => (
-              <span key={i} className="flex-1 text-center text-[8px] text-muted-foreground/30 leading-none">
-                {dot.label}
-              </span>
-            ))}
+          <div className="mt-2.5">
+            <p className={cn("text-base font-bold tracking-tight", isExternalReady ? "text-foreground" : "text-amber-400/90")}>
+              {isExternalReady ? "服务就绪" : "未就绪"}
+            </p>
+            <p className="text-[11px] text-muted-foreground/70 mt-0.5 truncate">
+              {hasPublicS3 && hasResourceUrl
+                ? "已配置公网 S3 & 访问域名"
+                : hasPublicS3
+                ? "已配置公网 S3 存储"
+                : hasResourceUrl
+                ? "已配置公网访问地址"
+                : "需配置公网 S3 或访问地址"}
+            </p>
           </div>
         </div>
       </motion.div>
 
       {/* ========== 快捷操作 ========== */}
-      <motion.div variants={itemVariants} className="grid grid-cols-3 gap-3 mb-8">
+      <motion.div
+        variants={itemVariants}
+        className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"
+      >
         <QuickAction
           icon={FolderKanban}
           label="新建项目"
@@ -265,12 +333,19 @@ export default function DashboardPage() {
           onClick={() => router.push("/assets")}
         />
         <QuickAction
-          icon={Sparkles}
-          label="AI 助手"
+          icon={DashboardAssistantIcon}
+          label="融光助手"
           desc="智能辅助创作"
-          color="text-purple-400"
           bg="bg-purple-500/10"
-          onClick={() => router.push("/projects")}
+          onClick={requestAssistantOpen}
+        />
+        <QuickAction
+          icon={Wrench}
+          label="工具"
+          desc="使用 AI 创作工具"
+          color="text-cyan-400"
+          bg="bg-cyan-500/10"
+          onClick={() => router.push("/generate/image")}
         />
       </motion.div>
 
@@ -403,10 +478,10 @@ function QuickAction({
   bg,
   onClick,
 }: {
-  icon: typeof Film;
+  icon: ComponentType<{ className?: string }>;
   label: string;
   desc: string;
-  color: string;
+  color?: string;
   bg: string;
   onClick: () => void;
 }) {
@@ -493,10 +568,8 @@ function AssetCard({ asset, onClick }: { asset: Asset; onClick: () => void }) {
           alt={asset.name}
           className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
         />
-        {coverSrc && (
-          /* 底部渐变遮罩 */
-          <div className="absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-black/70 to-transparent pointer-events-none" />
-        )}
+        {/* 主题自适应遮罩，确保封面与占位图上的名称始终清晰 */}
+        <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-linear-to-t from-background/95 via-background/70 to-transparent" />
 
         {/* 类型标签 */}
         <div className={cn(
@@ -509,7 +582,7 @@ function AssetCard({ asset, onClick }: { asset: Asset; onClick: () => void }) {
 
         {/* 名称 */}
         <div className="absolute bottom-0 inset-x-0 px-2.5 pb-2">
-          <p className="text-[11px] font-medium text-white truncate">{asset.name}</p>
+          <p className="truncate text-[11px] font-semibold text-foreground">{asset.name}</p>
         </div>
       </div>
     </div>

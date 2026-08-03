@@ -2,6 +2,7 @@ package com.stonewu.fusion.security;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.common.CommonResult;
+import com.stonewu.fusion.config.CorsProperties;
 import jakarta.servlet.DispatcherType;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +35,7 @@ public class SecurityConfig {
 
     private final TokenAuthenticationFilter tokenAuthenticationFilter;
     private final ObjectMapper objectMapper;
+    private final CorsProperties corsProperties;
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
@@ -90,7 +92,14 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(List.of("*"));
+        List<String> allowedOriginPatterns = corsProperties.getAllowedOriginPatterns().stream()
+                .map(String::trim)
+                .filter(origin -> !origin.isEmpty())
+                .toList();
+        if (allowedOriginPatterns.contains("*")) {
+            throw new IllegalStateException("CORS 不允许在启用凭证时使用通配来源 *，请配置明确域名");
+        }
+        configuration.setAllowedOriginPatterns(allowedOriginPatterns);
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));
         configuration.setAllowedHeaders(List.of("*"));
         configuration.setAllowCredentials(true);

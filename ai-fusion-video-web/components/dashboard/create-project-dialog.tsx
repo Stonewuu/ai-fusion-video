@@ -13,7 +13,9 @@ import {
   Monitor,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { getApiErrorMessage, readApiResponseError } from "@/lib/api/api-error";
 import { projectApi, type ProjectCreateReq } from "@/lib/api/project";
 import { artStyleApi } from "@/lib/api/art-style";
 import type { ArtStylePreset } from "@/lib/api/art-style";
@@ -73,7 +75,10 @@ export function CreateProjectDialog({
         setPresets(data);
         if (data.length > 0) setArtStyle(data[0].key);
       })
-      .catch(console.error)
+      .catch((error) => {
+        console.error("加载画风预设失败:", error);
+        toast.error(getApiErrorMessage(error));
+      })
       .finally(() => setPresetsLoading(false));
 
     // 加载存储配置 + 系统配置，判断上传 & 外网能力
@@ -89,11 +94,19 @@ export function CreateProjectDialog({
           .then((list) => {
             const map: Record<string, string> = {};
             list.forEach((c) => { map[c.configKey] = c.configValue || ""; });
-            setHasExternalAccess(hasPublicStorage || !!map.site_base_url);
+            setHasExternalAccess(
+              hasPublicStorage || !!map.resource_base_url,
+            );
           })
-          .catch(console.error);
+          .catch((error) => {
+            console.error("加载系统配置失败:", error);
+            toast.error(getApiErrorMessage(error));
+          });
       })
-      .catch(console.error);
+      .catch((error) => {
+        console.error("加载存储配置失败:", error);
+        toast.error(getApiErrorMessage(error));
+      });
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 关闭时重置表单
@@ -147,6 +160,7 @@ export function CreateProjectDialog({
         const imgUrl = resolveMediaUrl(preset.referenceImagePath);
         if (!imgUrl) return;
         const resp = await fetch(imgUrl);
+        if (!resp.ok) throw new Error(await readApiResponseError(resp));
         const blob = await resp.blob();
         const file = new File([blob], `${preset.key}.png`, {
           type: blob.type || "image/png",
@@ -159,6 +173,7 @@ export function CreateProjectDialog({
         setPresets(updatedPresets);
       } catch (err) {
         console.error("上传预设参考图失败:", err);
+        toast.error(getApiErrorMessage(err));
       } finally {
         setUploadingPreset(null);
       }
@@ -179,7 +194,7 @@ export function CreateProjectDialog({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            className="modal-overlay fixed inset-0 z-50"
             onClick={handleClose}
           />
           {/* 弹窗 */}
@@ -192,8 +207,7 @@ export function CreateProjectDialog({
           >
             <div
               className={cn(
-                "rounded-2xl border border-border/40",
-                "bg-card shadow-2xl shadow-black/20",
+                "modal-surface rounded-2xl border border-border/40",
                 "flex flex-col overflow-hidden max-h-[90vh]"
               )}
             >

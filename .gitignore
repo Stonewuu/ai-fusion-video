@@ -10,6 +10,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+/.pnpm-store/
+
+# Local Docker Compose configuration (copy from .env.example)
+/.env
 
 # IDE and editor artifacts
 .idea/
@@ -33,3 +37,7 @@ Desktop.ini
 # Subproject-level .vscode rules remain in their own .gitignore files.
 ai-fusion-video/data/
 .codegraph/
+.worktrees/
+.superpowers/
+.gemini/
+

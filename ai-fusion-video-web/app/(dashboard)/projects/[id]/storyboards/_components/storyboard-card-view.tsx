@@ -1,8 +1,9 @@
 "use client";
 
 import React, { memo, useState, useMemo } from "react";
-import { Film, Plus, Clock, Camera, Image as ImageIcon, GripHorizontal, Video, Play } from "lucide-react";
+import { Film, Plus, Clock, Camera, Image as ImageIcon, GripHorizontal, Video, Play, Trash2 } from "lucide-react";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
@@ -42,6 +43,7 @@ const CardItemUI = memo(
       idx: number;
       isSelected: boolean;
       onSelect?: () => void;
+      onDelete?: (itemId: number) => void;
       onVideoGen?: (itemId: number) => void;
       onOpenFrameDialog?: (item: StoryboardItem, frameType: StoryboardFrameType) => void;
       onPreviewVideo?: (videoUrl: string) => void;
@@ -58,6 +60,7 @@ const CardItemUI = memo(
         idx,
         isSelected,
         onSelect,
+        onDelete,
         onVideoGen,
         onOpenFrameDialog,
         onPreviewVideo,
@@ -167,13 +170,30 @@ const CardItemUI = memo(
               #{item.shotNumber || idx + 1}
             </div>
 
-            {/* 时长标签 -> 右上角 */}
-            {item.duration && (
-              <div className="absolute top-2 right-2 flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/50 backdrop-blur-sm text-white/95 text-[10px] z-10">
-                <Clock className="h-2.5 w-2.5 opacity-80" />
-                <span className="font-medium">{item.duration}s</span>
-              </div>
-            )}
+            {/* 时长与删除操作 -> 右上角 */}
+            <div className="absolute top-2 right-2 z-20 flex items-center gap-2">
+              {item.duration && (
+                <div className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-black/50 backdrop-blur-sm text-white/95 text-[10px]">
+                  <Clock className="h-2.5 w-2.5 opacity-80" />
+                  <span className="font-medium">{item.duration}s</span>
+                </div>
+              )}
+              {onDelete && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="icon-sm"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onDelete(item.id);
+                  }}
+                  aria-label={`删除镜头 ${item.shotNumber || idx + 1}`}
+                  title="删除镜头"
+                >
+                  <Trash2 />
+                </Button>
+              )}
+            </div>
 
             {/* 图片/视频切换 tab - 底部居中 */}
             {hasBoth && (
@@ -320,6 +340,7 @@ function SortableCardItem({
   idx,
   isSelected,
   onSelect,
+  onDelete,
   onVideoGen,
   onOpenFrameDialog,
   onPreviewVideo,
@@ -328,6 +349,7 @@ function SortableCardItem({
   idx: number;
   isSelected: boolean;
   onSelect: () => void;
+  onDelete?: (itemId: number) => void;
   onVideoGen?: (itemId: number) => void;
   onOpenFrameDialog?: (item: StoryboardItem, frameType: StoryboardFrameType) => void;
   onPreviewVideo?: (videoUrl: string) => void;
@@ -354,6 +376,7 @@ function SortableCardItem({
       idx={idx}
       isSelected={isSelected}
       onSelect={onSelect}
+      onDelete={onDelete}
       onVideoGen={onVideoGen}
       onOpenFrameDialog={onOpenFrameDialog}
       onPreviewVideo={onPreviewVideo}
@@ -369,6 +392,7 @@ export function StoryboardCardView({
   selectedItemId,
   onSelectItem,
   onAddItem,
+  onDeleteItem,
   onReorderItems,
   onVideoGen,
   onOpenFrameDialog,
@@ -377,6 +401,7 @@ export function StoryboardCardView({
   selectedItemId: number | null;
   onSelectItem: (id: number) => void;
   onAddItem: () => void;
+  onDeleteItem: (id: number) => void;
   onReorderItems?: (reordered: StoryboardItem[]) => void;
   onVideoGen?: (itemId: number) => void;
   onOpenFrameDialog?: (item: StoryboardItem, frameType: StoryboardFrameType) => void;
@@ -460,6 +485,7 @@ export function StoryboardCardView({
                 idx={idx}
                 isSelected={selectedItemId === item.id}
                 onSelect={() => onSelectItem(item.id)}
+                onDelete={onDeleteItem}
                 onVideoGen={onVideoGen}
                 onOpenFrameDialog={onOpenFrameDialog}
                 onPreviewVideo={setPreviewVideoUrl}

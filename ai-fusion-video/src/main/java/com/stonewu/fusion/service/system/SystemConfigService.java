@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.system;
 
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.system.SystemConfig;
 import com.stonewu.fusion.mapper.system.SystemConfigMapper;
 import lombok.RequiredArgsConstructor;
@@ -10,6 +11,8 @@ import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.List;
 
 /**
@@ -19,6 +22,9 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class SystemConfigService {
+
+    public static final String SITE_BASE_URL_KEY = "site_base_url";
+    public static final String RESOURCE_BASE_URL_KEY = "resource_base_url";
 
     private final SystemConfigMapper systemConfigMapper;
     private final PresetArtStyleResourceResolver presetArtStyleResourceResolver;
@@ -40,17 +46,18 @@ public class SystemConfigService {
      */
     @CacheEvict(value = "systemConfig", key = "#key")
     public void setValue(String key, String value) {
+        String normalizedValue = normalizeConfigValue(key, value);
         SystemConfig existing = systemConfigMapper.selectOne(
                 new LambdaQueryWrapper<SystemConfig>()
                         .eq(SystemConfig::getConfigKey, key)
                         .last("LIMIT 1"));
         if (existing != null) {
-            existing.setConfigValue(value);
+            existing.setConfigValue(normalizedValue);
             systemConfigMapper.updateById(existing);
         } else {
             SystemConfig config = SystemConfig.builder()
                     .configKey(key)
-                    .configValue(value)
+                    .configValue(normalizedValue)
                     .build();
             systemConfigMapper.insert(config);
         }
@@ -69,12 +76,14 @@ public class SystemConfigService {
      * 获取站点访问域名
      */
     public String getSiteBaseUrl() {
-        String url = getValue("site_base_url");
-        // 去掉末尾斜杠
-        if (StrUtil.isNotBlank(url) && url.endsWith("/")) {
-            return url.substring(0, url.length() - 1);
-        }
-        return url;
+        return normalizeBaseUrl(getValue(SITE_BASE_URL_KEY));
+    }
+
+    /**
+     * 获取供外部服务访问后端资源的公网地址。
+     */
+    public String getPublicResourceBaseUrl() {
+        return normalizeBaseUrl(getValue(RESOURCE_BASE_URL_KEY));
     }
 
     /**
@@ -106,9 +115,9 @@ public class SystemConfigService {
      * 将相对路径解析为完整的公网可访问 URL
      * <p>
      * 1. 已是完整 URL (http/https) → 直接返回
-    * 2. 预设画风图 (/art-styles/** 或 /api/art-styles/**) 统一映射到后端静态资源端点 /api/art-styles/**
-    * 3. 其他相对路径在有 site_base_url 时直接拼接
-    * 4. 没有 site_base_url 时，预设画风图返回相对 API 路径，兼容本地直连后端
+     * 2. 预设画风图 (/art-styles/** 或 /api/art-styles/**) 统一映射到后端静态资源端点 /api/art-styles/**
+     * 3. 其他相对路径在有 resource_base_url 时直接拼接
+     * 4. 没有资源公网地址时，相对路径无法解析为公网 URL，返回 null
      */
     public String resolvePublicUrl(String relativePath) {
         if (StrUtil.isBlank(relativePath)) {
@@ -122,29 +131,55 @@ public class SystemConfigService {
         if (presetArtStyleResourceResolver.isPresetArtStylePath(normalizedPath)) {
             String apiPath = presetArtStyleResourceResolver.toApiPath(normalizedPath);
             if (StrUtil.isBlank(apiPath)) {
-                return normalizedPath;
+                return null;
             }
-            String siteBaseUrl = getSiteBaseUrl();
-            if (StrUtil.isBlank(siteBaseUrl)) {
-                return apiPath;
+            String resourceBaseUrl = getPublicResourceBaseUrl();
+            if (StrUtil.isBlank(resourceBaseUrl)) {
+                return null;
             }
-            return buildApiUrl(siteBaseUrl, apiPath);
+            return resourceBaseUrl + apiPath;
         }
-        // 拼接站点域名
-        String siteBaseUrl = getSiteBaseUrl();
-        if (StrUtil.isNotBlank(siteBaseUrl)) {
-            return siteBaseUrl + normalizedPath;
+        // 拼接后端资源公网地址
+        String resourceBaseUrl = getPublicResourceBaseUrl();
+        if (StrUtil.isNotBlank(resourceBaseUrl)) {
+            return resourceBaseUrl + normalizedPath;
         }
         return null;
     }
 
-    private String buildApiUrl(String siteBaseUrl, String apiPath) {
-        if (StrUtil.isBlank(siteBaseUrl)) {
-            return apiPath;
+    private String normalizeConfigValue(String key, String value) {
+        if (!SITE_BASE_URL_KEY.equals(key) && !RESOURCE_BASE_URL_KEY.equals(key)) {
+            return value;
         }
-        if (siteBaseUrl.endsWith("/api") && apiPath.startsWith("/api/")) {
-            return siteBaseUrl + apiPath.substring("/api".length());
+        String normalized = normalizeBaseUrl(value);
+        if (StrUtil.isBlank(normalized)) {
+            return "";
         }
-        return siteBaseUrl + apiPath;
+        try {
+            URI uri = new URI(normalized);
+            boolean httpProtocol = "http".equalsIgnoreCase(uri.getScheme())
+                    || "https".equalsIgnoreCase(uri.getScheme());
+            if (!httpProtocol || StrUtil.isBlank(uri.getHost())) {
+                throw new BusinessException("公网地址必须是完整的 http:// 或 https:// URL");
+            }
+            if (uri.getUserInfo() != null || uri.getQuery() != null || uri.getFragment() != null) {
+                throw new BusinessException("公网地址不能包含认证信息、查询参数或锚点");
+            }
+            if (RESOURCE_BASE_URL_KEY.equals(key)
+                    && uri.getPath() != null
+                    && uri.getPath().replaceAll("/+$", "").endsWith("/api")) {
+                throw new BusinessException("后端资源公网地址应填写根地址，不能包含末尾 /api");
+            }
+            return normalized;
+        } catch (URISyntaxException e) {
+            throw new BusinessException("公网地址格式不正确: " + value);
+        }
+    }
+
+    private String normalizeBaseUrl(String value) {
+        if (StrUtil.isBlank(value)) {
+            return value;
+        }
+        return value.trim().replaceAll("/+$", "");
     }
 }

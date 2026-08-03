@@ -1,20 +1,25 @@
 package com.stonewu.fusion.service.storyboard;
 
+import cn.hutool.core.bean.BeanUtil;
+import cn.hutool.core.bean.copier.CopyOptions;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.UpdateWrapper;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.entity.storyboard.Storyboard;
 import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
 import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.mapper.script.ScriptEpisodeMapper;
+import com.stonewu.fusion.mapper.script.ScriptMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardEpisodeMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardItemMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardMapper;
 import com.stonewu.fusion.mapper.storyboard.StoryboardSceneMapper;
-import com.stonewu.fusion.security.SecurityUtils;
-import com.stonewu.fusion.service.team.TeamService;
+import com.stonewu.fusion.service.storyboard.dto.StoryboardItemAssetsPatch;
+import com.stonewu.fusion.service.storyboard.dto.StoryboardStatistics;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -31,12 +36,17 @@ import java.util.List;
 @RequiredArgsConstructor
 public class StoryboardService {
 
+    private static final String[] IGNORE_FIELDS = {
+            "id", "projectId", "scriptId", "title", "scope", "ownerType", "ownerId",
+            "createTime", "updateTime", "deleted"
+    };
+
     private final StoryboardMapper storyboardMapper;
     private final StoryboardEpisodeMapper episodeMapper;
     private final StoryboardSceneMapper sceneMapper;
     private final StoryboardItemMapper itemMapper;
+    private final ScriptMapper scriptMapper;
     private final ScriptEpisodeMapper scriptEpisodeMapper;
-    private final TeamService teamService;
 
     // ========== 分镜脚本 ==========
 
@@ -47,33 +57,57 @@ public class StoryboardService {
         return sb;
     }
 
-    @Cacheable(value = "storyboard", key = "'project:' + #projectId")
-    public List<Storyboard> listByProject(Long projectId) {
-        return storyboardMapper.selectList(new LambdaQueryWrapper<Storyboard>()
+    @Cacheable(value = "storyboard", key = "'project:' + #projectId", unless = "#result == null")
+    public Storyboard getByProjectId(Long projectId) {
+        Script script = scriptMapper.selectOne(new LambdaQueryWrapper<Script>()
+                .eq(Script::getProjectId, projectId)
+                .orderByDesc(Script::getCreateTime)
+                .orderByDesc(Script::getId)
+                .last("LIMIT 1"));
+        if (script == null) {
+            return null;
+        }
+        return storyboardMapper.selectOne(new LambdaQueryWrapper<Storyboard>()
                 .eq(Storyboard::getProjectId, projectId)
-                .orderByDesc(Storyboard::getCreateTime));
-    }
-
-    @CacheEvict(value = "storyboard", allEntries = true)
-    @Transactional
-    public Storyboard create(Storyboard storyboard) {
-        applyCurrentTeamOwnership(storyboard);
-        storyboardMapper.insert(storyboard);
-        return storyboard;
+                .eq(Storyboard::getScriptId, script.getId())
+                .orderByDesc(Storyboard::getCreateTime)
+                .orderByDesc(Storyboard::getId)
+                .last("LIMIT 1"));
     }
 
     @CacheEvict(value = "storyboard", allEntries = true)
     @Transactional
     public Storyboard update(Storyboard storyboard) {
-        getById(storyboard.getId());
-        storyboardMapper.updateById(storyboard);
+        Storyboard existing = getById(storyboard.getId());
+        BeanUtil.copyProperties(storyboard, existing,
+                CopyOptions.create().ignoreNullValue().setIgnoreProperties(IGNORE_FIELDS));
+        storyboardMapper.updateById(existing);
         return storyboardMapper.selectById(storyboard.getId());
     }
 
-    @CacheEvict(value = "storyboard", allEntries = true)
+    @CacheEvict(
+            value = { "storyboardEpisode", "storyboardScene", "storyboardItem", "storyboardStatistics" },
+            allEntries = true)
     @Transactional
-    public void delete(Long id) {
-        storyboardMapper.deleteById(id);
+    public void clearContent(Long storyboardId) {
+        getById(storyboardId);
+        itemMapper.delete(new LambdaQueryWrapper<StoryboardItem>()
+                .eq(StoryboardItem::getStoryboardId, storyboardId));
+        sceneMapper.delete(new LambdaQueryWrapper<StoryboardScene>()
+                .eq(StoryboardScene::getStoryboardId, storyboardId));
+        episodeMapper.delete(new LambdaQueryWrapper<StoryboardEpisode>()
+                .eq(StoryboardEpisode::getStoryboardId, storyboardId));
+    }
+
+    @Cacheable(value = "storyboardStatistics", key = "#storyboardId")
+    public StoryboardStatistics getStatistics(Long storyboardId) {
+        long episodeCount = episodeMapper.selectCount(new LambdaQueryWrapper<StoryboardEpisode>()
+                .eq(StoryboardEpisode::getStoryboardId, storyboardId));
+        long sceneCount = sceneMapper.selectCount(new LambdaQueryWrapper<StoryboardScene>()
+                .eq(StoryboardScene::getStoryboardId, storyboardId));
+        long itemCount = itemMapper.selectCount(new LambdaQueryWrapper<StoryboardItem>()
+                .eq(StoryboardItem::getStoryboardId, storyboardId));
+        return new StoryboardStatistics(episodeCount, sceneCount, itemCount);
     }
 
     // ========== 分镜集 ==========
@@ -93,7 +127,7 @@ public class StoryboardService {
                 .orderByAsc(StoryboardEpisode::getEpisodeNumber));
     }
 
-    @CacheEvict(value = "storyboardEpisode", allEntries = true)
+    @CacheEvict(value = { "storyboardEpisode", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardEpisode createEpisode(StoryboardEpisode episode) {
         if (episode.getScriptEpisodeId() != null) {
@@ -106,7 +140,7 @@ public class StoryboardService {
         return episode;
     }
 
-    @CacheEvict(value = "storyboardEpisode", allEntries = true)
+    @CacheEvict(value = { "storyboardEpisode", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardEpisode updateEpisode(StoryboardEpisode episode) {
         StoryboardEpisode existing = getEpisodeById(episode.getId());
@@ -118,7 +152,9 @@ public class StoryboardService {
         return episodeMapper.selectById(episode.getId());
     }
 
-    @CacheEvict(value = "storyboardEpisode", allEntries = true)
+    @CacheEvict(
+            value = { "storyboardEpisode", "storyboardScene", "storyboardItem", "storyboardStatistics" },
+            allEntries = true)
     @Transactional
     public void deleteEpisode(Long id) {
         StoryboardEpisode episode = getEpisodeById(id);
@@ -180,7 +216,7 @@ public class StoryboardService {
      * @param synopsis         集梗概
      * @return 已存在或新创建的分镜集
      */
-    @CacheEvict(value = "storyboardEpisode", allEntries = true)
+    @CacheEvict(value = { "storyboardEpisode", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardEpisode saveEpisodeForScript(Long storyboardId,
                                                   Long scriptEpisodeId,
@@ -222,7 +258,7 @@ public class StoryboardService {
      *
      * @param episodeId 分镜集ID
      */
-    @CacheEvict(value = { "storyboardScene", "storyboardItem" }, allEntries = true)
+    @CacheEvict(value = { "storyboardScene", "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public void clearEpisodeContent(Long episodeId) {
         getEpisodeById(episodeId);
@@ -320,14 +356,44 @@ public class StoryboardService {
                 .orderByAsc(StoryboardScene::getSortOrder));
     }
 
-    @CacheEvict(value = "storyboardScene", allEntries = true)
+    @CacheEvict(value = { "storyboardScene", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardScene createScene(StoryboardScene scene) {
         sceneMapper.insert(scene);
         return scene;
     }
 
-    @CacheEvict(value = "storyboardScene", allEntries = true)
+    /**
+     * Atomically creates one storyboard scene and all of its shots.
+     */
+    @CacheEvict(
+            value = { "storyboardScene", "storyboardItem", "storyboardStatistics" },
+            allEntries = true)
+    @Transactional
+    public StoryboardScene createSceneWithItems(StoryboardScene scene, List<StoryboardItem> items) {
+        if (scene == null || scene.getStoryboardId() == null || scene.getEpisodeId() == null) {
+            throw new BusinessException("分镜场次必须关联分镜和分镜集");
+        }
+        getById(scene.getStoryboardId());
+        StoryboardEpisode episode = getEpisodeById(scene.getEpisodeId());
+        if (!scene.getStoryboardId().equals(episode.getStoryboardId())) {
+            throw new BusinessException("分镜集不属于指定分镜");
+        }
+
+        sceneMapper.insert(scene);
+        if (items != null) {
+            for (StoryboardItem item : items) {
+                item.setId(null);
+                item.setStoryboardId(scene.getStoryboardId());
+                item.setStoryboardEpisodeId(scene.getEpisodeId());
+                item.setStoryboardSceneId(scene.getId());
+                itemMapper.insert(item);
+            }
+        }
+        return scene;
+    }
+
+    @CacheEvict(value = { "storyboardScene", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardScene updateScene(StoryboardScene scene) {
         getSceneById(scene.getId());
@@ -335,9 +401,14 @@ public class StoryboardService {
         return sceneMapper.selectById(scene.getId());
     }
 
-    @CacheEvict(value = "storyboardScene", allEntries = true)
+    @CacheEvict(
+            value = { "storyboardScene", "storyboardItem", "storyboardStatistics" },
+            allEntries = true)
     @Transactional
     public void deleteScene(Long id) {
+        getSceneById(id);
+        itemMapper.delete(new LambdaQueryWrapper<StoryboardItem>()
+                .eq(StoryboardItem::getStoryboardSceneId, id));
         sceneMapper.deleteById(id);
     }
 
@@ -363,29 +434,53 @@ public class StoryboardService {
                 .orderByAsc(StoryboardItem::getSortOrder));
     }
 
-    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @CacheEvict(value = { "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardItem createItem(StoryboardItem item) {
         itemMapper.insert(item);
         return item;
     }
 
-    private void applyCurrentTeamOwnership(Storyboard storyboard) {
-        Long currentUserId = SecurityUtils.getCurrentUserId();
-        if (currentUserId == null) {
-            return;
-        }
-        TeamService.OwnerScope ownerScope = teamService.getRequiredCurrentOwnerScopeByUser(currentUserId);
-        storyboard.setOwnerType(ownerScope.getOwnerType());
-        storyboard.setOwnerId(ownerScope.getOwnerId());
-    }
-
-    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @CacheEvict(value = { "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public StoryboardItem updateItem(StoryboardItem item) {
         getItemById(item.getId());
         itemMapper.updateById(item);
         return itemMapper.selectById(item.getId());
+    }
+
+    /**
+     * 局部更新分镜条目的角色、场景和道具关联。
+     *
+     * <p>字段缺省时不修改；角色、道具空数组写入 JSON 空数组；场景显式 null 写入数据库 null。</p>
+     */
+    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @Transactional
+    public StoryboardItem updateItemAssets(Long itemId, StoryboardItemAssetsPatch patch) {
+        StoryboardItem existing = getItemById(itemId);
+        if (!patch.hasUpdates()) {
+            return existing;
+        }
+        if (patch.characterIdsPresent() && patch.characterIds() == null) {
+            throw new BusinessException("角色关联清空时请传空数组，不能传 null");
+        }
+        if (patch.propIdsPresent() && patch.propIds() == null) {
+            throw new BusinessException("道具关联清空时请传空数组，不能传 null");
+        }
+
+        UpdateWrapper<StoryboardItem> wrapper = new UpdateWrapper<StoryboardItem>()
+                .eq("id", itemId);
+        if (patch.characterIdsPresent()) {
+            wrapper.set("character_ids", JSONUtil.toJsonStr(patch.characterIds()));
+        }
+        if (patch.sceneAssetItemIdPresent()) {
+            wrapper.set("scene_asset_item_id", patch.sceneAssetItemId());
+        }
+        if (patch.propIdsPresent()) {
+            wrapper.set("prop_ids", JSONUtil.toJsonStr(patch.propIds()));
+        }
+        itemMapper.update(null, wrapper);
+        return itemMapper.selectById(itemId);
     }
 
     /**
@@ -431,13 +526,13 @@ public class StoryboardService {
         throw new BusinessException("帧类型仅支持 first 或 last");
     }
 
-    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @CacheEvict(value = { "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public void deleteItem(Long id) {
         itemMapper.deleteById(id);
     }
 
-    @CacheEvict(value = "storyboardItem", allEntries = true)
+    @CacheEvict(value = { "storyboardItem", "storyboardStatistics" }, allEntries = true)
     @Transactional
     public void batchCreateItems(List<StoryboardItem> items) {
         for (StoryboardItem item : items) {

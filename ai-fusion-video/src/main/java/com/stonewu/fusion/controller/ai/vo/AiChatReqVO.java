@@ -22,6 +22,9 @@ public class AiChatReqVO {
     /** AI 模型 ID */
     private Long modelId;
 
+    /** 本次请求使用的思考等级。 */
+    private String reasoningEffort;
+
     /** Agent 类型 */
     private String agentType;
 
@@ -49,6 +52,15 @@ public class AiChatReqVO {
     /** 前端指定的启用工具列表（与 Agent 白名单取交集） */
     private List<String> enabledTools;
 
+    /** 用户在输入区显式激活的 Skill 名称。 */
+    private List<String> enabledSkills;
+
+    /** 用户在输入区主动引用的 MCP 工具；仅筛选 MCP，不影响平台工具。 */
+    private List<String> enabledMcpTools;
+
+    /** 用户随本轮消息提交的图片、视频、音频或文件输入。 */
+    private List<AiMultimodalInputVO> multimodalInputs;
+
     /** 自动引用（当前页面上下文，包含 type + id） */
     private List<AiReferenceVO> autoReferences;
 
@@ -57,4 +69,7 @@ public class AiChatReqVO {
 
     /** 是否启用并行工具执行（Multi-Agent 模式） */
     private Boolean enableParallelTools;
+
+    /** Tool execution policy: DEFAULT / ALWAYS_ASK / ALWAYS_ALLOW / FULL_ACCESS. */
+    private String toolExecutionMode;
 }

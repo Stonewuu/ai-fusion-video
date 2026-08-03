@@ -25,11 +25,11 @@ export function VideoPreviewDialog({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm"
+      className="modal-overlay fixed inset-0 z-50 flex items-center justify-center p-4"
     >
       <div
         onClick={(event) => event.stopPropagation()}
-        className="relative w-full max-w-4xl overflow-hidden rounded-xl border border-border/30 bg-card shadow-xl"
+        className="modal-surface relative w-full max-w-4xl overflow-hidden rounded-2xl border border-border/40"
       >
         <div className="flex items-center justify-between border-b border-border/20 px-4 py-3">
           <h3 className="flex items-center gap-2 text-sm font-semibold">

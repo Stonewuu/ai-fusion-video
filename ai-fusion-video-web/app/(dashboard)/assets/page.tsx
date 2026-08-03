@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { assetApi, type Asset } from "@/lib/api/asset";
 import { projectApi, type Project } from "@/lib/api/project";
 import { resolveMediaUrl } from "@/lib/api/client";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
 import { SafeImage } from "@/components/ui/safe-image";
 import {
@@ -113,7 +114,10 @@ export default function AssetsPage() {
 
   // 加载项目列表
   useEffect(() => {
-    projectApi.list().then(setProjects).catch(() => setProjects([]));
+    projectApi.list().then(setProjects).catch((error) => {
+      toastApiError(error, "加载项目列表失败");
+      setProjects([]);
+    });
   }, []);
 
   // 加载第一页（筛选改变时重置）
@@ -134,7 +138,8 @@ export default function AssetsPage() {
       setTotal(resp.total);
       setTypeCounts(resp.typeCounts || {});
       setCurrentPage(1);
-    } catch {
+    } catch (error) {
+      toastApiError(error, "加载资产失败");
       setAssets([]);
       setTotal(0);
       setTypeCounts({});
@@ -164,8 +169,8 @@ export default function AssetsPage() {
       setAssets((prev) => [...prev, ...(resp.records || [])]);
       setTotal(resp.total);
       setCurrentPage(nextPage);
-    } catch {
-      // ignore
+    } catch (error) {
+      toastApiError(error, "加载更多资产失败");
     } finally {
       setLoadingMore(false);
     }
@@ -292,7 +297,8 @@ export default function AssetsPage() {
         <div
           className={cn(
             "flex-1 min-w-[200px] flex items-center gap-2.5 px-3.5 py-2 rounded-xl",
-            "border border-border/30 bg-card/50 backdrop-blur-sm"
+            "border border-border/30 bg-card/50 backdrop-blur-sm",
+            "transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 motion-reduce:transition-none"
           )}
         >
           <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />

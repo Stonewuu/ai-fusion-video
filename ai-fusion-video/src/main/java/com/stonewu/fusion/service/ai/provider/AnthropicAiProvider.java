@@ -1,11 +1,15 @@
 package com.stonewu.fusion.service.ai.provider;
 
 import cn.hutool.core.util.StrUtil;
+import com.anthropic.models.messages.MessageCreateParams;
+import com.anthropic.models.messages.OutputConfig;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
-import io.agentscope.core.model.AnthropicChatModel;
+import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
-import io.agentscope.core.model.Model;
+import io.agentscope.core.model.transport.ProxyConfig;
+import io.agentscope.extensions.model.anthropic.AnthropicChatModel;
+import io.agentscope.extensions.model.anthropic.formatter.AnthropicChatFormatter;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.model.ChatModel;
@@ -34,9 +38,9 @@ public class AnthropicAiProvider extends AbstractAiProvider {
 
         AnthropicApi.Builder apiBuilder = AnthropicApi.builder().apiKey(context.getApiKey());
         apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
-            context.getApiConfig(), 60 * 1000, 3 * 60 * 1000));
+            context.getApiConfig(), 60 * 1000, 25 * 60 * 1000));
         apiBuilder.webClientBuilder(AiProxySupport.webClientBuilder(
-            context.getApiConfig(), "anthropic-provider", Duration.ofSeconds(60)));
+            context.getApiConfig(), "anthropic-provider", Duration.ofMinutes(25)));
         String rootBaseUrl = resolveRootBaseUrl(context.getBaseUrl());
         if (StrUtil.isNotBlank(rootBaseUrl)) {
             apiBuilder.baseUrl(rootBaseUrl);
@@ -55,11 +59,24 @@ public class AnthropicAiProvider extends AbstractAiProvider {
     }
 
     @Override
-    public Model createAgentScopeModel(AiProviderContext context) {
+    public ChatModelBase createAgentScopeModel(AiProviderContext context) {
         requireApiKey(context.getApiKey(), "Anthropic");
         GenerateOptions defaultOptions = buildReasoningOptions(context);
         String rootBaseUrl = resolveRootBaseUrl(context.getBaseUrl());
-        return AnthropicAgentScopeProxySupport.create(context, defaultOptions, rootBaseUrl);
+        AnthropicChatModel.Builder builder = AnthropicChatModel.builder()
+                .apiKey(context.getApiKey())
+                .modelName(context.getModelName())
+                .stream(true)
+                .formatter(agentScopeFormatter())
+                .baseUrl(rootBaseUrl);
+        if (defaultOptions != null) {
+            builder.defaultOptions(defaultOptions);
+        }
+        ProxyConfig proxy = AiProxySupport.agentScopeProxyConfig(context.getApiConfig());
+        if (proxy != null) {
+            builder.proxy(proxy);
+        }
+        return builder.build();
     }
 
     @Override
@@ -94,7 +111,36 @@ public class AnthropicAiProvider extends AbstractAiProvider {
             hasOptions = true;
         }
 
+        String reasoningEffort = getConfigString(
+                context.getConfig(), "reasoningEffort", "reasoning_effort");
+        if (StrUtil.isNotBlank(reasoningEffort)) {
+            builder.reasoningEffort(reasoningEffort);
+            hasOptions = true;
+        }
+
         return hasOptions ? builder.build() : null;
+    }
+
+    static AnthropicChatFormatter agentScopeFormatter() {
+        return new ReasoningEffortAnthropicFormatter();
+    }
+
+    private static final class ReasoningEffortAnthropicFormatter extends AnthropicChatFormatter {
+
+        @Override
+        public void applyOptions(
+                MessageCreateParams.Builder paramsBuilder,
+                GenerateOptions options,
+                GenerateOptions defaultOptions) {
+            super.applyOptions(paramsBuilder, options, defaultOptions);
+            GenerateOptions merged = GenerateOptions.mergeOptions(options, defaultOptions);
+            if (merged == null || StrUtil.isBlank(merged.getReasoningEffort())) {
+                return;
+            }
+            paramsBuilder.outputConfig(OutputConfig.builder()
+                    .effort(OutputConfig.Effort.of(merged.getReasoningEffort().trim()))
+                    .build());
+        }
     }
 
     private String resolveRootBaseUrl(String baseUrl) {

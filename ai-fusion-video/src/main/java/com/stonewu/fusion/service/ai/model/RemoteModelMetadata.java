@@ -6,7 +6,6 @@ package com.stonewu.fusion.service.ai.model;
 public record RemoteModelMetadata(
         String providerPlatform,
         String displayName,
-        String modelFamily,
         String modelProtocol,
         Integer modelType,
         boolean inferred

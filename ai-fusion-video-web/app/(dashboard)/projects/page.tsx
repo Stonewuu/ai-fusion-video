@@ -1,5 +1,6 @@
 "use client";
 
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -14,8 +15,10 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { projectApi, type Project } from "@/lib/api/project";
 import { CreateProjectDialog } from "@/components/dashboard/create-project-dialog";
+import { MainContentFrame } from "@/components/dashboard/main-content-frame";
 
 // 动画
 const containerVariants = {
@@ -72,6 +75,7 @@ function formatTime(iso: string) {
 }
 
 export default function ProjectsPage() {
+  const { confirm } = useConfirm();
   const router = useRouter();
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
@@ -86,6 +90,7 @@ export default function ProjectsPage() {
       setProjects(data);
     } catch (err) {
       console.error("获取项目列表失败:", err);
+      toastApiError(err, "获取项目列表失败");
     } finally {
       setLoading(false);
     }
@@ -97,13 +102,14 @@ export default function ProjectsPage() {
 
   const handleDelete = async (e: React.MouseEvent, id: number) => {
     e.stopPropagation();
-    if (!confirm("确定要删除该项目吗？此操作不可撤销。")) return;
+    const ok = await confirm({ title: "删除项目", description: "确定要删除该项目吗？此操作不可撤销，相关的剧本、分镜与资产数据将被永久移除。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     setDeletingId(id);
     try {
       await projectApi.delete(id);
       await fetchProjects();
     } catch (err) {
       console.error("删除项目失败:", err);
+      toastApiError(err, "删除项目失败");
     } finally {
       setDeletingId(null);
     }
@@ -116,7 +122,7 @@ export default function ProjectsPage() {
   );
 
   return (
-    <>
+    <MainContentFrame>
       <motion.div
         className="max-w-[1200px]"
         variants={containerVariants}
@@ -154,7 +160,8 @@ export default function ProjectsPage() {
           <div
             className={cn(
               "flex items-center gap-3 px-4 py-3 rounded-xl",
-              "border border-border/30 bg-card/50 backdrop-blur-sm"
+              "border border-border/30 bg-card/50 backdrop-blur-sm",
+              "transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 motion-reduce:transition-none"
             )}
           >
             <Search className="h-4 w-4 text-muted-foreground" />
@@ -286,6 +293,6 @@ export default function ProjectsPage() {
         onClose={() => setShowCreate(false)}
         onCreated={fetchProjects}
       />
-    </>
+    </MainContentFrame>
   );
 }

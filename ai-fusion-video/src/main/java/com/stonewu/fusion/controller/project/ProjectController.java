@@ -1,6 +1,7 @@
 package com.stonewu.fusion.controller.project;
 
 import com.stonewu.fusion.common.CommonResult;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.common.PageParam;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.config.ArtStylePresets;
@@ -10,6 +11,7 @@ import com.stonewu.fusion.convert.project.ProjectConvert;
 import com.stonewu.fusion.entity.project.Project;
 import com.stonewu.fusion.entity.project.ProjectMember;
 import com.stonewu.fusion.service.project.ProjectService;
+import com.stonewu.fusion.service.project.dto.ProjectWorkspaceOverview;
 import com.stonewu.fusion.service.system.SystemConfigService;
 import com.stonewu.fusion.security.SecurityUtils;
 import io.swagger.v3.oas.annotations.Operation;
@@ -42,6 +44,22 @@ public class ProjectController {
     @GetMapping("/{id}")
     public CommonResult<Project> get(@PathVariable Long id) {
         return CommonResult.success(projectService.getById(id));
+    }
+
+    @Operation(summary = "获取项目剧本与分镜工作区概览")
+    @GetMapping("/{id}/workspace-overview")
+    public CommonResult<ProjectWorkspaceOverview> getWorkspaceOverview(@PathVariable Long id) {
+        return CommonResult.success(projectService.getWorkspaceOverview(id));
+    }
+
+    @Operation(summary = "补齐项目剧本与分镜工作区")
+    @PostMapping("/{id}/workspace/initialize")
+    public CommonResult<ProjectWorkspaceOverview> initializeWorkspace(@PathVariable Long id) {
+        Long userId = SecurityUtils.requireCurrentUserId();
+        if (!projectService.canAccessProject(id, userId)) {
+            throw new BusinessException("无权初始化该项目工作区");
+        }
+        return CommonResult.success(projectService.initializeWorkspace(id));
     }
 
     @Operation(summary = "按归属查询项目列表")

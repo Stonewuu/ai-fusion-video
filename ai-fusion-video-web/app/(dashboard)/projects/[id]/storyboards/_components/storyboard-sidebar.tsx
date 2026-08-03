@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useRef } from "react";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import {
   Film,
   ChevronRight,
@@ -12,8 +13,8 @@ import {
   GripVertical,
   PanelLeftClose,
   PanelLeftOpen,
-  AlertCircle,
   Sparkles,
+  RotateCw,
 } from "lucide-react";
 import {
   DndContext,
@@ -31,7 +32,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import {
   storyboardApi,
@@ -39,6 +40,10 @@ import {
   StoryboardScene,
 } from "@/lib/api/storyboard";
 import type { ScriptEpisode } from "@/lib/api/script";
+import {
+  ScriptEpisodeBinding,
+  ScriptEpisodeBindingReminder,
+} from "./script-episode-binding";
 
 // ========== 可拖拽场次项 ==========
 
@@ -131,6 +136,8 @@ interface StoryboardSidebarProps {
   onSelect: (selection: SidebarSelection) => void;
   /** 切换桌面端目录收起状态 */
   onCollapsedChange?: (collapsed: boolean) => void;
+  onRefresh?: () => Promise<void> | void;
+  isRefreshing?: boolean;
   /** 初始加载完成时调用，传递第一集 episodeId（避免通过 onSelect 触发 page 的重复加载） */
   onInitialLoad?: (firstEpisodeId: number) => void;
   onDeleteEpisode?: (id: number) => Promise<boolean | void> | boolean | void;
@@ -149,6 +156,8 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
     collapsed = false,
     onSelect,
     onCollapsedChange,
+    onRefresh,
+    isRefreshing,
     onDeleteEpisode,
     onDeleteScene,
     scriptEpisodes = [],
@@ -163,7 +172,14 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
     new Set()
   );
   const [loading, setLoading] = useState(true);
-  const [bindingEpisodeIds, setBindingEpisodeIds] = useState<Set<number>>(new Set());
+  const [bindingEpisodeIds, setBindingEpisodeIds] = useState<Set<number>>(
+    new Set()
+  );
+  const [openBindingEpisodeId, setOpenBindingEpisodeId] = useState<
+    number | null
+  >(null);
+  const isInitialLoadedRef = useRef(false);
+  const shouldReduceMotion = useReducedMotion();
 
   // 监听 invalidation 自动强刷
   const storyboardsInvalidation = usePipelineStore((s) => s.invalidation.storyboards);
@@ -187,7 +203,8 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       sorted.splice(newIndex, 0, moved);
       setScenesMap((prev) => ({ ...prev, [episodeId]: sorted }));
       
-      props.onReorderScenes(episodeId, sorted).catch(() => {
+      props.onReorderScenes(episodeId, sorted).catch((error) => {
+        toastApiError(error, "更新场次排序失败");
         setScenesMap((prev) => ({ ...prev, [episodeId]: prevScenes }));
       });
     }
@@ -200,7 +217,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       const eps = await storyboardApi.listEpisodes(storyboardId);
       setEpisodes(eps);
       if (eps.length > 0) {
-        setExpandedEpisodes(new Set(eps.map((e) => e.id)));
+        setExpandedEpisodes((prev) => (prev.size > 0 ? prev : new Set(eps.map((e) => e.id))));
         const newScenesMap: Record<number, StoryboardScene[]> = {};
         await Promise.all(
           eps.map(async (e) => {
@@ -209,6 +226,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
               newScenesMap[e.id] = scenes;
             } catch (err) {
               console.error(`加载分集 ${e.id} 的场次失败:`, err);
+              toastApiError(err, `加载分集 ${e.id} 的场次失败`);
             }
           })
         );
@@ -219,6 +237,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       }
     } catch (err) {
       console.error("加载分镜集失败:", err);
+      toastApiError(err, "加载分镜集失败");
     } finally {
       setLoading(false);
     }
@@ -244,6 +263,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       setScenesMap((prev) => ({ ...prev, [episodeId]: scenes }));
     } catch (err) {
       console.error("加载场次失败:", err);
+      toastApiError(err, "加载场次失败");
     }
   };
 
@@ -274,6 +294,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       onSelect({ type: "episode", episodeId: ep.id });
     } catch (err) {
       console.error("创建分镜集失败:", err);
+      toastApiError(err, "创建分镜集失败");
     }
   };
 
@@ -294,6 +315,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       onSelect({ type: "scene", episodeId, sceneId: scene.id });
     } catch (err) {
       console.error("创建场次失败:", err);
+      toastApiError(err, "创建场次失败");
     }
   };
 
@@ -310,7 +332,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
       );
     } catch (err) {
       console.error("绑定剧本集失败:", err);
-      alert(err instanceof Error ? err.message : "绑定剧本集失败，请重试");
+      toastApiError(err, "绑定剧本集失败，请重试");
     } finally {
       setBindingEpisodeIds((prev) => {
         const next = new Set(prev);
@@ -346,6 +368,18 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
           分镜目录
         </h3>
         <div className="flex items-center gap-1">
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={() => void onRefresh()}
+              disabled={isRefreshing}
+              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground/70 hover:text-primary hover:bg-primary/8 transition-colors disabled:opacity-50"
+              title="刷新分镜目录"
+              aria-label="刷新分镜目录"
+            >
+              <RotateCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
+            </button>
+          )}
           <span className="text-[10px] text-primary/50 bg-primary/6 px-1.5 py-0.5 rounded-full tabular-nums font-medium">
             {episodes.length} 集
           </span>
@@ -381,20 +415,26 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
                 (selection.type === "episode" || selection.type === "scene") &&
                 selection.episodeId === ep.id;
               const scenes = scenesMap[ep.id] || [];
-              const boundScriptEpisodeIds = new Set(
-                episodes
-                  .filter((item) => item.id !== ep.id && item.scriptEpisodeId != null)
-                  .map((item) => item.scriptEpisodeId)
+              const boundScriptEpisodeIds = new Set<number>(
+                episodes.flatMap((item) =>
+                  item.id !== ep.id && item.scriptEpisodeId != null
+                    ? [item.scriptEpisodeId]
+                    : []
+                )
               );
               const suggestedScriptEpisode = scriptEpisodes.find(
-                (item) => item.episodeNumber === ep.episodeNumber
+                (item) =>
+                  item.episodeNumber === ep.episodeNumber &&
+                  !boundScriptEpisodeIds.has(item.id)
               );
+              const bindingPanelId = `script-episode-binding-${ep.id}`;
+              const isBindingPanelOpen = openBindingEpisodeId === ep.id;
 
               return (
                 <div key={ep.id} className="group/ep mb-0.5">
                   {/* 集标题行 */}
                   <div className={cn(
-                    "flex items-center rounded-lg transition-colors overflow-hidden",
+                    "flex items-center rounded-lg transition-colors",
                     isEpisodeSelected ? "bg-primary/8" : "hover:bg-primary/5"
                   )}>
                     <button
@@ -472,37 +512,57 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
                     >
                       <Plus className="h-3 w-3" />
                     </button>
+                    {ep.scriptEpisodeId == null && onBindScriptEpisode && (
+                      <ScriptEpisodeBindingReminder
+                        isOpen={isBindingPanelOpen}
+                        isBinding={bindingEpisodeIds.has(ep.id)}
+                        panelId={bindingPanelId}
+                        onToggle={() =>
+                          setOpenBindingEpisodeId((current) =>
+                            current === ep.id ? null : ep.id
+                          )
+                        }
+                      />
+                    )}
                   </div>
 
-                  {ep.scriptEpisodeId == null && onBindScriptEpisode && (
-                    <div className="ml-8 mr-1 mb-1 rounded-md border border-amber-500/20 bg-amber-500/8 px-2 py-2">
-                      <div className="flex items-start gap-1.5 text-[10px] text-amber-300">
-                        <AlertCircle className="h-3 w-3 mt-0.5 shrink-0" />
-                        <span>旧分镜集未绑定剧本集</span>
-                      </div>
-                      <select
-                        value=""
-                        disabled={bindingEpisodeIds.has(ep.id)}
-                        onChange={(event) => handleBindScriptEpisode(ep.id, event.target.value)}
-                        className="mt-1.5 w-full rounded-md border border-border/40 bg-background px-2 py-1 text-[11px] text-foreground outline-none focus:border-primary/50"
-                      >
-                        <option value="">
-                          {suggestedScriptEpisode
-                            ? `建议绑定第 ${suggestedScriptEpisode.episodeNumber} 集`
-                            : "选择剧本集绑定"}
-                        </option>
-                        {scriptEpisodes.map((scriptEpisode) => (
-                          <option
-                            key={scriptEpisode.id}
-                            value={scriptEpisode.id}
-                            disabled={boundScriptEpisodeIds.has(scriptEpisode.id)}
-                          >
-                            第 {scriptEpisode.episodeNumber} 集 {scriptEpisode.title || ""}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
+                  <AnimatePresence initial={false}>
+                    {ep.scriptEpisodeId == null &&
+                      onBindScriptEpisode &&
+                      isBindingPanelOpen && (
+                        <motion.div
+                          id={bindingPanelId}
+                          initial={shouldReduceMotion ? false : { height: 0, opacity: 0 }}
+                          animate={{
+                            height: "auto",
+                            opacity: 1,
+                            transition: {
+                              duration: shouldReduceMotion ? 0 : 0.2,
+                              ease: "easeOut",
+                            },
+                          }}
+                          exit={{
+                            height: 0,
+                            opacity: 0,
+                            transition: {
+                              duration: shouldReduceMotion ? 0 : 0.15,
+                              ease: "easeIn",
+                            },
+                          }}
+                          className="overflow-hidden"
+                        >
+                          <ScriptEpisodeBinding
+                            episodes={scriptEpisodes}
+                            boundEpisodeIds={boundScriptEpisodeIds}
+                            suggestedEpisodeId={suggestedScriptEpisode?.id}
+                            isBinding={bindingEpisodeIds.has(ep.id)}
+                            onBind={(scriptEpisodeId) =>
+                              handleBindScriptEpisode(ep.id, String(scriptEpisodeId))
+                            }
+                          />
+                        </motion.div>
+                      )}
+                  </AnimatePresence>
 
                   {/* 展开的场次列表 */}
                   {isExpanded && (

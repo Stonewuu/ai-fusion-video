@@ -11,7 +11,7 @@ import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.service.ai.ModelPresetService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
@@ -24,38 +24,56 @@ import java.util.Locale;
  * 目标：在真正发起平台请求前，就能根据当前模型能力给出稳定、可解释的错误，避免静默忽略或将错误延后到平台侧。
  */
 @Service
-@RequiredArgsConstructor
 public class GenerationModelCapabilityService {
 
     private final AiModelMetadataResolver aiModelMetadataResolver;
     private final ModelPresetService modelPresetService;
+    private final ReferenceImageTransportService referenceImageTransportService;
+
+    @Autowired
+    public GenerationModelCapabilityService(AiModelMetadataResolver aiModelMetadataResolver,
+                                            ModelPresetService modelPresetService,
+                                            ReferenceImageTransportService referenceImageTransportService) {
+        this.aiModelMetadataResolver = aiModelMetadataResolver;
+        this.modelPresetService = modelPresetService;
+        this.referenceImageTransportService = referenceImageTransportService;
+    }
+
+    /** Compatibility constructor for focused unit tests. */
+    public GenerationModelCapabilityService(AiModelMetadataResolver aiModelMetadataResolver,
+                                            ModelPresetService modelPresetService) {
+        this(aiModelMetadataResolver, modelPresetService, null);
+    }
 
     public ImageModelCapability resolveImageCapability(AiModel model) {
         return resolveImageCapability(model, aiModelMetadataResolver.resolvePlatform(model));
     }
 
     public ImageModelCapability resolveImageCapability(AiModel model, String platform) {
-        AiModelMetadata metadata = aiModelMetadataResolver.resolve(model, platform);
-        ImageModelCapability inferred = inferImageCapability(model, metadata);
         JSONObject config = getMergedModelConfig(model);
 
         Boolean supportsReferenceImages = getBoolean(config,
                 "supportReferenceImages", "supportsReferenceImages", "supportRefImages", "supportImageReferences");
         Integer minReferenceImages = getInteger(config, "minReferenceImages", "minRefImages");
         Integer maxReferenceImages = getInteger(config, "maxReferenceImages", "maxRefImages");
+        List<String> referenceImageInputFormats = normalizeReferenceImageInputFormats(config);
+        boolean supportsReferenceImageUrlInput = containsInputFormat(referenceImageInputFormats, "url");
+        boolean supportsReferenceImageBase64Input = Boolean.TRUE.equals(getBoolean(config, "supportDataUriInput"))
+                || containsInputFormat(referenceImageInputFormats, "data_uri", "base64");
 
         boolean finalSupportsReferenceImages = supportsReferenceImages != null
-                ? supportsReferenceImages : inferred.supportsReferenceImages();
+                ? supportsReferenceImages : false;
         int finalMinReferenceImages = minReferenceImages != null
-                ? Math.max(minReferenceImages, 0) : inferred.minReferenceImages();
-        Integer finalMaxReferenceImages = mergeNullableMax(maxReferenceImages, inferred.maxReferenceImages());
+                ? Math.max(minReferenceImages, 0) : 0;
+        Integer finalMaxReferenceImages = maxReferenceImages != null ? Math.max(maxReferenceImages, 0) : null;
 
         if (!finalSupportsReferenceImages) {
             finalMinReferenceImages = 0;
             finalMaxReferenceImages = 0;
         }
 
-        return new ImageModelCapability(finalSupportsReferenceImages, finalMinReferenceImages, finalMaxReferenceImages);
+        return new ImageModelCapability(finalSupportsReferenceImages, finalMinReferenceImages, finalMaxReferenceImages,
+                referenceImageInputFormats, supportsReferenceImageUrlInput, supportsReferenceImageBase64Input);
     }
 
     public VideoModelCapability resolveVideoCapability(AiModel model) {
@@ -63,8 +81,6 @@ public class GenerationModelCapabilityService {
     }
 
     public VideoModelCapability resolveVideoCapability(AiModel model, String platform) {
-        AiModelMetadata metadata = aiModelMetadataResolver.resolve(model, platform);
-        VideoModelCapability inferred = inferVideoCapability(model, metadata);
         JSONObject config = getMergedModelConfig(model);
 
         Boolean supportsFirstFrame = getBoolean(config,
@@ -77,6 +93,10 @@ public class GenerationModelCapabilityService {
                 "supportReferenceVideos", "supportsReferenceVideos", "supportRefVideos", "supportVideoReferences");
         Boolean supportsReferenceAudios = getBoolean(config,
                 "supportReferenceAudios", "supportsReferenceAudios", "supportRefAudios", "supportAudioReferences");
+        List<String> referenceImageInputFormats = normalizeReferenceImageInputFormats(config);
+        boolean supportsReferenceImageUrlInput = containsInputFormat(referenceImageInputFormats, "url");
+        boolean supportsReferenceImageBase64Input = Boolean.TRUE.equals(getBoolean(config, "supportDataUriInput"))
+                || containsInputFormat(referenceImageInputFormats, "data_uri", "base64");
 
         Integer minImageInputs = getInteger(config, "minImageInputs", "minImages");
         Integer maxImageInputs = getInteger(config, "maxImageInputs", "maxImages");
@@ -85,21 +105,21 @@ public class GenerationModelCapabilityService {
         Integer maxReferenceAudios = getInteger(config, "maxReferenceAudios", "maxRefAudios");
 
         boolean finalSupportsFirstFrame = supportsFirstFrame != null
-                ? supportsFirstFrame : inferred.supportsFirstFrame();
+                ? supportsFirstFrame : false;
         boolean finalSupportsLastFrame = supportsLastFrame != null
-                ? supportsLastFrame : inferred.supportsLastFrame();
+                ? supportsLastFrame : false;
         boolean finalSupportsReferenceImages = supportsReferenceImages != null
-                ? supportsReferenceImages : inferred.supportsReferenceImages();
+                ? supportsReferenceImages : false;
         boolean finalSupportsReferenceVideos = supportsReferenceVideos != null
-                ? supportsReferenceVideos : inferred.supportsReferenceVideos();
+                ? supportsReferenceVideos : false;
         boolean finalSupportsReferenceAudios = supportsReferenceAudios != null
-                ? supportsReferenceAudios : inferred.supportsReferenceAudios();
+                ? supportsReferenceAudios : false;
 
-        int finalMinImageInputs = minImageInputs != null ? Math.max(minImageInputs, 0) : inferred.minImageInputs();
-        Integer finalMaxImageInputs = mergeNullableMax(maxImageInputs, inferred.maxImageInputs());
-        Integer finalMaxReferenceImages = mergeNullableMax(maxReferenceImages, inferred.maxReferenceImages());
-        Integer finalMaxReferenceVideos = mergeNullableMax(maxReferenceVideos, inferred.maxReferenceVideos());
-        Integer finalMaxReferenceAudios = mergeNullableMax(maxReferenceAudios, inferred.maxReferenceAudios());
+        int finalMinImageInputs = minImageInputs != null ? Math.max(minImageInputs, 0) : 0;
+        Integer finalMaxImageInputs = maxImageInputs != null ? Math.max(maxImageInputs, 0) : null;
+        Integer finalMaxReferenceImages = maxReferenceImages != null ? Math.max(maxReferenceImages, 0) : null;
+        Integer finalMaxReferenceVideos = maxReferenceVideos != null ? Math.max(maxReferenceVideos, 0) : null;
+        Integer finalMaxReferenceAudios = maxReferenceAudios != null ? Math.max(maxReferenceAudios, 0) : null;
 
         if (!finalSupportsReferenceImages) {
             finalMaxReferenceImages = 0;
@@ -117,6 +137,9 @@ public class GenerationModelCapabilityService {
                 finalSupportsReferenceImages,
                 finalSupportsReferenceVideos,
                 finalSupportsReferenceAudios,
+                referenceImageInputFormats,
+                supportsReferenceImageUrlInput,
+                supportsReferenceImageBase64Input,
                 finalMinImageInputs,
                 finalMaxImageInputs,
                 finalMaxReferenceImages,
@@ -134,7 +157,7 @@ public class GenerationModelCapabilityService {
             return;
         }
         ImageModelCapability capability = resolveImageCapability(model, platform);
-        List<String> referenceImages = parseJsonUrls(task.getRefImageUrls());
+        List<String> referenceImages = parseJsonUrls(task.getRefImageUrls(), "refImageUrls");
 
         if (!referenceImages.isEmpty() && !capability.supportsReferenceImages()) {
             throw new BusinessException("当前图片模型 " + modelLabel(model)
@@ -151,6 +174,10 @@ public class GenerationModelCapabilityService {
             throw new BusinessException("当前图片模型 " + modelLabel(model)
                     + " 至少需要 " + capability.minReferenceImages() + " 张参考图，当前仅传入了 " + referenceImages.size() + " 张。");
         }
+
+        if (referenceImageTransportService != null) {
+            referenceImageTransportService.validateInputs(model, getMergedModelConfig(model), referenceImages);
+        }
     }
 
     public void validateVideoTask(AiModel model, VideoTask task) {
@@ -161,13 +188,32 @@ public class GenerationModelCapabilityService {
         if (model == null || task == null) {
             return;
         }
+        JSONObject config = getMergedModelConfig(model);
         VideoModelCapability capability = resolveVideoCapability(model, platform);
-        List<String> referenceImages = parseJsonUrls(task.getReferenceImageUrls());
-        List<String> referenceVideos = parseJsonUrls(task.getReferenceVideoUrls());
-        List<String> referenceAudios = parseJsonUrls(task.getReferenceAudioUrls());
+        List<String> referenceImages = parseJsonUrls(task.getReferenceImageUrls(), "referenceImageUrls");
+        List<String> referenceVideos = parseJsonUrls(task.getReferenceVideoUrls(), "referenceVideoUrls");
+        List<String> referenceAudios = parseJsonUrls(task.getReferenceAudioUrls(), "referenceAudioUrls");
         boolean hasFirstFrame = StrUtil.isNotBlank(task.getFirstFrameImageUrl());
         boolean hasLastFrame = StrUtil.isNotBlank(task.getLastFrameImageUrl());
         int totalImageInputs = referenceImages.size() + (hasFirstFrame ? 1 : 0) + (hasLastFrame ? 1 : 0);
+
+        boolean exclusiveInputModes = Boolean.TRUE.equals(getBoolean(config,
+                "exclusiveInputModes", "mutuallyExclusiveInputModes"));
+        boolean hasFrameInputs = hasFirstFrame || hasLastFrame;
+        boolean hasReferenceMedia = !referenceImages.isEmpty()
+                || !referenceVideos.isEmpty() || !referenceAudios.isEmpty();
+        if (exclusiveInputModes && hasFrameInputs && hasReferenceMedia) {
+            throw new BusinessException("当前视频模型 " + modelLabel(model)
+                    + " 的首帧/首尾帧模式与多模态参考模式互斥，请只选择一种输入方式。");
+        }
+
+        boolean audioRequiresVisualInput = Boolean.TRUE.equals(getBoolean(config,
+                "referenceAudioRequiresVisualInput", "audioRequiresVisualInput"));
+        if (audioRequiresVisualInput && !referenceAudios.isEmpty()
+                && !hasFrameInputs && referenceImages.isEmpty() && referenceVideos.isEmpty()) {
+            throw new BusinessException("当前视频模型 " + modelLabel(model)
+                    + " 不支持仅输入参考音频，请同时传入参考图片或参考视频。");
+        }
 
         if (hasFirstFrame && !capability.supportsFirstFrame()) {
             throw new BusinessException("当前视频模型 " + modelLabel(model)
@@ -210,6 +256,14 @@ public class GenerationModelCapabilityService {
             throw new BusinessException("当前视频模型 " + modelLabel(model)
                     + " 最多支持 " + capability.maxReferenceAudios() + " 个 referenceAudioUrls，当前传入了 " + referenceAudios.size() + " 个。");
         }
+
+        if (referenceImageTransportService != null && totalImageInputs > 0) {
+            List<String> imageInputs = new ArrayList<>();
+            if (hasFirstFrame) imageInputs.add(task.getFirstFrameImageUrl());
+            if (hasLastFrame) imageInputs.add(task.getLastFrameImageUrl());
+            imageInputs.addAll(referenceImages);
+            referenceImageTransportService.validateInputs(model, config, imageInputs);
+        }
     }
 
     public String describeImageCapability(AiModel model) {
@@ -222,7 +276,8 @@ public class GenerationModelCapabilityService {
         }
         String limitText = capability.maxReferenceImages() != null && capability.maxReferenceImages() > 0
                 ? "，最多 " + capability.maxReferenceImages() + " 张" : "";
-        return "当前默认图片模型：" + modelLabel(model) + "；支持参考图" + limitText + "。";
+        return "当前默认图片模型：" + modelLabel(model) + "；支持参考图" + limitText
+                + "；传递模式：" + referenceImageTransportText(capability.referenceImageInputFormats()) + "。";
     }
 
     public JSONObject buildImageCapabilitySnapshot(AiModel model) {
@@ -243,12 +298,15 @@ public class GenerationModelCapabilityService {
                 .set("modelId", model.getId())
                 .set("modelName", modelLabel(model))
                 .set("modelCode", model.getCode())
-                .set("modelFamily", metadata.modelFamily())
+                .set("capabilityPresetCode", model.getCapabilityPresetCode())
                 .set("modelProtocol", metadata.modelProtocol())
                 .set("platform", platform)
                 .set("supportsReferenceImages", capability.supportsReferenceImages())
                 .set("minReferenceImages", capability.minReferenceImages())
                 .set("maxReferenceImages", capability.maxReferenceImages())
+                .set("referenceImageInputFormats", capability.referenceImageInputFormats())
+                .set("supportsReferenceImageUrlInput", capability.supportsReferenceImageUrlInput())
+                .set("supportsReferenceImageBase64Input", capability.supportsReferenceImageBase64Input())
                 .set("asyncMode", Boolean.TRUE.equals(getBoolean(config,
                     "asyncMode", "useAsyncMode", "asyncTaskMode", "enableAsyncTask", "asyncEnabled")))
                 .set("supportedAspectRatios", getStringList(config, "supportedAspectRatios"))
@@ -269,6 +327,10 @@ public class GenerationModelCapabilityService {
         parts.add("首帧图：" + yesNo(capability.supportsFirstFrame()));
         parts.add("尾帧图：" + yesNo(capability.supportsLastFrame()));
         parts.add("参考图：" + referenceSupportText(capability.supportsReferenceImages(), capability.maxReferenceImages(), "张"));
+        if (capability.supportsFirstFrame() || capability.supportsLastFrame()
+                || capability.supportsReferenceImages()) {
+            parts.add("图片传递模式：" + referenceImageTransportText(capability.referenceImageInputFormats()));
+        }
         parts.add("参考视频：" + referenceSupportText(capability.supportsReferenceVideos(), capability.maxReferenceVideos(), "个"));
         parts.add("参考音频：" + referenceSupportText(capability.supportsReferenceAudios(), capability.maxReferenceAudios(), "个"));
         if (capability.minImageInputs() > 0) {
@@ -295,7 +357,7 @@ public class GenerationModelCapabilityService {
                 .set("modelId", model.getId())
                 .set("modelName", modelLabel(model))
                 .set("modelCode", model.getCode())
-                .set("modelFamily", metadata.modelFamily())
+                .set("capabilityPresetCode", model.getCapabilityPresetCode())
                 .set("modelProtocol", metadata.modelProtocol())
                 .set("platform", platform)
                 .set("supportsFirstFrame", capability.supportsFirstFrame())
@@ -303,6 +365,9 @@ public class GenerationModelCapabilityService {
                 .set("supportsReferenceImages", capability.supportsReferenceImages())
                 .set("supportsReferenceVideos", capability.supportsReferenceVideos())
                 .set("supportsReferenceAudios", capability.supportsReferenceAudios())
+                .set("referenceImageInputFormats", capability.referenceImageInputFormats())
+                .set("supportsReferenceImageUrlInput", capability.supportsReferenceImageUrlInput())
+                .set("supportsReferenceImageBase64Input", capability.supportsReferenceImageBase64Input())
                 .set("minImageInputs", capability.minImageInputs())
                 .set("maxImageInputs", capability.maxImageInputs())
                 .set("maxReferenceImages", capability.maxReferenceImages())
@@ -319,8 +384,8 @@ public class GenerationModelCapabilityService {
 
     public JSONObject getMergedModelConfig(AiModel model) {
         JSONObject merged = new JSONObject();
-        if (model != null && modelPresetService != null && StrUtil.isNotBlank(model.getCode())) {
-            mergeConfig(merged, parseConfig(modelPresetService.getPresetConfig(model.getCode())));
+        if (model != null && modelPresetService != null && StrUtil.isNotBlank(model.getCapabilityPresetCode())) {
+            mergeConfig(merged, parseConfig(modelPresetService.getPresetConfig(model.getCapabilityPresetCode())));
         }
         if (model != null) {
             mergeConfig(merged, parseConfig(model.getConfig()));
@@ -330,114 +395,6 @@ public class GenerationModelCapabilityService {
 
     public String resolveModelPlatform(AiModel model) {
         return aiModelMetadataResolver.resolvePlatform(model);
-    }
-
-    private ImageModelCapability inferImageCapability(AiModel model, AiModelMetadata metadata) {
-        String normalizedPlatform = metadata.normalizedPlatform();
-        String code = model != null && StrUtil.isNotBlank(model.getCode())
-                ? model.getCode().toLowerCase(Locale.ROOT) : "";
-        return switch (normalizedPlatform) {
-            case "googleflowreverseapi" -> new ImageModelCapability(true, 0, null);
-            case "dashscope" -> {
-                if (code.startsWith("wan2.7-image") || code.startsWith("wan2.6-image")) {
-                    yield new ImageModelCapability(true, 0, 10);
-                }
-                if (code.startsWith("qwen-image-2.0")) {
-                    yield new ImageModelCapability(true, 0, 2);
-                }
-                yield new ImageModelCapability(false, 0, 0);
-            }
-            case "openai_compatible", "newapi", "vertex_ai", "vertexai" -> new ImageModelCapability(false, 0, 0);
-            default -> new ImageModelCapability(false, 0, 0);
-        };
-    }
-
-    private VideoModelCapability inferVideoCapability(AiModel model, AiModelMetadata metadata) {
-        String normalizedPlatform = metadata.normalizedPlatform();
-        String code = model != null && StrUtil.isNotBlank(model.getCode())
-                ? model.getCode().toLowerCase(Locale.ROOT) : "";
-
-        if ("googleflowreverseapi".equals(normalizedPlatform)) {
-            if (code.contains("r2v")) {
-                return new VideoModelCapability(false, false, true, false, false,
-                        0, 3, 3, 0, 0);
-            }
-            if (code.contains("interpolation")) {
-                return new VideoModelCapability(true, true, false, false, false,
-                        2, 2, 0, 0, 0);
-            }
-            if (code.contains("i2v")) {
-                boolean lite = code.contains("lite");
-                return new VideoModelCapability(true, !lite, false, false, false,
-                        1, lite ? 1 : 2, 0, 0, 0);
-            }
-            return new VideoModelCapability(false, false, false, false, false,
-                    0, 0, 0, 0, 0);
-        }
-
-        if ("volcengine".equals(normalizedPlatform)) {
-            if (code.contains("seedance-2-0")) {
-                return new VideoModelCapability(true, true, true, true, true,
-                        0, null, 9, 3, 3);
-            }
-            if (code.contains("1-0-lite-t2v")) {
-                return new VideoModelCapability(false, false, false, false, false,
-                        0, 0, 0, 0, 0);
-            }
-            if (code.contains("1-0-lite-i2v")) {
-                return new VideoModelCapability(true, true, true, false, false,
-                        0, null, 9, 0, 0);
-            }
-            if (code.contains("1-0-pro-fast")) {
-                return new VideoModelCapability(true, false, false, false, false,
-                        0, 1, 0, 0, 0);
-            }
-            if (code.contains("1-5-pro") || code.contains("1-0-pro")) {
-                return new VideoModelCapability(true, true, false, false, false,
-                        0, 2, 0, 0, 0);
-            }
-        }
-
-        if ("dashscope".equals(normalizedPlatform)) {
-            if (code.contains("wan2.7-r2v")) {
-                return new VideoModelCapability(false, false, true, true, true,
-                        0, 10, 10, 3, 3);
-            }
-            if (code.contains("wan2.7-videoedit")) {
-                return new VideoModelCapability(false, false, true, true, false,
-                        0, 3, 3, 1, 0);
-            }
-            if (code.contains("wan2.7-i2v")) {
-                return new VideoModelCapability(true, true, false, true, true,
-                        1, 2, 0, 1, 1);
-            }
-            if (code.contains("kf2v")) {
-                return new VideoModelCapability(true, true, false, false, false,
-                        2, 2, 0, 0, 0);
-            }
-            if (code.contains("i2v")) {
-                return new VideoModelCapability(true, false, false, false, true,
-                        1, 1, 0, 0, 1);
-            }
-            if (code.contains("t2v")) {
-                return new VideoModelCapability(false, false, false, false, true,
-                        0, 0, 0, 0, 1);
-            }
-        }
-
-        if ("newapi".equals(normalizedPlatform)) {
-            return new VideoModelCapability(true, false, true, false, false,
-                    0, 1, 1, 0, 0);
-        }
-
-        if ("openai_compatible".equals(normalizedPlatform)
-            && ("agnes".equals(metadata.effectiveProtocol()) || "agnes".equals(metadata.effectiveFamily()))) {
-            return new VideoModelCapability(true, true, true, false, false,
-                0, null, null, 0, 0);
-        }
-
-        return new VideoModelCapability(false, false, false, false, false,
-                0, 0, 0, 0, 0);
     }
 
     private JSONObject parseConfig(String configJson) {
@@ -553,14 +510,7 @@ public class GenerationModelCapabilityService {
         return null;
     }
 
-    private Integer mergeNullableMax(Integer explicitValue, Integer inferredValue) {
-        if (explicitValue != null) {
-            return Math.max(explicitValue, 0);
-        }
-        return inferredValue;
-    }
-
-    private List<String> parseJsonUrls(String json) {
+    private List<String> parseJsonUrls(String json, String fieldName) {
         if (StrUtil.isBlank(json)) {
             return List.of();
         }
@@ -571,8 +521,37 @@ public class GenerationModelCapabilityService {
                     .map(String::trim)
                     .toList();
         } catch (Exception ignored) {
-            return List.of();
+            throw new BusinessException(fieldName + " 必须是合法的 URL JSON 数组");
         }
+    }
+
+    private boolean containsInputFormat(List<String> inputFormats, String... expectedFormats) {
+        for (String inputFormat : inputFormats) {
+            for (String expectedFormat : expectedFormats) {
+                if (expectedFormat.equalsIgnoreCase(StrUtil.trim(inputFormat))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private List<String> normalizeReferenceImageInputFormats(JSONObject config) {
+        List<String> normalized = new ArrayList<>();
+        for (String format : getStringList(config, "referenceImageInputFormats")) {
+            String value = StrUtil.blankToDefault(format, "").trim().toLowerCase(Locale.ROOT);
+            if ("base64".equals(value) || "data-uri".equals(value)) {
+                value = "data_uri";
+            }
+            if (("url".equals(value) || "data_uri".equals(value)) && !normalized.contains(value)) {
+                normalized.add(value);
+            }
+        }
+        if (Boolean.TRUE.equals(getBoolean(config, "supportDataUriInput"))
+                && !normalized.contains("data_uri")) {
+            normalized.add("data_uri");
+        }
+        return List.copyOf(normalized);
     }
 
     private String yesNo(boolean value) {
@@ -589,9 +568,23 @@ public class GenerationModelCapabilityService {
         return "支持";
     }
 
+    private String referenceImageTransportText(List<String> formats) {
+        if (formats == null || formats.isEmpty()) return "未配置";
+        List<String> labels = formats.stream()
+                .map(format -> "url".equalsIgnoreCase(format) ? "URL"
+                        : "data_uri".equalsIgnoreCase(format) || "base64".equalsIgnoreCase(format)
+                        ? "base64/Data URI" : format)
+                .distinct()
+                .toList();
+        return String.join("、", labels);
+    }
+
     public record ImageModelCapability(boolean supportsReferenceImages,
                                        int minReferenceImages,
-                                       Integer maxReferenceImages) {
+                                       Integer maxReferenceImages,
+                                       List<String> referenceImageInputFormats,
+                                       boolean supportsReferenceImageUrlInput,
+                                       boolean supportsReferenceImageBase64Input) {
     }
 
     public record VideoModelCapability(boolean supportsFirstFrame,
@@ -599,6 +592,9 @@ public class GenerationModelCapabilityService {
                                        boolean supportsReferenceImages,
                                        boolean supportsReferenceVideos,
                                        boolean supportsReferenceAudios,
+                                       List<String> referenceImageInputFormats,
+                                       boolean supportsReferenceImageUrlInput,
+                                       boolean supportsReferenceImageBase64Input,
                                        int minImageInputs,
                                        Integer maxImageInputs,
                                        Integer maxReferenceImages,

@@ -14,12 +14,15 @@ import {
   ArrowLeft,
   Bot,
   HardDrive,
+  ImagePlus,
+  Video,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { useAuthStore } from "@/lib/store/auth-store";
 
 // ========== 各模块的二级菜单配置 ==========
@@ -52,6 +55,11 @@ const projectDetailItems: SidebarItem[] = [
 
 const assetItems: SidebarItem[] = [
   { key: "list", label: "全部资产", icon: Images, href: "/assets", iconColor: "text-orange-400" },
+];
+
+const generationItems: SidebarItem[] = [
+  { key: "image", label: "生图", icon: ImagePlus, href: "/generate/image", iconColor: "text-fuchsia-400" },
+  { key: "video", label: "生视频", icon: Video, href: "/generate/video", iconColor: "text-cyan-400" },
 ];
 
 interface SidebarNavProps {
@@ -87,15 +95,17 @@ export function SidebarNav({
 
   const settingsItems: SidebarItem[] = isAdmin
     ? [
-        { key: "general", label: "通用设置", icon: Settings, href: "/settings/general", iconColor: "text-green-400" },
-        { key: "users", label: "用户列表", icon: Users, href: "/settings/users", iconColor: "text-cyan-400" },
-        { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-blue-400" },
-        { key: "ai-models", label: "AI 模型", icon: Bot, href: "/settings/ai-models", iconColor: "text-purple-400" },
-        { key: "storage", label: "存储配置", icon: HardDrive, href: "/settings/storage", iconColor: "text-orange-400" },
-      ]
+      { key: "general", label: "通用设置", icon: Settings, href: "/settings/general", iconColor: "text-green-400" },
+      { key: "users", label: "用户列表", icon: Users, href: "/settings/users", iconColor: "text-cyan-400" },
+      { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-blue-400" },
+      { key: "ai-models", label: "AI 配置", icon: Bot, href: "/settings/ai-models", iconColor: "text-purple-400" },
+      { key: "agents", label: "智能体配置", icon: Bot, href: "/settings/agents", iconColor: "text-violet-400" },
+      { key: "storage", label: "存储配置", icon: HardDrive, href: "/settings/storage", iconColor: "text-orange-400" },
+    ]
     : [
-        { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-blue-400" },
-      ];
+      { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-blue-400" },
+      { key: "agents", label: "智能体配置", icon: Bot, href: "/settings/agents", iconColor: "text-violet-400" },
+    ];
 
   // 若外部已传入 project，则不在组件内自行请求
   const project =
@@ -116,7 +126,9 @@ export function SidebarNav({
           setProjectLocalState({ id: projectId, project: projectData });
         }
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (!cancelled) toastApiError(error, "加载项目信息失败");
+      });
 
     return () => {
       cancelled = true;
@@ -146,6 +158,9 @@ export function SidebarNav({
   } else if (pathname.startsWith("/assets")) {
     sectionTitle = "资产";
     items = assetItems;
+  } else if (pathname.startsWith("/generate")) {
+    sectionTitle = "工具";
+    items = generationItems;
   } else if (pathname.startsWith("/settings")) {
     sectionTitle = "系统设置";
     items = settingsItems;
@@ -272,17 +287,6 @@ export function SidebarNav({
                       : "text-muted-foreground hover:text-foreground hover:bg-foreground/3"
                   )}
                 >
-                  {/* 选中指示条，颜色与菜单项图标一致 */}
-                  {!collapsed && (
-                    <span
-                      className={cn(
-                        "transition-colors duration-200",
-                        isActive ? item.iconColor : "text-transparent",
-                      )}
-                    >
-                      <div className="w-0.5 h-5 rounded-full bg-current" />
-                    </span>
-                  )}
                   <span className={cn("transition-colors", isActive ? item.iconColor : "")}>
                     <Icon className="h-[18px] w-[18px]" />
                   </span>

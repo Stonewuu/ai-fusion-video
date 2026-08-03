@@ -9,7 +9,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-sans);
+  --font-sans: var(--font-inter), "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
   --font-mono: var(--font-geist-mono);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -122,9 +122,11 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
   }
+
   html {
     @apply font-sans;
   }
@@ -134,6 +136,7 @@
     scrollbar-width: thin;
     scrollbar-color: oklch(0.75 0 0 / 20%) transparent;
   }
+
   .dark * {
     scrollbar-color: oklch(1 0 0 / 12%) transparent;
   }
@@ -143,26 +146,304 @@
     width: 5px;
     height: 5px;
   }
+
   ::-webkit-scrollbar-track {
     background: transparent;
   }
+
   ::-webkit-scrollbar-thumb {
     background: oklch(0.75 0 0 / 20%);
     border-radius: 9999px;
     transition: background 0.2s;
   }
+
   ::-webkit-scrollbar-thumb:hover {
     background: oklch(0.55 0 0 / 35%);
   }
+
   ::-webkit-scrollbar-corner {
     background: transparent;
   }
+
   .dark ::-webkit-scrollbar-thumb {
     background: oklch(1 0 0 / 12%);
   }
+
   .dark ::-webkit-scrollbar-thumb:hover {
     background: oklch(1 0 0 / 25%);
   }
+}
+
+/*
+ * 表单控件聚焦基线
+ *
+ * Shadcn 的焦点环由 box-shadow 实现，而组件自带的 transition-colors
+ * 不会过渡 box-shadow，导致聚焦与失焦时焦点环瞬间跳变。这里统一覆盖
+ * 共享控件和仍在使用的原生文本控件，同时保留各使用处自己的焦点配色。
+ */
+:where([data-slot="input"]:not([type="file"]),
+  [data-slot="textarea"],
+  [data-slot="select-trigger"],
+  input:not([type="file"]):not([type="hidden"]),
+  textarea,
+  select,
+  [contenteditable="true"]) {
+  transition-property: color, background-color, border-color, box-shadow;
+  transition-duration: 150ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+  :where([data-slot="input"]:not([type="file"]),
+    [data-slot="textarea"],
+    [data-slot="select-trigger"],
+    input:not([type="file"]):not([type="hidden"]),
+    textarea,
+    select,
+    [contenteditable="true"]) {
+    transition-duration: 0.01ms;
+  }
+}
+
+/* 融光助手内部导航按容器宽度切换，而不是读取 viewport breakpoint。 */
+.assistant-shell,
+[data-assistant-dock-surface],
+[data-assistant-surface] {
+  container-type: inline-size;
+}
+
+.assistant-content {
+  container-type: inline-size;
+}
+
+@container (min-width: 400px) {
+  .assistant-starter-prompts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container (min-width: 720px) {
+  .assistant-starter-prompts {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+[data-assistant-launcher-status="idle"] {
+  --assistant-launcher-accent: color-mix(in oklab, oklch(0.606 0.25 292.717) 36%, transparent);
+}
+
+[data-assistant-launcher-status="running"] {
+  --assistant-launcher-accent: color-mix(in oklab, var(--primary) 64%, transparent);
+}
+
+[data-assistant-launcher-status="completed"] {
+  --assistant-launcher-accent: color-mix(in oklab, oklch(0.696 0.17 162.48) 52%, transparent);
+}
+
+.assistant-launcher-waves {
+  --assistant-wave-color: var(--assistant-launcher-accent);
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  animation: assistant-waves-enter 240ms ease-out 80ms both;
+}
+
+.assistant-launcher-wave {
+  position: absolute;
+  inset: 0;
+  border-color: var(--assistant-wave-color);
+  border-style: solid;
+  border-width: 1px;
+  border-radius: 9999px;
+  opacity: 0;
+  animation: assistant-wave-breathe 3s linear infinite;
+  will-change: opacity, transform;
+}
+
+.assistant-launcher-wave:nth-child(2) {
+  animation-delay: -1s;
+}
+
+.assistant-launcher-wave:nth-child(3) {
+  animation-delay: -2s;
+}
+
+@keyframes assistant-wave-breathe {
+  0% {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+
+  8% {
+    opacity: 0.18;
+    transform: scale(1);
+  }
+
+  18% {
+    opacity: 0.72;
+    transform: scale(1.1);
+  }
+
+  70% {
+    opacity: 0.28;
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+@keyframes assistant-waves-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * Keep each Base UI portal above the floating/maximized assistant without
+ * overriding the component's internal stacking order. Nested portals (for
+ * example, a Select inside a Dialog) can then layer above their parent popup.
+ */
+body[data-assistant-layer="true"] > [data-base-ui-portal] {
+  position: relative;
+  z-index: 80;
+}
+
+.assistant-wide-only {
+  display: none;
+}
+
+.assistant-narrow-only {
+  display: flex;
+}
+
+.assistant-navigation {
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: 20;
+  display: flex;
+  width: min(320px, 86%);
+  flex-direction: column;
+  transform: translateX(-102%);
+  border-right: 1px solid color-mix(in oklab, var(--border) 30%, transparent);
+  background: color-mix(in oklab, var(--card) 95%, transparent);
+  box-shadow: 0 20px 60px -30px color-mix(in oklab, var(--foreground) 40%, transparent);
+  transition: transform 220ms ease-out;
+}
+
+.assistant-navigation-open {
+  transform: translateX(0);
+}
+
+@container (min-width: 650px) {
+  .assistant-wide-only {
+    display: flex !important;
+  }
+
+  .assistant-narrow-only {
+    display: none !important;
+  }
+
+  .assistant-navigation {
+    position: relative !important;
+    inset: auto !important;
+    z-index: auto !important;
+    width: 260px !important;
+    transform: none !important;
+    border-right: 1px solid color-mix(in oklab, var(--border) 20%, transparent) !important;
+    background: color-mix(in oklab, var(--card) 20%, transparent) !important;
+    box-shadow: none !important;
+    transition: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant-launcher-waves {
+    animation: none;
+  }
+
+  .assistant-launcher-wave {
+    animation: none;
+    inset: -9px;
+    border-width: 1px;
+    opacity: 0.5;
+    will-change: auto;
+  }
+
+  .assistant-launcher-wave:not(:first-child) {
+    display: none;
+  }
+
+  .assistant-shell * {
+    scroll-behavior: auto;
+  }
+
+  .assistant-navigation {
+    transition-duration: 0.01ms;
+  }
+}
+
+/*
+ * Select 浮层自身承担毛玻璃，避免内部列表滚动时伪元素随内容移走。
+ * 作用于所有共享 Select，业务页面无需重复覆盖。
+ */
+[data-slot="select-content"] {
+  @apply backdrop-blur-2xl backdrop-saturate-150;
+}
+
+[data-slot="select-content"]::before {
+  display: none;
+}
+
+/*
+ * 模态层级基线
+ * 浅色主题使用白色毛玻璃遮罩，深色主题使用更高不透明度的黑色毛玻璃；
+ * 弹窗本体更接近实体背景，避免透景干扰文字与表单阅读。
+ */
+html:not(.dark) :where([data-slot="dialog-overlay"],
+  [data-slot="sheet-overlay"],
+  .modal-overlay) {
+  @apply backdrop-blur-sm backdrop-saturate-125;
+  background-color: oklch(1 0 0 / 40%);
+}
+
+html.dark :where([data-slot="dialog-overlay"],
+  [data-slot="sheet-overlay"],
+  .modal-overlay) {
+  @apply backdrop-blur-sm backdrop-saturate-125;
+  background-color: oklch(0 0 0 / 50%);
+}
+
+html:not(.dark) :where([data-slot="dialog-content"],
+  [data-slot="sheet-content"],
+  .modal-surface) {
+  @apply backdrop-blur-xl backdrop-saturate-150;
+  border-color: color-mix(in oklab, var(--foreground) 12%, transparent);
+  background-color: color-mix(in oklab, var(--background) 92%, transparent);
+  box-shadow: 0 24px 80px -32px oklch(0 0 0 / 42%);
+}
+
+html.dark :where([data-slot="dialog-content"],
+  [data-slot="sheet-content"],
+  .modal-surface) {
+  @apply backdrop-blur-xl backdrop-saturate-150;
+  border-color: color-mix(in oklab, var(--foreground) 12%, transparent);
+  background-color: color-mix(in oklab, var(--background) 94%, transparent);
+  box-shadow: 0 24px 88px -30px oklch(0 0 0 / 78%);
+}
+
+[data-slot="dialog-content"][data-variant="media-lightbox"] {
+  border-color: transparent;
+  background-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
 }
 
 /* View Transitions API - 主题切换动画（动画由 JS animate() 控制） */
@@ -188,10 +469,12 @@
 
 /* 资产占位图流光效果 */
 @keyframes shimmer {
+
   0%,
   100% {
     transform: translateX(-100%);
   }
+
   50% {
     transform: translateX(100%);
   }

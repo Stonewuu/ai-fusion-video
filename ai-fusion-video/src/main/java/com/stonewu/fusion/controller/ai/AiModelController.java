@@ -36,8 +36,8 @@ public class AiModelController {
         AiModel model = AiModel.builder()
                 .name(reqVO.getName())
                 .code(reqVO.getCode())
-                .modelFamily(reqVO.getModelFamily())
                 .modelProtocol(reqVO.getModelProtocol())
+                .capabilityPresetCode(reqVO.getCapabilityPresetCode())
                 .modelType(reqVO.getModelType())
                 .icon(reqVO.getIcon()).description(reqVO.getDescription())
                 .sort(reqVO.getSort() != null ? reqVO.getSort() : 0)
@@ -46,7 +46,10 @@ public class AiModelController {
                 ? reqVO.getMaxConcurrency() : 5)
                 .defaultModel(reqVO.getDefaultModel() != null ? reqVO.getDefaultModel() : false)
             .supportVision(Boolean.TRUE.equals(reqVO.getSupportVision()))
+            .multimodalInputTypes(reqVO.getMultimodalInputTypes())
+            .multimodalInputTransports(reqVO.getMultimodalInputTransports())
             .supportReasoning(Boolean.TRUE.equals(reqVO.getSupportReasoning()))
+            .reasoningEffortLevels(reqVO.getReasoningEffortLevels())
             .contextWindow(reqVO.getContextWindow() != null && reqVO.getContextWindow() > 0
                 ? reqVO.getContextWindow() : null)
                 .apiConfigId(reqVO.getApiConfigId())
@@ -59,11 +62,13 @@ public class AiModelController {
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<Boolean> update(@Valid @RequestBody AiModelUpdateReqVO reqVO) {
         aiModelService.updateAiModel(reqVO.getId(), reqVO.getName(), reqVO.getCode(),
-                reqVO.getModelFamily(), reqVO.getModelProtocol(), reqVO.getModelType(),
+                reqVO.getModelProtocol(), reqVO.getCapabilityPresetCode(), reqVO.getModelType(),
                 reqVO.getIcon(), reqVO.getDescription(),
                 reqVO.getSort(), reqVO.getStatus(), reqVO.getConfig(), reqVO.getDefaultModel(),
-                reqVO.getApiConfigId(), reqVO.getMaxConcurrency(), reqVO.getSupportVision(),
-                reqVO.getSupportReasoning(), reqVO.getContextWindow());
+                reqVO.getApiConfigId(), reqVO.getMaxConcurrency(), reqVO.getMultimodalInputTypes(),
+                reqVO.getMultimodalInputTransports(),
+                reqVO.getSupportReasoning(), reqVO.getReasoningEffortLevels(),
+                reqVO.getContextWindow());
         return success(true);
     }
 
@@ -106,7 +111,7 @@ public class AiModelController {
     }
 
     @GetMapping("/presets")
-    @Operation(summary = "获取模型预设列表")
+    @Operation(summary = "获取模型能力预设列表")
     @Parameter(name = "type", description = "模型类型（可选）")
     public CommonResult<List<JSONObject>> presets(@RequestParam(value = "type", required = false) Integer type) {
         if (type != null) {
@@ -116,8 +121,8 @@ public class AiModelController {
     }
 
     @GetMapping("/preset-config")
-    @Operation(summary = "获取模型预设配置")
-    @Parameter(name = "code", description = "模型代码", required = true)
+    @Operation(summary = "获取模型能力预设配置")
+    @Parameter(name = "code", description = "能力预设代码", required = true)
     public CommonResult<String> presetConfig(@RequestParam("code") String code) {
         return success(modelPresetService.getPresetConfig(code));
     }

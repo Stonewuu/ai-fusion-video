@@ -40,7 +40,7 @@ RUN set -eux; \
 COPY --from=builder /build/target/*.jar app.jar
 
 # 创建数据目录
-RUN mkdir -p /app/data/media
+RUN mkdir -p /app/data/media /app/data/agent-workspace
 
 # 暴露端口
 EXPOSE 18080

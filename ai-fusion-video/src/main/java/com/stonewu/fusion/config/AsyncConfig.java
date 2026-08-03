@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.SimpleAsyncTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.annotation.EnableAsync;
 
 import java.util.concurrent.Executor;
@@ -23,6 +24,9 @@ import java.util.concurrent.Executor;
 @EnableAsync
 @Slf4j
 public class AsyncConfig {
+
+    private static final int MVC_ASYNC_QUEUE_CAPACITY = 512;
+    private static final int AGENT_WORKSPACE_MIGRATION_QUEUE_CAPACITY = 8;
 
     /**
      * ffmpeg 合成任务最大并发数。
@@ -46,6 +50,40 @@ public class AsyncConfig {
 
         log.info("[AsyncConfig] 视频合成执行器: virtualThreads=true, concurrencyLimit={} (CPU 核心数={})",
                 limit, Runtime.getRuntime().availableProcessors());
+        return executor;
+    }
+
+    /**
+     * Bounded executor used by Spring MVC for reactive return values and SSE async dispatch.
+     * It is intentionally separate from AgentScope's state/journal/model/tool schedulers.
+     */
+    @Bean(name = "mvcAsyncExecutor")
+    public ThreadPoolTaskExecutor mvcAsyncExecutor() {
+        int processors = Runtime.getRuntime().availableProcessors();
+        int corePoolSize = Math.max(4, Math.min(16, processors));
+        int maxPoolSize = Math.max(corePoolSize, Math.min(64, processors * 2));
+
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(corePoolSize);
+        executor.setMaxPoolSize(maxPoolSize);
+        executor.setQueueCapacity(MVC_ASYNC_QUEUE_CAPACITY);
+        executor.setKeepAliveSeconds(60);
+        executor.setAllowCoreThreadTimeOut(true);
+        executor.setThreadNamePrefix("mvc-async-");
+
+        log.info("[AsyncConfig] MVC 异步执行器: corePoolSize={}, maxPoolSize={}, queueCapacity={}",
+                corePoolSize, maxPoolSize, MVC_ASYNC_QUEUE_CAPACITY);
+        return executor;
+    }
+
+    @Bean(name = "agentWorkspaceMigrationExecutor")
+    public ThreadPoolTaskExecutor agentWorkspaceMigrationExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(AGENT_WORKSPACE_MIGRATION_QUEUE_CAPACITY);
+        executor.setThreadNamePrefix("agent-workspace-migration-");
+        executor.setWaitForTasksToCompleteOnShutdown(false);
         return executor;
     }
 

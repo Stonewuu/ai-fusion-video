@@ -1,0 +1,144 @@
+import type { AgentConversation, AgentMessage, ToolExecutionMode } from "@/lib/api/ai-assistant";
+import type { AiChatStreamEvent, PipelineRunStatus } from "@/lib/api/ai-pipeline";
+import { messagesToTimeline } from "@/components/dashboard/notification-panel/history";
+import {
+  createInitialPipelineState,
+  createPendingPipelineState,
+  reducePipelineEvent,
+} from "@/components/dashboard/agent-pipeline/state";
+import type { AgentPipelineState } from "@/components/dashboard/agent-pipeline/types";
+import type { TimelineItem } from "@/lib/store/pipeline-store";
+import { cancelCallingTimelineTools } from "@/lib/store/pipeline-timeline";
+import type { AssistantConversationRuntime } from "./assistant-types";
+
+export function statusIsRunning(status: string | undefined) {
+  return status === "running"
+    || status === "pending"
+    || status === "RUNNING"
+    || status === "WAITING_CONFIRMATION"
+    || status === "WAITING_EXTERNAL"
+    || status === "CANCEL_REQUESTED";
+}
+
+export function statusFromPipeline(status: PipelineRunStatus | string): string {
+  switch (status) {
+    case "COMPLETED": return "completed";
+    case "FAILED": return "failed";
+    case "CANCELLED": return "cancelled";
+    case "CANCEL_REQUESTED": return "CANCEL_REQUESTED";
+    case "WAITING_CONFIRMATION": return "WAITING_CONFIRMATION";
+    case "WAITING_EXTERNAL": return "WAITING_EXTERNAL";
+    case "ERROR": return "failed";
+    default: return "running";
+  }
+}
+
+export function normalizeTitle(value: string) {
+  const normalized = value.trim().replace(/\s+/g, " ");
+  return normalized.slice(0, 50) || "新对话";
+}
+
+function conversationStatus(conversation: AgentConversation) {
+  return conversation.status || "completed";
+}
+
+export function makeRuntime(
+  conversation: AgentConversation,
+  drafts: Record<string, string>,
+  runIds: Record<string, string>,
+  toolExecutionMode: ToolExecutionMode,
+): AssistantConversationRuntime {
+  const conversationId = conversation.conversationId;
+  const knownRunId = runIds[conversationId];
+  // The event cursor is meaningful only together with the in-memory timeline.
+  // After a page refresh the timeline is empty, so replay from the journal
+  // origin to recover reasoning text and its original start timestamp.
+  const lastSequence = 0;
+  return {
+    conversation,
+    messages: [],
+    pipeline: {
+      ...createInitialPipelineState(),
+      conversationId,
+      runId: knownRunId,
+      lastSequence,
+    },
+    draft: drafts[conversationId] ?? "",
+    status: conversationStatus(conversation),
+    statusConfirmed: !statusIsRunning(conversation.status),
+    knownRunId,
+    messagesLoaded: false,
+    messagesLoading: false,
+    unread: false,
+    toolExecutionMode,
+  };
+}
+
+export function messageKey(message: AgentMessage) {
+  if (message.role === "user" && message.messageOrder > 0) {
+    return `user:${message.conversationId}:${message.messageOrder}:${message.content ?? ""}`;
+  }
+  if (message.id > 0) return `id:${message.id}`;
+  if (message.runId && message.projectionKey) return `projection:${message.runId}:${message.projectionKey}`;
+  return [message.role, message.messageOrder, message.content ?? "", message.toolCallId ?? ""].join(":");
+}
+
+export function mergeMessages(current: AgentMessage[], incoming: AgentMessage[]) {
+  const merged = new Map<string, AgentMessage>();
+  for (const message of [...current, ...incoming]) merged.set(messageKey(message), message);
+  return [...merged.values()].sort((a, b) => (a.messageOrder ?? 0) - (b.messageOrder ?? 0));
+}
+
+export function timelineForMessages(messages: AgentMessage[]): TimelineItem[] {
+  return messagesToTimeline(messages.filter((message) => message.role !== "user"));
+}
+
+export function hasTerminal(event: AiChatStreamEvent) {
+  return !event.parentToolCallId
+    && !event.agentName
+    && (event.outputType === "DONE" || event.outputType === "ERROR" || event.outputType === "CANCELLED");
+}
+
+export function hasLiveTranscript(runtime: AssistantConversationRuntime) {
+  return runtime.pipeline.timeline.length > 0
+    || runtime.pipeline.reasoningText.trim().length > 0;
+}
+
+export function terminalStatusForEvent(event: AiChatStreamEvent) {
+  if (event.outputType === "DONE") return "completed";
+  if (event.outputType === "ERROR") return "failed";
+  return "cancelled";
+}
+
+export function reduceAssistantEvent(
+  pipeline: AgentPipelineState,
+  event: AiChatStreamEvent,
+) {
+  const next = reducePipelineEvent(pipeline, event);
+  return pipeline.status === "cancelling" && next.status === "cancelling"
+    ? { ...next, timeline: cancelCallingTimelineTools(next.timeline) }
+    : next;
+}
+
+export function pendingPipelineForNextRun(
+  conversationId: string,
+): AgentPipelineState {
+  return {
+    ...createPendingPipelineState(),
+    conversationId,
+    lastSequence: 0,
+  };
+}
+
+export function uniqueConversations(
+  current: AgentConversation[],
+  incoming: AgentConversation[],
+) {
+  const byId = new Map(current.map((conversation) => [conversation.conversationId, conversation]));
+  for (const conversation of incoming) byId.set(conversation.conversationId, conversation);
+  return [...byId.values()].sort((a, b) => {
+    const left = new Date(a.lastMessageTime ?? a.createTime ?? 0).getTime();
+    const right = new Date(b.lastMessageTime ?? b.createTime ?? 0).getTime();
+    return right - left;
+  });
+}

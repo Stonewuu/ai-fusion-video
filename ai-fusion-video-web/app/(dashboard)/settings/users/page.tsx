@@ -6,8 +6,9 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { userApi } from "@/lib/api/user";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import type { UserRespVO } from "@/lib/api/types";
-import { containerVariants, itemVariants } from "../_shared";
+import { containerVariants, itemVariants, settingsTypography } from "../_shared";
 
 function formatDateTime(value?: string | null): string {
   if (!value) return "--";
@@ -26,23 +27,21 @@ export default function SettingsUsersPage() {
   const currentUser = useAuthStore((state) => state.user);
   const isAdmin = currentUser?.roles?.includes("admin") ?? false;
   const [keyword, setKeyword] = useState("");
-  const [loading, setLoading] = useState(true);
+  const normalizedKeyword = keyword.trim();
+  const [loadedKeyword, setLoadedKeyword] = useState<string | null>(null);
   const [users, setUsers] = useState<UserRespVO[]>([]);
   const [total, setTotal] = useState(0);
+  const loading = isAdmin && loadedKeyword !== normalizedKeyword;
 
   useEffect(() => {
-    if (!isAdmin) {
-      setLoading(false);
-      return;
-    }
+    if (!isAdmin) return;
 
     let cancelled = false;
-    setLoading(true);
 
     userApi.page({
       pageNo: 1,
       pageSize: 100,
-      username: keyword.trim() || undefined,
+      username: normalizedKeyword || undefined,
     })
       .then((result) => {
         if (cancelled) return;
@@ -52,20 +51,21 @@ export default function SettingsUsersPage() {
       .catch((err) => {
         if (!cancelled) {
           console.error("加载用户列表失败:", err);
+          toastApiError(err, "加载用户列表失败");
           setUsers([]);
           setTotal(0);
         }
       })
       .finally(() => {
         if (!cancelled) {
-          setLoading(false);
+          setLoadedKeyword(normalizedKeyword);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, keyword]);
+  }, [isAdmin, normalizedKeyword]);
 
   const adminCount = useMemo(
     () => users.filter((user) => user.roles.includes("admin")).length,
@@ -75,14 +75,14 @@ export default function SettingsUsersPage() {
   if (!isAdmin) {
     return (
       <motion.div
-        className="max-w-[800px]"
+        className="w-full"
         variants={containerVariants}
-        initial="hidden"
+        initial={false}
         animate="visible"
       >
         <motion.div variants={itemVariants} className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-6">
-          <h1 className="text-2xl font-bold tracking-tight">用户列表</h1>
-          <p className="text-muted-foreground mt-2 text-sm">
+          <h1 className={settingsTypography.pageTitle}>用户列表</h1>
+          <p className={settingsTypography.pageDescription}>
             只有管理员可以查看全部用户。普通用户仅可在个人设置中维护自己的资料。
           </p>
         </motion.div>
@@ -92,15 +92,15 @@ export default function SettingsUsersPage() {
 
   return (
     <motion.div
-      className="max-w-[1000px]"
+      className="w-full"
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
     >
       <motion.div variants={itemVariants} className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">用户列表</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
+          <h1 className={settingsTypography.pageTitle}>用户列表</h1>
+          <p className={settingsTypography.pageDescription}>
             查看、搜索和管理系统中的全部用户。
           </p>
         </div>

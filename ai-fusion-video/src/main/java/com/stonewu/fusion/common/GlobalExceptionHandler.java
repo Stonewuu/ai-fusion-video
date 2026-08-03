@@ -3,6 +3,7 @@ package com.stonewu.fusion.common;
 import java.io.IOException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.BindException;
@@ -20,9 +21,14 @@ import org.springframework.web.servlet.resource.NoResourceFoundException;
 public class GlobalExceptionHandler {
 
     @ExceptionHandler(BusinessException.class)
-    public CommonResult<?> handleBusinessException(BusinessException e) {
+    public ResponseEntity<CommonResult<?>> handleBusinessException(BusinessException e) {
         log.warn("业务异常: {}", e.getMessage());
-        return CommonResult.error(e.getCode(), e.getMessage());
+        HttpStatus status = HttpStatus.resolve(e.getCode());
+        if (status == null || status.is2xxSuccessful() || status.is3xxRedirection()) {
+            status = HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        return ResponseEntity.status(status)
+                .body(CommonResult.error(e.getCode(), e.getMessage()));
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

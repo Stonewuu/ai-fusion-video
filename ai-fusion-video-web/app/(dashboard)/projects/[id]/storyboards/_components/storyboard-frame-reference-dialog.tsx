@@ -6,6 +6,8 @@ import ImageInput from "@/components/dashboard/image-input";
 import { SafeImage } from "@/components/ui/safe-image";
 import { Textarea } from "@/components/ui/textarea";
 import { resolveMediaUrl } from "@/lib/api/client";
+import { toastApiError } from "@/lib/api/toast-api-error";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import type { Project } from "@/lib/api/project";
 import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
@@ -190,11 +192,17 @@ export function FrameReferenceSection({
   const [submitting, setSubmitting] = useState(false);
   const skipNextChangeConfirmRef = useRef(false);
   const defaultPrompt = buildDefaultFramePrompt(item, project, frameType);
+  const { confirm } = useConfirm();
 
-  const confirmOverwrite = useCallback(() => {
+  const confirmOverwrite = useCallback(async () => {
     if (!imageUrl) return true;
-    return confirm(`${label}参考图已存在，确认覆盖吗？`);
-  }, [imageUrl, label]);
+    return await confirm({
+      title: "覆盖参考图",
+      description: `${label}参考图已存在，确认覆盖吗？`,
+      variant: "warning",
+      confirmText: "确认覆盖",
+    });
+  }, [confirm, imageUrl, label]);
 
   const handleChange = async (nextValue: string) => {
     if (!onUpdateFrame) return;
@@ -205,7 +213,7 @@ export function FrameReferenceSection({
       currentUrl &&
       nextUrl !== currentUrl &&
       !skipNextChangeConfirmRef.current &&
-      !confirmOverwrite()
+      !(await confirmOverwrite())
     ) {
       return;
     }
@@ -215,15 +223,15 @@ export function FrameReferenceSection({
       await onUpdateFrame(item.id, frameType, nextUrl);
     } catch (err) {
       console.error(`更新${label}失败:`, err);
-      alert(`更新${label}失败，请重试`);
+      toastApiError(err, `更新${label}失败，请重试`);
     } finally {
       setUpdating(false);
     }
   };
 
-  const handleOpenPrompt = () => {
+  const handleOpenPrompt = async () => {
     if (!onGenerateFrame) return;
-    if (!confirmOverwrite()) return;
+    if (!(await confirmOverwrite())) return;
     setPromptOpen(true);
   };
 
@@ -237,7 +245,7 @@ export function FrameReferenceSection({
       onGenerateSubmitted?.();
     } catch (err) {
       console.error(`提交${label}生成失败:`, err);
-      alert(`提交${label}生成失败，请重试`);
+      toastApiError(err, `提交${label}生成失败，请重试`);
       setSubmitting(false);
     }
   };
@@ -293,8 +301,8 @@ export function FrameReferenceSection({
           }
           uploadSubDir="storyboard-frames"
           placeholder={`粘贴${label}图片链接...`}
-          beforeUpload={() => {
-            const ok = confirmOverwrite();
+          beforeUpload={async () => {
+            const ok = await confirmOverwrite();
             skipNextChangeConfirmRef.current = ok;
             if (ok) {
               window.setTimeout(() => {
@@ -443,7 +451,7 @@ export function StoryboardFrameReferenceDialog({
 
       {previewImageUrl && (
         <div
-          className="fixed inset-0 z-[10020] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          className="modal-overlay fixed inset-0 z-[10020] flex items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => setPreviewImageUrl(null)}
         >
           <div
@@ -452,7 +460,7 @@ export function StoryboardFrameReferenceDialog({
           >
             <button
               onClick={() => setPreviewImageUrl(null)}
-              className="absolute -top-12 right-0 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              className="absolute -top-12 right-0 rounded-full border border-border/40 bg-background/80 p-1.5 text-foreground shadow-xl backdrop-blur-xl transition-colors hover:bg-background"
               type="button"
             >
               <X className="h-5 w-5" />
@@ -461,9 +469,9 @@ export function StoryboardFrameReferenceDialog({
               src={resolveMediaUrl(previewImageUrl)}
               alt={previewImageTitle}
               fallbackType="image"
-              className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl border border-white/10 select-none pointer-events-none"
+              className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl border border-border/40 select-none pointer-events-none"
             />
-            <p className="text-white/90 text-xs font-medium px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm border border-white/5">
+            <p className="rounded-full border border-border/40 bg-background/80 px-3 py-1.5 text-xs font-medium text-foreground shadow-xl backdrop-blur-xl">
               {previewImageTitle}
             </p>
           </div>

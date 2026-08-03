@@ -1,6 +1,5 @@
 package com.stonewu.fusion.service.ai;
 
-import cn.hutool.json.JSONUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
@@ -13,7 +12,7 @@ import java.util.stream.Collectors;
  * 工具执行器注册中心
  * <p>
  * 自动收集所有 {@link ToolExecutor} Bean，按 toolName 建立索引，
- * 提供按名称查找和执行工具的能力。
+ * 提供 AgentScope V2 kernel 按名称查找严格白名单工具的能力。
  */
 @Component
 @Slf4j
@@ -26,34 +25,6 @@ public class ToolExecutorRegistry {
                 .collect(Collectors.toMap(ToolExecutor::getToolName, Function.identity()));
         log.info("[ToolExecutorRegistry] 已注册 {} 个工具执行器: {}",
                 executorMap.size(), executorMap.keySet());
-    }
-
-    /**
-     * 执行指定工具
-     *
-     * @param toolName  工具名称（对应 ToolExecutor.getToolName()）
-     * @param toolInput 工具入参 JSON
-     * @param context   工具执行上下文（包含用户身份等信息）
-     * @return 工具执行结果 JSON
-     */
-    public String execute(String toolName, String toolInput, ToolExecutionContext context) {
-        ToolExecutor executor = executorMap.get(toolName);
-        if (executor == null) {
-            log.warn("[ToolExecutorRegistry] 未找到工具执行器: {}, 返回默认结果", toolName);
-            return JSONUtil.toJsonStr(Map.of(
-                    "status", "not_implemented",
-                    "message", "工具 " + toolName + " 尚未实现执行器",
-                    "toolName", toolName));
-        }
-        try {
-            return executor.execute(toolInput, context);
-        } catch (Exception e) {
-            log.error("[ToolExecutorRegistry] 工具执行失败: name={}", toolName, e);
-            return JSONUtil.toJsonStr(Map.of(
-                    "status", "error",
-                    "message", "工具执行失败: " + e.getMessage(),
-                    "toolName", toolName));
-        }
     }
 
     /**

@@ -3,7 +3,7 @@ package com.stonewu.fusion.service.ai.provider;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.service.ai.googleflow.GoogleFlowReverseApiSupport;
-import io.agentscope.core.model.Model;
+import io.agentscope.core.model.ChatModelBase;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
 
@@ -28,7 +28,7 @@ public class GoogleFlowReverseApiProvider extends AbstractAiProvider {
     }
 
     @Override
-    public Model createAgentScopeModel(AiProviderContext context) {
+    public ChatModelBase createAgentScopeModel(AiProviderContext context) {
         throw new BusinessException("GoogleFlowReverseApi 仅支持图片/视频生成模型，不支持 AgentScope 对话模型");
     }
 

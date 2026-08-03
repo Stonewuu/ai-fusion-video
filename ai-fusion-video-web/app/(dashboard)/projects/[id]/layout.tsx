@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams } from "next/navigation";
 import { Loader2 } from "lucide-react";
 import { projectApi, type Project } from "@/lib/api/project";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { ProjectContext } from "./project-context";
 
 /**
@@ -37,6 +38,7 @@ export default function ProjectDetailLayout({
       setProject(proj);
     } catch (err) {
       console.error("加载项目失败:", err);
+      toastApiError(err, "加载项目失败");
     } finally {
       setLoading(false);
     }

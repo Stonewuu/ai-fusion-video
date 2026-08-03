@@ -4,7 +4,6 @@ import com.stonewu.fusion.controller.script.vo.EpisodeCreateReqVO;
 import com.stonewu.fusion.controller.script.vo.EpisodeUpdateReqVO;
 import com.stonewu.fusion.controller.script.vo.SceneCreateReqVO;
 import com.stonewu.fusion.controller.script.vo.SceneUpdateReqVO;
-import com.stonewu.fusion.controller.script.vo.ScriptCreateReqVO;
 import com.stonewu.fusion.controller.script.vo.ScriptUpdateReqVO;
 import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.entity.script.Script;
@@ -23,8 +22,6 @@ public interface ScriptConvert {
     ScriptConvert INSTANCE = Mappers.getMapper(ScriptConvert.class);
 
     // ========== 剧本 ==========
-
-    Script convert(ScriptCreateReqVO reqVO);
 
     Script convert(ScriptUpdateReqVO reqVO);
 

@@ -6,6 +6,14 @@ import type {
   SubTimelineItem,
   TimelineItem,
 } from "@/lib/store/pipeline-store";
+import { persistedToolTimelineStatus } from "@/lib/store/pipeline-timeline";
+import { isSubAgentTool } from "./constants";
+
+function validDurationMs(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? value
+    : undefined;
+}
 
 function pushReasoningToTimeline(
   timeline: TimelineItem[],
@@ -103,16 +111,82 @@ function updateLastSubTimelineReasoningDuration(
   }
 }
 
+function normalizeToolResult(
+  toolName: string | undefined,
+  content: string | undefined
+): string | undefined {
+  if (!content || !toolName || !isSubAgentTool(toolName)) {
+    return content;
+  }
+
+  try {
+    const value: unknown = JSON.parse(content);
+    if (typeof value !== "object" || value === null || Array.isArray(value)) {
+      return content;
+    }
+    const result = (value as Record<string, unknown>).result;
+    if (typeof result === "string" && result.trim()) {
+      return result;
+    }
+    const error = (value as Record<string, unknown>).error;
+    if (typeof error === "string" && error.trim()) {
+      return error;
+    }
+  } catch {
+    // 非 JSON 的子 Agent 结果直接按原文本展示。
+  }
+
+  return content;
+}
+
+function requireToolMessageIdentity(message: AgentMessage): {
+  toolCallId: string;
+  toolName: string;
+} {
+  if (!message.toolCallId) {
+    throw new Error(`Persisted tool message ${message.id} has no toolCallId`);
+  }
+  if (!message.toolName) {
+    throw new Error(`Persisted tool message ${message.id} has no toolName`);
+  }
+  return { toolCallId: message.toolCallId, toolName: message.toolName };
+}
+
 export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
   const timeline: TimelineItem[] = [];
   const toolIndexMap = new Map<string, number>();
+  const pendingParentUpdates = new Map<
+    string,
+    Array<(children: SubTimelineItem[]) => void>
+  >();
+
+  const registerTool = (toolCallId: string, index: number) => {
+    toolIndexMap.set(toolCallId, index);
+    const pendingUpdates = pendingParentUpdates.get(toolCallId);
+    if (!pendingUpdates?.length) return;
+
+    const parentItem = timeline[index];
+    if (parentItem.type !== "tool") return;
+    if (!parentItem.children) {
+      parentItem.children = [];
+    }
+    for (const update of pendingUpdates) {
+      update(parentItem.children);
+    }
+    pendingParentUpdates.delete(toolCallId);
+  };
 
   const appendToParentChildren = (
     parentToolCallId: string,
     updater: (children: SubTimelineItem[]) => void
   ) => {
     const parentIdx = toolIndexMap.get(parentToolCallId);
-    if (parentIdx === undefined) return;
+    if (parentIdx === undefined) {
+      const pendingUpdates = pendingParentUpdates.get(parentToolCallId) ?? [];
+      pendingUpdates.push(updater);
+      pendingParentUpdates.set(parentToolCallId, pendingUpdates);
+      return;
+    }
 
     const parentItem = timeline[parentIdx];
     if (parentItem.type !== "tool") return;
@@ -125,17 +199,21 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
   };
 
   for (const msg of messages) {
+    const reasoningDurationMs = validDurationMs(msg.reasoningDurationMs);
     if (msg.role === "tool") {
-      const toolCallId = msg.toolCallId || `hist-tool-${msg.id}`;
+      const { toolCallId, toolName } = requireToolMessageIdentity(msg);
 
       if (msg.parentToolCallId) {
         appendToParentChildren(msg.parentToolCallId, (children) => {
           if (msg.toolStatus === "running") {
+            if (typeof msg.content !== "string") {
+              throw new Error(`Persisted tool call ${toolCallId} has no arguments`);
+            }
             children.push({
               type: "tool",
               id: toolCallId,
-              name: msg.toolName || "tool",
-              arguments: msg.content || "",
+              name: toolName,
+              arguments: msg.content,
               status: "calling",
             });
             return;
@@ -145,34 +223,47 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
             (child) => child.type === "tool" && child.id === toolCallId
           );
           if (existingChild && existingChild.type === "tool") {
-            existingChild.status =
-              msg.toolStatus === "error" ? "error" : "done";
-            existingChild.result = msg.content;
+            if (existingChild.name !== toolName) {
+              throw new Error(`Persisted child tool name changed: ${toolCallId}`);
+            }
+            existingChild.status = persistedToolTimelineStatus(msg.toolStatus);
+            existingChild.result = normalizeToolResult(
+              toolName,
+              msg.content
+            );
             return;
           }
-
-          children.push({
-            type: "tool",
-            id: toolCallId,
-            name: msg.toolName || "tool",
-            arguments: "",
-            status: msg.toolStatus === "error" ? "error" : "done",
-            result: msg.content,
-          });
+          if (msg.toolStatus === "cancelled") {
+            if (typeof msg.content !== "string") {
+              throw new Error(`Persisted cancelled child tool ${toolCallId} has no arguments`);
+            }
+            children.push({
+              type: "tool",
+              id: toolCallId,
+              name: toolName,
+              arguments: msg.content,
+              status: "cancelled",
+            });
+            return;
+          }
+          throw new Error(`Persisted child tool result has no call: ${toolCallId}`);
         });
         continue;
       }
 
       if (msg.toolStatus === "running") {
+        if (typeof msg.content !== "string") {
+          throw new Error(`Persisted tool call ${toolCallId} has no arguments`);
+        }
         const idx = timeline.length;
         timeline.push({
           type: "tool",
           id: toolCallId,
-          name: msg.toolName || "tool",
-          arguments: msg.content || "",
+          name: toolName,
+          arguments: msg.content,
           status: "calling",
         });
-        toolIndexMap.set(toolCallId, idx);
+        registerTool(toolCallId, idx);
         continue;
       }
 
@@ -180,24 +271,30 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
       if (existingIdx !== undefined) {
         const existingItem = timeline[existingIdx];
         if (existingItem.type === "tool") {
-          existingItem.status =
-            msg.toolStatus === "error" ? "error" : "done";
-          existingItem.result = msg.content;
+          if (existingItem.name !== toolName) {
+            throw new Error(`Persisted tool name changed: ${toolCallId}`);
+          }
+          existingItem.status = persistedToolTimelineStatus(msg.toolStatus);
+          existingItem.result = normalizeToolResult(toolName, msg.content);
         }
         continue;
       }
-
-      const idx = timeline.length;
-      timeline.push({
-        type: "tool",
-        id: toolCallId,
-        name: msg.toolName || "tool",
-        arguments: "",
-        status: msg.toolStatus === "error" ? "error" : "done",
-        result: msg.content,
-      });
-      toolIndexMap.set(toolCallId, idx);
-      continue;
+      if (msg.toolStatus === "cancelled") {
+        if (typeof msg.content !== "string") {
+          throw new Error(`Persisted cancelled tool ${toolCallId} has no arguments`);
+        }
+        const idx = timeline.length;
+        timeline.push({
+          type: "tool",
+          id: toolCallId,
+          name: toolName,
+          arguments: msg.content,
+          status: "cancelled",
+        });
+        registerTool(toolCallId, idx);
+        continue;
+      }
+      throw new Error(`Persisted tool result has no call: ${toolCallId}`);
     }
 
     if (msg.parentToolCallId) {
@@ -206,20 +303,20 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
           pushReasoningToSubTimeline(
             children,
             msg.reasoningContent,
-            msg.reasoningDurationMs
+            reasoningDurationMs
           );
-        } else if (msg.reasoningDurationMs !== undefined) {
+        } else if (reasoningDurationMs !== undefined) {
           updateLastSubTimelineReasoningDuration(
             children,
-            msg.reasoningDurationMs
+            reasoningDurationMs
           );
         }
 
         if (msg.content) {
-          if (msg.reasoningDurationMs !== undefined) {
+          if (reasoningDurationMs !== undefined) {
             updateLastSubTimelineReasoningDuration(
               children,
-              msg.reasoningDurationMs
+              reasoningDurationMs
             );
           }
           pushContentToSubTimeline(children, msg.content);
@@ -232,15 +329,15 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
       pushReasoningToTimeline(
         timeline,
         msg.reasoningContent,
-        msg.reasoningDurationMs
+        reasoningDurationMs
       );
-    } else if (msg.reasoningDurationMs !== undefined) {
-      updateLastTimelineReasoningDuration(timeline, msg.reasoningDurationMs);
+    } else if (reasoningDurationMs !== undefined) {
+      updateLastTimelineReasoningDuration(timeline, reasoningDurationMs);
     }
 
     if (msg.content) {
-      if (msg.reasoningDurationMs !== undefined) {
-        updateLastTimelineReasoningDuration(timeline, msg.reasoningDurationMs);
+      if (reasoningDurationMs !== undefined) {
+        updateLastTimelineReasoningDuration(timeline, reasoningDurationMs);
       }
       pushContentToTimeline(timeline, msg.content);
     }

@@ -1,5 +1,4 @@
-import axios from "axios";
-import { http, API_BASE_URL } from "./client";
+import { http } from "./client";
 
 // ============================================================
 // 类型定义
@@ -205,27 +204,18 @@ export async function uploadFile(
   formData.append("file", file);
   formData.append("subDir", subDir);
 
-  const token = (() => {
-    if (typeof window === "undefined") return null;
-    try {
-      const stored = localStorage.getItem("auth-storage");
-      if (stored) return JSON.parse(stored)?.state?.token;
-    } catch {
-      // ignore
-    }
-    return null;
-  })();
+  return http.post("/api/storage/upload", formData, { timeout: 0 });
+}
 
-  const resp = await axios.post(`${API_BASE_URL}/api/storage/upload`, formData, {
-    headers: {
-      "Content-Type": "multipart/form-data",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-  });
+export async function uploadAssistantInput(
+  file: File,
+  modelId: number,
+  transport: "url" | "base64",
+): Promise<string> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("modelId", String(modelId));
+  formData.append("transport", transport);
 
-  const result = resp.data;
-  if (result.code !== 0) {
-    throw new Error(result.msg || "上传失败");
-  }
-  return result.data;
+  return http.post("/api/storage/assistant-upload", formData, { timeout: 0 });
 }

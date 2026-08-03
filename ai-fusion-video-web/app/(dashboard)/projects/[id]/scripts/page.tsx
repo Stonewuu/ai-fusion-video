@@ -20,10 +20,10 @@ import { EpisodeTree } from "./_components/episode-tree";
 import { SceneList } from "./_components/scene-list";
 import { SceneDetail } from "./_components/scene-detail";
 import { ScriptOverview } from "./_components/script-overview";
-import { EmptyState } from "./_components/empty-state";
-import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
+import { useConfirm } from "@/components/ui/confirm-dialog";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import { useProject } from "../project-context";
 
 const SCRIPT_SIDEBAR_COLLAPSED_STORAGE_KEY = "fusion-script-sidebar-collapsed";
@@ -32,8 +32,10 @@ export default function ScriptTabPage() {
   const params = useParams();
   const projectId = Number(params.id);
   const { project } = useProject();
+  const { confirm, alert } = useConfirm();
 
   const [loading, setLoading] = useState(true);
+  const [isRefreshingScript, setIsRefreshingScript] = useState(false);
   const [script, setScript] = useState<Script | null>(null);
   const [episodes, setEpisodes] = useState<ScriptEpisode[]>([]);
   const [storyboard, setStoryboard] = useState<Storyboard | null>(null);
@@ -63,10 +65,6 @@ export default function ScriptTabPage() {
 
   // 选中的场次（用于右栏显示详情）
   const [selectedSceneId, setSelectedSceneId] = useState<number | null>(null);
-
-  // 创建剧本对话框
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [showParseDialog, setShowParseDialog] = useState(false);
 
   // 移动端侧边栏状态
   const [leftSheetOpen, setLeftSheetOpen] = useState(false);
@@ -114,6 +112,7 @@ export default function ScriptTabPage() {
       setEpisodeScenes((prev) => ({ ...prev, [episodeId]: scenes }));
     } catch (err) {
       console.error("加载场次失败:", err);
+      toastApiError(err, "加载场次失败");
     } finally {
       setLoadingEpisodes((prev) => {
         const s = new Set(prev);
@@ -124,14 +123,13 @@ export default function ScriptTabPage() {
   };
 
   const loadStoryboardForScript = useCallback(async (scriptId: number) => {
-    const storyboards = await storyboardApi.list(projectId);
-    const currentStoryboard = storyboards.find((item) => item.scriptId === scriptId) ?? null;
-    setStoryboard(currentStoryboard);
-
-    if (!currentStoryboard) {
+    const currentStoryboard = await storyboardApi.getByProject(projectId);
+    if (!currentStoryboard || currentStoryboard.scriptId !== scriptId) {
+      setStoryboard(null);
       return { storyboard: null, episodes: [] as StoryboardEpisode[] };
     }
 
+    setStoryboard(currentStoryboard);
     const currentEpisodes = await storyboardApi.listEpisodes(currentStoryboard.id);
     return { storyboard: currentStoryboard, episodes: currentEpisodes };
   }, [projectId]);
@@ -139,9 +137,8 @@ export default function ScriptTabPage() {
   const loadScript = useCallback(async () => {
     try {
       setLoading(true);
-      const scripts = await scriptApi.list(projectId);
-      if (scripts.length > 0) {
-        const scr = scripts[0];
+      const scr = await scriptApi.getByProject(projectId);
+      if (scr) {
         setScript(scr);
         const eps = await scriptApi.listEpisodes(scr.id);
         setEpisodes(eps);
@@ -158,7 +155,8 @@ export default function ScriptTabPage() {
         setStoryboard(null);
       }
     } catch (err) {
-      console.error("加载剧本失败:", err);
+      console.error("加载剧本工作区失败:", err);
+      toastApiError(err, "加载剧本工作区失败");
     } finally {
       setLoading(false);
     }
@@ -171,9 +169,8 @@ export default function ScriptTabPage() {
 
   const refreshScript = useCallback(async () => {
     try {
-      const scripts = await scriptApi.list(projectId);
-      if (scripts.length > 0) {
-        const scr = scripts[0];
+      const scr = await scriptApi.getByProject(projectId);
+      if (scr) {
         setScript(scr);
         const eps = await scriptApi.listEpisodes(scr.id);
         setEpisodes(eps);
@@ -199,6 +196,7 @@ export default function ScriptTabPage() {
                   newEpisodeScenes[e.id] = scenes;
                 } catch (err) {
                   console.error(`刷新分集 ${e.id} 场次失败:`, err);
+                  toastApiError(err, `刷新分集 ${e.id} 场次失败`);
                 }
               }
             })
@@ -213,9 +211,19 @@ export default function ScriptTabPage() {
         setStoryboard(null);
       }
     } catch (err) {
-      console.error("刷新剧本数据失败:", err);
+      console.error("刷新剧本工作区失败:", err);
+      toastApiError(err, "刷新剧本工作区失败");
     }
   }, [loadStoryboardForScript, projectId]);
+
+  const handleManualRefreshScript = useCallback(async () => {
+    setIsRefreshingScript(true);
+    try {
+      await refreshScript();
+    } finally {
+      setIsRefreshingScript(false);
+    }
+  }, [refreshScript]);
 
   // AI 工具执行后自动刷新
   const scriptsInvalidation = usePipelineStore((s) => s.invalidation.scripts);
@@ -235,34 +243,6 @@ export default function ScriptTabPage() {
       loadStoryboardForScript(script.id);
     }
   }, [loadStoryboardForScript, script, storyboardsInvalidation]);
-
-  const handleAiScriptCreated = useCallback(
-    (createdScript: { id: number; title: string }) => {
-      const scriptDisplayTitle =
-        createdScript.title?.trim() || project?.name?.trim() || "未命名项目";
-
-      loadScript();
-
-      const pipelineId = addPipeline({
-        label: `AI 生成剧本 - ${scriptDisplayTitle}`,
-        projectId,
-        request: {
-          agentType: "script_full_parse",
-          category: "pipeline",
-          title: `AI 剧本解析：${scriptDisplayTitle}`,
-          projectId,
-          context: { scriptId: createdScript.id },
-        },
-        onComplete: () => {
-          loadScript();
-        },
-      });
-
-      setPanelExpanded(true);
-      setExpandedTaskId(pipelineId);
-    },
-    [addPipeline, loadScript, project?.name, projectId, setExpandedTaskId, setPanelExpanded]
-  );
 
   // ========== 导航操作 ==========
 
@@ -330,11 +310,12 @@ export default function ScriptTabPage() {
       setActiveEpisodeId(ep.id);
     } catch (err) {
       console.error("添加分集失败:", err);
+      toastApiError(err, "添加分集失败");
     }
   };
 
   const handleDeleteEpisode = async (episodeId: number) => {
-    if (!confirm("确定要删除该分集及其所有场次吗？")) return;
+    const ok = await confirm({ title: "删除剧本分集", description: "确定要删除该分集及其所有场次吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await scriptApi.deleteEpisode(episodeId);
       setEpisodes((prev) => prev.filter((ep) => ep.id !== episodeId));
@@ -351,6 +332,7 @@ export default function ScriptTabPage() {
       }
     } catch (err) {
       console.error("删除分集失败:", err);
+      toastApiError(err, "删除分集失败");
     }
   };
 
@@ -375,6 +357,7 @@ export default function ScriptTabPage() {
       setTimeout(() => scrollToScene(scene.id), 100);
     } catch (err) {
       console.error("添加场次失败:", err);
+      toastApiError(err, "添加场次失败");
     }
   };
 
@@ -407,11 +390,12 @@ export default function ScriptTabPage() {
       );
     } catch (err) {
       console.error("插入场次失败:", err);
+      toastApiError(err, "插入场次失败");
     }
   };
 
   const handleDeleteScene = async (sceneId: number, episodeId: number) => {
-    if (!confirm("确定要删除该场次吗？")) return;
+    const ok = await confirm({ title: "删除场次", description: "确定要删除该场次吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await scriptApi.deleteScene(sceneId);
       setEpisodeScenes((prev) => ({
@@ -423,6 +407,7 @@ export default function ScriptTabPage() {
       }
     } catch (err) {
       console.error("删除场次失败:", err);
+      toastApiError(err, "删除场次失败");
     }
   };
 
@@ -452,6 +437,7 @@ export default function ScriptTabPage() {
       );
     } catch (err) {
       console.error("排序保存失败，已回滚:", err);
+      toastApiError(err, "排序保存失败，已回滚");
       // 回滚
       setEpisodeScenes((prev) => ({ ...prev, [episodeId]: prevScenes }));
     }
@@ -479,6 +465,7 @@ export default function ScriptTabPage() {
         projectId,
         request: {
           agentType: "script_episode_parse",
+          toolExecutionMode: "FULL_ACCESS",
           category: "pipeline",
           title: `AI 解析 · 第 ${ep.episodeNumber} 集`,
           projectId,
@@ -495,12 +482,13 @@ export default function ScriptTabPage() {
       setExpandedTaskId(pipelineId);
     } catch (err) {
       console.error("启动分集解析失败:", err);
+      toastApiError(err, "启动分集解析失败");
     }
   };
 
   const ensureStoryboardForScript = async () => {
     if (!script) {
-      throw new Error("请先创建剧本后再生成分镜");
+      throw new Error("项目剧本工作区未初始化");
     }
     if (storyboard && storyboard.scriptId === script.id) {
       return storyboard;
@@ -511,13 +499,7 @@ export default function ScriptTabPage() {
       return loaded.storyboard;
     }
 
-    const created = await storyboardApi.create({
-      projectId,
-      scriptId: script.id,
-      title: script.title?.trim() || project?.name?.trim() || "AI 分镜",
-    });
-    setStoryboard(created);
-    return created;
+    throw new Error("项目分镜工作区未初始化或关联剧本不一致");
   };
 
   const handleGenerateEpisodeStoryboard = async (episodeId: number) => {
@@ -537,12 +519,12 @@ export default function ScriptTabPage() {
       );
 
       if (!boundEpisode && legacyUnboundEpisode) {
-        alert(`分镜中存在未绑定的第 ${ep.episodeNumber} 集，请先到分镜页将旧分镜集绑定到当前剧本集后再重新生成。`);
+        await alert({ title: "未绑定分镜集", description: `分镜中存在未绑定的第 ${ep.episodeNumber} 集，请先到分镜页将旧分镜集绑定到当前剧本集后再重新生成。`, variant: "warning" });
         return;
       }
 
       if (boundEpisode) {
-        const confirmed = confirm(`将覆盖第 ${ep.episodeNumber} 集已有分镜内容，不影响其它集。确定继续？`);
+        const confirmed = await confirm({ title: "覆盖生成本集分镜", description: `将覆盖第 ${ep.episodeNumber} 集已有分镜内容，不影响其它集。确定继续？`, variant: "ai", confirmText: "确定覆盖生成" });
         if (!confirmed) return;
         await storyboardApi.clearEpisodeContent(boundEpisode.id);
       }
@@ -552,6 +534,7 @@ export default function ScriptTabPage() {
         projectId,
         request: {
           agentType: "episode_storyboard_writer",
+          toolExecutionMode: "FULL_ACCESS",
           category: "pipeline",
           title: `AI 分镜 · 第 ${ep.episodeNumber} 集`,
           message: `请为剧本分集（scriptEpisodeId: ${ep.id}）生成分镜，并保存到分镜脚本 ${targetStoryboard.id}。`,
@@ -571,7 +554,7 @@ export default function ScriptTabPage() {
       setExpandedTaskId(pipelineId);
     } catch (err) {
       console.error("启动单集分镜生成失败:", err);
-      alert(err instanceof Error ? err.message : "启动单集分镜生成失败，请重试");
+      toastApiError(err, "启动单集分镜生成失败，请重试");
     }
   };
 
@@ -583,6 +566,7 @@ export default function ScriptTabPage() {
       setEpisodeScenes((prev) => ({ ...prev, [episodeId]: scenes }));
     } catch (err) {
       console.error("重新加载场次失败:", err);
+      toastApiError(err, "重新加载场次失败");
     } finally {
       setLoadingEpisodes((prev) => {
         const s = new Set(prev);
@@ -661,23 +645,10 @@ export default function ScriptTabPage() {
 
   if (!script) {
     return (
-      <>
-        <EmptyState
-          projectId={projectId}
-          projectName={project?.name}
-          showCreateDialog={showCreateDialog}
-          onShowCreateDialog={setShowCreateDialog}
-          onCreated={loadScript}
-          onParseScript={() => setShowParseDialog(true)}
-        />
-        <ParseScriptDialog
-          open={showParseDialog}
-          projectId={projectId}
-          projectName={project?.name}
-          onClose={() => setShowParseDialog(false)}
-          onCreated={handleAiScriptCreated}
-        />
-      </>
+      <div className="rounded-xl border border-destructive/30 bg-card p-6">
+        <p className="font-medium">项目剧本工作区未初始化</p>
+        <p className="mt-1 text-sm text-muted-foreground">请检查项目创建流程后重试。</p>
+      </div>
     );
   }
 
@@ -686,11 +657,13 @@ export default function ScriptTabPage() {
       variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}
       initial="hidden"
       animate="visible"
-      className="flex h-full rounded-xl border border-border/20 overflow-hidden bg-card/10"
+      className="flex min-h-0 flex-1 rounded-xl border border-border/20 overflow-hidden bg-card/10"
     >
       {/* 左栏：树形导航 */}
       <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="shrink-0 hidden xl:block">
       <EpisodeTree
+        onRefresh={handleManualRefreshScript}
+        isRefreshing={isRefreshingScript}
         episodes={episodes}
         expandedEpisodes={expandedEpisodes}
         activeEpisodeId={activeEpisodeId}
@@ -725,7 +698,9 @@ export default function ScriptTabPage() {
             />
             <SheetContent side="left" className="w-[300px] p-0 border-r-0 flex flex-col pt-12">
               <EpisodeTree
-                episodes={episodes}
+        onRefresh={handleManualRefreshScript}
+        isRefreshing={isRefreshingScript}
+        episodes={episodes}
                 expandedEpisodes={expandedEpisodes}
                 activeEpisodeId={activeEpisodeId}
                 selectedSceneId={selectedSceneId}
@@ -757,7 +732,7 @@ export default function ScriptTabPage() {
               {selectedScene ? (
                 <SceneDetail scene={selectedScene} projectId={projectId} />
               ) : (
-                <ScriptOverview script={script} episodes={episodes} />
+                <ScriptOverview script={script} episodes={episodes} projectName={project?.name} />
               )}
             </SheetContent>
           </Sheet>
@@ -787,7 +762,7 @@ export default function ScriptTabPage() {
         {selectedScene ? (
           <SceneDetail scene={selectedScene} projectId={projectId} />
         ) : (
-          <ScriptOverview script={script} episodes={episodes} />
+          <ScriptOverview script={script} episodes={episodes} projectName={project?.name} />
         )}
       </motion.div>
 

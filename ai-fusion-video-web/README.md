@@ -22,12 +22,14 @@ pnpm dev
 
 默认访问地址：<http://localhost:3000>
 
-前端默认请求后端地址：<http://localhost:18080>
+前端默认使用同源 `/api/**` 和 `/media/**`，Next.js 开发服务器会将请求代理到
+<http://localhost:18080>。
 
-如需覆盖后端地址，可设置环境变量：
+代理目标在已提交的 `.env.development` 中显式配置。本地后端端口不同时，修改该文件或在
+`.env.local` 中覆盖：
 
-```bash
-NEXT_PUBLIC_API_BASE_URL=http://localhost:18080
+```env
+DEV_BACKEND_URL=http://localhost:18081
 ```
 
 ## 生产构建
@@ -38,6 +40,15 @@ pnpm start
 ```
 
 `next.config.ts` 已启用 `standalone` 输出，便于容器化部署。
+
+Docker 镜像在容器启动时读取 `PUBLIC_API_URL` 并生成浏览器运行时配置：
+
+- 留空：统一入口部署，浏览器使用同源 `/api`。
+- `https://api.example.com`：前后端分域，浏览器直接访问该后端。
+
+该地址不包含末尾 `/api`。分域部署还必须在后端配置
+`CORS_ALLOWED_ORIGIN_PATTERNS=https://app.example.com`。不要使用 `NEXT_PUBLIC_API_BASE_URL`，它属于
+构建时变量，无法可靠配置已经发布的镜像。
 
 ## 目录说明
 

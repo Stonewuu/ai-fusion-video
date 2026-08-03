@@ -1,0 +1,34 @@
+[
+  {
+    "code": "agnes-video-v2.0",
+    "name": "Agnes Video V2.0",
+    "platform": "openai_compatible",
+    "modelProtocol": "agnes",
+    "modelType": 3,
+    "description": "Agnes Video V2.0 视频生成模型，使用 OpenAI 兼容渠道提交 /v1/videos，但请求体和轮询协议为 Agnes 专有格式。支持文生视频、单图生视频、多图视频和关键帧过渡。",
+    "capabilities": ["文生视频", "图生视频-首帧", "图生视频-首尾帧", "多图视频", "关键帧过渡"],
+    "config": {
+      "referenceImageInputFormats": ["url", "data_uri"],
+      "supportDataUriInput": true,
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": false,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 16,
+      "maxReferenceImages": 16,
+      "maxReferenceVideos": 0,
+      "maxReferenceAudios": 0,
+      "defaultWidth": 1152,
+      "defaultHeight": 768,
+      "minDuration": 3,
+      "maxDuration": 18,
+      "defaultDuration": 5,
+      "frameRate": 24,
+      "pollIntervalMillis": 5000,
+      "pollTimeoutMillis": 1800000,
+      "supportCameraFixed": false
+    }
+  }
+]

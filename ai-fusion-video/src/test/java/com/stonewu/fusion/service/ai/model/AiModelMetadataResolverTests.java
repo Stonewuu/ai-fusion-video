@@ -1,56 +1,74 @@
 package com.stonewu.fusion.service.ai.model;
 
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.ApiConfigService;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 
 class AiModelMetadataResolverTests {
 
+    private final AiModelMetadataResolver resolver =
+            new AiModelMetadataResolver(mock(ApiConfigService.class));
+
     @Test
-    void shouldInferNewApiSpecificProtocolFromFamilyKeywords() {
-        AiModelMetadataResolver resolver = new AiModelMetadataResolver(mock(ApiConfigService.class));
+    void modelProtocolOverrideWinsProviderDefault() {
         AiModel model = AiModel.builder()
-                .name("即梦 Video")
-                .code("jimeng-v1")
                 .modelType(3)
+                .modelProtocol("jimeng")
+                .build();
+        ApiConfig apiConfig = ApiConfig.builder()
+                .platform("newapi")
+                .videoProtocol("newapi")
                 .build();
 
-        AiModelMetadata metadata = resolver.resolve(model, "newapi");
+        AiModelMetadata metadata = resolver.resolve(model, apiConfig);
 
-        assertEquals("jimeng", metadata.modelFamily());
         assertEquals("jimeng", metadata.modelProtocol());
     }
 
     @Test
-    void shouldFallbackToGenericProtocolForNewApiGenericVideoModel() {
-        AiModelMetadataResolver resolver = new AiModelMetadataResolver(mock(ApiConfigService.class));
-        AiModel model = AiModel.builder()
-                .name("Generic Video")
-                .code("video-model-v1")
-                .modelType(3)
+    void inheritsCapabilitySpecificProviderProtocols() {
+        ApiConfig apiConfig = ApiConfig.builder()
+                .platform("openai_compatible")
+                .textProtocol("openai_compatible")
+                .imageProtocol("agnes")
+                .videoProtocol("agnes")
                 .build();
 
-        AiModelMetadata metadata = resolver.resolve(model, "newapi");
-
-        assertEquals("generic", metadata.modelFamily());
-        assertEquals("generic", metadata.modelProtocol());
+        assertEquals("openai_compatible", resolver.resolve(
+                AiModel.builder().modelType(1).build(), apiConfig).modelProtocol());
+        assertEquals("agnes", resolver.resolve(
+                AiModel.builder().modelType(2).build(), apiConfig).modelProtocol());
+        assertEquals("agnes", resolver.resolve(
+                AiModel.builder().modelType(3).build(), apiConfig).modelProtocol());
     }
 
     @Test
-    void shouldInferAgnesProtocolForOpenAiCompatibleVideoModel() {
-        AiModelMetadataResolver resolver = new AiModelMetadataResolver(mock(ApiConfigService.class));
+    void doesNotInferProtocolFromModelNameCodeOrPlatform() {
         AiModel model = AiModel.builder()
                 .name("Agnes Video")
                 .code("agnes-video-v2.0")
                 .modelType(3)
                 .build();
 
-        AiModelMetadata metadata = resolver.resolve(model, "openai_compatible");
+        AiModelMetadata metadata = resolver.resolve(model,
+                ApiConfig.builder().platform("openai_compatible").build());
 
-        assertEquals("agnes", metadata.modelFamily());
-        assertEquals("agnes", metadata.modelProtocol());
+        assertNull(metadata.modelProtocol());
+    }
+
+    @Test
+    void remoteDiscoveryInfersOnlyModelType() {
+        RemoteModelMetadata metadata = resolver.resolveRemoteModel(
+                "openai_compatible", "agnes-video-v2.0", "Agnes Video", null);
+
+        assertEquals(3, metadata.modelType());
+        assertNull(metadata.modelProtocol());
+        assertEquals("openai_compatible", metadata.providerPlatform());
+        assertEquals("Agnes Video", metadata.displayName());
     }
 }

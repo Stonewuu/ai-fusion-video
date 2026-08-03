@@ -2,6 +2,8 @@
 
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import { toast } from "sonner";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Select,
   SelectContent,
@@ -38,6 +40,7 @@ import {
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { cn } from "@/lib/utils";
 import { uploadFile } from "@/lib/api/storage";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { resolveMediaUrl } from "@/lib/api/client";
 import {
   assetApi,
@@ -111,12 +114,12 @@ type Props = EditProps | CreateProps;
 function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
   return createPortal(
     <div
-      className="fixed inset-0 z-200 flex items-center justify-center bg-black/80 backdrop-blur-sm cursor-pointer"
+      className="modal-overlay fixed inset-0 z-200 flex cursor-pointer items-center justify-center"
       onClick={onClose}
     >
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 p-2 rounded-full bg-white/10 text-white/80 hover:bg-white/20 transition-colors z-10"
+        className="absolute right-4 top-4 z-10 rounded-full border border-border/40 bg-background/80 p-2 text-foreground shadow-xl backdrop-blur-xl transition-colors hover:bg-background"
       >
         <X className="h-5 w-5" />
       </button>
@@ -163,6 +166,7 @@ function CoverSelectorDialog({
         })
         .catch(err => {
           console.error(err);
+          toast.error(getApiErrorMessage(err));
           setAssets([]);
           setLoadedProjectId(projectId);
         });
@@ -282,6 +286,7 @@ function CoverSelectorDialog({
 
 // ========== 子资产编辑面板（滑入式） ==========
 function AssetItemEditPanel({
+  confirm,
   item,
   assetId,
   assetType,
@@ -290,6 +295,7 @@ function AssetItemEditPanel({
   onUpdated,
   onDeleted,
 }: {
+  confirm: ReturnType<typeof useConfirm>["confirm"];
   item: AssetItem;
   assetId: number;
   assetType: string;
@@ -358,18 +364,20 @@ function AssetItemEditPanel({
       onUpdated();
     } catch (err) {
       console.error("更新子资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async () => {
-    if (!confirm("确定删除该子资产？")) return;
+    const ok = await confirm({ title: "删除子资产", description: "确定删除该子资产吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await assetApi.deleteItem(item.id);
       onDeleted();
     } catch (err) {
       console.error("删除子资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     }
   };
 
@@ -382,6 +390,7 @@ function AssetItemEditPanel({
       setDirty(true);
     } catch (err) {
       console.error("上传子资产图片失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setUploading(false);
     }
@@ -500,6 +509,7 @@ function AssetItemEditPanel({
                   projectId,
                   request: {
                     agentType: 'asset_image_gen',
+                    toolExecutionMode: 'FULL_ACCESS',
                     projectId,
                     context: {
                       selectedAssetIds: [assetId],
@@ -709,6 +719,7 @@ function AssetItemCreatePanel({
       onCreated();
     } catch (err) {
       console.error("创建子资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setCreating(false);
     }
@@ -845,6 +856,7 @@ function AssetItemCreatePanel({
 
 // ========== 主面板 ==========
 export default function AssetDetailPanel(props: Props) {
+  const { confirm } = useConfirm();
   const { onClose, onSaved } = props;
   const isCreating = props.isCreating === true;
   const asset = isCreating ? null : props.asset;
@@ -930,6 +942,7 @@ export default function AssetDetailPanel(props: Props) {
       setDirty(true);
     } catch (err) {
       console.error("上传资产封面失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setCoverUploading(false);
     }
@@ -950,6 +963,7 @@ export default function AssetDetailPanel(props: Props) {
       onSaved();
     } catch (err) {
       console.error("保存资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setSaving(false);
     }
@@ -957,12 +971,13 @@ export default function AssetDetailPanel(props: Props) {
 
   const handleDelete = async () => {
     if (!asset || !props.onDeleted) return;
-    if (!confirm("确定要删除该资产及其所有子资产吗？")) return;
+    const ok = await confirm({ title: "删除主资产", description: "确定要删除该资产及其所有子资产吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await assetApi.delete(asset.id);
       props.onDeleted();
     } catch (err) {
       console.error("删除资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     }
   };
 
@@ -979,6 +994,7 @@ export default function AssetDetailPanel(props: Props) {
       props.onCreated(created);
     } catch (err) {
       console.error("创建资产失败:", err);
+      toast.error(getApiErrorMessage(err));
     } finally {
       setCreateSaving(false);
     }
@@ -1366,9 +1382,9 @@ export default function AssetDetailPanel(props: Props) {
                         />
                         {/* 删除按钮 */}
                         <button
-                          onClick={(e) => {
+                          onClick={async (e) => {
                             e.stopPropagation();
-                            if (!confirm("确定删除该子资产？")) return;
+                            const ok = await confirm({ title: "删除子资产", description: "确定删除该子资产吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
                             assetApi.deleteItem(item.id).then(() => {
                               if (selectedItem?.id === item.id) setSelectedItem(null);
                               loadItems(asset.id);
@@ -1418,6 +1434,7 @@ export default function AssetDetailPanel(props: Props) {
           />
         ) : selectedItem ? (
           <AssetItemEditPanel
+            confirm={confirm}
             key={selectedItem.id}
             item={selectedItem}
             assetId={asset.id}

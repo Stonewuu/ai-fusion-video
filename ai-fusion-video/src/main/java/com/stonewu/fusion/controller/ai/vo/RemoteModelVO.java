@@ -29,8 +29,8 @@ public class RemoteModelVO {
     /** 模型类型：1-对话 2-图像生成 3-视频生成 */
     private Integer modelType;
 
-    /** 模型家族 */
-    private String modelFamily;
+    /** 可直接应用的模型能力预设代码 */
+    private String capabilityPresetCode;
 
     /** 模型协议 */
     private String modelProtocol;

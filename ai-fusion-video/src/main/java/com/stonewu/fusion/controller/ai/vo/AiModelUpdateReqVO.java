@@ -5,6 +5,9 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
+import java.util.List;
+import java.util.Map;
+
 @Schema(description = "更新AI模型请求")
 @Data
 public class AiModelUpdateReqVO {
@@ -12,8 +15,8 @@ public class AiModelUpdateReqVO {
     private Long id;
     private String name;
     private String code;
-    private String modelFamily;
     private String modelProtocol;
+    private String capabilityPresetCode;
     private Integer modelType;
     private String icon;
     private String description;
@@ -24,7 +27,10 @@ public class AiModelUpdateReqVO {
     private Integer maxConcurrency;
     private Boolean defaultModel;
     private Boolean supportVision;
+    private List<String> multimodalInputTypes;
+    private Map<String, List<String>> multimodalInputTransports;
     private Boolean supportReasoning;
+    private List<String> reasoningEffortLevels;
     @Min(value = 0, message = "上下文窗口不能小于 0")
     private Integer contextWindow;
     private Long apiConfigId;

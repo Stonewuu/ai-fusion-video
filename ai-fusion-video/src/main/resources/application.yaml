@@ -40,13 +40,53 @@ springdoc:
 
 server:
   port: 18080
+  forward-headers-strategy: framework
 
 # 应用配置
 app:
+  cors:
+    # 一体化/统一网关部署保持为空；分域部署通过 CORS_ALLOWED_ORIGIN_PATTERNS 配置前端来源。
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:}
   storage:
     local-base-path: ./data/media
+  agent-workspace:
+    local-base-path: ${AGENT_WORKSPACE_LOCAL_PATH:./data/agent-workspace}
 
 video:
   compose:
     ffmpeg-path: ${VIDEO_COMPOSE_FFMPEG_PATH:ffmpeg}
     ffprobe-path: ${VIDEO_COMPOSE_FFPROBE_PATH:ffprobe}
+
+fusion:
+  agentscope:
+    v2:
+      cache:
+        maximum-size: 64
+        expire-after-access: 30m
+        capacity-wait: 5s
+      state:
+        mode: mysql
+        database-name: "ai_fusion_video"
+        table-name: "afv_agent_state"
+      ingress:
+        max-events: 4096
+        max-bytes: 8388608
+        coalesce-delay: 50ms
+        coalesce-max-chars: 1024
+      execution:
+        owner-lease: 30s
+        run-timeout: 30m
+        confirmation-timeout: 48h
+        max-iters: 999
+      skills:
+        enabled: true
+        fail-fast: true
+        display-names: {}
+        repositories:
+          bundled:
+            location: classpath:agentscope/skills
+            lazy: false
+      mcp:
+        enabled: ${AGENTSCOPE_MCP_ENABLED:false}
+        fail-fast: true
+        servers: {}

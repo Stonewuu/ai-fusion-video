@@ -5,7 +5,12 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.entity.generation.VideoTask;
+import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.ModelPresetService;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
+import com.stonewu.fusion.service.storage.StorageConfigService;
+import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
+import com.stonewu.fusion.service.system.SystemConfigService;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -14,11 +19,14 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class GenerationModelCapabilityServiceTests {
 
-                private final ModelPresetService presetService = createPresetService();
-                private final GenerationModelCapabilityService service = new GenerationModelCapabilityService(null, presetService);
+        private final ModelPresetService presetService = createPresetService();
+        private final AiModelMetadataResolver metadataResolver = new AiModelMetadataResolver(mock(ApiConfigService.class));
+        private final GenerationModelCapabilityService service = new GenerationModelCapabilityService(metadataResolver, presetService);
 
         private static ModelPresetService createPresetService() {
                 ModelPresetService presetService = new ModelPresetService();
@@ -34,6 +42,7 @@ class GenerationModelCapabilityServiceTests {
             AiModel model = AiModel.builder()
                     .name(modelCode)
                     .code(modelCode)
+                    .capabilityPresetCode(modelCode)
                     .build();
 
             GenerationModelCapabilityService.ImageModelCapability capability = service.resolveImageCapability(model, "openai");
@@ -49,6 +58,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("GPT Image 1")
                 .code("gpt-image-1")
+                .capabilityPresetCode("gpt-image-1")
                 .build();
         ImageTask task = ImageTask.builder()
                 .refImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
@@ -59,20 +69,22 @@ class GenerationModelCapabilityServiceTests {
 
     @Test
     void shouldExposeOfficialOpenAiImagePresetSizesAndRatios() {
-        AiModel dallE3 = AiModel.builder()
-                .name("DALL·E 3")
-                .code("dall-e-3")
+        AiModel gptImage1 = AiModel.builder()
+                .name("GPT Image 1")
+                .code("gpt-image-1")
+                .capabilityPresetCode("gpt-image-1")
                 .build();
-        var dallE3Config = service.getMergedModelConfig(dallE3);
+        var gptImage1Config = service.getMergedModelConfig(gptImage1);
 
-        assertEquals(List.of("1:1", "7:4", "4:7"),
-                JSONUtil.toList(dallE3Config.getJSONArray("supportedAspectRatios"), String.class));
-        assertEquals("1792x1024",
-                dallE3Config.getJSONObject("supportedSizes").getJSONObject("standard").getStr("7:4"));
+        assertEquals(List.of("1:1", "2:3", "3:2"),
+                JSONUtil.toList(gptImage1Config.getJSONArray("supportedAspectRatios"), String.class));
+        assertEquals("1536x1024",
+                gptImage1Config.getJSONObject("supportedSizes").getJSONObject("standard").getStr("3:2"));
 
         AiModel gptImage2 = AiModel.builder()
                 .name("GPT Image 2")
                 .code("gpt-image-2")
+                .capabilityPresetCode("gpt-image-2")
                 .build();
         var gptImage2Config = service.getMergedModelConfig(gptImage2);
 
@@ -97,24 +109,95 @@ class GenerationModelCapabilityServiceTests {
     }
 
     @Test
-    void shouldRejectReferenceImagesForDallE3Preset() {
+    void shouldExposeAgnesImage21PresetCapabilities() {
         AiModel model = AiModel.builder()
-                .name("DALL·E 3")
-                .code("dall-e-3")
+                .name("Agnes Image 2.1 Flash")
+                .code("agnes-image-2.1-flash")
+                .capabilityPresetCode("agnes-image-2.1-flash")
+                .build();
+
+        GenerationModelCapabilityService.ImageModelCapability capability =
+                service.resolveImageCapability(model, "openai_compatible");
+        var config = service.getMergedModelConfig(model);
+
+        assertTrue(capability.supportsReferenceImages());
+        assertEquals(16, capability.maxReferenceImages());
+        assertEquals("agnes", config.getStr("imageProtocol"));
+        assertFalse(config.containsKey("agnesSizeMode"));
+        assertTrue(config.getBool("supportDataUriInput"));
+        assertEquals(List.of("url", "data_uri"),
+                JSONUtil.toList(config.getJSONArray("referenceImageInputFormats"), String.class));
+        assertEquals(List.of("1K", "2K", "3K", "4K"),
+                JSONUtil.toList(config.getJSONArray("supportedResolutions"), String.class));
+        assertEquals("2624x1472",
+                config.getJSONObject("supportedSizes").getJSONObject("2K").getStr("16:9"));
+        assertEquals("6272x2688",
+                config.getJSONObject("supportedSizes").getJSONObject("4K").getStr("21:9"));
+    }
+
+    @Test
+    void shouldExposeAgnesImage20DataUriPresetCapabilities() {
+        AiModel model = AiModel.builder()
+                .name("Agnes Image 2.0 Flash")
+                .code("agnes-image-2.0-flash")
+                .capabilityPresetCode("agnes-image-2.0-flash")
+                .build();
+
+        GenerationModelCapabilityService.ImageModelCapability capability =
+                service.resolveImageCapability(model, "openai_compatible");
+        var config = service.getMergedModelConfig(model);
+
+        assertTrue(capability.supportsReferenceImages());
+        assertEquals(16, capability.maxReferenceImages());
+        assertEquals("agnes", config.getStr("imageProtocol"));
+        assertFalse(config.containsKey("agnesSizeMode"));
+        assertTrue(config.getBool("supportDataUriInput"));
+        assertEquals(List.of("url", "data_uri"),
+                JSONUtil.toList(config.getJSONArray("referenceImageInputFormats"), String.class));
+        assertEquals("1024x768",
+                config.getJSONObject("supportedSizes").getJSONObject("standard").getStr("4:3"));
+    }
+
+    @Test
+    void shouldRejectUrlOnlyLocalReferenceWithoutPublicAccessAtSubmissionValidation() {
+        ModelPresetService urlOnlyPresetService = new ModelPresetService() {
+            @Override
+            public String getPresetConfig(String code) {
+                return """
+                        {
+                          "supportReferenceImages": true,
+                          "maxReferenceImages": 1,
+                          "referenceImageInputFormats": ["url"]
+                        }
+                        """;
+            }
+        };
+        SystemConfigService systemConfigService = mock(SystemConfigService.class);
+        when(systemConfigService.resolvePublicUrl("/media/reference.png")).thenReturn(null);
+        ReferenceImageTransportService transportService = new ReferenceImageTransportService(
+                mock(StorageConfigService.class),
+                systemConfigService,
+                mock(PresetArtStyleResourceResolver.class));
+        GenerationModelCapabilityService strictService = new GenerationModelCapabilityService(
+                metadataResolver, urlOnlyPresetService, transportService);
+        AiModel model = AiModel.builder()
+                .name("URL Only Image")
+                .code("url-only-image")
+                .capabilityPresetCode("url-only-image")
                 .build();
         ImageTask task = ImageTask.builder()
-                .refImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
+                .refImageUrls(JSONUtil.toJsonStr(List.of("/media/reference.png")))
                 .build();
 
         BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.validateImageTask(model, task, "openai"));
+                () -> strictService.validateImageTask(model, task, "openai_compatible"));
 
-        assertTrue(ex.getMessage().contains("不支持参考图输入"));
+        assertTrue(ex.getMessage().contains("未配置访问域名或公网对象存储"));
     }
 
     @Test
     void shouldUsePresetCapabilityWhenModelConfigDoesNotContainNewFields() {
-        GenerationModelCapabilityService serviceWithPreset = new GenerationModelCapabilityService(null, new ModelPresetService() {
+        GenerationModelCapabilityService serviceWithPreset = new GenerationModelCapabilityService(metadataResolver, new ModelPresetService() {
             @Override
             public String getPresetConfig(String code) {
                 if (!"doubao-seedream-3-0-t2i-250415".equals(code)) {
@@ -133,6 +216,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Seedream 3.0")
                 .code("doubao-seedream-3-0-t2i-250415")
+                .capabilityPresetCode("doubao-seedream-3-0-t2i-250415")
                 .config("{\"defaultWidth\":2048,\"defaultHeight\":2048}")
                 .build();
 
@@ -147,6 +231,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Veo T2V Fast")
                 .code("veo_3_1_t2v_fast")
+                .capabilityPresetCode("veo_3_1_t2v_fast")
                 .build();
         VideoTask task = VideoTask.builder()
                 .firstFrameImageUrl("https://example.com/first.png")
@@ -163,6 +248,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Interpolation Lite")
                 .code("veo_3_1_interpolation_lite")
+                .capabilityPresetCode("veo_3_1_interpolation_lite")
                 .build();
         VideoTask task = VideoTask.builder()
                 .firstFrameImageUrl("https://example.com/first.png")
@@ -179,6 +265,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Seedance 1.0 Pro Fast")
                 .code("doubao-seedance-1-0-pro-fast-251015")
+                .capabilityPresetCode("doubao-seedance-1-0-pro-fast-251015")
                 .build();
         VideoTask task = VideoTask.builder()
                 .lastFrameImageUrl("https://example.com/last.png")
@@ -195,10 +282,9 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Seedance 2.0")
                 .code("doubao-seedance-2-0-260128")
+                .capabilityPresetCode("doubao-seedance-2-0-260128")
                 .build();
         VideoTask task = VideoTask.builder()
-                .firstFrameImageUrl("https://example.com/first.png")
-                .lastFrameImageUrl("https://example.com/last.png")
                 .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref-1.png")))
                 .referenceVideoUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref-1.mp4")))
                 .referenceAudioUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref-1.mp3")))
@@ -208,10 +294,46 @@ class GenerationModelCapabilityServiceTests {
     }
 
     @Test
+    void shouldRejectMixedSeedance20FrameAndReferenceModes() {
+        AiModel model = AiModel.builder()
+                .name("Seedance 2.0")
+                .code("doubao-seedance-2-0-260128")
+                .capabilityPresetCode("doubao-seedance-2-0-260128")
+                .build();
+        VideoTask task = VideoTask.builder()
+                .firstFrameImageUrl("https://example.com/first.png")
+                .referenceVideoUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.mp4")))
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, task, "volcengine"));
+
+        assertTrue(ex.getMessage().contains("互斥"));
+    }
+
+    @Test
+    void shouldRejectSeedance20AudioOnlyReferenceMode() {
+        AiModel model = AiModel.builder()
+                .name("Seedance 2.0")
+                .code("doubao-seedance-2-0-260128")
+                .capabilityPresetCode("doubao-seedance-2-0-260128")
+                .build();
+        VideoTask task = VideoTask.builder()
+                .referenceAudioUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.mp3")))
+                .build();
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.validateVideoTask(model, task, "volcengine"));
+
+        assertTrue(ex.getMessage().contains("参考图片或参考视频"));
+    }
+
+    @Test
     void shouldAllowDashScopeWanImageReferenceImages() {
         AiModel model = AiModel.builder()
                 .name("Wan 2.7 Image")
                 .code("wan2.7-image")
+                .capabilityPresetCode("wan2.7-image")
                 .build();
         ImageTask task = ImageTask.builder()
                 .refImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
@@ -228,6 +350,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Qwen Image 2.0")
                 .code("qwen-image-2.0")
+                .capabilityPresetCode("qwen-image-2.0")
                 .build();
         ImageTask task = ImageTask.builder()
                 .refImageUrls(JSONUtil.toJsonStr(List.of(
@@ -247,6 +370,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Wan 2.7 T2V")
                 .code("wan2.7-t2v")
+                .capabilityPresetCode("wan2.7-t2v")
                 .build();
         VideoTask task = VideoTask.builder()
                 .firstFrameImageUrl("https://example.com/first.png")
@@ -263,6 +387,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Wan 2.7 T2V")
                 .code("wan2.7-t2v")
+                .capabilityPresetCode("wan2.7-t2v")
                 .build();
         VideoTask task = VideoTask.builder()
                 .referenceAudioUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.mp3")))
@@ -279,6 +404,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Wan 2.7 I2V")
                 .code("wan2.7-i2v")
+                .capabilityPresetCode("wan2.7-i2v")
                 .build();
         VideoTask task = VideoTask.builder()
                 .firstFrameImageUrl("https://example.com/first.png")
@@ -297,6 +423,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Wan 2.7 R2V")
                 .code("wan2.7-r2v")
+                .capabilityPresetCode("wan2.7-r2v")
                 .build();
         VideoTask task = VideoTask.builder()
                 .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
@@ -312,6 +439,7 @@ class GenerationModelCapabilityServiceTests {
         AiModel model = AiModel.builder()
                 .name("Wan 2.7 Video Edit")
                 .code("wan2.7-videoedit")
+                .capabilityPresetCode("wan2.7-videoedit")
                 .build();
         VideoTask task = VideoTask.builder()
                 .referenceImageUrls(JSONUtil.toJsonStr(List.of("https://example.com/ref.png")))
@@ -324,5 +452,23 @@ class GenerationModelCapabilityServiceTests {
         assertTrue(capability.supportsReferenceVideos());
         assertFalse(capability.supportsReferenceAudios());
         service.validateVideoTask(model, task, "dashscope");
+    }
+
+    @Test
+    void shouldNotInferCapabilitiesFromModelCodeOrProtocol() {
+        AiModel model = AiModel.builder()
+                .name("Agnes Video without explicit capability preset")
+                .code("agnes-video-v2.0")
+                .modelProtocol("agnes")
+                .build();
+
+        GenerationModelCapabilityService.VideoModelCapability capability =
+                service.resolveVideoCapability(model, "openai_compatible");
+
+        assertFalse(capability.supportsFirstFrame());
+        assertFalse(capability.supportsLastFrame());
+        assertFalse(capability.supportsReferenceImages());
+        assertFalse(capability.supportsReferenceVideos());
+        assertFalse(capability.supportsReferenceAudios());
     }
 }

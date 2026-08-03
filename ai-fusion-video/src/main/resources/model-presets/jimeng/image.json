@@ -1,0 +1,23 @@
+[
+  {
+    "code": "jimeng-4.0-image",
+    "modelCode": "jimeng-4.0",
+    "name": "即梦 4.0 Image",
+    "platform": "newapi",
+    "modelProtocol": "newapi",
+    "modelType": 2,
+    "description": "即梦图片模型通用能力模板，支持文生图与参考图生成；具体尺寸和数量上限以当前接入渠道为准。",
+    "capabilities": ["文生图", "图生图", "参考图"],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": ["url"],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 4,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "maxCount": 4,
+      "supportedAspectRatios": ["1:1", "3:4", "4:3", "16:9", "9:16"],
+      "supportedResolutions": ["1K", "2K"]
+    }
+  }
+]

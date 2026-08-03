@@ -31,6 +31,15 @@ public class ApiConfig extends BaseEntity {
     /** 平台标识：deepseek / dashscope / openai_compatible / newapi / gemini / ollama / anthropic / vertex_ai / GoogleFlowReverseApi */
     private String platform;
 
+    /** 文本模型默认请求协议；同一接入配置可按能力类型使用不同协议 */
+    private String textProtocol;
+
+    /** 图片模型默认请求协议 */
+    private String imageProtocol;
+
+    /** 视频模型默认请求协议 */
+    private String videoProtocol;
+
     /** API 类型：1-文本对话 2-图片生成 3-视频生成 */
     private Integer apiType;
 

@@ -1,103 +1,160 @@
 package com.stonewu.fusion.service.ai.agentscope;
 
 import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.service.ai.ToolExecutionContext;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import io.agentscope.core.message.ToolUseBlock;
+import com.stonewu.fusion.service.ai.ToolPermissionRisk;
+import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
+import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
+import com.stonewu.fusion.service.ai.agentscope.tool.AbstractPlatformAgentTool;
+import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
+import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
+import com.stonewu.fusion.service.ai.run.RunLeaseGuard;
+import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.ToolResultBlock;
-import io.agentscope.core.tool.AgentTool;
+import io.agentscope.core.tool.ToolBase;
 import io.agentscope.core.tool.ToolCallParam;
-import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
+import reactor.core.scheduler.Scheduler;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Map;
+import java.util.Objects;
 
-/**
- * AgentScope 工具适配器
- * <p>
- * 将现有 {@link ToolExecutor} 接口适配为 AgentScope 的 {@link AgentTool} 接口，
- * 使现有工具可以在 AgentScope ReActAgent 中使用。
- */
-@Slf4j
-public class AgentScopeToolAdapter implements AgentTool {
+/** Adapts a platform tool to the strict AgentScope V2 {@link ToolBase} contract. */
+public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
 
     private final ToolExecutor toolExecutor;
-    private final ToolExecutionContext toolContext;
-    private final AgentCancellationToken cancellationToken;
+    private final Scheduler toolScheduler;
+    private final RunLeaseGuard leaseGuard;
+    private final ObjectMapper objectMapper;
 
-    public AgentScopeToolAdapter(ToolExecutor toolExecutor, ToolExecutionContext toolContext,
-            AgentCancellationToken cancellationToken) {
-        this.toolExecutor = toolExecutor;
-        this.toolContext = toolContext;
-        this.cancellationToken = cancellationToken;
-    }
-
-    @Override
-    public String getName() {
-        return toolExecutor.getToolName();
-    }
-
-    @Override
-    public String getDescription() {
-        String desc = toolExecutor.getToolDescription();
-        return desc != null ? desc : toolExecutor.getDisplayName();
-    }
-
-    @Override
-    public Map<String, Object> getParameters() {
-        String schema = toolExecutor.getParametersSchema();
-        if (schema == null || schema.isBlank()) {
-            return Map.of(
-                    "type", "object",
-                    "properties", Map.of());
-        }
-        try {
-            return JSONUtil.parseObj(schema);
-        } catch (Exception e) {
-            log.warn("工具参数 Schema 解析失败: tool={}, schema={}", getName(), schema, e);
-            return Map.of(
-                    "type", "object",
-                    "properties", Map.of());
-        }
+    public AgentScopeToolAdapter(
+            ToolExecutor toolExecutor,
+            AgentScopeToolSchema.PreparedSchema schema,
+            Scheduler toolScheduler,
+            RunLeaseGuard leaseGuard,
+            ObjectMapper objectMapper) {
+        super(builder(toolExecutor, schema));
+        this.toolExecutor = Objects.requireNonNull(toolExecutor, "toolExecutor must not be null");
+        this.toolScheduler = Objects.requireNonNull(toolScheduler, "toolScheduler must not be null");
+        this.leaseGuard = Objects.requireNonNull(leaseGuard, "leaseGuard must not be null");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
     }
 
     @Override
     public Mono<ToolResultBlock> callAsync(ToolCallParam param) {
-        return Mono.fromCallable(() -> {
-            // 工具执行前检查取消标志，避免已取消后仍执行耗时工具
-            cancellationToken.throwIfCancelled();
-
-            String input = JSONUtil.toJsonStr(param.getInput());
-            log.info("[AgentScopeToolAdapter] 工具被调用: name={}, input={}", getName(), input);
-
-            String result = toolExecutor.execute(input, toolContext);
-
-            // 工具执行后再次检查，避免结果被提交回已取消的流
-            cancellationToken.throwIfCancelled();
-
-            return buildToolResult(param, result);
-        }).onErrorResume(AgentCancelledException.class, e -> {
-            log.info("[AgentScopeToolAdapter] 工具执行被取消: name={}", getName());
-            return Mono.error(e);
-        }).onErrorResume(e -> {
-            if (e instanceof AgentCancelledException) {
-                return Mono.error(e);
-            }
-            log.error("[AgentScopeToolAdapter] 工具执行失败: name={}", getName(), e);
-            String errorResult = JSONUtil.toJsonStr(Map.of(
-                    "status", "error",
-                    "message", "工具执行失败: " + e.getMessage(),
-                    "toolName", getName()));
-            return Mono.just(buildToolResult(param, errorResult));
+        return Mono.defer(() -> {
+            RuntimeContext runtime = requireRuntimeContext(param);
+            AgentRunContext run = requireContext(runtime, AgentRunContext.class);
+            CancellationContext cancellation = requireContext(runtime, CancellationContext.class);
+            com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext toolContext =
+                    requireContext(
+                            runtime,
+                            com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext.class);
+            Duration remaining = remaining(run);
+            Map<String, Object> input = Objects.requireNonNull(
+                    param.getInput(), "AgentScope tool input must not be null");
+            Mono<String> invocation = Mono.fromCallable(() -> toolExecutor.execute(
+                            JSONUtil.toJsonStr(input),
+                            com.stonewu.fusion.service.ai.ToolExecutionContext.builder()
+                                    .userId(toolContext.userId())
+                                    .ownerType(toolContext.ownerType())
+                                    .ownerId(toolContext.ownerId())
+                                    .build()))
+                    .subscribeOn(toolScheduler);
+            return cancellation.checkpoint()
+                    .then(assertLease(run))
+                    .then(invocation)
+                    .flatMap(result -> cancellation.checkpoint()
+                            .then(assertLease(run))
+                            .thenReturn(projectResult(param, result)))
+                    .timeout(remaining);
         });
     }
 
-    private ToolResultBlock buildToolResult(ToolCallParam param, String result) {
-        ToolResultBlock block = ToolResultBlock.text(result);
-        ToolUseBlock toolUseBlock = param != null ? param.getToolUseBlock() : null;
-        if (toolUseBlock == null) {
-            return block;
+    @Override
+    public boolean matchRule(String ruleContent, Map<String, Object> toolInput) {
+        if (AgentToolPermissionPolicy.HIGH_RISK_RULE_CONTENT.equals(ruleContent)) {
+            return toolExecutor.getPermissionRisk(Objects.requireNonNull(
+                    toolInput, "toolInput must not be null")) == ToolPermissionRisk.HIGH_RISK;
         }
-        return block.withIdAndName(toolUseBlock.getId(), toolUseBlock.getName());
+        return super.matchRule(ruleContent, toolInput);
+    }
+
+    public boolean mayRequireHighRiskApproval() {
+        return toolExecutor.mayRequireHighRiskApproval();
+    }
+
+    private ToolResultBlock projectResult(ToolCallParam param, String result) {
+        if (result == null) {
+            throw new IllegalStateException("AgentScope tool returned null output: " + getName());
+        }
+        try {
+            JsonNode payload = objectMapper.readTree(result);
+            if (payload != null && payload.isObject()) {
+                JsonNode status = payload.get("status");
+                if (status != null && status.isTextual()
+                        && ("error".equalsIgnoreCase(status.textValue())
+                            || "failed".equalsIgnoreCase(status.textValue()))) {
+                    return errorResult(param, result);
+                }
+            }
+        } catch (JsonProcessingException plainTextResult) {
+            // ToolExecutor permits text output; only JSON objects carry the platform status contract.
+        }
+        return textResult(param, result);
+    }
+
+    private Mono<Void> assertLease(AgentRunContext run) {
+        return leaseGuard.assertLease(run.runId(), run.ownerInstanceId(), run.ownerEpoch());
+    }
+
+    private RuntimeContext requireRuntimeContext(ToolCallParam param) {
+        requireToolUse(param);
+        if (param.getRuntimeContext() == null) {
+            throw new IllegalArgumentException(
+                    "AgentScope RuntimeContext is required for tool: " + getName());
+        }
+        return param.getRuntimeContext();
+    }
+
+    private <T> T requireContext(RuntimeContext runtime, Class<T> type) {
+        T value = runtime.get(type);
+        if (value == null) {
+            throw new IllegalStateException(
+                    "AgentScope RuntimeContext is missing " + type.getSimpleName()
+                            + " for tool " + getName());
+        }
+        return value;
+    }
+
+    private Duration remaining(AgentRunContext run) {
+        Duration remaining = Duration.between(Instant.now(), run.deadline());
+        if (remaining.isZero() || remaining.isNegative()) {
+            throw new IllegalStateException("Agent run deadline expired before tool execution");
+        }
+        return remaining;
+    }
+
+    private static ToolBase.Builder builder(
+            ToolExecutor tool,
+            AgentScopeToolSchema.PreparedSchema schema) {
+        Objects.requireNonNull(tool, "toolExecutor must not be null");
+        Objects.requireNonNull(schema, "schema must not be null");
+        String description = tool.getToolDescription();
+        if (description == null || description.isBlank()) {
+            throw new IllegalArgumentException(
+                    "AgentScope tool description must not be blank: " + tool.getToolName());
+        }
+        return ToolBase.builder()
+                .name(tool.getToolName())
+                .description(description)
+                .inputSchema(schema.value())
+                .readOnly(tool.isReadOnly())
+                .concurrencySafe(tool.isConcurrencySafe());
     }
 }

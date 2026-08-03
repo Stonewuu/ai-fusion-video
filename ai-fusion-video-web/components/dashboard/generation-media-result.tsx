@@ -11,13 +11,13 @@ type Obj = Record<string, unknown>;
 function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClose: () => void }) {
   return createPortal(
     <div
-      className="fixed inset-0 z-200 flex items-center justify-center bg-black/80 px-4 py-6 backdrop-blur-sm"
+      className="modal-overlay fixed inset-0 z-200 flex items-center justify-center px-4 py-6"
       onClick={onClose}
     >
       <button
         type="button"
         onClick={onClose}
-        className="absolute right-4 top-4 rounded-full bg-white/10 p-2 text-white/80 transition-colors hover:bg-white/20"
+        className="absolute right-4 top-4 rounded-full border border-border/40 bg-background/80 p-2 text-foreground shadow-xl backdrop-blur-xl transition-colors hover:bg-background"
         aria-label="关闭预览"
       >
         <X className="h-5 w-5" />

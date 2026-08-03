@@ -116,6 +116,7 @@
     "modelType": 3,
     "description": "Flow2API 首帧 / 首尾帧图生视频别名模型，支持 1-2 张参考图",
     "config": {
+      "referenceImageInputFormats": ["data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,
@@ -138,6 +139,7 @@
     "modelType": 3,
     "description": "Flow2API 高质量图生视频别名模型，支持 1-2 张参考图与 1080P / 4K 放大",
     "config": {
+      "referenceImageInputFormats": ["data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,
@@ -160,6 +162,7 @@
     "modelType": 3,
     "description": "Flow2API 超高质量图生视频别名模型，支持 1-2 张参考图",
     "config": {
+      "referenceImageInputFormats": ["data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,
@@ -182,6 +185,7 @@
     "modelType": 3,
     "description": "Flow2API 图生视频基础别名模型，支持 1-2 张参考图",
     "config": {
+      "referenceImageInputFormats": ["data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,
@@ -204,6 +208,7 @@
     "modelType": 3,
     "description": "Flow2API 轻量图生视频别名模型，仅支持 1 张首帧参考图",
     "config": {
+      "referenceImageInputFormats": ["data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": false,
       "supportReferenceImages": false,
@@ -226,6 +231,7 @@
     "modelType": 3,
     "description": "Flow2API 插帧视频别名模型，需要 2 张首尾帧图片",
     "config": {
+      "referenceImageInputFormats": ["data_uri"],
       "supportFirstFrame": true,
       "supportLastFrame": true,
       "supportReferenceImages": false,
@@ -251,6 +257,7 @@
       "supportFirstFrame": false,
       "supportLastFrame": false,
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "supportReferenceVideos": false,
       "supportReferenceAudios": false,
       "minImageInputs": 0,
@@ -273,6 +280,7 @@
       "supportFirstFrame": false,
       "supportLastFrame": false,
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "supportReferenceVideos": false,
       "supportReferenceAudios": false,
       "minImageInputs": 0,
@@ -295,6 +303,7 @@
       "supportFirstFrame": false,
       "supportLastFrame": false,
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["data_uri"],
       "supportReferenceVideos": false,
       "supportReferenceAudios": false,
       "minImageInputs": 0,

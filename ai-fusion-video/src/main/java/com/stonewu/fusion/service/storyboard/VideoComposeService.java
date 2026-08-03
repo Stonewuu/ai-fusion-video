@@ -581,8 +581,8 @@ public class VideoComposeService {
 
     private HttpURLConnection openConnection(URI uri) throws IOException {
         HttpURLConnection conn = (HttpURLConnection) uri.toURL().openConnection();
-        conn.setConnectTimeout(30000);
-        conn.setReadTimeout(180000);
+        conn.setConnectTimeout(Math.toIntExact(TimeUnit.MINUTES.toMillis(1)));
+        conn.setReadTimeout(Math.toIntExact(TimeUnit.MINUTES.toMillis(25)));
         conn.setInstanceFollowRedirects(false);
         return conn;
     }

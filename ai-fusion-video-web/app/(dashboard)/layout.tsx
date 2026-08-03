@@ -8,9 +8,11 @@ import { useAuthStore } from "@/lib/store/auth-store";
 import { AppHeader } from "@/components/dashboard/app-header";
 import { VersionUpdateNotifier } from "@/components/dashboard/version-update-notifier";
 import { SidebarNav } from "@/components/dashboard/sidebar-nav";
+import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
 import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
-import { LayoutContext, useLayoutState } from "@/lib/hooks/use-layout";
+import { toastApiError } from "@/lib/api/toast-api-error";
+import { AssistantDockSlot } from "@/components/dashboard/assistant/dock-slot";
 
 const GLOBAL_SIDEBAR_COLLAPSED_STORAGE_KEY = "fusion-dashboard-sidebar-collapsed";
 
@@ -55,13 +57,6 @@ export default function DashboardLayout({
     );
   };
 
-  // 布局宽度控制：子页面通过 useFullWidth(condition) 驱动
-  const { fullWidth, setFullWidth } = useLayoutState();
-  const layoutCtx = useMemo(
-    () => ({ fullWidth, setFullWidth }),
-    [fullWidth, setFullWidth]
-  );
-
   // 在 layout 层统一请求 project 数据，供桌面/移动端 SidebarNav 共享
   useEffect(() => {
     if (currentProjectId === null) {
@@ -74,7 +69,9 @@ export default function DashboardLayout({
           setProjectState({ id: currentProjectId, project });
         }
       })
-      .catch(() => {});
+      .catch((error) => {
+        if (!cancelled) toastApiError(error, "加载项目信息失败");
+      });
 
     return () => {
       cancelled = true;
@@ -92,8 +89,7 @@ export default function DashboardLayout({
   const ready = authHydrated && isAuthenticated;
 
   return (
-    <LayoutContext value={layoutCtx}>
-      <div className="h-screen overflow-hidden flex flex-col bg-background">
+    <div className="h-screen overflow-hidden flex flex-col bg-background">
         <VersionUpdateNotifier />
 
         {/* 顶部浮动导航栏 */}
@@ -117,10 +113,10 @@ export default function DashboardLayout({
           {ready && (
             <div
               className={cn(
-                "hidden lg:block shrink-0 pt-1 self-start transition-[width,padding] duration-200 ease-out",
+                "hidden lg:block shrink-0 pt-1.5 self-start transition-[width,padding] duration-200 ease-out",
                 isGlobalSidebarCollapsed
                   ? "w-20 px-3"
-                  : "w-[clamp(272px,23vw,332px)] px-4"
+                  : "w-[clamp(272px,23vw,332px)] px-3"
               )}
             >
               <SidebarNav
@@ -177,13 +173,15 @@ export default function DashboardLayout({
           )}
 
           {/* 主内容区 */}
-          <main className="flex-1 min-w-0 min-h-0 py-4 px-5 lg:px-8 overflow-auto">
-            <div className={cn("w-full h-full mx-auto transition-[max-width] duration-300 ease-in-out", fullWidth ? "max-w-full" : "max-w-7xl")}>
-              {ready ? children : null}
-            </div>
+          <main className="dashboard-scroll flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden">
+            <OverlayScrollArea key={pathname} className="min-h-0 flex-1">
+              <div className="dashboard-content flex min-h-full w-full shrink-0 flex-col pt-4">
+                {ready ? children : null}
+              </div>
+            </OverlayScrollArea>
           </main>
+          {ready && <AssistantDockSlot projectId={currentProjectId} />}
         </motion.div>
       </div>
-    </LayoutContext>
   );
 }

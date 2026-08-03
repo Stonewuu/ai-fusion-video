@@ -19,6 +19,8 @@ spring:
       port: 46379
       password: 123456
       database: 0
+      connect-timeout: 2s
+      timeout: 3s
 
   # Spring AI - DashScope
   ai:
@@ -34,11 +36,18 @@ server:
 fusion:
   agentscope:
     shutdown-timeout: 3s
+    v2:
+      state:
+        mode: mysql
 
 # 视频合成并发数（默认按 CPU 核心数自动计算，取消注释可手动覆盖）
 # app:
 #   video-compose:
 #     max-concurrent: 2
+
+app:
+  cors:
+    allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000,http://127.0.0.1:3000}
 
 video:
   compose:

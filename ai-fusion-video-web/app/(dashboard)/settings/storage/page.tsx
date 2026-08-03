@@ -17,6 +17,8 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
+import { toastApiError } from "@/lib/api/toast-api-error";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
 import {
   getStorageProviderOption,
@@ -50,7 +52,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
-import { containerVariants, itemVariants } from "../_shared";
+import { containerVariants, itemVariants, settingsTypography } from "../_shared";
 
 // ============================================================
 // 存储配置 Dialog
@@ -251,6 +253,7 @@ function StorageConfigDialog({ open, onOpenChange, editingConfig, onSaved }: Sto
       onOpenChange(false);
     } catch (err) {
       console.error("保存存储配置失败:", err);
+      toastApiError(err, "保存存储配置失败");
     } finally {
       setSaving(false);
     }
@@ -594,6 +597,7 @@ function StorageConfigDialog({ open, onOpenChange, editingConfig, onSaved }: Sto
 // ============================================================
 
 export default function StoragePage() {
+  const { confirm } = useConfirm();
   const [storageConfigs, setStorageConfigs] = useState<StorageConfigType[]>([]);
   const [storageLoading, setStorageLoading] = useState(true);
   const [storageDialogOpen, setStorageDialogOpen] = useState(false);
@@ -606,6 +610,7 @@ export default function StoragePage() {
       setStorageConfigs(data);
     } catch (err) {
       console.error("加载存储配置列表失败:", err);
+      toastApiError(err, "加载存储配置列表失败");
     } finally {
       setStorageLoading(false);
     }
@@ -616,12 +621,13 @@ export default function StoragePage() {
   }, [loadStorageConfigs]);
 
   const handleDeleteStorageConfig = async (id: number) => {
-    if (!confirm("确定要删除该存储配置吗？")) return;
+    const ok = await confirm({ title: "删除存储配置", description: "确定要删除该存储配置吗？此操作不可撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
       await storageConfigApi.delete(id);
       await loadStorageConfigs();
     } catch (err) {
       console.error("删除存储配置失败:", err);
+      toastApiError(err, "删除存储配置失败");
     }
   };
 
@@ -631,28 +637,29 @@ export default function StoragePage() {
       await loadStorageConfigs();
     } catch (err) {
       console.error("设置默认存储失败:", err);
+      toastApiError(err, "设置默认存储失败");
     }
   };
 
   return (
     <motion.div
-      className="max-w-[1200px]"
+      className="w-full"
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
     >
       {/* 页面标题 */}
       <motion.div variants={itemVariants} className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">存储配置</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className={settingsTypography.pageTitle}>存储配置</h1>
+        <p className={settingsTypography.pageDescription}>
           管理文件存储后端，支持本地磁盘和 S3 兼容存储
         </p>
       </motion.div>
 
       {/* ========== 存储配置管理 ========== */}
-      <motion.div variants={itemVariants} className="mb-8">
+      <motion.div variants={itemVariants}>
         <div className="flex items-center justify-between mb-3 px-1">
-          <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">
+          <h3 className={settingsTypography.sectionTitle}>
             存储后端
           </h3>
           <button

@@ -1,4 +1,5 @@
 import { API_BASE_URL, http } from "./client";
+import { readApiResponseError } from "./api-error";
 import type { AgentConversation } from "./ai-assistant";
 import {
   authenticatedFetch,
@@ -62,7 +63,7 @@ export function reconnectTaskStream(
       );
 
       if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        throw new Error(await readApiResponseError(response));
       }
 
       const reader = response.body?.getReader();

@@ -1,8 +1,10 @@
 package com.stonewu.fusion.controller.ai.vo;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -10,7 +12,17 @@ import java.util.List;
  */
 @Data
 @Accessors(chain = true)
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class AiChatStreamRespVO {
+
+    /** Durable wire schema version. */
+    private Integer schemaVersion;
+
+    /** Authoritative Agent run ID. */
+    private String runId;
+
+    /** Monotonic sequence within runId. */
+    private Long sequence;
 
     /** 消息 ID */
     private String messageId;
@@ -18,7 +30,7 @@ public class AiChatStreamRespVO {
     /** 会话 ID */
     private String conversationId;
 
-    /** 输出类型：REASONING / CONTENT / TOOL_CALL / TOOL_FINISHED / SUB_AGENT_FINISHED / DONE / ERROR / CANCELLED */
+    /** 输出类型：REASONING / CONTENT / TOOL_CALL_STARTED / TOOL_CALL / TOOL_FINISHED / SUB_AGENT_FINISHED / DONE / ERROR / CANCELLED */
     private String outputType;
 
     /** 文本内容（增量） */
@@ -60,11 +72,59 @@ public class AiChatStreamRespVO {
     /** 错误信息 */
     private String error;
 
+    /** Sanitized AgentScope event source. */
+    private String source;
+
+    /** AgentScope reply identity when present. */
+    private String replyId;
+
+    /** AgentScope block identity when present. */
+    private String blockId;
+
+    /** Stable raw event identity. */
+    private String rawEventId;
+
+    /** Exhaustively mapped raw event discriminator. */
+    private String rawEventType;
+
+    /** Original event creation time. */
+    private Instant createdAt;
+
+    /** Platform control discriminator, currently USER_CONFIRM_REQUIRED. */
+    private String controlType;
+
+    /** Server-persisted tool set for an actionable confirmation. */
+    private List<PendingToolCallVO> pendingToolCalls;
+
+    /** Exact user decisions for the persisted confirmation tool set. */
+    private List<ToolConfirmationDecisionVO> decisions;
+
+    /** Server-authoritative action expiry. */
+    private Instant expiresAt;
+
+    /** Machine-readable reason for a terminal cancellation. */
+    private String cancellationReason;
+
     @Data
     @Accessors(chain = true)
     public static class ToolCallVO {
         private String id;
         private String name;
         private String arguments;
+    }
+
+    @Data
+    @Accessors(chain = true)
+    public static class PendingToolCallVO {
+        private String toolCallId;
+        private String toolName;
+        private String argumentsPreview;
+    }
+
+    @Data
+    @Accessors(chain = true)
+    public static class ToolConfirmationDecisionVO {
+        private String toolCallId;
+        private Boolean approved;
     }
 }

@@ -1,0 +1,62 @@
+[
+  {
+    "code": "claude-fable-5",
+    "name": "Claude Fable 5",
+    "platform": "anthropic",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "Anthropic 2026 年面向长时间智能体任务的高能力模型，支持文本和图片输入。",
+    "capabilities": ["文本对话", "图片理解", "扩展思考", "工具调用"],
+    "supportReasoning": true,
+    "reasoningEffortLevels": ["max", "xhigh", "high", "medium", "low"],
+    "contextWindow": 1000000,
+    "multimodalInputTypes": ["image"],
+    "multimodalInputTransports": { "image": ["url", "base64"] },
+    "config": {}
+  },
+  {
+    "code": "claude-opus-5",
+    "name": "Claude Opus 5",
+    "platform": "anthropic",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "Anthropic 2026 年复杂编码与企业任务模型，支持文本和图片输入。",
+    "capabilities": ["文本对话", "图片理解", "扩展思考", "工具调用"],
+    "supportReasoning": true,
+    "reasoningEffortLevels": ["max", "xhigh", "high", "medium", "low"],
+    "contextWindow": 1000000,
+    "multimodalInputTypes": ["image"],
+    "multimodalInputTransports": { "image": ["url", "base64"] },
+    "config": {}
+  },
+  {
+    "code": "claude-sonnet-5",
+    "name": "Claude Sonnet 5",
+    "platform": "anthropic",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "Anthropic 2026 年兼顾速度与智能的通用模型，支持文本和图片输入。",
+    "capabilities": ["文本对话", "图片理解", "扩展思考", "工具调用"],
+    "supportReasoning": true,
+    "reasoningEffortLevels": ["max", "xhigh", "high", "medium", "low"],
+    "contextWindow": 1000000,
+    "multimodalInputTypes": ["image"],
+    "multimodalInputTransports": { "image": ["url", "base64"] },
+    "config": {}
+  },
+  {
+    "code": "claude-haiku-4-5-20251001",
+    "name": "Claude Haiku 4.5",
+    "platform": "anthropic",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "Anthropic 2025 年低延迟模型，支持文本和图片输入。",
+    "capabilities": ["文本对话", "图片理解", "工具调用"],
+    "supportReasoning": true,
+    "reasoningEffortLevels": [],
+    "contextWindow": 200000,
+    "multimodalInputTypes": ["image"],
+    "multimodalInputTransports": { "image": ["url", "base64"] },
+    "config": {}
+  }
+]

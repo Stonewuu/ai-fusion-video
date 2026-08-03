@@ -1,4 +1,26 @@
 import { http, API_BASE_URL } from "./client";
+import { getApiPayloadMessage, readApiResponseError, toApiError } from "./api-error";
+
+export type AiMultimodalInputType = "image" | "video" | "audio" | "file";
+export type AiMultimodalInputTransport = "url" | "base64";
+export type ToolExecutionMode =
+  | "DEFAULT"
+  | "ALWAYS_ASK"
+  | "ALWAYS_ALLOW"
+  | "FULL_ACCESS";
+
+export interface AiMultimodalInput {
+  id: string;
+  name: string;
+  inputType: AiMultimodalInputType;
+  mimeType: string;
+  transport: AiMultimodalInputTransport;
+  url?: string;
+  data?: string;
+  /** 应用存储中的持久化地址，用于用户消息回显，不发送给模型。 */
+  resourceUrl?: string;
+  size: number;
+}
 
 // ========== 类型定义 ==========
 
@@ -6,6 +28,7 @@ export interface AiChatReq {
   message?: string;
   conversationId?: string;
   modelId?: number;
+  reasoningEffort?: string;
   agentType?: string;
   category?: string;
   /** 自定义对话标题（不传则使用消息前50字） */
@@ -15,7 +38,13 @@ export interface AiChatReq {
   systemPrompt?: string;
   instruction?: string;
   enabledTools?: string[];
+  /** 用户在输入区显式激活的 Skill 名称。 */
+  enabledSkills?: string[];
+  enabledMcpTools?: string[];
+  multimodalInputs?: AiMultimodalInput[];
   enableParallelTools?: boolean;
+  toolExecutionMode: ToolExecutionMode;
+  referencesJson?: string;
   /** 当前页面上下文引用（type + id），用于模板变量替换 */
   autoReferences?: Array<{ type: string; id: number }>;
 }
@@ -23,9 +52,15 @@ export interface AiChatReq {
 export type OutputType =
   | "REASONING"
   | "CONTENT"
+  | "TOOL_CALL_STARTED"
   | "TOOL_CALL"
   | "TOOL_FINISHED"
+  | "SUB_AGENT_STARTED"
   | "SUB_AGENT_FINISHED"
+  | "USER_CONFIRMATION_REQUIRED"
+  | "EXTERNAL_EXECUTION_REQUIRED"
+  | "USER_CONFIRM_RESULT"
+  | "EXTERNAL_EXECUTION_RESULT"
   | "DONE"
   | "ERROR"
   | "CANCELLED";
@@ -36,18 +71,27 @@ export interface ToolCallInfo {
   arguments: string;
 }
 
+export interface ToolConfirmationDecision {
+  toolCallId: string;
+  approved: boolean;
+}
+
 export interface AiChatStreamEvent {
+  /** Durable fields are present on AgentScope v2 Pipeline events. */
+  schemaVersion?: number;
+  runId?: string;
+  sequence?: number;
   messageId?: string;
   conversationId?: string;
   outputType: OutputType;
   content?: string;
   reasoningContent?: string;
-  reasoningStartTime?: number;
-  reasoningDurationMs?: number;
+  reasoningStartTime?: number | null;
+  reasoningDurationMs?: number | null;
   toolCalls?: ToolCallInfo[];
   toolCallId?: string;
   toolName?: string;
-  toolResult?: string;
+  toolResult?: string | null;
   toolStatus?: string;
   finished?: boolean;
   error?: string;
@@ -55,6 +99,21 @@ export interface AiChatStreamEvent {
   parentToolCallId?: string;
   /** 事件来源 Agent 名称（null 表示主 Agent） */
   agentName?: string;
+  source?: string;
+  replyId?: string;
+  blockId?: string;
+  rawEventId?: string;
+  rawEventType?: string;
+  createdAt?: string;
+  controlType?: string;
+  pendingToolCalls?: Array<{
+    toolCallId: string;
+    toolName: string;
+    argumentsPreview: string;
+  }>;
+  decisions?: ToolConfirmationDecision[];
+  expiresAt?: string;
+  cancellationReason?: string;
 }
 
 // ========== SSE 回调 ==========
@@ -131,13 +190,14 @@ async function refreshTokenForSSE(): Promise<string | null> {
       body: JSON.stringify({ refreshToken }),
     });
     if (!resp.ok) {
-      processSseQueue(new Error("刷新失败"), null);
+      processSseQueue(new Error(await readApiResponseError(resp)), null);
       return null;
     }
 
     const result = await resp.json();
     if (result.code !== 0 || !result.data) {
-      processSseQueue(new Error("刷新失败"), null);
+      const message = getApiPayloadMessage(result);
+      processSseQueue(new Error(message || "请求失败"), null);
       return null;
     }
 
@@ -161,8 +221,8 @@ async function refreshTokenForSSE(): Promise<string | null> {
 
     processSseQueue(null, accessToken);
     return accessToken;
-  } catch {
-    processSseQueue(new Error("刷新失败"), null);
+  } catch (error) {
+    processSseQueue(toApiError(error), null);
     return null;
   } finally {
     isRefreshingForSSE = false;
@@ -210,7 +270,7 @@ export interface AgentConversation {
   id: number;
   conversationId: string;
   userId: number;
-  projectId: number;
+  projectId: number | null;
   contextType?: string;
   agentType?: string;
   category?: string;
@@ -219,12 +279,15 @@ export interface AgentConversation {
   messageCount: number;
   lastMessageTime?: string;
   status: string;
+  agentStateStatus?: "ACTIVE" | "EXPIRED";
   createTime?: string;
 }
 
 export interface AgentMessage {
   id: number;
   conversationId: string;
+  runId?: string;
+  projectionKey?: string;
   role: string;
   content: string;
   referencesJson?: string;
@@ -235,7 +298,7 @@ export interface AgentMessage {
   /** 父级工具调用 ID（子 Agent 事件归属） */
   parentToolCallId?: string;
   reasoningContent?: string;
-  reasoningDurationMs?: number;
+  reasoningDurationMs?: number | null;
   messageOrder: number;
   createTime?: string;
 }
@@ -243,6 +306,30 @@ export interface AgentMessage {
 export interface PageResult<T> {
   list: T[];
   total: number;
+}
+
+export interface AssistantSkillReferenceOption {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string;
+  source: string;
+}
+
+export interface AssistantMcpToolReferenceOption {
+  serverName: string;
+  toolName: string;
+  description: string;
+  readOnly: boolean;
+}
+
+export interface AssistantReferenceOptions {
+  skills: AssistantSkillReferenceOption[];
+  mcpTools: AssistantMcpToolReferenceOption[];
+}
+
+export async function getAssistantReferenceOptions(): Promise<AssistantReferenceOptions> {
+  return http.get("/api/ai/assistant/reference-options");
 }
 
 /**
@@ -279,5 +366,16 @@ export async function listMessages(
  */
 export async function deleteConversation(id: number): Promise<void> {
   await http.delete(`/api/ai/assistant/conversations/${id}`);
+}
+
+/**
+ * 按稳定会话标识幂等删除，兼容尚未同步数据库 ID 的乐观会话。
+ */
+export async function deleteConversationByConversationId(
+  conversationId: string
+): Promise<void> {
+  await http.delete(
+    `/api/ai/assistant/conversations/by-conversation-id/${encodeURIComponent(conversationId)}`
+  );
 }
 

@@ -1,0 +1,66 @@
+name: 使用咨询
+description: 咨询安装、配置或功能使用问题
+title: "[Question] "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请先查阅 README 并搜索现有 Issue。若你遇到可稳定复现的程序错误，请改用“缺陷报告”。
+
+        请勿提交 API Key、密码、Token、Cookie、完整配置文件或其他敏感信息。
+
+  - type: dropdown
+    id: topic
+    attributes:
+      label: 咨询类型
+      options:
+        - 安装或升级
+        - Docker 或部署
+        - AI 模型配置
+        - 数据库或存储配置
+        - 功能使用
+        - 开发或二次集成
+        - 其他
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: 融光版本
+      description: 可填写 Release、Docker 镜像标签或 Git commit；与版本无关时填写“不适用”。
+      placeholder: 例如 v1.0.0、latest 或不适用
+    validations:
+      required: true
+
+  - type: textarea
+    id: question
+    attributes:
+      label: 你的问题
+      description: 请说明目标、当前操作方式，以及具体卡住的位置。
+    validations:
+      required: true
+
+  - type: textarea
+    id: attempts
+    attributes:
+      label: 已尝试的方法
+      description: 列出已查阅的文档、执行的命令或尝试过的解决方法，避免重复排查。
+
+  - type: textarea
+    id: context
+    attributes:
+      label: 补充信息
+      description: 可补充已脱敏的配置片段、日志或截图。
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 提交前检查
+      options:
+        - label: 我已查阅 README 并搜索现有 Issue。
+          required: true
+        - label: 我已删除描述、日志和截图中的敏感信息。
+          required: true

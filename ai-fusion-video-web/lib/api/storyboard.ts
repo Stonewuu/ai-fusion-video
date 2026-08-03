@@ -19,6 +19,13 @@ export interface Storyboard {
   updateTime: string;
 }
 
+/** 分镜概览统计 */
+export interface StoryboardStatistics {
+  episodeCount: number;
+  sceneCount: number;
+  itemCount: number;
+}
+
 /** 分镜集合成状态: 0未开始 1合成中 2已完成 3失败 */
 export type EpisodeComposeStatus = 0 | 1 | 2 | 3;
 
@@ -101,18 +108,9 @@ export interface StoryboardItem {
 
 // ========== 请求类型 ==========
 
-/** 创建分镜请求 */
-export interface StoryboardCreateReq {
-  projectId: number;
-  scriptId?: number;
-  title: string;
-  description?: string;
-}
-
 /** 更新分镜请求 */
 export interface StoryboardUpdateReq {
   id: number;
-  title?: string;
   description?: string;
   status?: number;
 }
@@ -208,9 +206,16 @@ export interface StoryboardItemUpdateReq {
   lastFramePrompt?: string | null;
   videoPrompt?: string | null;
   status?: number;
-  characterIds?: string | null;
+}
+
+/** 分镜条目资产关联局部更新请求 */
+export interface StoryboardItemAssetsUpdateReq {
+  /** 字段缺省表示不修改，空数组表示清空 */
+  characterIds?: number[];
+  /** 字段缺省表示不修改，显式 null 表示清空 */
   sceneAssetItemId?: number | null;
-  propIds?: string | null;
+  /** 字段缺省表示不修改，空数组表示清空 */
+  propIds?: number[];
 }
 
 /** 分镜首尾帧类型 */
@@ -231,20 +236,21 @@ export const storyboardApi = {
   /** 获取分镜详情 */
   get: (id: number) => http.get<never, Storyboard>(`/api/storyboard/${id}`),
 
-  /** 按项目查询分镜列表 */
-  list: (projectId: number) =>
-    http.get<never, Storyboard[]>(`/api/storyboard/list?projectId=${projectId}`),
-
-  /** 创建分镜 */
-  create: (data: StoryboardCreateReq) =>
-    http.post<never, Storyboard>("/api/storyboard", data),
+  /** 按项目获取唯一分镜 */
+  getByProject: (projectId: number) =>
+    http.get<never, Storyboard | null>(`/api/storyboard/project/${projectId}`),
 
   /** 更新分镜 */
   update: (data: StoryboardUpdateReq) =>
     http.put<never, Storyboard>("/api/storyboard", data),
 
-  /** 删除分镜 */
-  delete: (id: number) => http.delete<never, boolean>(`/api/storyboard/${id}`),
+  /** 清空分镜内部的分集、场次与镜头 */
+  clearContent: (id: number) =>
+    http.post<never, boolean>(`/api/storyboard/${id}/clearContent`),
+
+  /** 获取分镜概览统计 */
+  getStatistics: (storyboardId: number) =>
+    http.get<never, StoryboardStatistics>(`/api/storyboard/${storyboardId}/statistics`),
 
   // ========== 分镜集 ==========
 
@@ -330,6 +336,10 @@ export const storyboardApi = {
   /** 更新分镜条目 */
   updateItem: (data: StoryboardItemUpdateReq) =>
     http.put<never, StoryboardItem>("/api/storyboard/item", data),
+
+  /** 局部更新分镜条目资产关联 */
+  updateItemAssets: (id: number, data: StoryboardItemAssetsUpdateReq) =>
+    http.patch<never, StoryboardItem>(`/api/storyboard/item/${id}/assets`, data),
 
   /** 更新分镜条目首尾帧 */
   updateFrame: (id: number, data: StoryboardFrameUpdateReq) =>

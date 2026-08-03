@@ -11,7 +11,7 @@
 	</parent>
 	<groupId>com.stonewu</groupId>
 	<artifactId>ai-fusion-video</artifactId>
-	<version>0.6.3</version>
+	<version>1.0.0</version>
 	<name>ai-fusion-video</name>
 	<description>AI-driven video creation platform</description>
 	<url>https://github.com/Stonewuu/ai-fusion-video</url>
@@ -32,7 +32,7 @@
 	<scm>
 		<connection>scm:git:https://github.com/Stonewuu/ai-fusion-video.git</connection>
 		<developerConnection>scm:git:ssh://git@github.com/Stonewuu/ai-fusion-video.git</developerConnection>
-		<tag>0.6.3</tag>
+		<tag>1.0.0</tag>
 		<url>https://github.com/Stonewuu/ai-fusion-video</url>
 	</scm>
 	<properties>
@@ -40,10 +40,23 @@
 		<mapstruct.version>1.6.3</mapstruct.version>
 		<anthropic-java.version>2.26.0</anthropic-java.version>
 		<dashscope-sdk-java.version>2.22.16</dashscope-sdk-java.version>
-		<!-- 降级 Jackson 以兼容 volcengine-java-sdk-ark-runtime:1.0.17 中使用的
-		PropertyNamingStrategy.SNAKE_CASE -->
-		<jackson-bom.version>2.17.3</jackson-bom.version>
+		<agentscope.version>2.0.0</agentscope.version>
+		<victools.version>4.38.0</victools.version>
+		<testcontainers.version>1.21.3</testcontainers.version>
+		<awaitility.version>4.3.0</awaitility.version>
+		<maven-failsafe.version>3.5.4</maven-failsafe.version>
 	</properties>
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>com.github.victools</groupId>
+				<artifactId>jsonschema-generator-bom</artifactId>
+				<version>${victools.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -123,14 +136,26 @@
 			<artifactId>spring-security-test</artifactId>
 			<scope>test</scope>
 		</dependency>
-
-
-		<!-- Spring AI Alibaba Agent Framework -->
 		<dependency>
-			<groupId>com.alibaba.cloud.ai</groupId>
-			<artifactId>spring-ai-alibaba-agent-framework</artifactId>
-			<version>1.1.2.0</version>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>${testcontainers.version}</version>
+			<scope>test</scope>
 		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>mysql</artifactId>
+			<version>${testcontainers.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
+			<version>${awaitility.version}</version>
+			<scope>test</scope>
+		</dependency>
+
+
 		<dependency>
 			<groupId>com.alibaba.cloud.ai</groupId>
 			<artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
@@ -184,6 +209,12 @@
 			<artifactId>spring-ai-google-genai</artifactId>
 			<version>1.1.2</version>
 		</dependency>
+		<!-- 与 AgentScope Gemini 2.0.0 GA 对齐，Spring AI 1.1.2 的旧版缺少 ProxyOptions -->
+		<dependency>
+			<groupId>com.google.genai</groupId>
+			<artifactId>google-genai</artifactId>
+			<version>1.45.0</version>
+		</dependency>
 
 		<!-- OkHttp (平台 API 调用) -->
 		<dependency>
@@ -200,24 +231,41 @@
 			<version>5.8.34</version>
 		</dependency>
 
-		<!-- AgentScope Java Spring Boot Starter -->
+		<!-- AgentScope Java 2.0.0 GA -->
 		<dependency>
 			<groupId>io.agentscope</groupId>
-			<artifactId>agentscope-spring-boot-starter</artifactId>
-			<version>1.0.12</version>
+			<artifactId>agentscope-harness</artifactId>
+			<version>${agentscope.version}</version>
 		</dependency>
-		<!-- AgentScope MySQL Session -->
 		<dependency>
 			<groupId>io.agentscope</groupId>
-			<artifactId>agentscope-extensions-session-mysql</artifactId>
-			<version>1.0.12</version>
+			<artifactId>agentscope-extensions-mysql</artifactId>
+			<version>${agentscope.version}</version>
 		</dependency>
-		<!-- AgentScope 1.0.12 默认升级到 json-schema-validator 3.0.1，
-		会连带引入 Jackson 3.1.0，和当前 Spring Jackson 2 栈冲突 -->
 		<dependency>
-			<groupId>com.networknt</groupId>
-			<artifactId>json-schema-validator</artifactId>
-			<version>3.0.0</version>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-model-openai</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-model-anthropic</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-model-gemini</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-model-dashscope</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-model-ollama</artifactId>
+			<version>${agentscope.version}</version>
 		</dependency>
 		<!-- OpenAI Java SDK (AgentScope OpenAIChatModel 需要) -->
 		<dependency>
@@ -230,7 +278,7 @@
 		<dependency>
 			<groupId>com.volcengine</groupId>
 			<artifactId>volcengine-java-sdk-ark-runtime</artifactId>
-			<version>1.0.19</version>
+			<version>2.0.19</version>
 		</dependency>
 		<!-- Java 9+ 需要单独引入 javax.annotation-api (volcengine SDK 依赖) -->
 		<dependency>
@@ -301,4 +349,47 @@
 			</plugin>
 		</plugins>
 	</build>
+
+	<profiles>
+		<profile>
+			<id>agentscope-integration</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-failsafe-plugin</artifactId>
+						<version>${maven-failsafe.version}</version>
+						<executions>
+							<execution>
+								<goals>
+									<goal>integration-test</goal>
+									<goal>verify</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<includes>
+								<include>**/AgentPersistenceMigrationIT.java</include>
+								<include>**/AgentMessageAllocatorIT.java</include>
+								<include>**/AgentRunStartIT.java</include>
+								<include>**/AgentJournalTerminalIT.java</include>
+								<include>**/AgentModelCallUsageIT.java</include>
+								<include>**/AgentOutboxMultiInstanceIT.java</include>
+								<include>**/AgentProjectionRecoveryIT.java</include>
+								<include>**/PlatformSubAgentRunServiceIT.java</include>
+								<include>**/AgentWaitingStateIT.java</include>
+								<include>**/AgentFencingCancellationIT.java</include>
+								<include>**/AgentOwnedJournalTakeoverIT.java</include>
+								<include>**/AgentReplayLiveIT.java</include>
+								<include>**/AgentIntegrationProfileSentinelIT.java</include>
+								<include>**/AgentDurableRuntimeMultiInstanceIT.java</include>
+							</includes>
+							<failIfNoTests>true</failIfNoTests>
+							<failIfNoSpecifiedTests>true</failIfNoSpecifiedTests>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>

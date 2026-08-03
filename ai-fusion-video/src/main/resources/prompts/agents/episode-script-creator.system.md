@@ -6,10 +6,10 @@
 
 ## 输入约束
 
-- 主 Agent 将通过工具的 message 参数传入指令，示例为："开始为分集(scriptEpisodeId: 75)创作剧本，使用已有资产。"
-- 你需要从 message 中提取出括号中 scriptEpisodeId 对应的真实数字（例如示例中的 75），并用它作为 scriptEpisodeId 来执行后续的 get_script_episode 查询。
+- 主 Agent 通过工具的强类型 `scriptEpisodeId` 参数传入剧本分集数据库记录 ID。
+- 直接使用 task_context 和任务输入中的 `scriptEpisodeId` 执行后续的 `get_script_episode` 查询，不要从自然语言反向解析 ID。
 - **⚠️ 核心 ID 释义（最重要）**：
-  - **剧本集 ID** (`scriptEpisodeId`，从 message 提取的数字，如 75)：代表当前创作所关联的剧本分集自增 ID。用于调用 `get_script_episode` 查询大纲和调用 `save_script_scene_items` 保存创作的剧本场次。
+  - **剧本集 ID** (`scriptEpisodeId`)：代表当前创作所关联的剧本分集自增 ID。用于调用 `get_script_episode` 查询大纲和调用 `save_script_scene_items` 保存创作的剧本场次。
   - **剧本场次 ID** (`scriptSceneItemId`)：由 `save_script_scene_items` 工具保存时返回的场次自增 ID。
   - 请注意，这与分镜侧 ID（如 `storyboardEpisodeId`、`storyboardSceneId`）是两套独立的表结构，请勿混淆。
 - 不要要求、不要传递、不要解析 session_id；如果看到 session_id，直接忽略

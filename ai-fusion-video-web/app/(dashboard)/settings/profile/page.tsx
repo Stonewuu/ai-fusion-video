@@ -27,7 +27,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
-import { containerVariants, itemVariants } from "../_shared";
+import { containerVariants, itemVariants, settingsTypography } from "../_shared";
 
 // ============================================================
 // 个人信息编辑 Dialog
@@ -205,22 +205,22 @@ export default function ProfileSettingsPage() {
 
   return (
     <motion.div
-      className="max-w-[1200px]"
+      className="w-full"
       variants={containerVariants}
-      initial="hidden"
+      initial={false}
       animate="visible"
     >
       {/* 页面标题 */}
       <motion.div variants={itemVariants} className="mb-8">
-        <h1 className="text-3xl font-bold tracking-tight">个人设置</h1>
-        <p className="text-muted-foreground mt-1">
+        <h1 className={settingsTypography.pageTitle}>个人设置</h1>
+        <p className={settingsTypography.pageDescription}>
           管理你的个人信息和账户安全
         </p>
       </motion.div>
 
       {/* ========== 个人信息卡片 ========== */}
       <motion.div variants={itemVariants} className="mb-8">
-        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1">
+        <h3 className={cn(settingsTypography.sectionTitle, "mb-3 px-1")}>
           个人信息
         </h3>
         <div
@@ -295,7 +295,7 @@ export default function ProfileSettingsPage() {
 
       {/* ========== 安全设置卡片 ========== */}
       <motion.div variants={itemVariants} className="mb-8">
-        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1">
+        <h3 className={cn(settingsTypography.sectionTitle, "mb-3 px-1")}>
           安全设置
         </h3>
         <div
@@ -310,7 +310,7 @@ export default function ProfileSettingsPage() {
                 <Key className="h-4.5 w-4.5 text-amber-400" />
               </div>
               <div>
-                <h4 className="text-sm font-medium">修改密码</h4>
+                <h4 className={settingsTypography.sectionTitle}>修改密码</h4>
                 <p className="text-xs text-muted-foreground">
                   定期修改密码可以保护你的账户安全
                 </p>
@@ -406,8 +406,8 @@ export default function ProfileSettingsPage() {
       </motion.div>
 
       {/* ========== 账户信息卡片 ========== */}
-      <motion.div variants={itemVariants} className="mb-8">
-        <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-3 px-1">
+      <motion.div variants={itemVariants}>
+        <h3 className={cn(settingsTypography.sectionTitle, "mb-3 px-1")}>
           账户信息
         </h3>
         <div

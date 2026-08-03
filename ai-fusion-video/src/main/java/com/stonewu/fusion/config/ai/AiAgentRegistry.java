@@ -20,6 +20,20 @@ import java.util.Map;
 @Component
 public class AiAgentRegistry {
 
+        private static final String SUB_AGENT_MESSAGE_SCHEMA = """
+                        {
+                          "type": "object",
+                          "properties": {
+                            "message": {
+                              "type": "string",
+                              "description": "发送给子 Agent 的任务消息"
+                            }
+                          },
+                          "required": ["message"],
+                          "additionalProperties": false
+                        }
+                        """;
+
         private final Map<String, AiAgentDefinition> agentMap = new LinkedHashMap<>();
 
         public AiAgentRegistry() {
@@ -73,15 +87,17 @@ public class AiAgentRegistry {
                                 .type("ai_media")
                                 .name("默认助手")
                                 .toolNames(List.of(
-                                                "list_my_projects", "get_project",
-                                                "get_project_script", "list_project_assets", "list_project_storyboards",
+                                                "list_my_projects", "get_project", "save_project", "delete_project",
+                                                "get_project_script", "list_project_assets", "get_project_storyboard",
                                                 "get_script", "get_script_structure", "get_script_episode",
                                                 "update_script", "update_script_info", "save_script_episode",
                                                 "save_script_scene_items", "update_script_scene",
-                                                "manage_script_scenes",
+                                                "manage_script_scenes", "delete_script_child_resource",
                                                 "get_asset", "create_asset", "batch_create_assets", "update_asset",
-                                                "add_asset_item",
+                                                "add_asset_item", "update_asset_item", "delete_asset_resource",
                                                 "get_storyboard", "insert_storyboard_item",
+                                                "update_storyboard_scene", "update_storyboard_item",
+                                                "delete_storyboard_child_resource",
                                                 "get_generation_model_capabilities",
                                                 "generate_image",
                                                 "query_asset_metadata"))
@@ -144,7 +160,11 @@ public class AiAgentRegistry {
                                                                                 "script-full-parse_episode-scene-writer.override.md"))
                                                                 .build()))
                                 .systemPrompt(loadPrompt("script-full-parse.system.md"))
-                                .instructionTemplate("{scriptContent}")
+                                .instructionTemplate("""
+                                                <task_context>
+                                                <project_id>{projectId}</project_id>
+                                                <script_id>{scriptId}</script_id>
+                                                </task_context>""")
                                 .defaultUserMessage("请解析项目 {projectId} 的剧本（ID: {scriptId}），将原文内容解析为结构化的分集、场次和对白数据。")
                                 .enableTools(1)
                                 .build());
@@ -245,7 +265,7 @@ public class AiAgentRegistry {
                                 .toolNames(List.of(
                                                 "get_project", "get_script_structure",
                                                 "list_project_assets", "get_storyboard",
-                                                "list_project_storyboards"))
+                                                "get_project_storyboard"))
                                 .subAgentTools(List.of(
                                                 // 子资产预处理子 Agent（串行，先执行）
                                                 AiAgentDefinition.SubAgentToolDef.builder()
@@ -453,6 +473,7 @@ public class AiAgentRegistry {
                                                                                 assetId: 1
                                                                                 itemId: 3
                                                                                 projectId: 5""")
+                                                                .parametersSchema(SUB_AGENT_MESSAGE_SCHEMA)
                                                                 .refAgentType("asset_image_executor")
                                                                 .build()))
                                 .systemPrompt(loadPrompt("asset-image-generation.system.md"))
@@ -514,6 +535,7 @@ public class AiAgentRegistry {
                                                                                 projectId: 5
                                                                                 frameType: first
                                                                                 framePrompt: 生成该镜头视频的首帧定格图……""")
+                                                                .parametersSchema(SUB_AGENT_MESSAGE_SCHEMA)
                                                                 .refAgentType("storyboard_frame_executor")
                                                                 .build()))
                                 .systemPrompt(loadPrompt("storyboard-frame-gen.system.md"))
@@ -575,6 +597,7 @@ public class AiAgentRegistry {
                                                                                 请为分镜镜头生成视频。
                                                                                 storyboardItemId: 42
                                                                                 projectId: 5""")
+                                                                .parametersSchema(SUB_AGENT_MESSAGE_SCHEMA)
                                                                 .refAgentType("storyboard_video_executor")
                                                                 .build()))
                                 .systemPrompt(loadPrompt("storyboard-video-gen.system.md"))

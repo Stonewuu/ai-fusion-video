@@ -12,7 +12,7 @@ import lombok.*;
  * 分镜脚本实体
  * <p>
  * 对应数据库表：afv_storyboard
- * 存储项目的分镜脚本信息，一个项目可有多个分镜脚本，每个分镜下包含多个分镜条目（StoryboardItem）。
+ * 存储项目唯一的分镜容器，每个分镜下包含多个分镜分集、场次和条目（StoryboardItem）。
  */
 @TableName(value = "afv_storyboard", autoResultMap = true)
 @Data

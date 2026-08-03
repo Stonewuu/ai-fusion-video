@@ -1,119 +1,100 @@
-"use client";
+﻿"use client";
 
 import { create } from "zustand";
 import {
+  continuePipelineStream,
   pipelineStream,
+  reconnectPipelineStream,
   cancelPipeline,
+  listRunningPipelines,
   type AiChatReq,
-  type AiChatStreamEvent,
+  type PipelineRunStatusResponse,
+  type PipelineRunStatus,
 } from "@/lib/api/ai-pipeline";
 import {
   reconnectTaskStream,
   getTaskStreamStatus,
-  listRunningTaskStreams,
 } from "@/lib/api/task-stream";
+import {
+  cancelCallingTimelineTools,
+  restoreOptimisticallyCancelledTimelineTools,
+  type TimelineItem,
+} from "@/lib/store/pipeline-timeline";
+import {
+  createPipelineEventHandler,
+  generatePipelineTaskId,
+  TOOL_INVALIDATION_MAP,
+  type PipelineEventLifecycle,
+} from "@/lib/store/pipeline-event-handler";
+import {
+  PipelineStatusSynchronizer,
+  type PipelineStatusSyncTarget,
+} from "@/lib/store/pipeline-status-sync";
+
+export type {
+  SubTimelineItem,
+  TimelineItem,
+  ToolTimelineStatus,
+} from "@/lib/store/pipeline-timeline";
 
 // ========== 数据失效映射 ==========
 
 /** 数据失效类型 */
 export type InvalidationType = "assets" | "scripts" | "storyboards";
 
-/** 工具名 → 影响的数据类型 */
-const TOOL_INVALIDATION_MAP: Record<string, InvalidationType> = {
-  // assets 相关的工具
-  create_asset: "assets",
-  add_asset_item: "assets",
-  update_asset: "assets",
-  batch_create_assets: "assets",
-  batch_create_asset_items: "assets",
-  update_asset_image: "assets",
-  generate_image: "assets",
-
-  // scripts 相关的工具
-  save_script_episode: "scripts",
-  save_script_scene_items: "scripts",
-  update_script: "scripts",
-  update_script_info: "scripts",
-  manage_script_scenes: "scripts",
-  update_script_scene: "scripts",
-  update_script_scene_item: "scripts",
-  manage_script_scene_items: "scripts",
-
-  // storyboards 相关的工具
-  save_storyboard_episode: "storyboards",
-  save_storyboard_scene_shots: "storyboards",
-  insert_storyboard_item: "storyboards",
-  update_storyboard_item_video: "storyboards",
-  update_storyboard_item_frame: "storyboards",
-  generate_video: "storyboards",
-};
-
 // ========== 类型 ==========
-
-/** 子 Agent 时间线中的元素 */
-export type SubTimelineItem =
-  | {
-      type: "tool";
-      id: string;
-      name: string;
-      arguments: string;
-      status: "calling" | "done" | "error";
-      result?: string;
-    }
-  | { type: "content"; text: string }
-  | { type: "reasoning"; text: string; durationMs?: number };
-
-/** 时间线中的每个元素（与 agent-pipeline.tsx 一致） */
-export type TimelineItem =
-  | {
-      type: "tool";
-      id: string;
-      name: string;
-      arguments: string;
-      status: "calling" | "done" | "error";
-      result?: string;
-      /** 如果此工具是子 Agent 调用，agentName 标识来源 */
-      agentName?: string;
-      /** 子 Agent 的嵌套时间线（推理、内容、工具调用） */
-      children?: SubTimelineItem[];
-    }
-  | { type: "reasoning"; text: string; durationMs?: number }
-  | { type: "content"; text: string };
 
 export interface PipelineState {
   status: "running" | "done" | "error" | "cancelled";
   reasoningText: string;
+  reasoningStartTime?: number;
   reasoningDurationMs?: number;
   timeline: TimelineItem[];
+  runId?: string;
+  lastSequence: number;
   conversationId?: string;
   error?: string;
+  /** 页面恢复的 Pipeline 在打开详情前不回放 journal 内容。 */
+  contentLoaded?: boolean;
+  contentLoading?: boolean;
+  /** 仅在详情选中时建立前端 reconnect SSE，不影响后端 Pipeline。 */
+  reconnectOnSelect?: boolean;
+  /** 页面列表/轮询得到的后端 run 状态。 */
+  runStatus?: PipelineRunStatus;
+  /** 取消请求已提交，等待 durable terminal event。 */
+  cancelRequested?: boolean;
+  /** 新一轮输出需要与上一轮末尾的文本分开渲染。 */
+  separateNextRootContent?: boolean;
 }
 
 export interface PipelineTask {
   id: string;
   label: string;
-  projectId: number;
+  projectId: number | null;
   status: "running" | "done" | "error" | "cancelled";
   state: PipelineState;
   createdAt: number;
   cancellable?: boolean;
+  /** 当前浏览器仍持有启动配置，可在失败后继续同一会话。 */
+  continuable?: boolean;
   /** 任务结束时间（done/error/cancelled 时记录） */
   finishedAt?: number;
 }
 
 // ========== Store ==========
 
-interface PipelineStoreState {
+export interface PipelineStoreState {
   tasks: PipelineTask[];
   notificationOpen: boolean;
   /** 是否显示大面板（任务中心） */
   panelExpanded: boolean;
   /** 当前展开详情的 pipeline id */
   expandedTaskId: string | null;
-  /** 是否已执行过自动重连 */
-  reconnected: boolean;
+  /** 是否已恢复过运行中 Pipeline 列表 */
+  runningPipelinesRestored: boolean;
   /** 数据失效计数器 —— 页面监听对应 key 触发刷新 */
   invalidation: Record<InvalidationType, number>;
+  triggerInvalidation: (type: InvalidationType) => void;
 
   // actions
   addPipeline: (config: {
@@ -121,6 +102,12 @@ interface PipelineStoreState {
     projectId: number;
     request: AiChatReq;
     onComplete?: () => void;
+  }) => string;
+  addPipelineContinuation: (config: {
+    label: string;
+    projectId: number | null;
+    conversationId: string;
+    initialTimeline?: TimelineItem[];
   }) => string;
   attachTaskStream: (config: {
     label: string;
@@ -149,558 +136,103 @@ interface PipelineStoreState {
       errorText?: string;
     }
   ) => void;
-  cancelPipeline: (id: string) => void;
+  cancelPipeline: (id: string) => Promise<void>;
+  continuePipeline: (id: string) => void;
   removePipeline: (id: string) => void;
   clearCompleted: () => void;
   setNotificationOpen: (open: boolean) => void;
   setPanelExpanded: (expanded: boolean) => void;
   setExpandedTaskId: (id: string | null) => void;
-  /** 页面加载时调用：查询后端 running 对话并尝试 SSE 重连 */
-  tryReconnect: () => void;
+  /** 首次打开恢复任务详情时，从 journal 起点加载完整内容。 */
+  loadPipelineContent: (id: string) => void;
+  /** 仅终止前端内容流；不会取消后端 Pipeline。 */
+  disconnectPipelineContent: (id: string) => void;
+  /** 页面加载时调用：查询 running 对话并轮询状态，不建立 SSE。 */
+  restoreRunningPipelines: () => void;
+  /** 页面重新可见时，从 durable cursor 恢复本地实时内容流。 */
+  resumePipelineConnections: () => void;
 }
 
 // 简单任务的完成回调（不放在 zustand state 里避免序列化问题）
 const simpleTaskCallbacks = new Map<string, () => void>();
+const pipelineCompleteCallbacks = new Map<string, () => void>();
+const notifiedPipelineSettlements = new Set<string>();
 
 // 存储 AbortController 的 map（不放在 zustand state 里避免序列化问题）
 const abortControllers = new Map<string, AbortController>();
+const reconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
+const PIPELINE_STATUS_POLL_INTERVAL_MS = 3000;
+const PIPELINE_RECONNECT_DELAY_MS = 1000;
 
-function isMainAgentTerminalEvent(event: AiChatStreamEvent): boolean {
-  return !event.parentToolCallId && !event.agentName && (
-    event.outputType === "DONE" ||
-    event.outputType === "ERROR" ||
-    event.outputType === "CANCELLED"
-  );
+function clearPipelineReconnect(id: string): void {
+  const timer = reconnectTimers.get(id);
+  if (timer) clearTimeout(timer);
+  reconnectTimers.delete(id);
 }
 
-let idCounter = 0;
-function generateId(): string {
-  return `pipeline-${Date.now()}-${++idCounter}`;
+function schedulePipelineReconnect(id: string): void {
+  if (reconnectTimers.has(id)) return;
+  const timer = setTimeout(() => {
+    reconnectTimers.delete(id);
+    usePipelineStore.getState().loadPipelineContent(id);
+  }, PIPELINE_RECONNECT_DELAY_MS);
+  reconnectTimers.set(id, timer);
 }
 
-type ContentMergeMode = "stream" | "paragraph";
-
-function mergeContentText(
-  existingText: string,
-  incomingText: string,
-  mode: ContentMergeMode
-): string {
-  if (!existingText) return incomingText;
-  if (!incomingText) return existingText;
-  if (mode === "stream") {
-    return existingText + incomingText;
-  }
-  if (existingText.endsWith("\n\n")) {
-    return existingText + incomingText;
-  }
-  if (existingText.endsWith("\n")) {
-    return `${existingText}\n${incomingText}`;
-  }
-  return `${existingText}\n\n${incomingText}`;
+function schedulePipelineStatusSync(delayMs?: number): void {
+  pipelineStatusSynchronizer.schedule(delayMs);
 }
 
-/**
- * 获取当前运行中 pipeline 的 conversationId 集合
- * 供 notification-panel 过滤历史列表使用
- */
-export function getRunningConversationIds(): Set<string> {
-  const tasks = usePipelineStore.getState().tasks;
-  const ids = new Set<string>();
-  for (const t of tasks) {
-    if (t.status === "running" && t.state.conversationId) {
-      ids.add(t.state.conversationId);
-    }
-  }
-  return ids;
-}
-
-/**
- * 在 timeline 中找到指定 tool ID 的节点，并向其 children 追加子事件。
- * 如果找不到（重连场景下 TOOL_CALL 可能被 Redis Stream 裁剪），
- * 自动创建一个占位工具节点来承载后续子事件。
- */
-function appendToToolChildren(
-  timeline: TimelineItem[],
-  parentToolCallId: string,
-  updater: (children: SubTimelineItem[]) => SubTimelineItem[]
-): TimelineItem[] {
-  const found = timeline.some(
-    (item) => item.type === "tool" && item.id === parentToolCallId
-  );
-
-  if (!found) {
-    // 容错：创建占位父工具节点（TOOL_CALL 事件已被裁剪）
-    const placeholder: TimelineItem = {
-      type: "tool",
-      id: parentToolCallId,
-      name: "unknown_sub_agent",
-      arguments: "",
-      status: "calling",
-      children: updater([]),
-    };
-    return [...timeline, placeholder];
-  }
-
-  return timeline.map((item) => {
-    if (item.type === "tool" && item.id === parentToolCallId) {
-      return {
-        ...item,
-        children: updater(item.children ?? []),
-      };
-    }
-    return item;
-  });
-}
-
-function updateToolStatus(
-  timeline: TimelineItem[],
-  toolCallId: string,
-  status: "calling" | "done" | "error"
-): TimelineItem[] {
-  return timeline.map((item) =>
-    item.type === "tool" && item.id === toolCallId
-      ? { ...item, status }
-      : item
-  );
-}
-
-function appendReasoningToSubTimeline(
-  children: SubTimelineItem[],
-  reasoningContent: string
-): SubTimelineItem[] {
-  const last = children[children.length - 1];
-  if (last && last.type === "reasoning") {
-    return [
-      ...children.slice(0, -1),
-      { ...last, text: last.text + reasoningContent },
-    ];
-  }
-  return [
-    ...children,
-    {
-      type: "reasoning",
-      text: reasoningContent,
-    },
-  ];
-}
-
-function updateLastSubTimelineReasoningDuration(
-  children: SubTimelineItem[],
-  durationMs: number
-): SubTimelineItem[] {
-  for (let index = children.length - 1; index >= 0; index--) {
-    const item = children[index];
-    if (item.type === "reasoning") {
-      return children.map((child, childIndex) =>
-        childIndex === index && child.type === "reasoning"
-          ? { ...child, durationMs }
-          : child
-      );
-    }
-  }
-  return children;
-}
-
-function appendReasoningToTimeline(
-  timeline: TimelineItem[],
-  reasoningContent: string
-): TimelineItem[] {
-  const last = timeline[timeline.length - 1];
-  if (last && last.type === "reasoning") {
-    return [
-      ...timeline.slice(0, -1),
-      { ...last, text: last.text + reasoningContent },
-    ];
-  }
-  return [
-    ...timeline,
-    {
-      type: "reasoning",
-      text: reasoningContent,
-    },
-  ];
-}
-
-function updateLastTimelineReasoningDuration(
-  timeline: TimelineItem[],
-  durationMs: number
-): TimelineItem[] {
-  for (let index = timeline.length - 1; index >= 0; index--) {
-    const item = timeline[index];
-    if (item.type === "reasoning") {
-      return timeline.map((timelineItem, timelineIndex) =>
-        timelineIndex === index && timelineItem.type === "reasoning"
-          ? { ...timelineItem, durationMs }
-          : timelineItem
-      );
-    }
-  }
-  return timeline;
-}
-
-/** 处理 SSE 事件的通用逻辑（支持子 Agent 嵌套） */
-function createEventHandler(
+function bindPipelineRunId(
   id: string,
-  set: (fn: (s: PipelineStoreState) => Partial<PipelineStoreState>) => void,
+  runId: string,
+  set: (fn: (state: PipelineStoreState) => Partial<PipelineStoreState>) => void,
+  get: () => PipelineStoreState,
+): void {
+  const task = get().tasks.find((candidate) => candidate.id === id);
+  if (!task) return;
+  if (task.state.runId && task.state.runId !== runId) {
+    throw new Error("Pipeline stream switched to a different run");
+  }
+  if (task.state.runId) return;
+  set((state) => ({
+    tasks: state.tasks.map((candidate) => candidate.id === id
+      ? {
+          ...candidate,
+          state: { ...candidate.state, runId },
+        }
+      : candidate),
+  }));
+}
+
+function notifyPipelineSettlement(
+  id: string,
+  status: "done" | "error" | "cancelled",
   onComplete?: () => void,
   onSettled?: (status: "done" | "error" | "cancelled") => void,
-  contentMergeMode: ContentMergeMode = "stream"
-) {
-  // 事件队列 + rAF 节流，避免高频 set() 导致 Maximum update depth exceeded
-  const eventQueue: AiChatStreamEvent[] = [];
-  let rafScheduled = false;
-
-  function flushEvents() {
-    rafScheduled = false;
-    const batch = eventQueue.splice(0);
-    if (batch.length === 0) return;
-
-    // 收集本批次需要触发的 invalidation 类型
-    const invalidations: InvalidationType[] = [];
-    let hasTerminalEvent = false;
-    for (const event of batch) {
-      if (isMainAgentTerminalEvent(event)) {
-        hasTerminalEvent = true;
-      }
-    }
-
-
-    set((s) => {
-      const tasks = s.tasks.map((t) => {
-        if (t.id !== id) return t;
-
-        const next: PipelineState = {
-          ...t.state,
-          timeline: [...t.state.timeline],
-        };
-
-        for (const event of batch) {
-          if (event.conversationId) {
-            next.conversationId = event.conversationId;
-          }
-
-          const isSubAgent = !!event.parentToolCallId;
-
-          switch (event.outputType) {
-            case "REASONING":
-              if (event.reasoningContent) {
-                if (isSubAgent) {
-                  next.timeline = appendToToolChildren(
-                    next.timeline,
-                    event.parentToolCallId!,
-                    (children) =>
-                      appendReasoningToSubTimeline(
-                        children,
-                        event.reasoningContent!
-                      )
-                  );
-                } else {
-                  next.reasoningText += event.reasoningContent;
-                  next.timeline = appendReasoningToTimeline(
-                    next.timeline,
-                    event.reasoningContent
-                  );
-                }
-              }
-              break;
-
-            case "CONTENT":
-              if (event.reasoningDurationMs && !isSubAgent) {
-                next.reasoningDurationMs = event.reasoningDurationMs;
-                next.timeline = updateLastTimelineReasoningDuration(
-                  next.timeline,
-                  event.reasoningDurationMs
-                );
-              }
-              if (event.content) {
-                const content = event.content;
-                if (isSubAgent) {
-                  next.timeline = appendToToolChildren(
-                    next.timeline,
-                    event.parentToolCallId!,
-                    (children) => {
-                      let updatedChildren = [...children];
-                      if (event.reasoningDurationMs) {
-                        updatedChildren = updateLastSubTimelineReasoningDuration(
-                          updatedChildren,
-                          event.reasoningDurationMs
-                        );
-                      }
-
-                      const last =
-                        updatedChildren[updatedChildren.length - 1];
-                      if (last && last.type === "content") {
-                        return [
-                          ...updatedChildren.slice(0, -1),
-                          {
-                            ...last,
-                            text: mergeContentText(
-                              last.text,
-                              content,
-                              contentMergeMode
-                            ),
-                          },
-                        ];
-                      }
-                      return [
-                        ...updatedChildren,
-                        { type: "content" as const, text: content },
-                      ];
-                    }
-                  );
-                } else {
-                  const last = next.timeline[next.timeline.length - 1];
-                  if (last && last.type === "content") {
-                    next.timeline[next.timeline.length - 1] = {
-                      ...last,
-                      text: mergeContentText(
-                        last.text,
-                        content,
-                        contentMergeMode
-                      ),
-                    };
-                  } else {
-                    next.timeline.push({
-                      type: "content",
-                      text: content,
-                    });
-                  }
-                }
-              }
-              break;
-
-            case "TOOL_CALL":
-              if (event.toolCalls) {
-                for (const tc of event.toolCalls) {
-                  if (isSubAgent) {
-                    next.timeline = appendToToolChildren(
-                      next.timeline,
-                      event.parentToolCallId!,
-                      (children) => {
-                        const exists = children.some(
-                          (c) => c.type === "tool" && c.id === tc.id
-                        );
-                        if (exists) return children;
-                        return [
-                          ...children,
-                          {
-                            type: "tool" as const,
-                            id: tc.id,
-                            name: tc.name,
-                            arguments: tc.arguments,
-                            status: "calling" as const,
-                          },
-                        ];
-                      }
-                    );
-                  } else {
-                    const exists = next.timeline.some(
-                      (item) => item.type === "tool" && item.id === tc.id
-                    );
-                    if (!exists) {
-                      next.timeline.push({
-                        type: "tool",
-                        id: tc.id,
-                        name: tc.name,
-                        arguments: tc.arguments,
-                        status: "calling",
-                        agentName: event.agentName,
-                      });
-                    }
-                  }
-                }
-              }
-              break;
-
-            case "TOOL_FINISHED":
-              if (event.toolCallId) {
-                const toolStatus =
-                  event.toolStatus === "error"
-                    ? ("error" as const)
-                    : ("done" as const);
-
-                if (isSubAgent) {
-                  next.timeline = appendToToolChildren(
-                    next.timeline,
-                    event.parentToolCallId!,
-                    (children) =>
-                      children.map((c) =>
-                        c.type === "tool" && c.id === event.toolCallId
-                          ? {
-                              ...c,
-                              status: toolStatus,
-                              result: event.toolResult,
-                            }
-                          : c
-                      )
-                  );
-                } else {
-                  const exists = next.timeline.some(
-                    (item) =>
-                      item.type === "tool" && item.id === event.toolCallId
-                  );
-                  if (exists) {
-                    next.timeline = next.timeline.map((item) =>
-                      item.type === "tool" && item.id === event.toolCallId
-                        ? {
-                            ...item,
-                            status: toolStatus,
-                            result: event.toolResult,
-                            // 补充工具名（占位节点可能为 unknown_sub_agent）
-                            ...(event.toolName ? { name: event.toolName } : {}),
-                          }
-                        : item
-                    );
-                  } else if (event.toolName) {
-                    // 容错：TOOL_CALL 已被裁剪，补创建已完成工具节点
-                    next.timeline.push({
-                      type: "tool",
-                      id: event.toolCallId,
-                      name: event.toolName,
-                      arguments: "",
-                      status: toolStatus,
-                      result: event.toolResult,
-                    });
-                  }
-                }
-              }
-              // 收集 invalidation
-              if (
-                event.toolName &&
-                event.toolStatus !== "error" &&
-                TOOL_INVALIDATION_MAP[event.toolName]
-              ) {
-                invalidations.push(TOOL_INVALIDATION_MAP[event.toolName]);
-              }
-              break;
-
-            case "SUB_AGENT_FINISHED":
-              if (isSubAgent) {
-                next.timeline = updateToolStatus(
-                  next.timeline,
-                  event.parentToolCallId!,
-                  "done"
-                );
-              }
-              break;
-
-            case "DONE":
-              next.status = "done";
-              if (event.content) {
-                const last = next.timeline[next.timeline.length - 1];
-                if (last && last.type === "content") {
-                  next.timeline[next.timeline.length - 1] = {
-                    ...last,
-                    text: mergeContentText(
-                      last.text,
-                      event.content,
-                      contentMergeMode
-                    ),
-                  };
-                } else {
-                  next.timeline.push({ type: "content", text: event.content });
-                }
-              }
-              break;
-
-            case "ERROR":
-              if (isSubAgent) {
-                next.timeline = updateToolStatus(
-                  next.timeline,
-                  event.parentToolCallId!,
-                  "error"
-                );
-                next.timeline = appendToToolChildren(
-                  next.timeline,
-                  event.parentToolCallId!,
-                  (children) => [
-                    ...children,
-                    {
-                      type: "content" as const,
-                        text: `${event.agentName || "子Agent"} 出错：${event.error || "未知错误"}`,
-                    },
-                  ]
-                );
-              } else if (event.agentName) {
-                next.timeline.push({
-                  type: "content",
-                  text: `${event.agentName} 出错：${event.error || "未知错误"}`,
-                });
-              } else {
-                next.status = "error";
-                next.error = event.error || "未知错误";
-              }
-              break;
-
-            case "CANCELLED":
-              next.status = "cancelled";
-              break;
-          }
-        } // end for batch
-
-        const newStatus: PipelineTask["status"] =
-          next.status === "done"
-            ? "done"
-            : next.status === "error"
-              ? "error"
-              : next.status === "cancelled"
-                ? "cancelled"
-                : "running";
-
-        const isFinished = newStatus !== "running" && t.status === "running";
-        return {
-          ...t,
-          status: newStatus,
-          state: next,
-          ...(isFinished ? { finishedAt: Date.now() } : {}),
-        };
-      });
-
-      // 合并 invalidation 到同一次 set
-      const newInvalidation = { ...s.invalidation };
-      if (hasTerminalEvent) {
-        newInvalidation.assets = (newInvalidation.assets || 0) + 1;
-        newInvalidation.scripts = (newInvalidation.scripts || 0) + 1;
-        newInvalidation.storyboards = (newInvalidation.storyboards || 0) + 1;
-      }
-      for (const inv of invalidations) {
-        newInvalidation[inv] = (newInvalidation[inv] || 0) + 1;
-      }
-
-      return { tasks, invalidation: newInvalidation };
-    });
-
-    // 完成/错误/取消时触发后续回调
-    for (const event of batch) {
-      if (event.outputType === "DONE" && isMainAgentTerminalEvent(event)) {
-        abortControllers.delete(id);
-        onComplete?.();
-        onSettled?.("done");
-      }
-      if (
-        (event.outputType === "ERROR" || event.outputType === "CANCELLED") &&
-        isMainAgentTerminalEvent(event)
-      ) {
-        abortControllers.delete(id);
-        onSettled?.(
-          event.outputType === "CANCELLED" ? "cancelled" : "error"
-        );
-      }
-    }
-  }
-
-  return (event: AiChatStreamEvent) => {
-    eventQueue.push(event);
-    if (!rafScheduled) {
-      rafScheduled = true;
-      if (typeof requestAnimationFrame !== "undefined") {
-        requestAnimationFrame(flushEvents);
-      } else {
-        setTimeout(flushEvents, 16);
-      }
-    }
-  };
+): void {
+  if (notifiedPipelineSettlements.has(id)) return;
+  notifiedPipelineSettlements.add(id);
+  clearPipelineReconnect(id);
+  abortControllers.delete(id);
+  if (status === "done") onComplete?.();
+  onSettled?.(status);
 }
+
+const pipelineEventLifecycle: PipelineEventLifecycle = {
+  notifySettlement: notifyPipelineSettlement,
+  scheduleStatusSync: schedulePipelineStatusSync,
+};
+
+function toTerminalTaskStatus(
+  status: PipelineRunStatus
+): Exclude<PipelineTask["status"], "running"> | null {
+  if (status === "COMPLETED") return "done";
+  if (status === "FAILED") return "error";
+  if (status === "CANCELLED") return "cancelled";
+  return null;
+}
+
 
 function settleTaskIfRunning(
   set: (fn: (s: PipelineStoreState) => Partial<PipelineStoreState>) => void,
@@ -726,6 +258,10 @@ function settleTaskIfRunning(
         state: {
           ...t.state,
           status,
+          cancelRequested: false,
+          timeline: status === "cancelled"
+            ? cancelCallingTimelineTools(t.state.timeline)
+            : t.state.timeline,
           ...(status === "error"
             ? { error: options?.error || t.state.error || "任务失败" }
             : {}),
@@ -747,11 +283,65 @@ function settleTaskIfRunning(
   });
   abortControllers.delete(id);
   if (transitioned) {
-    if (status === "done") {
-      options?.onComplete?.();
-    }
-    options?.onSettled?.(status);
+    notifyPipelineSettlement(
+      id,
+      status,
+      options?.onComplete,
+      options?.onSettled,
+    );
   }
+}
+
+function startPipelineContinuationStream(
+  id: string,
+  conversationId: string,
+  set: (fn: (state: PipelineStoreState) => Partial<PipelineStoreState>) => void,
+  get: () => PipelineStoreState,
+  onComplete?: () => void,
+) {
+  const handleEvent = createPipelineEventHandler(
+    pipelineEventLifecycle,
+    id,
+    set,
+    onComplete,
+  );
+  const controller = continuePipelineStream(conversationId, {
+    onEvent: (event) => {
+      bindPipelineRunId(id, event.runId, set, get);
+      handleEvent(event);
+    },
+    onError: (error) => {
+      const current = get().tasks.find((candidate) => candidate.id === id);
+      if (current?.status !== "running") return;
+      if (!current.state.runId) {
+        settleTaskIfRunning(set, id, "error", {
+          error: `继续执行失败：${error.message}`,
+        });
+        return;
+      }
+      set((state) => ({
+        tasks: state.tasks.map((candidate) =>
+          candidate.id === id
+            ? {
+                ...candidate,
+                state: {
+                  ...candidate.state,
+                  error: `Pipeline 连接中断：${error.message}`,
+                  contentLoaded: false,
+                  contentLoading: false,
+                },
+              }
+            : candidate,
+        ),
+      }));
+      abortControllers.delete(id);
+      schedulePipelineReconnect(id);
+    },
+    onComplete: () => {
+      abortControllers.delete(id);
+    },
+  });
+  abortControllers.set(id, controller);
 }
 
 export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
@@ -759,15 +349,17 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
   notificationOpen: false,
   panelExpanded: false,
   expandedTaskId: null,
-  reconnected: false,
+  runningPipelinesRestored: false,
   invalidation: { assets: 0, scripts: 0, storyboards: 0 },
+  triggerInvalidation: (type: InvalidationType) => set((s) => ({ invalidation: { ...s.invalidation, [type]: (s.invalidation[type] || 0) + 1 } })),
 
   addSimpleTask: ({ label, projectId, initialNote, onComplete }) => {
-    const id = generateId();
+    const id = generatePipelineTaskId();
     const initialState: PipelineState = {
       status: "running",
       reasoningText: "",
       timeline: initialNote ? [{ type: "content", text: initialNote }] : [],
+      lastSequence: 0,
     };
     const task: PipelineTask = {
       id,
@@ -837,11 +429,15 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
   },
 
   addPipeline: ({ label, projectId, request, onComplete }) => {
-    const id = generateId();
+    const id = generatePipelineTaskId();
     const initialState: PipelineState = {
       status: "running",
       reasoningText: "",
       timeline: [],
+      lastSequence: 0,
+      conversationId: request.conversationId,
+      contentLoaded: true,
+      contentLoading: false,
     };
 
     const task: PipelineTask = {
@@ -852,57 +448,143 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       state: initialState,
       createdAt: Date.now(),
       cancellable: true,
+      continuable: true,
     };
 
     set((s) => ({ tasks: [...s.tasks, task] }));
+    if (onComplete) pipelineCompleteCallbacks.set(id, onComplete);
 
-    const handleEvent = createEventHandler(id, set, onComplete);
+    const handleEvent = createPipelineEventHandler(
+      pipelineEventLifecycle,
+      id,
+      set,
+      onComplete,
+    );
 
     // 启动 SSE 流
     const controller = pipelineStream(request, {
-      onEvent: handleEvent,
+      onEvent: (event) => {
+        bindPipelineRunId(id, event.runId, set, get);
+        handleEvent(event);
+      },
       onError: (err) => {
-        // 仅在 running 状态时标记错误，避免覆盖已取消/已完成的状态
+        const current = get().tasks.find((candidate) => candidate.id === id);
+        if (current?.status === "running" && !current.state.runId) {
+          settleTaskIfRunning(set, id, "error", {
+            error: `Pipeline 启动失败：${err.message}`,
+          });
+          return;
+        }
+        // 传输失败不是 Agent 终态；保留 cursor 供 durable reconnect。
         set((s) => ({
           tasks: s.tasks.map((t) =>
             t.id === id && t.status === "running"
               ? {
                   ...t,
-                  status: "error" as const,
-                  finishedAt: Date.now(),
                   state: {
                     ...t.state,
-                    status: "error" as const,
-                    error: err.message,
+                    error: `Pipeline 连接中断：${err.message}`,
+                    contentLoaded: false,
+                    contentLoading: false,
                   },
                 }
               : t
           ),
         }));
         abortControllers.delete(id);
+        schedulePipelineReconnect(id);
       },
       onComplete: () => {
-        // SSE 流结束，如果还在 running 则标记为 done
-        set((s) => ({
-          tasks: s.tasks.map((t) =>
-            t.id === id && t.status === "running"
-              ? {
-                  ...t,
-                  status: "done" as const,
-                  finishedAt: Date.now(),
-                  state: { ...t.state, status: "done" as const },
-                }
-              : t
-          ),
-        }));
+        // 业务终态已由 journal terminal event 在 handleEvent 中处理。
         abortControllers.delete(id);
-        onComplete?.();
       },
     });
 
     abortControllers.set(id, controller);
 
     return id;
+  },
+
+  addPipelineContinuation: ({
+    label,
+    projectId,
+    conversationId,
+    initialTimeline = [],
+  }) => {
+    const id = generatePipelineTaskId();
+    const task: PipelineTask = {
+      id,
+      label,
+      projectId,
+      status: "running",
+      state: {
+        status: "running",
+        reasoningText: "",
+        timeline: [...initialTimeline],
+        lastSequence: 0,
+        conversationId,
+        contentLoaded: true,
+        contentLoading: false,
+        separateNextRootContent: initialTimeline.length > 0,
+      },
+      createdAt: Date.now(),
+      cancellable: true,
+      continuable: true,
+    };
+    set((state) => ({ tasks: [...state.tasks, task] }));
+    startPipelineContinuationStream(id, conversationId, set, get);
+    return id;
+  },
+
+  continuePipeline: (id: string) => {
+    const task = get().tasks.find((candidate) => candidate.id === id);
+    if (
+      !task ||
+      (task.status !== "error" && task.status !== "cancelled")
+    ) {
+      return;
+    }
+    if (!task.continuable || !task.state.conversationId) {
+      throw new Error("当前 Pipeline 缺少继续执行所需的会话配置");
+    }
+    abortControllers.get(id)?.abort();
+    abortControllers.delete(id);
+    notifiedPipelineSettlements.delete(id);
+    set((state) => ({
+      tasks: state.tasks.map((candidate) =>
+        candidate.id === id
+          ? {
+              ...candidate,
+              status: "running",
+              finishedAt: undefined,
+              state: {
+                ...candidate.state,
+                status: "running",
+                reasoningText: "",
+                reasoningStartTime: undefined,
+                reasoningDurationMs: undefined,
+                runId: undefined,
+                lastSequence: 0,
+                error: undefined,
+                runStatus: undefined,
+                cancelRequested: false,
+                contentLoaded: true,
+                contentLoading: false,
+                reconnectOnSelect: false,
+                separateNextRootContent: true,
+              },
+            }
+          : candidate,
+      ),
+    }));
+
+    startPipelineContinuationStream(
+      id,
+      task.state.conversationId,
+      set,
+      get,
+      pipelineCompleteCallbacks.get(id),
+    );
   },
 
   attachTaskStream: ({
@@ -913,7 +595,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     onComplete,
     onSettled,
   }) => {
-    const id = generateId();
+    const id = generatePipelineTaskId();
     const task: PipelineTask = {
       id,
       label,
@@ -923,6 +605,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
         status: "running",
         reasoningText: "",
         timeline: [{ type: "content", text: "正在连接任务流……" }],
+        lastSequence: 0,
         conversationId: taskId,
       },
       createdAt: Date.now(),
@@ -942,12 +625,14 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
           return;
         }
 
-        const handleEvent = createEventHandler(
+        const handleEvent = createPipelineEventHandler(
+          pipelineEventLifecycle,
           id,
           set,
           onComplete,
           onSettled,
-          "paragraph"
+          "paragraph",
+          false
         );
 
         set((s) => ({
@@ -967,16 +652,19 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
             });
           },
           onComplete: () => {
-            const fallbackStatus =
-              streamStatus === "ERROR"
-                ? "error"
-                : streamStatus === "COMPLETED"
-                  ? "done"
-                  : "done";
-            settleTaskIfRunning(set, id, fallbackStatus, {
-              onComplete,
-              onSettled,
-            });
+            if (streamStatus === "ERROR") {
+              settleTaskIfRunning(set, id, "error", { onSettled });
+            } else if (streamStatus === "COMPLETED") {
+              settleTaskIfRunning(set, id, "done", {
+                onComplete,
+                onSettled,
+              });
+            } else {
+              settleTaskIfRunning(set, id, "error", {
+                error: "任务流在未提供终态事件时结束",
+                onSettled,
+              });
+            }
           },
         });
 
@@ -994,43 +682,71 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
 
   cancelPipeline: async (id: string) => {
     const task = get().tasks.find((t) => t.id === id);
-    const controller = abortControllers.get(id);
-
-    // 先标记为 cancelled，防止 abort 触发的 onError/onComplete 回调覆盖状态
+    if (!task || task.status !== "running" || task.state.cancelRequested) return;
+    if (!task.state.runId) {
+      const error = new Error("Pipeline 尚未返回 runId，无法提交取消请求");
+      set((s) => ({
+        tasks: s.tasks.map((item) =>
+          item.id === id
+            ? { ...item, state: { ...item.state, error: `取消请求失败：${error.message}` } }
+            : item
+        ),
+      }));
+      throw error;
+    }
+    const previousTimeline = task.state.timeline;
     set((s) => ({
-      tasks: s.tasks.map((t) =>
-        t.id === id
+      tasks: s.tasks.map((item) =>
+        item.id === id
           ? {
-              ...t,
-              status: "cancelled" as const,
-              finishedAt: Date.now(),
-              state: { ...t.state, status: "cancelled" as const },
+              ...item,
+              state: {
+                ...item.state,
+                cancelRequested: true,
+                error: undefined,
+                timeline: cancelCallingTimelineTools(item.state.timeline),
+              },
             }
-          : t
+          : item
       ),
-      invalidation: {
-        assets: (s.invalidation.assets || 0) + 1,
-        scripts: (s.invalidation.scripts || 0) + 1,
-        storyboards: (s.invalidation.storyboards || 0) + 1,
-      },
     }));
-
-    controller?.abort();
-    abortControllers.delete(id);
-
-    if (task?.state.conversationId) {
-      try {
-        await cancelPipeline(task.state.conversationId);
-      } catch {
-        // 忽略取消错误
-      }
+    schedulePipelineStatusSync(0);
+    try {
+      await cancelPipeline({ runId: task.state.runId });
+      // 保持 SSE 连接，等待服务端持久化并发送 CANCELLED terminal event。
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      set((s) => ({
+        tasks: s.tasks.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                state: item.state.cancelRequested
+                  ? {
+                      ...item.state,
+                      cancelRequested: false,
+                      timeline: restoreOptimisticallyCancelledTimelineTools(
+                        item.state.timeline,
+                        previousTimeline,
+                      ),
+                      error: `取消请求失败：${message}`,
+                    }
+                  : item.state,
+              }
+            : item
+        ),
+      }));
+      throw error;
     }
   },
 
   removePipeline: (id: string) => {
     abortControllers.get(id)?.abort();
     abortControllers.delete(id);
+    clearPipelineReconnect(id);
     simpleTaskCallbacks.delete(id);
+    pipelineCompleteCallbacks.delete(id);
+    notifiedPipelineSettlements.delete(id);
     set((s) => ({
       tasks: s.tasks.filter((t) => t.id !== id),
       expandedTaskId: s.expandedTaskId === id ? null : s.expandedTaskId,
@@ -1043,7 +759,10 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       .map((t) => t.id);
     for (const id of removableIds) {
       abortControllers.delete(id);
+      clearPipelineReconnect(id);
       simpleTaskCallbacks.delete(id);
+      pipelineCompleteCallbacks.delete(id);
+      notifiedPipelineSettlements.delete(id);
     }
     set((s) => ({
       tasks: s.tasks.filter((t) => t.status === "running"),
@@ -1071,152 +790,309 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
     set({ expandedTaskId: id });
   },
 
-  /**
-   * 页面加载时调用：查询后端 running 对话 → 检查 Redis 流状态 → reconnect SSE
-   */
-  tryReconnect: () => {
-    if (get().reconnected) return;
-    set({ reconnected: true });
+  loadPipelineContent: (id: string) => {
+    const task = get().tasks.find((candidate) => candidate.id === id);
+    const canHydrate = task?.state.reconnectOnSelect === true
+      || task?.status === "running";
+    if (
+      !task?.state.runId ||
+      !canHydrate ||
+      task.state.contentLoaded !== false ||
+      task.state.contentLoading
+    ) {
+      return;
+    }
 
-    // 异步查询后端
-    (async () => {
+    clearPipelineReconnect(id);
+    abortControllers.get(id)?.abort();
+    abortControllers.delete(id);
+    const afterSequence = task.state.lastSequence;
+    set((s) => ({
+      tasks: s.tasks.map((candidate) =>
+        candidate.id === id
+          ? {
+              ...candidate,
+              state: {
+                ...candidate.state,
+                error: undefined,
+                contentLoading: true,
+                ...(afterSequence === 0
+                  ? {
+                      reasoningText: "",
+                      reasoningStartTime: undefined,
+                      reasoningDurationMs: undefined,
+                      timeline: [],
+                    }
+                  : {}),
+              },
+            }
+          : candidate
+      ),
+    }));
+
+    const handleEvent = createPipelineEventHandler(
+      pipelineEventLifecycle,
+      id,
+      set,
+    );
+    const controller = reconnectPipelineStream(
+      task.state.runId,
+      afterSequence,
+      {
+        onEvent: handleEvent,
+        onError: (error) => {
+          set((s) => ({
+            tasks: s.tasks.map((candidate) =>
+              candidate.id === id
+                ? {
+                    ...candidate,
+                    state: {
+                      ...candidate.state,
+                      contentLoading: false,
+                      contentLoaded: false,
+                      error: `Pipeline 内容加载中断：${error.message}`,
+                    },
+                  }
+                : candidate
+            ),
+          }));
+          abortControllers.delete(id);
+          schedulePipelineReconnect(id);
+        },
+        onComplete: () => {
+          set((s) => ({
+            tasks: s.tasks.map((candidate) =>
+              candidate.id === id
+                ? {
+                    ...candidate,
+                    state: {
+                      ...candidate.state,
+                      contentLoaded: true,
+                      contentLoading: false,
+                    },
+                  }
+                : candidate
+            ),
+          }));
+          abortControllers.delete(id);
+        },
+      }
+    );
+    abortControllers.set(id, controller);
+  },
+
+  disconnectPipelineContent: (id: string) => {
+    const task = get().tasks.find((candidate) => candidate.id === id);
+    if (!task?.state.reconnectOnSelect) return;
+
+    // 仅关闭当前浏览器的 SSE；不调用 cancelPipeline，不影响服务端 run。
+    abortControllers.get(id)?.abort();
+    abortControllers.delete(id);
+    set((s) => ({
+      tasks: s.tasks.map((candidate) =>
+        candidate.id === id
+          ? {
+              ...candidate,
+              state: { ...candidate.state, contentLoading: false },
+            }
+          : candidate
+      ),
+    }));
+    schedulePipelineStatusSync(0);
+  },
+
+  /** 页面加载时调用：只查询 durable root run 的元数据和状态，不建立 SSE。 */
+  restoreRunningPipelines: () => {
+    if (get().runningPipelinesRestored) return;
+    set({ runningPipelinesRestored: true });
+
+    void (async () => {
       try {
-        const runningConvs = await listRunningTaskStreams();
-        if (runningConvs.length === 0) {
-          console.log("[Pipeline] 无运行中任务");
-          return;
-        }
-
-        console.log(
-          `[Pipeline] 后端有 ${runningConvs.length} 个 running 对话，开始重连`
-        );
-
-        for (const conv of runningConvs) {
-          const conversationId = conv.conversationId;
-          const id = `reconnect-${conversationId}`;
-
-          // 检查是否已存在（当前页面已有该任务的 SSE 连接）
+        const runningRuns = await listRunningPipelines();
+        for (const run of runningRuns) {
+          const id = `reconnect-${run.runId}`;
           const existing = get().tasks.find(
-            (t) => t.state.conversationId === conversationId
+            (task) =>
+              task.state.runId === run.runId ||
+              task.state.conversationId === run.conversationId
           );
           if (existing) continue;
 
-          // 创建占位 task
           const placeholder: PipelineTask = {
             id,
-            label: conv.title || "AI 任务",
-            projectId: conv.projectId,
+            label: run.title || "AI 任务",
+            projectId: run.projectId,
             status: "running",
             state: {
               status: "running",
               reasoningText: "",
-              timeline: [{ type: "content", text: "正在重连……" }],
-              conversationId,
+              timeline: [],
+              runId: run.runId,
+              lastSequence: 0,
+              conversationId: run.conversationId,
+              contentLoaded: false,
+              contentLoading: false,
+              reconnectOnSelect: true,
+              runStatus: run.status,
+              cancelRequested: run.status === "CANCEL_REQUESTED",
             },
-            createdAt: conv.createTime
-              ? new Date(conv.createTime).getTime()
-              : Date.now(),
-            cancellable: conv.category !== "task",
+            createdAt: new Date(run.startedAt).getTime(),
+            cancellable: true,
+            continuable: true,
           };
-
           set((s) => ({ tasks: [...s.tasks, placeholder] }));
-
-          // 检查 Redis 流状态
-          try {
-            const streamStatus = await getTaskStreamStatus(conversationId);
-            console.log(
-              `[Pipeline] 对话 ${conversationId} Redis 状态: ${streamStatus}`
-            );
-
-            if (streamStatus === "ACTIVE") {
-              // 后台仍在运行 → 重连 SSE
-              const handleEvent = createEventHandler(
-                id,
-                set,
-                undefined,
-                undefined,
-                conv.category === "task" ? "paragraph" : "stream"
-              );
-
-              // 清空占位文本
-              set((s) => ({
-                tasks: s.tasks.map((t) =>
-                  t.id === id
-                    ? { ...t, state: { ...t.state, timeline: [] } }
-                    : t
-                ),
-              }));
-
-              const controller = reconnectTaskStream(conversationId, {
-                onEvent: handleEvent,
-                onError: (err) => {
-                  settleTaskIfRunning(set, id, "error", { error: err.message });
-                },
-                onComplete: () => {
-                  settleTaskIfRunning(set, id, "done");
-                },
-              });
-
-              abortControllers.set(id, controller);
-            } else {
-              // Redis 流已结束 → 标记
-              const finalStatus: PipelineTask["status"] =
-                streamStatus === "COMPLETED" ? "done" : "error";
-              set((s) => ({
-                tasks: s.tasks.map((t) =>
-                  t.id === id
-                    ? {
-                        ...t,
-                        status: finalStatus,
-                        state: {
-                          ...t.state,
-                          status:
-                            finalStatus === "done"
-                              ? ("done" as const)
-                              : ("error" as const),
-                          timeline: [
-                            {
-                              type: "content" as const,
-                              text:
-                                finalStatus === "done"
-                                  ? "任务已完成"
-                                  : "任务异常结束",
-                            },
-                          ],
-                        },
-                      }
-                    : t
-                ),
-              }));
-            }
-          } catch (err) {
-            console.error(`[Pipeline] 重连 ${conversationId} 失败:`, err);
-            set((s) => ({
-              tasks: s.tasks.map((t) =>
-                t.id === id
-                  ? {
-                      ...t,
-                      status: "error" as const,
-                      state: {
-                        ...t.state,
-                        status: "error" as const,
-                        error: "重连失败",
-                        timeline: [
-                          {
-                            type: "content" as const,
-                            text: "重连失败，任务可能已结束",
-                          },
-                        ],
-                      },
-                    }
-                  : t
-              ),
-            }));
-          }
         }
+        schedulePipelineStatusSync(0);
       } catch (err) {
-        console.error("[Pipeline] 查询运行中任务失败:", err);
+        console.error("[Pipeline] 查询 durable runs 失败:", err);
       }
     })();
   },
+
+  resumePipelineConnections: () => {
+    const resumableIds = get().tasks
+      .filter((task) => task.status === "running"
+        && task.state.runId
+        && (task.state.reconnectOnSelect !== true
+          || task.state.contentLoading
+          || abortControllers.has(task.id)))
+      .map((task) => task.id);
+    if (resumableIds.length === 0) {
+      schedulePipelineStatusSync(0);
+      return;
+    }
+
+    for (const id of resumableIds) {
+      clearPipelineReconnect(id);
+      abortControllers.get(id)?.abort();
+      abortControllers.delete(id);
+    }
+    const resumableSet = new Set(resumableIds);
+    set((state) => ({
+      tasks: state.tasks.map((task) => resumableSet.has(task.id)
+        ? {
+            ...task,
+            state: {
+              ...task.state,
+              contentLoaded: false,
+              contentLoading: false,
+              error: undefined,
+            },
+          }
+        : task),
+    }));
+    for (const id of resumableIds) get().loadPipelineContent(id);
+    schedulePipelineStatusSync(0);
+  },
 }));
+
+function trackedPipelineStatuses(): PipelineStatusSyncTarget[] {
+  return usePipelineStore.getState().tasks.flatMap((task) =>
+    task.status === "running"
+      && task.state.reconnectOnSelect === true
+      && !task.state.contentLoading
+      && task.state.runId
+      ? [{ taskId: task.id, runId: task.state.runId }]
+      : []
+  );
+}
+
+function applyPipelineStatus(
+  target: PipelineStatusSyncTarget,
+  status: PipelineRunStatusResponse,
+): void {
+  const terminalStatus = toTerminalTaskStatus(status.status);
+  let transitioned = false;
+  let removed = false;
+  usePipelineStore.setState((state): Partial<PipelineStoreState> => {
+    const current = state.tasks.find(
+      (candidate) => candidate.id === target.taskId,
+    );
+    if (
+      !current
+      || current.state.runId !== target.runId
+      || current.state.contentLoading
+      || current.status !== "running"
+    ) {
+      return {};
+    }
+
+    if (
+      terminalStatus
+      && current.state.reconnectOnSelect
+      && !state.panelExpanded
+    ) {
+      transitioned = true;
+      removed = true;
+      return {
+        tasks: state.tasks.filter(
+          (candidate) => candidate.id !== target.taskId,
+        ),
+      };
+    }
+
+    const tasks = state.tasks.map((candidate) => {
+      if (candidate.id !== target.taskId) return candidate;
+      transitioned = terminalStatus !== null;
+      return {
+        ...candidate,
+        status: terminalStatus ?? candidate.status,
+        ...(terminalStatus ? { finishedAt: Date.now() } : {}),
+        state: {
+          ...candidate.state,
+          runStatus: status.status,
+          status: terminalStatus ?? candidate.state.status,
+          cancelRequested: status.status === "CANCEL_REQUESTED",
+          timeline: terminalStatus === "cancelled"
+            || status.status === "CANCEL_REQUESTED"
+            ? cancelCallingTimelineTools(candidate.state.timeline)
+            : candidate.state.timeline,
+          ...(terminalStatus === "error"
+            ? { error: status.terminalEvent?.error || "任务失败" }
+            : {}),
+        },
+      };
+    });
+
+    return terminalStatus
+      ? {
+          tasks,
+          invalidation: {
+            assets: (state.invalidation.assets || 0) + 1,
+            scripts: (state.invalidation.scripts || 0) + 1,
+            storyboards: (state.invalidation.storyboards || 0) + 1,
+          },
+        }
+      : { tasks };
+  });
+
+  if (transitioned && terminalStatus) {
+    notifyPipelineSettlement(
+      target.taskId,
+      terminalStatus,
+      pipelineCompleteCallbacks.get(target.taskId),
+    );
+    if (removed) {
+      pipelineCompleteCallbacks.delete(target.taskId);
+      notifiedPipelineSettlements.delete(target.taskId);
+    }
+  }
+}
+
+const pipelineStatusSynchronizer = new PipelineStatusSynchronizer({
+  intervalMs: PIPELINE_STATUS_POLL_INTERVAL_MS,
+  listTargets: trackedPipelineStatuses,
+  applyStatus: applyPipelineStatus,
+  reportError: (target, error) => {
+    console.error(`[Pipeline] 查询 ${target.runId} 状态失败:`, error);
+  },
+});
+
+export function triggerToolInvalidation(toolName?: string): void {
+  if (!toolName) return;
+  const target = TOOL_INVALIDATION_MAP[toolName];
+  if (target) {
+    usePipelineStore.getState().triggerInvalidation(target);
+  }
+}
+

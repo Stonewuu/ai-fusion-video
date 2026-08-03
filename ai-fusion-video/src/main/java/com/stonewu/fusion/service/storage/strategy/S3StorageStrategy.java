@@ -41,8 +41,8 @@ public class S3StorageStrategy implements StorageStrategy {
     private final StorageUrlResolver storageUrlResolver;
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(120, TimeUnit.SECONDS)
             .followRedirects(true)
             .build();

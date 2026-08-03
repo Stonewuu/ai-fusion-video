@@ -32,8 +32,8 @@ public abstract class AbstractAiProvider implements AiProvider {
     private static final int RESPONSE_PREVIEW_LENGTH = 180;
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
-            .connectTimeout(15, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(25, TimeUnit.MINUTES)
             .build();
 
     protected String normalizeBaseUrl(String baseUrl) {
@@ -207,6 +207,13 @@ public abstract class AbstractAiProvider implements AiProvider {
         } else if (isReasoningEnabled(context)) {
             // Gemini 2.5 通过 thinkingBudget 触发 ThinkingConfig，-1 表示动态思考。
             builder.thinkingBudget(-1);
+            hasOptions = true;
+        }
+
+        String reasoningEffort = getConfigString(
+                context.getConfig(), "reasoningEffort", "reasoning_effort");
+        if (StrUtil.isNotBlank(reasoningEffort)) {
+            builder.reasoningEffort(reasoningEffort);
             hasOptions = true;
         }
 

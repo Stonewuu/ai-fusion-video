@@ -1,10 +1,12 @@
 "use client";
 
 import React, { useRef, useState } from "react";
+import { toast } from "sonner";
 import { Upload, Link, Images, X, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { uploadFile } from "@/lib/api/storage";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { cn } from "@/lib/utils";
 
 interface ImageInputProps {
@@ -18,7 +20,7 @@ interface ImageInputProps {
   onPreviewClick?: () => void;
   placeholder?: string;
   uploadSubDir?: string;
-  beforeUpload?: () => boolean;
+  beforeUpload?: () => boolean | Promise<boolean>;
 }
 
 /**
@@ -50,24 +52,25 @@ export default function ImageInput({
       onChange(uploadedUrl);
     } catch (error) {
       console.error("图片上传失败:", error);
+      toast.error(getApiErrorMessage(error));
     } finally {
       setUploading(false);
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-    if (beforeUpload && !beforeUpload()) return;
+    if (beforeUpload && !(await beforeUpload())) return;
     void handleUpload(file);
   };
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     const file = e.dataTransfer.files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
-    if (beforeUpload && !beforeUpload()) return;
+    if (beforeUpload && !(await beforeUpload())) return;
     void handleUpload(file);
   };
 

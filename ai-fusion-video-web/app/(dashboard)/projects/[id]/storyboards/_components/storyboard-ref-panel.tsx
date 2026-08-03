@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import { toastApiError } from "@/lib/api/toast-api-error";
 import {
   Info,
   Camera,
@@ -581,7 +582,10 @@ function SceneAssetPanel({
 
       // 批量获取子资产详情
       const results = await Promise.all(
-        allItemIds.map((id) => assetApi.getItem(id).catch(() => null))
+        allItemIds.map((id) => assetApi.getItem(id).catch((error) => {
+          toastApiError(error, "加载资产项失败");
+          return null;
+        }))
       );
 
       // 收集主资产ID用于查名称
@@ -595,7 +599,10 @@ function SceneAssetPanel({
 
       // 批量获取主资产（用于获取名称和类型做辅助标注）
       const parentAssets = await Promise.all(
-        Array.from(parentAssetIds).map((id) => assetApi.get(id).catch(() => null))
+        Array.from(parentAssetIds).map((id) => assetApi.get(id).catch((error) => {
+          toastApiError(error, "加载父级资产失败");
+          return null;
+        }))
       );
       const parentInfoMap = new Map<number, { name: string; type: string }>();
       for (const a of parentAssets) {
@@ -625,6 +632,7 @@ function SceneAssetPanel({
       });
     } catch (err) {
       console.error("加载场次资产失败:", err);
+      toastApiError(err, "加载场次资产失败");
     } finally {
       setLoading(false);
     }
@@ -668,6 +676,7 @@ function SceneAssetPanel({
       projectId,
       request: {
         agentType: "asset_image_gen",
+        toolExecutionMode: "FULL_ACCESS",
         projectId,
         context: {
           selectedAssetIds,
@@ -692,6 +701,7 @@ function SceneAssetPanel({
       projectId,
       request: {
         agentType: "storyboard_video_gen",
+        toolExecutionMode: "FULL_ACCESS",
         projectId,
         context: {
           selectedStoryboardItemIds: selectedItemIds,
@@ -981,7 +991,10 @@ function ItemDetail({
     try {
       // 批量获取子资产详情
       const items = await Promise.all(
-        allItemIds.map((id) => assetApi.getItem(id).catch(() => null))
+        allItemIds.map((id) => assetApi.getItem(id).catch((error) => {
+          toastApiError(error, "加载镜头关联资产项失败");
+          return null;
+        }))
       );
 
       // 收集主资产 ID（去重）
@@ -1024,6 +1037,7 @@ function ItemDetail({
       });
     } catch (err) {
       console.error("加载镜头关联资产失败:", err);
+      toastApiError(err, "加载镜头关联资产失败");
     } finally {
       setAssetsLoading(false);
     }
@@ -1440,10 +1454,12 @@ function LinkedAssetGroup({
 function StoryboardOverview({
   storyboard,
   items,
+  projectName,
   onBatchGenerateFrames,
 }: {
   storyboard: Storyboard;
   items: StoryboardItem[];
+  projectName?: string;
   onBatchGenerateFrames?: BatchFrameGenerateHandler;
 }) {
   const totalDuration = items.reduce(
@@ -1461,7 +1477,7 @@ function StoryboardOverview({
           <Info className="h-3 w-3" /> 分镜概览
         </h4>
         <p className="text-sm font-semibold mb-1">
-          {storyboard.title || "分镜表"}
+          {projectName || "未命名项目"}
         </p>
         {storyboard.description && (
           <p className="text-xs text-muted-foreground leading-relaxed">
@@ -1585,6 +1601,7 @@ export function StoryboardRefPanel({
         <StoryboardOverview
           storyboard={storyboard}
           items={items}
+          projectName={project?.name}
           onBatchGenerateFrames={onBatchGenerateFrames}
         />
       )}
@@ -1592,13 +1609,13 @@ export function StoryboardRefPanel({
       {/* 图片大图预览灯箱 */}
       {previewImageUrl && (
         <div 
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/85 backdrop-blur-md p-4 animate-in fade-in duration-200"
+          className="modal-overlay fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => setPreviewImageUrl(null)}
         >
           <div className="relative max-w-[90vw] max-h-[90vh] flex flex-col items-center gap-3" onClick={(e) => e.stopPropagation()}>
             <button
               onClick={() => setPreviewImageUrl(null)}
-              className="absolute -top-12 right-0 p-1.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+              className="absolute -top-12 right-0 rounded-full border border-border/40 bg-background/80 p-1.5 text-foreground shadow-xl backdrop-blur-xl transition-colors hover:bg-background"
               type="button"
             >
               <X className="h-5 w-5" />
@@ -1607,9 +1624,9 @@ export function StoryboardRefPanel({
               src={resolveMediaUrl(previewImageUrl)}
               alt={previewImageTitle}
               fallbackType="image"
-              className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl border border-white/10 select-none pointer-events-none"
+              className="max-w-full max-h-[80vh] rounded-lg object-contain shadow-2xl border border-border/40 select-none pointer-events-none"
             />
-            <p className="text-white/90 text-xs font-medium px-3 py-1.5 rounded-full bg-black/40 backdrop-blur-sm border border-white/5">
+            <p className="rounded-full border border-border/40 bg-background/80 px-3 py-1.5 text-xs font-medium text-foreground shadow-xl backdrop-blur-xl">
               {previewImageTitle}
             </p>
           </div>

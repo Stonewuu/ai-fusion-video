@@ -47,14 +47,14 @@ public class GoogleFlowReverseApiClient {
     private final PresetArtStyleResourceResolver presetArtStyleResourceResolver;
 
     private final OkHttpClient streamHttpClient = new OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(0, TimeUnit.MILLISECONDS)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(60, TimeUnit.SECONDS)
             .build();
 
     private final OkHttpClient downloadHttpClient = new OkHttpClient.Builder()
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(120, TimeUnit.SECONDS)
+            .connectTimeout(1, TimeUnit.MINUTES)
+            .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(60, TimeUnit.SECONDS)
             .followRedirects(true)
             .build();

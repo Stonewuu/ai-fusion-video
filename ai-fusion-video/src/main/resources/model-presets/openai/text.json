@@ -1,0 +1,47 @@
+[
+  {
+    "code": "gpt-5.6-sol",
+    "name": "GPT-5.6 Sol",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_compatible",
+    "modelType": 1,
+    "description": "OpenAI 2026 年旗舰级智能体与编码模型，支持文本和图片输入。",
+    "capabilities": ["文本对话", "图片理解", "深度推理", "工具调用"],
+    "supportReasoning": true,
+    "reasoningEffortLevels": ["max", "xhigh", "high", "medium", "low", "none"],
+    "contextWindow": 1050000,
+    "multimodalInputTypes": ["image"],
+    "multimodalInputTransports": { "image": ["url", "base64"] },
+    "config": {}
+  },
+  {
+    "code": "gpt-5.6-terra",
+    "name": "GPT-5.6 Terra",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_compatible",
+    "modelType": 1,
+    "description": "OpenAI 2026 年通用智能模型，兼顾质量、速度与成本，支持文本和图片输入。",
+    "capabilities": ["文本对话", "图片理解", "深度推理", "工具调用"],
+    "supportReasoning": true,
+    "reasoningEffortLevels": ["max", "xhigh", "high", "medium", "low", "none"],
+    "contextWindow": 1050000,
+    "multimodalInputTypes": ["image"],
+    "multimodalInputTransports": { "image": ["url", "base64"] },
+    "config": {}
+  },
+  {
+    "code": "gpt-5.6-luna",
+    "name": "GPT-5.6 Luna",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_compatible",
+    "modelType": 1,
+    "description": "OpenAI 2026 年低延迟、高性价比模型，支持文本和图片输入。",
+    "capabilities": ["文本对话", "图片理解", "工具调用"],
+    "supportReasoning": true,
+    "reasoningEffortLevels": ["max", "xhigh", "high", "medium", "low", "none"],
+    "contextWindow": 1050000,
+    "multimodalInputTypes": ["image"],
+    "multimodalInputTransports": { "image": ["url", "base64"] },
+    "config": {}
+  }
+]

@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1254" height="1254" viewBox="0 0 1254 1254" role="img" aria-labelledby="title desc">
+  <title id="title">融光助手 Logo</title>
+  <desc id="desc">三片相隔一百二十度并循环覆盖的渐变叶片组成圆形莫比乌斯对话气泡，构造圆交集形成鲁洛克斯三角形负空间。</desc>
+
+  <defs>
+    <radialGradient id="background" cx="627" cy="539" r="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fffaf2"/>
+      <stop offset="0.58" stop-color="#fef9ef"/>
+      <stop offset="1" stop-color="#fcf7eb"/>
+    </radialGradient>
+    <linearGradient id="cyanLeaf" x1="350" y1="260" x2="720" y2="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#27b3c7"/>
+      <stop offset="0.5" stop-color="#20abc2"/>
+      <stop offset="1" stop-color="#25adc2"/>
+    </linearGradient>
+    <linearGradient id="darkLeaf" x1="900" y1="470" x2="580" y2="970" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0291b1"/>
+      <stop offset="0.5" stop-color="#0589ad"/>
+      <stop offset="1" stop-color="#0879a1"/>
+    </linearGradient>
+    <linearGradient id="coralLeaf" x1="530" y1="230" x2="1010" y2="780" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff8a6a"/>
+      <stop offset="0.5" stop-color="#fe8467"/>
+      <stop offset="1" stop-color="#fc8165"/>
+    </linearGradient>
+    <linearGradient id="tailGradient" x1="505" y1="895" x2="325" y2="1015" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0785a8"/>
+      <stop offset="0.42" stop-color="#0b91ae"/>
+      <stop offset="0.74" stop-color="#1ca7bc"/>
+      <stop offset="1" stop-color="#28b2c4"/>
+    </linearGradient>
+    <radialGradient id="lightSpirit" cx="620" cy="565" r="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffc65a"/>
+      <stop offset="0.58" stop-color="#fdbe54"/>
+      <stop offset="1" stop-color="#fbbc52"/>
+    </radialGradient>
+    <linearGradient id="eye" x1="0" y1="575" x2="0" y2="609" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0e3768"/>
+      <stop offset="1" stop-color="#082b56"/>
+    </linearGradient>
+
+    <clipPath id="outerCircle" clipPathUnits="userSpaceOnUse">
+      <circle cx="627" cy="595" r="386"/>
+    </clipPath>
+    <path id="leaf" fill-rule="evenodd" clip-rule="evenodd" d="M627 209 A386 386 0 1 1 627 981 A386 386 0 1 1 627 209Z M627 388.044 A326.956 326.956 0 1 1 627 1041.956 A326.956 326.956 0 1 1 627 388.044Z"/>
+    <path id="leafClipExpanded" fill-rule="evenodd" clip-rule="evenodd" d="M627 208.5 A386.5 386.5 0 1 1 627 981.5 A386.5 386.5 0 1 1 627 208.5Z M627 388.544 A326.456 326.456 0 1 1 627 1041.456 A326.456 326.456 0 1 1 627 388.544Z"/>
+    <clipPath id="coralLeafClip" clipPathUnits="userSpaceOnUse">
+      <use href="#leafClipExpanded" transform="rotate(60 627 595)"/>
+    </clipPath>
+    <clipPath id="darkLeafClip" clipPathUnits="userSpaceOnUse">
+      <use href="#leafClipExpanded" transform="rotate(180 627 595)"/>
+    </clipPath>
+    <clipPath id="cyanLeafClip" clipPathUnits="userSpaceOnUse">
+      <use href="#leafClipExpanded" transform="rotate(300 627 595)"/>
+    </clipPath>
+    <clipPath id="upperRightOverlap" clipPathUnits="userSpaceOnUse">
+      <rect x="627" y="0" width="627" height="595"/>
+    </clipPath>
+    <clipPath id="upperLeftOverlap" clipPathUnits="userSpaceOnUse">
+      <rect x="0" y="0" width="627" height="595"/>
+    </clipPath>
+  </defs>
+
+  <rect width="1254" height="1254" fill="url(#background)"/>
+
+  <path d="M360 800 C355 850 320 900 270 940 C245 958 242 973 260 978 C335 980 425 978 505 956 C530 949 550 938 566 925 C505 870 430 825 360 800Z" fill="url(#tailGradient)"/>
+
+  <g clip-path="url(#outerCircle)">
+    <use href="#leaf" transform="rotate(60 627 595)" fill="url(#coralLeaf)"/>
+    <use href="#leaf" transform="rotate(300 627 595)" fill="url(#cyanLeaf)"/>
+    <use href="#leaf" transform="rotate(180 627 595)" fill="url(#darkLeaf)"/>
+    <g clip-path="url(#coralLeafClip)">
+      <g clip-path="url(#darkLeafClip)">
+        <use href="#leaf" transform="rotate(60 627 595)" fill="url(#coralLeaf)"/>
+      </g>
+    </g>
+    <g clip-path="url(#coralLeafClip)">
+      <g clip-path="url(#darkLeafClip)">
+        <g clip-path="url(#cyanLeafClip)">
+          <g clip-path="url(#upperRightOverlap)">
+            <use href="#leaf" transform="rotate(300 627 595)" fill="url(#cyanLeaf)"/>
+          </g>
+          <g clip-path="url(#upperLeftOverlap)">
+            <use href="#leaf" transform="rotate(180 627 595)" fill="url(#darkLeaf)"/>
+          </g>
+        </g>
+      </g>
+    </g>
+  </g>
+
+  <path d="M638 445 C629 445 631 483 618 513 C600 552 559 573 499 580 C488 581 488 592 496 596 C556 608 607 641 624 704 C627 716 627 734 638 734 C648 734 648 716 651 704 C668 641 719 608 779 596 C788 594 788 582 778 580 C717 573 676 552 658 513 C645 483 647 445 638 445Z" fill="url(#lightSpirit)"/>
+  <ellipse cx="610" cy="592" rx="11" ry="17" fill="url(#eye)"/>
+  <ellipse cx="669.5" cy="592" rx="10.5" ry="17" fill="url(#eye)"/>
+</svg>

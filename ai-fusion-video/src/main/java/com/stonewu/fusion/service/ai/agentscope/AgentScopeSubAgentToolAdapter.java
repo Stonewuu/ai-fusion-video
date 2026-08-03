@@ -1,137 +1,197 @@
 package com.stonewu.fusion.service.ai.agentscope;
 
-import cn.hutool.json.JSONUtil;
-import io.agentscope.core.ReActAgent;
-import io.agentscope.core.message.Msg;
-import io.agentscope.core.message.MsgRole;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stonewu.fusion.config.ai.AiAgentDefinition;
+import com.stonewu.fusion.enums.ai.AgentRunStatus;
+import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
+import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
+import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
+import com.stonewu.fusion.service.ai.agentscope.context.ToolPermissionContext;
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
+import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
+import com.stonewu.fusion.service.ai.agentscope.tool.AbstractPlatformAgentTool;
+import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
+import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentCommand;
+import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRun;
+import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRunPort;
+import com.stonewu.fusion.service.ai.run.RunLeaseGuard;
+import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.message.ToolUseBlock;
-import io.agentscope.core.tool.AgentTool;
+import io.agentscope.core.message.UserMessage;
+import io.agentscope.core.tool.ToolBase;
 import io.agentscope.core.tool.ToolCallParam;
-import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
+import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
-/**
- * AgentScope 子 Agent 工具适配器。
- * <p>
- * 与 AgentScope 默认 SubAgentTool 不同，这里在 callAsync 中能拿到当前 ToolCallParam，
- * 因此可以把新创建的子 Agent 实例和父 tool_call_id 精确绑定，支持同名子 Agent 并行执行。
- */
-@Slf4j
-public class AgentScopeSubAgentToolAdapter implements AgentTool {
+/** Executes a durable platform-managed child Harness run as an AgentScope V2 tool call. */
+public final class AgentScopeSubAgentToolAdapter extends AbstractPlatformAgentTool {
 
-    private final String toolName;
-    private final String description;
-    private final Supplier<ReActAgent> agentFactory;
-    private final StreamingEventHook streamingHook;
-    private final AgentCancellationToken cancellationToken;
+    private final AiAgentDefinition.SubAgentToolDef definition;
+    private final AgentKernelSpec parentSpec;
+    private final AgentKernelSpecFactory specFactory;
+    private final Supplier<PlatformSubAgentRunPort> childRuns;
+    private final RunLeaseGuard leaseGuard;
+    private final ObjectMapper objectMapper;
 
-    public AgentScopeSubAgentToolAdapter(String toolName,
-            String description,
-            Supplier<ReActAgent> agentFactory,
-            StreamingEventHook streamingHook,
-            AgentCancellationToken cancellationToken) {
-        this.toolName = toolName;
-        this.description = description;
-        this.agentFactory = agentFactory;
-        this.streamingHook = streamingHook;
-        this.cancellationToken = cancellationToken;
-    }
-
-    @Override
-    public String getName() {
-        return toolName;
-    }
-
-    @Override
-    public String getDescription() {
-        return description;
-    }
-
-    @Override
-    public Map<String, Object> getParameters() {
-        return Map.of(
-                "type", "object",
-                "properties", Map.of(
-                        "message", Map.of(
-                                "type", "string",
-                                "description", "发送给子 Agent 的任务消息")),
-                "required", List.of("message"),
-                "additionalProperties", false);
+    public AgentScopeSubAgentToolAdapter(
+            AiAgentDefinition.SubAgentToolDef definition,
+            AgentKernelSpec parentSpec,
+            AgentScopeToolSchema.PreparedSchema schema,
+            AgentKernelSpecFactory specFactory,
+            Supplier<PlatformSubAgentRunPort> childRuns,
+            RunLeaseGuard leaseGuard,
+            ObjectMapper objectMapper) {
+        super(builder(definition, schema));
+        this.definition = Objects.requireNonNull(definition, "definition must not be null");
+        this.parentSpec = Objects.requireNonNull(parentSpec, "parentSpec must not be null");
+        this.specFactory = Objects.requireNonNull(specFactory, "specFactory must not be null");
+        this.childRuns = Objects.requireNonNull(childRuns, "childRuns must not be null");
+        this.leaseGuard = Objects.requireNonNull(leaseGuard, "leaseGuard must not be null");
+        this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
     }
 
     @Override
     public Mono<ToolResultBlock> callAsync(ToolCallParam param) {
         return Mono.defer(() -> {
-            cancellationToken.throwIfCancelled();
-
-            ReActAgent subAgent = agentFactory.get();
-            ToolUseBlock toolUseBlock = param != null ? param.getToolUseBlock() : null;
-            String parentToolCallId = toolUseBlock != null ? toolUseBlock.getId() : null;
-            streamingHook.bindSubAgentCall(subAgent, parentToolCallId);
-
-            String inputMessage = buildInputMessage(param);
-            log.info("[AgentScopeSubAgentToolAdapter] 子Agent工具被调用: name={}, parentToolCallId={}, input={}",
-                    getName(), parentToolCallId, inputMessage);
-
-            if (inputMessage == null || inputMessage.isBlank()) {
-                return Mono.just(buildToolResult(param, JSONUtil.toJsonStr(Map.of(
-                        "status", "error",
-                        "message", "子 Agent 调用缺少 message 参数",
-                        "toolName", getName()))));
-            }
-
-            Msg userMsg = Msg.builder()
-                    .role(MsgRole.USER)
-                    .textContent(inputMessage)
-                    .build();
-
-            return subAgent.call(userMsg)
-                    .map(finalMsg -> {
-                        cancellationToken.throwIfCancelled();
-                        String result = finalMsg != null ? finalMsg.getTextContent() : "";
-                        return buildToolResult(param, result);
-                    });
-        }).onErrorResume(AgentCancelledException.class, e -> {
-            log.info("[AgentScopeSubAgentToolAdapter] 子Agent工具执行被取消: name={}", getName());
-            return Mono.error(e);
-        }).onErrorResume(e -> {
-            if (e instanceof AgentCancelledException) {
-                return Mono.error(e);
-            }
-            log.error("[AgentScopeSubAgentToolAdapter] 子Agent工具执行失败: name={}", getName(), e);
-            String errorResult = JSONUtil.toJsonStr(Map.of(
-                    "status", "error",
-                    "message", "子 Agent 执行失败: " + e.getMessage(),
-                    "toolName", getName()));
-            return Mono.just(buildToolResult(param, errorResult));
+            ToolUseBlock toolUse = requireToolUse(param);
+            RuntimeContext runtime = requireRuntimeContext(param);
+            AgentRunContext run = requireContext(runtime, AgentRunContext.class);
+            CancellationContext cancellation = requireContext(runtime, CancellationContext.class);
+            ToolPermissionContext permission = requireContext(
+                    runtime, ToolPermissionContext.class);
+            ProjectContext project = runtime.get(ProjectContext.class);
+            Map<String, Object> input = Objects.requireNonNull(
+                    param.getInput(), "AgentScope sub-agent tool input must not be null");
+            String message = inputMessage(input);
+            AgentKernelSpec childSpec = specFactory.createChild(
+                    parentSpec, definition, project, input);
+            PlatformSubAgentCommand command = new PlatformSubAgentCommand(
+                    run.runId(),
+                    toolUse.getId(),
+                    run.ownerInstanceId(),
+                    run.ownerEpoch(),
+                    getName(),
+                    childSpec,
+                    List.of(new UserMessage(message)),
+                    project,
+                    permission.mode(),
+                    run.deadline());
+            return cancellation.checkpoint()
+                    .then(assertLease(run))
+                    .then(Mono.defer(() -> {
+                        PlatformSubAgentRunPort childRunPort = childRuns.get();
+                        if (childRunPort == null) {
+                            return Mono.error(new IllegalStateException(
+                                    "Platform sub-agent run service is unavailable"));
+                        }
+                        return childRunPort.start(command)
+                                .flatMap(childRunPort::awaitCompletion);
+                    }))
+                    .flatMap(child -> cancellation.checkpoint()
+                            .then(assertLease(run))
+                            .thenReturn(projectResult(param, child)))
+                    .timeout(remaining(run));
         });
     }
 
-    private String buildInputMessage(ToolCallParam param) {
-        if (param == null || param.getInput() == null || param.getInput().isEmpty()) {
-            return "";
-        }
-        Object message = param.getInput().get("message");
-        if (message != null) {
-            String messageText = String.valueOf(message);
-            if (!messageText.isBlank()) {
-                return messageText;
-            }
-        }
-        return JSONUtil.toJsonStr(param.getInput());
+    private ToolResultBlock projectResult(
+            ToolCallParam param, PlatformSubAgentRun child) {
+        String result = childResult(child);
+        return child.status() == AgentRunStatus.COMPLETED
+                ? textResult(param, result)
+                : errorResult(param, result);
     }
 
-    private ToolResultBlock buildToolResult(ToolCallParam param, String result) {
-        ToolResultBlock block = ToolResultBlock.text(result != null ? result : "");
-        ToolUseBlock toolUseBlock = param != null ? param.getToolUseBlock() : null;
-        if (toolUseBlock == null) {
-            return block;
+    private String inputMessage(Map<String, Object> input) {
+        Object explicit = input.get("message");
+        if (explicit instanceof String text && !text.isBlank()) {
+            return text;
         }
-        return block.withIdAndName(toolUseBlock.getId(), toolUseBlock.getName());
+        if (input.isEmpty()) {
+            throw new IllegalArgumentException(
+                    "Platform sub-agent tool input must not be empty: " + getName());
+        }
+        try {
+            return objectMapper.writeValueAsString(input);
+        } catch (JsonProcessingException failure) {
+            throw new IllegalArgumentException(
+                    "Platform sub-agent tool input is not serializable: " + getName(), failure);
+        }
+    }
+
+    private String childResult(PlatformSubAgentRun child) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("parentRunId", child.parentRunId());
+        result.put("parentToolCallId", child.parentToolCallId());
+        result.put("childRunId", child.childRunId());
+        result.put("agentName", child.agentName());
+        result.put("status", child.status().name());
+        result.put("executionMode", "PLATFORM_MANAGED_CHILD_RUN");
+        result.put("resultDelivery", "PARENT_TOOL_RESULT");
+        result.put("result", child.result());
+        result.put("error", child.error());
+        try {
+            return objectMapper.writeValueAsString(result);
+        } catch (JsonProcessingException failure) {
+            throw new IllegalStateException("Failed to serialize platform child run", failure);
+        }
+    }
+
+    private Mono<Void> assertLease(AgentRunContext run) {
+        return leaseGuard.assertLease(run.runId(), run.ownerInstanceId(), run.ownerEpoch());
+    }
+
+    private Duration remaining(AgentRunContext run) {
+        Duration remaining = Duration.between(Instant.now(), run.deadline());
+        if (remaining.isZero() || remaining.isNegative()) {
+            throw new IllegalStateException(
+                    "Agent run deadline expired before child Agent completion");
+        }
+        return remaining;
+    }
+
+    private RuntimeContext requireRuntimeContext(ToolCallParam param) {
+        if (param.getRuntimeContext() == null) {
+            throw new IllegalArgumentException(
+                    "AgentScope RuntimeContext is required for sub-agent tool: " + getName());
+        }
+        return param.getRuntimeContext();
+    }
+
+    private <T> T requireContext(RuntimeContext runtime, Class<T> type) {
+        T value = runtime.get(type);
+        if (value == null) {
+            throw new IllegalStateException(
+                    "AgentScope RuntimeContext is missing " + type.getSimpleName()
+                            + " for sub-agent tool " + getName());
+        }
+        return value;
+    }
+
+    private static ToolBase.Builder builder(
+            AiAgentDefinition.SubAgentToolDef definition,
+            AgentScopeToolSchema.PreparedSchema schema) {
+        Objects.requireNonNull(definition, "definition must not be null");
+        Objects.requireNonNull(schema, "schema must not be null");
+        if (definition.getToolName() == null || definition.getToolName().isBlank()
+                || definition.getDescription() == null || definition.getDescription().isBlank()) {
+            throw new IllegalArgumentException(
+                    "Platform sub-agent tool name and description are required");
+        }
+        return ToolBase.builder()
+                .name(definition.getToolName())
+                .description(definition.getDescription())
+                .inputSchema(schema.value())
+                .readOnly(false)
+                .concurrencySafe(true);
     }
 }

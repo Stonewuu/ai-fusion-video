@@ -8,6 +8,7 @@
     "capabilities": ["文生图", "图生图", "多图参考", "1K/2K/4K"],
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["url", "data_uri"],
       "minReferenceImages": 0,
       "maxReferenceImages": 10,
       "defaultWidth": 2048,
@@ -60,6 +61,7 @@
     "capabilities": ["文生图", "图生图", "多图参考", "1K/2K"],
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["url", "data_uri"],
       "minReferenceImages": 0,
       "maxReferenceImages": 10,
       "defaultWidth": 2048,
@@ -102,6 +104,7 @@
     "capabilities": ["文生图", "图像编辑", "参考图"],
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["url", "data_uri"],
       "minReferenceImages": 0,
       "maxReferenceImages": 2,
       "defaultWidth": 2048,
@@ -137,6 +140,7 @@
     "capabilities": ["文生图", "图像编辑", "参考图"],
     "config": {
       "supportReferenceImages": true,
+      "referenceImageInputFormats": ["url", "data_uri"],
       "minReferenceImages": 0,
       "maxReferenceImages": 2,
       "defaultWidth": 2048,

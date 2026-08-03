@@ -1,10 +1,19 @@
 package com.stonewu.fusion.service.ai.provider;
 
 import com.stonewu.fusion.entity.ai.ApiConfig;
+import io.agentscope.core.message.Base64Source;
+import io.agentscope.core.message.DataBlock;
+import io.agentscope.core.message.ImageBlock;
+import io.agentscope.core.message.TextBlock;
+import io.agentscope.core.message.UserMessage;
+import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
-import io.agentscope.core.model.Model;
+import io.agentscope.core.model.transport.OkHttpTransport;
+import io.agentscope.extensions.model.openai.OpenAIChatModel;
 import org.junit.jupiter.api.Test;
 
+import java.lang.reflect.Field;
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -24,14 +33,14 @@ class OpenAiCompatibleAiProviderTests {
                                 .apiConfig(ApiConfig.builder().platform("openai_compatible").apiUrl("https://api.openai.com").build())
                 .build();
 
-        Model model = provider.createAgentScopeModel(context);
+        ChatModelBase model = provider.createAgentScopeModel(context);
 
         assertThat(model).isInstanceOf(OpenAiResponsesAgentScopeModel.class);
         assertThat(model.getModelName()).isEqualTo("gpt-5");
     }
 
     @Test
-    void createAgentScopeModelKeepsChatCompletionsByDefault() {
+    void createAgentScopeModelBuildsOfficialChatCompletionsWithOptionsAndProxy() throws Exception {
         OpenAiCompatibleAiProvider provider = new OpenAiCompatibleAiProvider();
 
         AiProviderContext context = AiProviderContext.builder()
@@ -39,12 +48,28 @@ class OpenAiCompatibleAiProviderTests {
                 .apiKey("test-key")
                 .baseUrl("https://api.openai.com")
                 .modelName("gpt-4o-mini")
-                                .apiConfig(ApiConfig.builder().platform("openai_compatible").apiUrl("https://api.openai.com").build())
+                .config(Map.of("temperature", 0.2, "topP", 0.8))
+                .apiConfig(ApiConfig.builder()
+                        .platform("openai_compatible")
+                        .apiUrl("https://api.openai.com")
+                        .proxyType("http")
+                        .proxyHost("127.0.0.1")
+                        .proxyPort(7890)
+                        .build())
                 .build();
 
-        Model model = provider.createAgentScopeModel(context);
+        ChatModelBase model = provider.createAgentScopeModel(context);
 
-        assertThat(model).isNotInstanceOf(OpenAiResponsesAgentScopeModel.class);
+        assertThat(model).isInstanceOf(OpenAIChatModel.class);
+        assertThat(model.getModelName()).isEqualTo("gpt-4o-mini");
+        GenerateOptions options = (GenerateOptions) readField(model, "configuredOptions");
+        assertThat(options.getTemperature()).isEqualTo(0.2);
+        assertThat(options.getTopP()).isEqualTo(0.8);
+
+        Object client = readField(model, "client");
+        OkHttpTransport transport = (OkHttpTransport) client.getClass().getMethod("getTransport").invoke(client);
+        assertThat(transport.getConfig().getProxyConfig().getHost()).isEqualTo("127.0.0.1");
+        assertThat(transport.getConfig().getProxyConfig().getPort()).isEqualTo(7890);
     }
 
     @Test
@@ -106,5 +131,81 @@ class OpenAiCompatibleAiProviderTests {
                 .reasoningEffort("medium")
                 .additionalBodyParam("include_reasoning", true)
                 .build())).isNotNull();
+    }
+
+    @Test
+    void responsesModelPreservesTypedImageBlocks() {
+        OpenAiResponsesAgentScopeModel model = new OpenAiResponsesAgentScopeModel(
+                ApiConfig.builder().platform("openai_compatible").apiUrl("https://api.openai.com").build(),
+                "test-key",
+                "https://api.openai.com",
+                "gpt-5.6-sol",
+                null);
+        UserMessage userMessage = new UserMessage(
+                TextBlock.builder().text("Describe this image").build(),
+                ImageBlock.builder()
+                        .source(Base64Source.builder()
+                                .mediaType("image/png")
+                                .data("aGVsbG8=")
+                                .build())
+                        .build());
+
+        var mapped = model.mapMessages(List.of(userMessage));
+
+        assertThat(mapped).singleElement().satisfies(item -> {
+            assertThat(item.isMessage()).isTrue();
+            assertThat(item.asMessage().content()).hasSize(2);
+            assertThat(item.asMessage().content().get(0).isInputText()).isTrue();
+            assertThat(item.asMessage().content().get(1).isInputImage()).isTrue();
+            assertThat(item.asMessage().content().get(1).asInputImage().imageUrl())
+                    .contains("data:image/png;base64,aGVsbG8=");
+        });
+    }
+
+    @Test
+    void responsesModelPreservesFileDataBlocks() {
+        OpenAiResponsesAgentScopeModel model = new OpenAiResponsesAgentScopeModel(
+                ApiConfig.builder().platform("openai_compatible").apiUrl("https://api.openai.com").build(),
+                "test-key",
+                "https://api.openai.com",
+                "gpt-5.6-sol",
+                null);
+        UserMessage userMessage = new UserMessage(
+                TextBlock.builder().text("Read this file").build(),
+                DataBlock.builder()
+                        .id("file-1")
+                        .name("sample.pdf")
+                        .source(Base64Source.builder()
+                                .mediaType("application/pdf")
+                                .data("aGVsbG8=")
+                                .build())
+                        .build());
+
+        var mapped = model.mapMessages(List.of(userMessage));
+
+        assertThat(mapped).singleElement().satisfies(item -> {
+            assertThat(item.isMessage()).isTrue();
+            assertThat(item.asMessage().content()).hasSize(2);
+            assertThat(item.asMessage().content().get(1).isInputFile()).isTrue();
+        });
+    }
+
+    private Object readField(Object target, String fieldName) throws ReflectiveOperationException {
+        Field field = findField(target.getClass(), fieldName);
+        return field.get(target);
+    }
+
+    private Field findField(Class<?> type, String fieldName) throws NoSuchFieldException {
+        Class<?> current = type;
+        while (current != null) {
+            try {
+                Field field = current.getDeclaredField(fieldName);
+                field.setAccessible(true);
+                return field;
+            } catch (NoSuchFieldException ignored) {
+                current = current.getSuperclass();
+            }
+        }
+        throw new NoSuchFieldException(fieldName);
     }
 }

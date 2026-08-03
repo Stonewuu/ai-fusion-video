@@ -13,9 +13,11 @@ import org.springframework.data.redis.connection.stream.RecordId;
 import org.springframework.data.redis.connection.stream.StreamOffset;
 import org.springframework.data.redis.connection.stream.StreamReadOptions;
 import org.springframework.data.redis.connection.stream.StreamRecords;
+import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -39,10 +41,13 @@ import java.util.Map;
 public class AiStreamRedisService {
 
     private final StringRedisTemplate stringRedisTemplate;
+    private final ReactiveStringRedisTemplate reactiveStringRedisTemplate;
 
     private static final String STREAM_KEY_PREFIX = "fv:ai:stream:";
     private static final String STATUS_KEY_PREFIX = "fv:ai:stream:status:";
     private static final String REPLAY_KEY_PREFIX = "fv:ai:stream:replay:";
+    private static final String RUN_WAKEUP_CHANNEL_PREFIX = "fv:ai:run:wakeup:";
+    private static final String RUN_CANCEL_CHANNEL_PREFIX = "fv:ai:run:cancel:";
 
     /** 状态过期时间：1小时 */
     private static final Duration STATUS_TTL = Duration.ofHours(1);
@@ -98,6 +103,43 @@ public class AiStreamRedisService {
             log.error("发布事件到 Redis Stream 失败: conversationId={}", conversationId, e);
             return null;
         }
+    }
+
+    /** Publishes only a committed MySQL sequence as an outbox wake-up hint. */
+    public Mono<Long> publishRunWakeup(String runId, long sequence) {
+        return reactiveStringRedisTemplate.convertAndSend(
+                runWakeupChannel(runId), Long.toString(sequence));
+    }
+
+    /** Returns a stream only after Redis confirms that the channel subscription is active. */
+    public Mono<Flux<String>> runWakeupPayloadsWhenSubscribed(String runId) {
+        return reactiveStringRedisTemplate
+                .listenToChannelLater(runWakeupChannel(runId))
+                .map(messages -> Flux.from(messages)
+                        .map(message -> message.getMessage()));
+    }
+
+    public Flux<String> runWakeupPayloads(String runId) {
+        return runWakeupPayloadsWhenSubscribed(runId).flatMapMany(messages -> messages);
+    }
+
+    public static String runWakeupChannel(String runId) {
+        return RUN_WAKEUP_CHANNEL_PREFIX + runId;
+    }
+
+    public Mono<Long> publishRunCancel(String runId) {
+        return reactiveStringRedisTemplate.convertAndSend(
+                runCancelChannel(runId), runId);
+    }
+
+    public Mono<Flux<String>> runCancelPayloadsWhenSubscribed(String runId) {
+        return reactiveStringRedisTemplate
+                .listenToChannelLater(runCancelChannel(runId))
+                .map(messages -> Flux.from(messages).map(message -> message.getMessage()));
+    }
+
+    public static String runCancelChannel(String runId) {
+        return RUN_CANCEL_CHANNEL_PREFIX + runId;
     }
 
     // ===== 读取端（SSE 连接调用） =====

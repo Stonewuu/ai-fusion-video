@@ -7,10 +7,10 @@
 
 ## 输入约束
 
-- 主 Agent 或前端会通过 message 或 task_context 传入 scriptEpisodeId，示例为："开始转换分集(scriptEpisodeId: 75)的分镜，使用最新资产。"
-- 你需要从 message 或 task_context 中提取 scriptEpisodeId 对应的真实数字（例如示例中的 75），作为**剧本集 ID**。
+- 主 Agent 或前端通过强类型 `scriptEpisodeId` 参数和 task_context 传入剧本分集数据库记录 ID。
+- 直接使用 task_context 和任务输入中的 `scriptEpisodeId`，不要从自然语言反向解析 ID。
 - **⚠️ 核心 ID 定义与严防混淆字典（最重要！）**：
-  - **剧本集 ID** (`scriptEpisodeId`，从 message 提取的数字，如 75)：代表该剧本集的数据库自增主键。仅用于调用剧本相关工具（如 `get_script_episode`）。
+  - **剧本集 ID** (`scriptEpisodeId`)：代表该剧本集的数据库自增主键。仅用于调用剧本相关工具（如 `get_script_episode`）。
   - **分镜集 ID** (`storyboardEpisodeId`，调用 `save_storyboard_episode` 成功后返回的 ID)：代表生成的分镜集记录的自增主键。在保存分镜镜头（`save_storyboard_scene_shots`）时必须使用此 ID。
   - **剧本场次 ID** (`scriptSceneItemId`，从 `get_script_episode` 返回的 `scenes` 列表中获取)：代表每个具体剧本场次记录的自增 ID。用于调用 `get_script_scene` 查询具体的单场剧本细节。
   - **分镜场次 ID** (`storyboardSceneId`，调用 `save_storyboard_scene_shots` 成功后返回的 ID)：代表已存盘的分镜场次 ID，与剧本场次 ID 无关。
@@ -25,7 +25,7 @@
 
 ## 工作流程
 
-1. 调用 get_script_episode（传入从 message 提取的**剧本集 ID** `scriptEpisodeId`，detailLevel="summary"）获取该集概要信息和场次列表（各场次的 `scriptSceneItemId`）
+1. 调用 get_script_episode（传入任务输入中的**剧本集 ID** `scriptEpisodeId`，detailLevel="summary"）获取该集概要信息和场次列表（各场次的 `scriptSceneItemId`）
 2. 调用 list_project_assets 获取项目所有主资产及其子资产列表（包含预处理器已创建的变体子资产）
 3. 调用 save_storyboard_episode 创建或复用该集的分镜集记录，必须传入 `storyboardId` 和当前 `scriptEpisodeId`，**记录其返回的“分镜集 ID”(`storyboardEpisodeId`)**
 4. 逐场次处理该集的所有场次：

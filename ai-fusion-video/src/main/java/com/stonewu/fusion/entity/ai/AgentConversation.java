@@ -1,6 +1,7 @@
 package com.stonewu.fusion.entity.ai;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.stonewu.fusion.common.BaseEntity;
@@ -56,9 +57,23 @@ public class AgentConversation extends BaseEntity {
     @Builder.Default
     private Integer messageCount = 0;
 
+    /** 下一条消息的全历史唯一顺序号 */
+    @Builder.Default
+    private Long nextMessageOrder = 1L;
+
     /** 最后消息时间 */
     private LocalDateTime lastMessageTime;
 
     /** 对话状态：active-进行中 closed-已关闭 */
     private String status;
+
+    /** AgentState 最近一次进入可继续使用状态的时间。 */
+    private LocalDateTime agentStateLastActiveAt;
+
+    /** AgentState 已完成物理清理的时间。 */
+    private LocalDateTime agentStateExpiredAt;
+
+    /** API 读取时计算出的生命周期状态：ACTIVE / EXPIRED。 */
+    @TableField(exist = false)
+    private String agentStateStatus;
 }

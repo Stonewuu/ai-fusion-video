@@ -1,10 +1,15 @@
 package com.stonewu.fusion.entity.ai;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.extension.handlers.JacksonTypeHandler;
 import com.stonewu.fusion.common.BaseEntity;
 import lombok.*;
+
+import java.util.List;
+import java.util.Map;
 
 /**
  * AI 模型实体
@@ -12,7 +17,7 @@ import lombok.*;
  * 对应数据库表：afv_ai_model
  * 管理系统中可用的 AI 模型配置，包括文本模型和图片模型。
  */
-@TableName("afv_ai_model")
+@TableName(value = "afv_ai_model", autoResultMap = true)
 @Data
 @EqualsAndHashCode(callSuper = true)
 @ToString(callSuper = true)
@@ -28,14 +33,14 @@ public class AiModel extends BaseEntity {
     /** 模型显示名称 */
     private String name;
 
-    /** 模型代码标识，如 deepseek-chat、qwen-vl-max */
+    /** 模型代码标识，如 deepseek-v4-flash、qwen3.7-plus */
     private String code;
 
-    /** 模型家族标识，如 gpt / claude / gemini / jimeng / kling / sora / wan */
-    private String modelFamily;
-
-    /** 模型协议标识，如 generic / jimeng / kling / sora */
+    /** 模型级请求协议覆盖；为空时继承 API 配置中对应能力类型的默认协议 */
     private String modelProtocol;
+
+    /** 模型能力预设代码；为空表示使用自定义能力配置 */
+    private String capabilityPresetCode;
 
     /** 模型类型：1-文本对话 2-图片生成 3-视频生成 */
     private Integer modelType;
@@ -74,9 +79,24 @@ public class AiModel extends BaseEntity {
     @Builder.Default
     private Boolean supportVision = false;
 
+    /** 支持的多模态输入类型：image、video、audio、file。 */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    @Builder.Default
+    private List<String> multimodalInputTypes = List.of();
+
+    /** 每种多模态输入支持的传输形式：url、base64。 */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    @Builder.Default
+    private Map<String, List<String>> multimodalInputTransports = Map.of();
+
     /** 是否支持深度思考（reasoning） */
     @Builder.Default
     private Boolean supportReasoning = false;
+
+    /** 可选的思考等级，按能力从高到低排序。 */
+    @TableField(typeHandler = JacksonTypeHandler.class)
+    @Builder.Default
+    private List<String> reasoningEffortLevels = List.of();
 
     /** 上下文窗口大小（token 数） */
     private Integer contextWindow;

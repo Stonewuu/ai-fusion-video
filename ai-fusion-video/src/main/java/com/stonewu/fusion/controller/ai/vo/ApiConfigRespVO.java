@@ -10,6 +10,9 @@ public class ApiConfigRespVO {
     private Long id;
     private String name;
     private String platform;
+    private String textProtocol;
+    private String imageProtocol;
+    private String videoProtocol;
     private String apiUrl;
     private Boolean autoAppendV1Path;
     private String proxyType;

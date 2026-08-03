@@ -9,7 +9,6 @@ import com.stonewu.fusion.controller.ai.vo.AiModelConnectivityRespVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
-import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -22,7 +21,9 @@ import org.springframework.transaction.annotation.Transactional;
 import cn.hutool.core.util.StrUtil;
 
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 
 @Service
 @RequiredArgsConstructor
@@ -36,20 +37,14 @@ public class AiModelService {
     private final ModelPresetService modelPresetService;
     private final AiModelMetadataResolver aiModelMetadataResolver;
     private final ChatModelFactory chatModelFactory;
-    private final AgentScopeModelFactory agentScopeModelFactory;
 
     @Transactional
     public Long createAiModel(AiModel aiModel) {
         validateApiConfig(aiModel.getApiConfigId(), true);
         validateUniqueCode(null, aiModel.getApiConfigId(), aiModel.getCode());
-        // 如果用户未设置 config，尝试从预设自动填充
-        if (StrUtil.isBlank(aiModel.getConfig()) && StrUtil.isNotBlank(aiModel.getCode())) {
-            String presetConfig = modelPresetService.getPresetConfig(aiModel.getCode());
-            if (presetConfig != null) {
-                aiModel.setConfig(presetConfig);
-            }
-        }
         normalizeMetadata(aiModel);
+        validateRequestProtocol(aiModel);
+        validateCapabilityPreset(aiModel);
         try {
             aiModelMapper.insert(aiModel);
         } catch (DuplicateKeyException e) {
@@ -62,12 +57,14 @@ public class AiModelService {
     }
 
     @Transactional
-    public void updateAiModel(Long id, String name, String code, String modelFamily,
-                               String modelProtocol, Integer modelType, String icon,
+    public void updateAiModel(Long id, String name, String code, String modelProtocol,
+                               String capabilityPresetCode, Integer modelType, String icon,
                                String description, Integer sort, Integer status,
                                String config, Boolean defaultModel, Long apiConfigId,
-                               Integer maxConcurrency, Boolean supportVision,
-                               Boolean supportReasoning, Integer contextWindow) {
+                               Integer maxConcurrency, List<String> multimodalInputTypes,
+                               Map<String, List<String>> multimodalInputTransports,
+                               Boolean supportReasoning, List<String> reasoningEffortLevels,
+                               Integer contextWindow) {
         AiModel model = aiModelMapper.selectById(id);
         if (model == null) throw new BusinessException(404, "AI模型不存在");
         Long nextApiConfigId = apiConfigId != null ? apiConfigId : model.getApiConfigId();
@@ -76,8 +73,8 @@ public class AiModelService {
         validateUniqueCode(id, nextApiConfigId, nextCode);
         if (name != null) model.setName(name);
         if (code != null) model.setCode(code);
-        if (modelFamily != null) model.setModelFamily(aiModelMetadataResolver.normalizeFamily(modelFamily));
         if (modelProtocol != null) model.setModelProtocol(aiModelMetadataResolver.normalizeProtocol(modelProtocol));
+        if (capabilityPresetCode != null) model.setCapabilityPresetCode(normalizeCapabilityPresetCode(capabilityPresetCode));
         if (modelType != null) model.setModelType(modelType);
         if (icon != null) model.setIcon(icon);
         if (description != null) model.setDescription(description);
@@ -86,11 +83,15 @@ public class AiModelService {
         if (config != null) model.setConfig(config);
         if (maxConcurrency != null) model.setMaxConcurrency(maxConcurrency > 0 ? maxConcurrency : 5);
         if (defaultModel != null) model.setDefaultModel(defaultModel);
-        if (supportVision != null) model.setSupportVision(supportVision);
+        if (multimodalInputTypes != null) model.setMultimodalInputTypes(multimodalInputTypes);
+        if (multimodalInputTransports != null) model.setMultimodalInputTransports(multimodalInputTransports);
         if (supportReasoning != null) model.setSupportReasoning(supportReasoning);
+        if (reasoningEffortLevels != null) model.setReasoningEffortLevels(reasoningEffortLevels);
         if (contextWindow != null) model.setContextWindow(contextWindow > 0 ? contextWindow : null);
         if (apiConfigId != null) model.setApiConfigId(apiConfigId);
         normalizeMetadata(model);
+        validateRequestProtocol(model);
+        validateCapabilityPreset(model);
         try {
             aiModelMapper.updateById(model);
         } catch (DuplicateKeyException e) {
@@ -100,14 +101,12 @@ public class AiModelService {
             clearOtherDefaults(model.getModelType(), model.getId());
         }
         chatModelFactory.evict(id);
-        agentScopeModelFactory.evict(id);
     }
 
     @Transactional
     public void deleteAiModel(Long id) {
         aiModelMapper.softDeleteById(id);
         chatModelFactory.evict(id);
-        agentScopeModelFactory.evict(id);
     }
 
     public AiModel getById(Long id) {
@@ -215,8 +214,60 @@ public class AiModelService {
         if (model == null) {
             return;
         }
-        model.setModelFamily(aiModelMetadataResolver.normalizeFamily(model.getModelFamily()));
+        normalizeReasoningEffortLevels(model);
         model.setModelProtocol(aiModelMetadataResolver.normalizeProtocol(model.getModelProtocol()));
+        model.setCapabilityPresetCode(normalizeCapabilityPresetCode(model.getCapabilityPresetCode()));
+        AiModelMultimodalCapabilities.normalizeModel(model);
+    }
+
+    private void normalizeReasoningEffortLevels(AiModel model) {
+        if (!Boolean.TRUE.equals(model.getSupportReasoning())) {
+            model.setReasoningEffortLevels(List.of());
+            return;
+        }
+        LinkedHashSet<String> normalized = new LinkedHashSet<>();
+        if (model.getReasoningEffortLevels() != null) {
+            model.getReasoningEffortLevels().stream()
+                    .filter(StrUtil::isNotBlank)
+                    .map(String::trim)
+                    .forEach(normalized::add);
+        }
+        model.setReasoningEffortLevels(List.copyOf(normalized));
+    }
+
+    private String normalizeCapabilityPresetCode(String code) {
+        return StrUtil.isBlank(code) ? null : code.trim();
+    }
+
+    private void validateCapabilityPreset(AiModel model) {
+        if (model == null || StrUtil.isBlank(model.getCapabilityPresetCode())) {
+            return;
+        }
+        var preset = modelPresetService.getPreset(model.getCapabilityPresetCode());
+        if (preset == null) {
+            throw new BusinessException(400, "模型能力预设不存在: " + model.getCapabilityPresetCode());
+        }
+        Integer presetModelType = preset.getInt("modelType");
+        if (presetModelType != null && !presetModelType.equals(model.getModelType())) {
+            throw new BusinessException(400, "模型能力预设与模型类型不匹配");
+        }
+    }
+
+    private void validateRequestProtocol(AiModel model) {
+        if (model == null || model.getModelType() == null || model.getModelType() < 1 || model.getModelType() > 3) {
+            return;
+        }
+        var metadata = aiModelMetadataResolver.resolve(model);
+        if (StrUtil.isBlank(metadata.modelProtocol()) || "generic".equals(metadata.modelProtocol())) {
+            String capability = switch (model.getModelType()) {
+                case 1 -> "文本";
+                case 2 -> "图片";
+                case 3 -> "视频";
+                default -> "当前";
+            };
+            throw new BusinessException(400, capability
+                    + "模型未配置有效请求协议：请在模型中设置覆盖协议，或在 API 配置中设置对应的默认协议");
+        }
     }
 
     private void clearOtherDefaults(Integer modelType, Long excludeId) {

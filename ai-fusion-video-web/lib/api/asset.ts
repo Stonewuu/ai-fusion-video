@@ -52,6 +52,7 @@ export interface AssetCreateReq {
 /** 更新资产请求 */
 export interface AssetUpdateReq {
   id: number;
+  type?: string;
   name?: string;
   description?: string;
   coverUrl?: string;

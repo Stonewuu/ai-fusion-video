@@ -1,6 +1,7 @@
 package com.stonewu.fusion.entity.generation;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -46,13 +47,15 @@ public class VideoTask extends BaseEntity {
     private String generateMode;
 
     /** 首帧参考图片URL（图生视频模式） */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
     private String firstFrameImageUrl;
 
     /** 尾帧参考图片URL（图生视频模式） */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
     private String lastFrameImageUrl;
 
     /** 参考图片URL列表 JSON */
-    @TableField(typeHandler = JsonbTypeHandler.class)
+    @TableField(typeHandler = JsonbTypeHandler.class, updateStrategy = FieldStrategy.NEVER)
     private String referenceImageUrls;
 
     /** 参考视频URL列表 JSON（多模态参考 / 编辑视频 / 延长视频） */
