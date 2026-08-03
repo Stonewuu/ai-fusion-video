@@ -91,6 +91,8 @@ Agent 运行基于 AgentScope，支持 Skill、MCP 和子 Agent。会话与运�
 
 https://github.com/user-attachments/assets/fe71cbb8-f9d9-4351-9a4c-cb8a0a6af7ba
 
+https://github.com/user-attachments/assets/24d9443b-e463-405c-8ada-108236b4d6c2
+
 https://github.com/user-attachments/assets/2f1de26c-5cd5-4be3-ad2e-81be2edd6956
 
 https://github.com/user-attachments/assets/acd26ede-8b77-48c0-91dc-c80c5ed7ceca
