@@ -7,7 +7,7 @@
 - [x] 实现 Stargazers 分页读取、UTC 日期聚合和 SVG 渲染。
 - [x] 增加定时 Pages 部署工作流。
 - [x] 完成本地验证。
-- [ ] 推送分支并创建草稿 PR。
+- [x] 推送分支并创建草稿 PR。
 
 ## 变更记录
 
@@ -17,3 +17,4 @@
 - 固定发布地址为 `https://stonewuu.github.io/ai-fusion-video/star-history.svg`。
 - Node.js 单元测试 3/3 通过；真实读取并渲染 1,218 条 Stargazer 记录。
 - `actionlint` 校验通过，SVG XML 解析和浏览器渲染通过。
+- 提交 `a1e70c8` 已推送到 `v-1.1.0`，草稿 PR 为 `#52`。
