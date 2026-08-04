@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
@@ -26,6 +27,11 @@ interface ComfyUiModelWorkflowFieldProps {
   onChange: (workflowId: number, configJson: string) => void;
 }
 
+function positiveConfigNumber(value: unknown, fallback: number): number {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
 export function ComfyUiModelWorkflowField({
   apiConfigId,
   modelType,
@@ -38,6 +44,24 @@ export function ComfyUiModelWorkflowField({
   const requestKey = `${apiConfigId}:${modelType}`;
   const loading = loadedKey !== requestKey;
   const visibleWorkflows = loading ? [] : workflows;
+  const config = parseConfigJson(configJson);
+  const defaultPollIntervalMillis = modelType === 2 ? 2_000 : 5_000;
+  const defaultTimeoutMillis = modelType === 2 ? 25 * 60_000 : 60 * 60_000;
+  const pollIntervalSeconds = positiveConfigNumber(
+    config.comfyuiPollIntervalMillis,
+    defaultPollIntervalMillis,
+  ) / 1_000;
+  const timeoutMinutes = positiveConfigNumber(
+    config.comfyuiTimeoutMillis,
+    defaultTimeoutMillis,
+  ) / 60_000;
+
+  const updateRuntimeConfig = (key: "comfyuiPollIntervalMillis" | "comfyuiTimeoutMillis", nextValue: number) => {
+    if (!value) return;
+    const next = parseConfigJson(configJson);
+    next[key] = Math.round(nextValue);
+    onChange(value, stringifyConfigObject(next));
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -134,6 +158,62 @@ export function ComfyUiModelWorkflowField({
         <p className="text-[10px] leading-4 text-destructive">
           当前实例没有同类型且已发布的工作流，请先在工作流管理中完成验证、试运行和发布。
         </p>
+      )}
+      {value && (
+        <div className="space-y-3 border-t border-primary/10 pt-3">
+          <div>
+            <p className="text-xs font-medium text-foreground">任务执行参数</p>
+            <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
+              仅影响使用此模型发起的生成任务；工作流试运行仍使用系统固定参数。
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="comfyui-poll-interval" className="text-[11px] text-muted-foreground">轮询间隔（秒）</Label>
+              <Input
+                key={pollIntervalSeconds}
+                id="comfyui-poll-interval"
+                type="number"
+                min={0.5}
+                step={0.5}
+                defaultValue={pollIntervalSeconds}
+                className="font-mono"
+                onBlur={event => {
+                  const parsed = Number(event.currentTarget.value);
+                  const seconds = Number.isFinite(parsed) ? Math.max(0.5, parsed) : pollIntervalSeconds;
+                  event.currentTarget.value = String(seconds);
+                  updateRuntimeConfig("comfyuiPollIntervalMillis", seconds * 1_000);
+                }}
+                onKeyDown={event => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+              />
+              <p className="text-[10px] leading-4 text-muted-foreground">查询 ComfyUI 任务状态的频率，最短 0.5 秒。</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="comfyui-timeout" className="text-[11px] text-muted-foreground">任务超时（分钟）</Label>
+              <Input
+                key={timeoutMinutes}
+                id="comfyui-timeout"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={timeoutMinutes}
+                className="font-mono"
+                onBlur={event => {
+                  const parsed = Number(event.currentTarget.value);
+                  const minutes = Number.isFinite(parsed) ? Math.max(1, parsed) : timeoutMinutes;
+                  event.currentTarget.value = String(minutes);
+                  updateRuntimeConfig("comfyuiTimeoutMillis", minutes * 60_000);
+                }}
+                onKeyDown={event => {
+                  if (event.key === "Enter") event.currentTarget.blur();
+                }}
+              />
+              <p className="text-[10px] leading-4 text-muted-foreground">超过该时长仍未完成时，将任务标记为超时。</p>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
