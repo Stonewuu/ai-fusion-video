@@ -105,6 +105,9 @@ public class VideoTask extends BaseEntity {
     /** 使用的AI模型ID */
     private Long modelId;
 
+    /** 提交时固化的 ComfyUI 工作流版本ID */
+    private Long workflowVersionId;
+
     /** 任务分类标签 */
     private String category;
 

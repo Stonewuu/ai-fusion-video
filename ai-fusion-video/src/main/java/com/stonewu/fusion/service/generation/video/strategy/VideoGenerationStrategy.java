@@ -38,4 +38,14 @@ public interface VideoGenerationStrategy {
      * @param task 生视频任务
      */
     void poll(String platformTaskId, VideoTask task);
+
+    /** Cancel a submitted remote task when the platform supports cancellation. */
+    default boolean cancel(String platformTaskId, VideoTask task) {
+        return false;
+    }
+
+    /** Whether result URLs have already been copied into platform-controlled storage. */
+    default boolean persistsResults() {
+        return false;
+    }
 }

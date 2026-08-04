@@ -11,6 +11,7 @@ import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.infrastructure.queue.RedisTaskQueue;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.ApiConfigService;
+import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import com.stonewu.fusion.service.generation.image.ImageGenerationService;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import com.stonewu.fusion.service.generation.ReferenceImageTransportService;
@@ -24,7 +25,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -51,6 +54,7 @@ public class ImageGenerationConsumer {
     private final ReferenceImageTransportService referenceImageTransportService;
     private final ImageGenerationStrategyRouter imageGenerationStrategyRouter;
     private final MediaStorageService mediaStorageService;
+    private final ComfyUiWorkflowService comfyUiWorkflowService;
 
     private final AtomicInteger workerThreadCounter = new AtomicInteger(1);
     private final ExecutorService workerExecutor = Executors.newCachedThreadPool(r -> {
@@ -68,6 +72,7 @@ public class ImageGenerationConsumer {
             throw new BusinessException("没有可用的图片生成模型");
         }
         task.setModelId(queueModel.getId());
+        pinWorkflowVersion(queueModel, task);
         generationModelCapabilityService.validateImageTask(queueModel, task);
 
         String queueName = resolveQueueName(task.getModelId());
@@ -132,6 +137,53 @@ public class ImageGenerationConsumer {
         // 超时：标记任务失败，避免 consumer 继续执行无意义的任务
         imageGenerationService.updateStatus(task.getId(), 3, "同步等待超时");
         throw new RuntimeException("生图任务排队超时（等待 " + (timeoutMs / 1000) + " 秒），当前任务较多，请稍后重试");
+    }
+
+    public boolean cancelTask(String taskId, Long userId) {
+        ImageTask task = imageGenerationService.getByTaskId(taskId);
+        if (task == null || userId == null || !userId.equals(task.getUserId())) {
+            throw new BusinessException(404, "图片任务不存在");
+        }
+        if (Integer.valueOf(2).equals(task.getStatus()) || Integer.valueOf(3).equals(task.getStatus())) {
+            return false;
+        }
+        String queueName = resolveQueueName(task.getModelId());
+        if (Integer.valueOf(0).equals(task.getStatus()) && taskQueue.remove(queueName, taskId)) {
+            markCancelled(task);
+            return true;
+        }
+        AiModel model = aiModelService.getById(task.getModelId());
+        ApiConfig apiConfig = model == null || model.getApiConfigId() == null
+                ? null : apiConfigService.getById(model.getApiConfigId());
+        if (model == null || apiConfig == null) {
+            throw new BusinessException("图片任务缺少模型或 API 配置，无法取消");
+        }
+        ImageGenerationStrategy strategy = imageGenerationStrategyRouter.resolve(model, apiConfig);
+        Set<String> platformTaskIds = new LinkedHashSet<>();
+        imageGenerationService.listItems(task.getId()).stream()
+                .map(ImageItem::getPlatformTaskId)
+                .filter(StrUtil::isNotBlank)
+                .forEach(platformTaskIds::add);
+        boolean cancelled = false;
+        for (String platformTaskId : platformTaskIds) {
+            cancelled |= strategy.cancel(platformTaskId, task, apiConfig);
+        }
+        if (!cancelled) {
+            throw new BusinessException(400, "当前图片任务尚不能取消或远端任务已结束");
+        }
+        markCancelled(task);
+        return true;
+    }
+
+    private void markCancelled(ImageTask task) {
+        for (ImageItem item : imageGenerationService.listItems(task.getId())) {
+            if (!Integer.valueOf(1).equals(item.getStatus())) {
+                item.setStatus(2);
+                item.setErrorMsg("用户取消");
+                imageGenerationService.updateItem(item);
+            }
+        }
+        imageGenerationService.updateStatus(task.getId(), 3, "用户取消");
     }
 
     /**
@@ -223,7 +275,9 @@ public class ImageGenerationConsumer {
             strategy.poll(platformTaskId, task, apiConfig);
 
             // 持久化远程图片到本地/OSS 存储
-            persistImageItems(task);
+            if (!strategy.persistsResults()) {
+                persistImageItems(task);
+            }
 
             // 更新为完成
             imageGenerationService.updateStatus(task.getId(), 2, null);
@@ -237,6 +291,17 @@ public class ImageGenerationConsumer {
         List<String> queueNames = new ArrayList<>(taskQueue.listRegisteredQueuesByPrefix(MODEL_QUEUE_PREFIX));
         queueNames.sort(String::compareTo);
         return queueNames;
+    }
+
+    private void pinWorkflowVersion(AiModel model, ImageTask task) {
+        if (model.getComfyuiWorkflowId() == null) return;
+        var workflow = comfyUiWorkflowService.requireWorkflow(model.getComfyuiWorkflowId());
+        if (!Integer.valueOf(1).equals(workflow.getStatus())
+                || workflow.getActiveVersionId() == null) {
+            throw new BusinessException("ComfyUI 工作流已禁用或没有已发布版本");
+        }
+        var version = comfyUiWorkflowService.requireVersion(workflow.getActiveVersionId());
+        task.setWorkflowVersionId(version.getId());
     }
 
     private void refreshQueueMaxConcurrent(String queueName, Long modelId) {

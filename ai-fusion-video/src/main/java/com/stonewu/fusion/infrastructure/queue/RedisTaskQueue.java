@@ -38,6 +38,14 @@ public class RedisTaskQueue {
         log.debug("[push] 任务入队，queue:{}, task:{}", queueName, taskData);
     }
 
+    /** Remove one pending occurrence without affecting a running lease. */
+    public boolean remove(String queueName, String taskData) {
+        Long removed = stringRedisTemplate.opsForList()
+                .remove(getQueueKey(queueName), 1, taskData);
+        cleanupQueueRegistration(queueName);
+        return removed != null && removed > 0;
+    }
+
     /**
      * 尝试获取执行许可并取出任务
      */

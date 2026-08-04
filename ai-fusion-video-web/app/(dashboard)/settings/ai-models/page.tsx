@@ -16,6 +16,7 @@ import {
   Star,
   Trash2,
   Upload,
+  Workflow,
 } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -53,6 +54,7 @@ import {
 import { AiModelDialog } from "./_components/ai-model-dialog";
 import { ApiConfigDialog } from "./_components/api-config-dialog";
 import { FetchRemoteModelsDialog } from "./_components/fetch-remote-models-dialog";
+import { ComfyUiWorkflowManagerDialog } from "./_components/comfyui-workflow-manager-dialog";
 import {
   buildGenerationCapabilityView,
   findCapabilityPreset,
@@ -99,6 +101,7 @@ export default function AiModelsPage() {
   const cardGridRef = useRef<HTMLDivElement>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportIncludeSecrets, setExportIncludeSecrets] = useState(false);
+  const [workflowManagerOpen, setWorkflowManagerOpen] = useState(false);
 
   const loadModels = useCallback(async () => {
     try {
@@ -478,13 +481,15 @@ export default function AiModelsPage() {
             </div>
           </div>
           <div className="flex items-center gap-1 shrink-0 mt-0.5">
-            <button
-              onClick={() => { setFetchModelsConfig(config); setFetchModelsDialogOpen(true); }}
-              className="p-1.5 rounded-md text-sky-500 hover:text-sky-600 hover:bg-sky-500/10 transition-colors"
-              title="获取可用模型列表"
-            >
-              <CloudDownload className="h-3.5 w-3.5" />
-            </button>
+            {config.platform !== "comfyui" && (
+              <button
+                onClick={() => { setFetchModelsConfig(config); setFetchModelsDialogOpen(true); }}
+                className="p-1.5 rounded-md text-sky-500 hover:text-sky-600 hover:bg-sky-500/10 transition-colors"
+                title="获取可用模型列表"
+              >
+                <CloudDownload className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button
               onClick={() => { setEditingConfig(config); setConfigDialogOpen(true); }}
               className="p-1.5 rounded-md text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
@@ -807,6 +812,10 @@ export default function AiModelsPage() {
               <Download className="h-3.5 w-3.5" />
               导出
             </button>
+            <Button variant="outline" size="sm" onClick={() => setWorkflowManagerOpen(true)}>
+              <Workflow />
+              ComfyUI 工作流
+            </Button>
             <div
               className="flex h-9 rounded-xl border border-border/30 bg-card/50 overflow-hidden shrink-0"
               role="group"
@@ -921,6 +930,12 @@ export default function AiModelsPage() {
         onOpenChange={setConfigDialogOpen}
         editingConfig={editingConfig}
         onSaved={() => { loadConfigs(); loadModels(); }}
+      />
+      <ComfyUiWorkflowManagerDialog
+        open={workflowManagerOpen}
+        onOpenChange={setWorkflowManagerOpen}
+        apiConfigs={configs}
+        onChanged={() => { loadModels(); }}
       />
       <AiModelDialog
         open={modelDialogOpen}

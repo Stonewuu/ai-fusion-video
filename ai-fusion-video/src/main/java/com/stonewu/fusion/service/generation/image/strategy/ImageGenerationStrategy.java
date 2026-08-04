@@ -69,6 +69,16 @@ public interface ImageGenerationStrategy {
      */
     void poll(String platformTaskId, ImageTask task, ApiConfig apiConfig);
 
+    /** Cancel a submitted remote task when the platform supports cancellation. */
+    default boolean cancel(String platformTaskId, ImageTask task, ApiConfig apiConfig) {
+        return false;
+    }
+
+    /** Whether result URLs have already been copied into platform-controlled storage. */
+    default boolean persistsResults() {
+        return false;
+    }
+
     /**
      * 从模型配置中解析默认尺寸
      * <p>

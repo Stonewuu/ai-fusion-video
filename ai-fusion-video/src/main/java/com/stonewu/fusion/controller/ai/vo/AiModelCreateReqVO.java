@@ -38,4 +38,6 @@ public class AiModelCreateReqVO {
     private Integer contextWindow;
     @NotNull(message = "API配置不能为空")
     private Long apiConfigId;
+
+    private Long comfyuiWorkflowId;
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { Eye, EyeOff, Loader2, PlugZap } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import {
@@ -34,6 +35,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ProviderVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import { getPlatformFields } from "../../_shared";
 import { getProtocolOptionsForModelType } from "./model-config-support";
+import { comfyUiWorkflowApi } from "@/lib/api/comfyui-workflow";
 
 export interface ApiConfigDialogProps {
   open: boolean;
@@ -55,10 +57,12 @@ export const API_PROVIDER_PRESETS = [
   { id: "dashscope", platform: "dashscope", label: "通义千问", url: "https://dashscope.aliyuncs.com", textProtocol: "dashscope", imageProtocol: "dashscope", videoProtocol: "dashscope" },
   { id: "openai", platform: "openai_compatible", label: "OpenAI", url: "https://api.openai.com", textProtocol: "openai_compatible", imageProtocol: "openai", videoProtocol: "openai" },
   { id: "agnes", platform: "openai_compatible", label: "Agnes AI", url: "https://apihub.agnes-ai.com", textProtocol: "openai_compatible", imageProtocol: "agnes", videoProtocol: "agnes" },
+  { id: "comfyui", platform: "comfyui", label: "ComfyUI", url: "http://localhost:8188", textProtocol: "", imageProtocol: "comfyui", videoProtocol: "comfyui" },
 ] as const;
 
 export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConfigDialogProps) {
   const [saving, setSaving] = useState(false);
+  const [testingConnection, setTestingConnection] = useState(false);
   const [form, setForm] = useState<ApiConfigSaveReq>({ name: "" });
   const [showSecrets, setShowSecrets] = useState<Record<string, boolean>>({});
 
@@ -89,6 +93,7 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
         setForm({ name: "", platform: "openai_compatible", textProtocol: "openai_compatible", imageProtocol: "openai", videoProtocol: "openai", apiUrl: "", autoAppendV1Path: true, proxyType: "none", proxyHost: "", proxyPort: undefined, proxyUsername: "", proxyPassword: "", apiKey: "", appId: "", appSecret: "", status: 1 });
       }
       setShowSecrets({});
+      setTestingConnection(false);
     }
   }, [open, editingConfig]);
 
@@ -124,12 +129,29 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
     }
   };
 
+  const handleTestConnection = async () => {
+    if (!editingConfig) return;
+    setTestingConnection(true);
+    try {
+      const result = await comfyUiWorkflowApi.testConnection(editingConfig.id);
+      toast.success("ComfyUI 连接成功", {
+        description: `版本 ${result.version || "未知"}，Jobs API ${result.jobsApiSupported ? "可用" : "不可用"}`,
+      });
+    } catch (err) {
+      console.error("检测 ComfyUI 连接失败:", err);
+      toastApiError(err, "检测 ComfyUI 连接失败");
+    } finally {
+      setTestingConnection(false);
+    }
+  };
+
   const fields = getPlatformFields(form.platform || "");
   const proxyEnabled = form.proxyType && form.proxyType !== "none";
   const proxyInvalid = Boolean(proxyEnabled && (
     !form.proxyHost?.trim() || !form.proxyPort || form.proxyPort < 1 || form.proxyPort > 65535
     || (!!form.proxyPassword && !form.proxyUsername?.trim())
   ));
+  const comfyUiInvalid = form.platform === "comfyui" && !form.apiUrl?.trim();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -157,9 +179,21 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
             <Select
               value={form.platform || "openai_compatible"}
               onValueChange={v => {
-                updateField("platform", v as string);
+                const platform = String(v);
+                updateField("platform", platform);
                 if (v === "openai_compatible") {
                   updateField("autoAppendV1Path", true);
+                }
+                if (platform === "comfyui") {
+                  setForm(previous => ({
+                    ...previous,
+                    platform,
+                    textProtocol: "",
+                    imageProtocol: "comfyui",
+                    videoProtocol: "comfyui",
+                    apiUrl: "http://localhost:8188",
+                    autoAppendV1Path: false,
+                  }));
                 }
               }}
               items={PLATFORM_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
@@ -215,6 +249,9 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
                       if (provider.platform === "openai_compatible") {
                         updateField("autoAppendV1Path", true);
                       }
+                      if (provider.platform === "comfyui") {
+                        updateField("autoAppendV1Path", false);
+                      }
                     }}
                     className={cn(
                       "rounded-xl border px-3 py-2 text-left transition-colors",
@@ -263,6 +300,7 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
                     <Select
                       value={form[item.key] || UNSET_PROTOCOL_VALUE}
                       onValueChange={value => updateField(item.key, value === UNSET_PROTOCOL_VALUE ? "" : String(value))}
+                      disabled={form.platform === "comfyui"}
                       items={[
                         { value: UNSET_PROTOCOL_VALUE, label: "未配置" },
                         ...options.map(option => ({ value: option.value, label: option.label })),
@@ -471,10 +509,21 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
         </div>
 
         <DialogFooter className="shrink-0">
+          {editingConfig?.platform === "comfyui" && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTestConnection}
+              disabled={testingConnection || saving}
+            >
+              {testingConnection ? <Loader2 className="animate-spin" /> : <PlugZap />}
+              测试连接
+            </Button>
+          )}
           <DialogClose render={<Button variant="outline" size="sm" />}>
             取消
           </DialogClose>
-          <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim() || proxyInvalid}>
+          <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim() || proxyInvalid || comfyUiInvalid}>
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
             {editingConfig ? "保存" : "创建"}
           </Button>

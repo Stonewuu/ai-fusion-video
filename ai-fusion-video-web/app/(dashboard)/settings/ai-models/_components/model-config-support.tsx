@@ -131,6 +131,7 @@ export const MODEL_PROTOCOL_LABELS: Record<string, string> = {
   jimeng: "即梦协议",
   kling: "可灵协议",
   sora: "Sora 协议",
+  comfyui: "ComfyUI Native API",
 };
 
 export const TEXT_PROTOCOL_OPTIONS = [
@@ -151,6 +152,7 @@ export const IMAGE_PROTOCOL_OPTIONS = [
   { value: "volcengine", label: "火山引擎协议" },
   { value: "vertex_ai", label: "Vertex AI 协议" },
   { value: "google_flow", label: "Flow 协议" },
+  { value: "comfyui", label: "ComfyUI Native API" },
 ] as const;
 
 export const VIDEO_PROTOCOL_OPTIONS = [
@@ -163,6 +165,7 @@ export const VIDEO_PROTOCOL_OPTIONS = [
   { value: "dashscope", label: "DashScope 协议" },
   { value: "volcengine", label: "火山引擎协议" },
   { value: "google_flow", label: "Flow 协议" },
+  { value: "comfyui", label: "ComfyUI Native API" },
 ] as const;
 
 export const CUSTOM_CAPABILITY_PRESET_VALUE = "__custom_capabilities__";
