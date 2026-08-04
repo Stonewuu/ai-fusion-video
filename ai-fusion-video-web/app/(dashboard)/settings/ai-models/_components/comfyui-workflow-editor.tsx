@@ -273,7 +273,7 @@ export function ComfyUiWorkflowEditor({
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-y-auto py-4 pr-1">
+      <div className="min-h-0 flex-1 overflow-y-auto px-1 py-4">
         {step === 0 && (
           <div className="space-y-4">
             <div className="grid gap-3 md:grid-cols-2">
