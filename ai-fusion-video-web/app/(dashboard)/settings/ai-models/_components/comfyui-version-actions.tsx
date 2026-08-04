@@ -87,6 +87,7 @@ function TestOutputPreview({ output, index }: { output: ComfyUiStoredOutput; ind
         <Button
           variant="outline"
           size="icon-sm"
+          nativeButton={false}
           aria-label={`打开${label}`}
           title="打开原文件"
           render={<a href={source} target="_blank" rel="noreferrer" />}
