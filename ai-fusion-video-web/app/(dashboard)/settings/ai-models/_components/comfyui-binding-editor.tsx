@@ -162,7 +162,7 @@ export function ComfyUiBindingEditor({
           const node = nodes.find(item => item.id === row.nodeId);
           return (
             <div key={`${row.businessField}-${row.nodeId}-${row.inputName}-${index}`} className="rounded-lg border border-border/20 bg-background/70 p-3">
-              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[1fr_1.4fr_1fr_1fr_80px_32px]">
+              <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-[1fr_1.4fr_1fr_1fr_80px_36px]">
                 <div className="space-y-1.5">
                   <Label className="text-[11px] text-muted-foreground">平台字段</Label>
                   <OptionSelect
@@ -208,7 +208,7 @@ export function ComfyUiBindingEditor({
                 <div className="flex items-end">
                   <Button
                     variant="destructive-ghost"
-                    size="icon-sm"
+                    size="icon"
                     aria-label="删除输入绑定"
                     onClick={() => onInputBindingsChange(groupInputBindings(inputRows.filter((_, rowIndex) => rowIndex !== index)))}
                   >
@@ -239,7 +239,7 @@ export function ComfyUiBindingEditor({
         <div className="rounded-lg border border-border/20 bg-background/70 p-4 text-sm text-muted-foreground">尚未配置输出绑定。</div>
       ) : outputBindings.map((row, index) => (
         <div key={`${row.nodeId}-${row.mediaType}-${row.role}-${index}`} className="rounded-lg border border-border/20 bg-background/70 p-3">
-          <div className="grid gap-2 md:grid-cols-[1.5fr_1fr_1fr_32px]">
+          <div className="grid gap-2 md:grid-cols-[1.5fr_1fr_1fr_36px]">
             <div className="space-y-1.5">
               <Label className="text-[11px] text-muted-foreground">输出节点</Label>
               <OptionSelect
@@ -268,7 +268,7 @@ export function ComfyUiBindingEditor({
               />
             </div>
             <div className="flex items-end">
-              <Button variant="destructive-ghost" size="icon-sm" aria-label="删除输出绑定" onClick={() => onOutputBindingsChange(outputBindings.filter((_, rowIndex) => rowIndex !== index))}>
+              <Button variant="destructive-ghost" size="icon" aria-label="删除输出绑定" onClick={() => onOutputBindingsChange(outputBindings.filter((_, rowIndex) => rowIndex !== index))}>
                 <Trash2 />
               </Button>
             </div>

@@ -243,11 +243,11 @@ export function ComfyUiWorkflowEditor({
                 <SelectTrigger className="w-44 text-xs"><SelectValue placeholder={versionsLoading ? "加载中" : "选择版本"} /></SelectTrigger>
                 <SelectContent className="text-xs"><SelectGroup>{versionOptions.map(option => <SelectItem key={option.value} value={option.value} className="text-xs">{option.label}</SelectItem>)}</SelectGroup></SelectContent>
               </Select>
-              <Button variant="outline" size="sm" onClick={() => { setSelectedVersion(null); setVersionDraft({ ...versionDraft, id: undefined }); setStep(1); }}>
+              <Button variant="outline" onClick={() => { setSelectedVersion(null); setVersionDraft({ ...versionDraft, id: undefined }); setStep(1); }}>
                 <Copy />{selectedVersion ? "复制为新版本" : "新建版本"}
               </Button>
               {selectedVersion && !selectedVersion.published && (
-                <Button variant="destructive-ghost" size="icon-sm" aria-label="删除工作流草稿" onClick={() => void deleteDraftVersion()}>
+                <Button variant="destructive-ghost" size="icon" aria-label="删除工作流草稿" onClick={() => void deleteDraftVersion()}>
                   <Trash2 />
                 </Button>
               )}
