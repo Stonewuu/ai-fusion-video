@@ -18,7 +18,7 @@
 </p>
 
 <p align="center">
-  <img src="https://stonewuu.github.io/ai-fusion-video/star-history.svg" alt="GitHub Star History" width="920" />
+  <img src="https://stonewuu.github.io/Stonewuu/star-history/Stonewuu/ai-fusion-video.svg" alt="GitHub Star History" width="920" />
 </p>
 
 <table align="center" style="margin: 0 auto; display: table;">
