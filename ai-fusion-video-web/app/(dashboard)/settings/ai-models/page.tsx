@@ -101,7 +101,7 @@ export default function AiModelsPage() {
   const cardGridRef = useRef<HTMLDivElement>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportIncludeSecrets, setExportIncludeSecrets] = useState(false);
-  const [workflowManagerOpen, setWorkflowManagerOpen] = useState(false);
+  const [workflowManagerConfig, setWorkflowManagerConfig] = useState<ApiConfig | null>(null);
 
   const loadModels = useCallback(async () => {
     try {
@@ -490,6 +490,17 @@ export default function AiModelsPage() {
                 <CloudDownload className="h-3.5 w-3.5" />
               </button>
             )}
+            {config.platform === "comfyui" && (
+              <button
+                type="button"
+                onClick={() => setWorkflowManagerConfig(config)}
+                className="rounded-md p-1.5 text-primary transition-colors hover:bg-primary/10"
+                title="管理 ComfyUI 工作流"
+                aria-label={`管理 ${config.name} 的 ComfyUI 工作流`}
+              >
+                <Workflow className="h-3.5 w-3.5" />
+              </button>
+            )}
             <button
               onClick={() => { setEditingConfig(config); setConfigDialogOpen(true); }}
               className="p-1.5 rounded-md text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
@@ -812,10 +823,6 @@ export default function AiModelsPage() {
               <Download className="h-3.5 w-3.5" />
               导出
             </button>
-            <Button variant="outline" size="sm" onClick={() => setWorkflowManagerOpen(true)}>
-              <Workflow />
-              ComfyUI 工作流
-            </Button>
             <div
               className="flex h-9 rounded-xl border border-border/30 bg-card/50 overflow-hidden shrink-0"
               role="group"
@@ -932,9 +939,9 @@ export default function AiModelsPage() {
         onSaved={() => { loadConfigs(); loadModels(); }}
       />
       <ComfyUiWorkflowManagerDialog
-        open={workflowManagerOpen}
-        onOpenChange={setWorkflowManagerOpen}
-        apiConfigs={configs}
+        open={workflowManagerConfig !== null}
+        onOpenChange={open => { if (!open) setWorkflowManagerConfig(null); }}
+        apiConfig={workflowManagerConfig}
         onChanged={() => { loadModels(); }}
       />
       <AiModelDialog

@@ -38,7 +38,7 @@ import {
 
 interface ComfyUiWorkflowEditorProps {
   workflow: ComfyUiWorkflow | null;
-  apiConfigs: ApiConfig[];
+  apiConfig: ApiConfig;
   onWorkflowCreated: (id: number) => Promise<void> | void;
   onWorkflowChanged: () => Promise<void> | void;
 }
@@ -71,7 +71,7 @@ function versionToDraft(version: ComfyUiWorkflowVersion): VersionDraft {
 
 export function ComfyUiWorkflowEditor({
   workflow,
-  apiConfigs,
+  apiConfig,
   onWorkflowCreated,
   onWorkflowChanged,
 }: ComfyUiWorkflowEditorProps) {
@@ -85,7 +85,7 @@ export function ComfyUiWorkflowEditor({
   const [selectedVersion, setSelectedVersion] = useState<ComfyUiWorkflowVersion | null>(null);
   const [versionDraft, setVersionDraft] = useState<VersionDraft>(EMPTY_VERSION);
   const [metadata, setMetadata] = useState({
-    apiConfigId: apiConfigs[0]?.id,
+    apiConfigId: apiConfig.id,
     name: "",
     code: "",
     modelType: 2 as ComfyUiWorkflowModelType,
@@ -118,7 +118,7 @@ export function ComfyUiWorkflowEditor({
   useEffect(() => {
     setStep(0);
     setMetadata({
-      apiConfigId: workflow?.apiConfigId ?? apiConfigs[0]?.id,
+      apiConfigId: apiConfig.id,
       name: workflow?.name || "",
       code: workflow?.code || "",
       modelType: workflow?.modelType || 2,
@@ -127,7 +127,7 @@ export function ComfyUiWorkflowEditor({
     });
     void loadVersions(workflow?.activeVersionId ?? undefined);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [workflow?.id]);
+  }, [apiConfig.id, workflow?.id]);
 
   const parsedNodes = useMemo(() => {
     try {
@@ -280,11 +280,8 @@ export function ComfyUiWorkflowEditor({
               <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">名称</Label><Input value={metadata.name} onChange={event => setMetadata(previous => ({ ...previous, name: event.target.value }))} placeholder="例如：SDXL 文生图" /></div>
               <div className="space-y-1.5"><Label className="text-xs text-muted-foreground">稳定标识</Label><Input value={metadata.code} onChange={event => setMetadata(previous => ({ ...previous, code: event.target.value }))} placeholder="sdxl_text_to_image" className="font-mono" /></div>
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">ComfyUI API 配置</Label>
-                <Select value={metadata.apiConfigId} onValueChange={value => setMetadata(previous => ({ ...previous, apiConfigId: Number(value) }))} items={apiConfigs.map(config => ({ value: config.id, label: config.name }))}>
-                  <SelectTrigger className="w-full"><SelectValue placeholder="选择 ComfyUI 实例" /></SelectTrigger>
-                  <SelectContent><SelectGroup>{apiConfigs.map(config => <SelectItem key={config.id} value={config.id}>{config.name}</SelectItem>)}</SelectGroup></SelectContent>
-                </Select>
+                <Label className="text-xs text-muted-foreground">所属 ComfyUI 供应商</Label>
+                <Input value={apiConfig.name} readOnly aria-label="所属 ComfyUI 供应商" />
               </div>
               <div className="space-y-1.5">
                 <Label className="text-xs text-muted-foreground">生成类型</Label>

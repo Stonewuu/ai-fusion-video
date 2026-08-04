@@ -88,7 +88,7 @@
 
 ### 子任务
 
-- [x] 后端选定验证集通过（含 Flyway 命名、模型绑定、ComfyUI 与生成链路测试，45/45）。
+- [x] 后端选定验证集通过（含 Flyway 命名、模型绑定、ComfyUI 与生成链路测试，46/46）。
 - [ ] Flyway 命名与 validate 等价检查通过（命名 2/2 通过；真实 validate 等待 MySQL）。
 - [x] 后端编译及测试编译通过；全量测试仅 3 个依赖 MySQL 的上下文测试类受环境限制。
 - [x] 前端 lint/typecheck/build 通过。
@@ -109,4 +109,5 @@
 - 相关后端测试 25/25 通过，前端类型检查、lint 与生产构建通过。
 - 全量后端测试已执行；`AiAgentToolRegistrationTests`、`FusionVideoApplicationTests`、`ProjectWorkspaceCacheTests` 因本地 MySQL 连接拒绝失败，已作为环境限制记录。
 - 全部实现与文档已提交到 `v-1.1.0`。
-- 完成官方 v0.30.0 协议终审：确认上传、下载、节点定义、系统版本、Jobs 输出/状态/取消契约；移除非官方响应字段 fallback，并补强未知长度 JSON、输入图片和输出的 16MB/20MB/1GB 硬限制，选定后端验证集 45/45 通过。
+- 完成官方 v0.30.0 协议终审：确认上传、下载、节点定义、系统版本、Jobs 输出/状态/取消契约；移除非官方响应字段 fallback，并补强未知长度 JSON、输入图片和输出的 16MB/20MB/1GB 硬限制，选定后端验证集 46/46 通过。
+- 将工作流管理入口从页面全局工具栏下沉到对应的 ComfyUI 供应商卡片；工作流目录、创建和编辑均固定按该供应商 `apiConfigId` 隔离。

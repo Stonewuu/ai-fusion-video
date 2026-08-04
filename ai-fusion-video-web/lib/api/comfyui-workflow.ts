@@ -113,10 +113,16 @@ export interface ComfyUiConnectionResult {
 }
 
 export const comfyUiWorkflowApi = {
-  page: (pageNo = 1, pageSize = 100) =>
-    http.get<never, PageResult<ComfyUiWorkflow>>(
-      `/api/ai/comfyui/workflow/page?pageNo=${pageNo}&pageSize=${pageSize}`,
-    ),
+  page: (pageNo = 1, pageSize = 100, apiConfigId?: number) => {
+    const query = new URLSearchParams({
+      pageNo: String(pageNo),
+      pageSize: String(pageSize),
+    });
+    if (apiConfigId !== undefined) query.set("apiConfigId", String(apiConfigId));
+    return http.get<never, PageResult<ComfyUiWorkflow>>(
+      `/api/ai/comfyui/workflow/page?${query.toString()}`,
+    );
+  },
   list: (apiConfigId?: number, modelType?: number) => {
     const query = new URLSearchParams();
     if (apiConfigId !== undefined) query.set("apiConfigId", String(apiConfigId));

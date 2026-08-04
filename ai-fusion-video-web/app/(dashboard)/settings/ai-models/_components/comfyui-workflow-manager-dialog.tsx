@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ImageIcon, Loader2, Plus, Trash2, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -20,14 +20,14 @@ import { ComfyUiWorkflowEditor } from "./comfyui-workflow-editor";
 interface ComfyUiWorkflowManagerDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  apiConfigs: ApiConfig[];
+  apiConfig: ApiConfig | null;
   onChanged: () => void;
 }
 
 export function ComfyUiWorkflowManagerDialog({
   open,
   onOpenChange,
-  apiConfigs,
+  apiConfig,
   onChanged,
 }: ComfyUiWorkflowManagerDialogProps) {
   const { confirm } = useConfirm();
@@ -35,16 +35,17 @@ export function ComfyUiWorkflowManagerDialog({
   const [workflows, setWorkflows] = useState<ComfyUiWorkflow[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
-  const comfyUiConfigs = useMemo(
-    () => apiConfigs.filter(config => config.platform === "comfyui" && config.status === 1),
-    [apiConfigs],
-  );
   const selectedWorkflow = workflows.find(workflow => workflow.id === selectedId) || null;
 
   const loadWorkflows = useCallback(async (preferredId?: number) => {
+    if (!apiConfig) {
+      setWorkflows([]);
+      setSelectedId(null);
+      return;
+    }
     setLoading(true);
     try {
-      const result = await comfyUiWorkflowApi.page(1, 100);
+      const result = await comfyUiWorkflowApi.page(1, 100, apiConfig.id);
       setWorkflows(result.list);
       setSelectedId(current => {
         const target = preferredId ?? current;
@@ -55,13 +56,14 @@ export function ComfyUiWorkflowManagerDialog({
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiConfig]);
 
   useEffect(() => {
     if (!open) return;
     setCreating(false);
+    setSelectedId(null);
     void loadWorkflows();
-  }, [loadWorkflows, open]);
+  }, [apiConfig?.id, loadWorkflows, open]);
 
   const deleteWorkflow = async (workflow: ComfyUiWorkflow) => {
     const accepted = await confirm({
@@ -84,8 +86,8 @@ export function ComfyUiWorkflowManagerDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[min(96vw,1400px)] h-[min(900px,calc(100vh-2rem))] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
-          <DialogTitle>ComfyUI 工作流</DialogTitle>
-          <DialogDescription>管理员导入 API-format 工作流，显式绑定平台输入输出，并在发布前完成在线校验和真实试运行。</DialogDescription>
+          <DialogTitle>{apiConfig?.name || "ComfyUI"} · 工作流</DialogTitle>
+          <DialogDescription>工作流固定归属于当前 ComfyUI 供应商。导入 API-format 后，需完成输入输出绑定、在线校验和真实试运行。</DialogDescription>
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
@@ -100,7 +102,7 @@ export function ComfyUiWorkflowManagerDialog({
                 size="icon-sm"
                 aria-label="新建 ComfyUI 工作流"
                 onClick={() => { setCreating(true); setSelectedId(null); }}
-                disabled={comfyUiConfigs.length === 0}
+                disabled={!apiConfig}
               >
                 <Plus />
               </Button>
@@ -109,8 +111,6 @@ export function ComfyUiWorkflowManagerDialog({
             <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {loading ? (
                 <div className="flex justify-center py-8"><Loader2 className="size-5 animate-spin text-muted-foreground" /></div>
-              ) : comfyUiConfigs.length === 0 ? (
-                <div className="rounded-lg border border-border/20 bg-background/70 p-3 text-xs leading-5 text-muted-foreground">请先创建并保存一个 ComfyUI API 配置，再管理工作流。</div>
               ) : workflows.length === 0 && !creating ? (
                 <div className="rounded-lg border border-border/20 bg-background/70 p-3 text-xs leading-5 text-muted-foreground">还没有工作流。点击右上角加号开始导入。</div>
               ) : workflows.map(workflow => {
@@ -140,11 +140,11 @@ export function ComfyUiWorkflowManagerDialog({
           </aside>
 
           <section className="min-h-0 overflow-hidden rounded-xl border border-border/30 bg-card/50 p-4 backdrop-blur-sm">
-            {creating || selectedWorkflow ? (
+            {apiConfig && (creating || selectedWorkflow) ? (
               <ComfyUiWorkflowEditor
-                key={creating ? "new" : selectedWorkflow?.id}
+                key={`${apiConfig.id}:${creating ? "new" : selectedWorkflow?.id}`}
                 workflow={creating ? null : selectedWorkflow}
-                apiConfigs={comfyUiConfigs}
+                apiConfig={apiConfig}
                 onWorkflowCreated={async id => {
                   setCreating(false);
                   await loadWorkflows(id);

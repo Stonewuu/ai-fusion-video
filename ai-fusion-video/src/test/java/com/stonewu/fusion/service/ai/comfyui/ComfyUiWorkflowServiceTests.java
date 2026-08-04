@@ -72,6 +72,21 @@ class ComfyUiWorkflowServiceTests {
     }
 
     @Test
+    void updateWorkflowCannotMoveDraftToAnotherComfyUiProvider() {
+        ComfyUiWorkflow workflow = ComfyUiWorkflow.builder()
+                .id(12L)
+                .apiConfigId(7L)
+                .modelType(2)
+                .build();
+        when(workflowMapper.selectById(12L)).thenReturn(workflow);
+
+        assertThatThrownBy(() -> service.updateWorkflow(
+                12L, 8L, null, null, null, null, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不能更换所属供应商");
+    }
+
+    @Test
     void publishRequiresOnlineValidationAndRealExecutionTest() {
         ComfyUiWorkflow workflow = ComfyUiWorkflow.builder().id(12L).modelType(2).build();
         ComfyUiWorkflowVersion version = ComfyUiWorkflowVersion.builder()

@@ -72,7 +72,7 @@
 
 - 状态：受外部环境限制
 - 当前证据：`FlywayMigrationNamingTests` 2/2 通过；含模型绑定、ComfyUI 单元/契约、输入/输出资源与图片/视频
-  生成链路在内的后端选定验证集 45/45 通过。
+  生成链路在内的后端选定验证集 46/46 通过。
 - 阻塞表现：全量 `mvn test` 中 3 个 Spring 上下文测试类因 MySQL `Connection refused` 失败。
 - 后续验收：启动项目目标 MySQL，执行应用启动或等价 Flyway validate，并重新运行全量测试。
 

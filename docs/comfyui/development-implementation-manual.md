@@ -98,6 +98,7 @@ v0.30.0 精确响应契约：`/system_stats` 的版本字段为 `system.comfyui_
 - `create_time`、`update_time`
 
 同一个 API 配置下 `code + deleted_id` 唯一。
+`api_config_id` 是工作流创建后的不可变归属；需要迁移到其他 ComfyUI 供应商时必须在目标供应商下新建工作流并重新校验、试运行和发布。
 
 ### 5.2 `afv_comfyui_workflow_version`
 
@@ -180,8 +181,8 @@ v0.30.0 精确响应契约：`/system_stats` 的版本字段为 `system.comfyui_
 1. 在 ComfyUI 中制作并完整运行工作流。
 2. 保存 UI-format JSON 用于以后编辑。
 3. 使用 `File -> Export (API)` 导出 API-format JSON。
-4. 平台模型管理中创建或选择 ComfyUI API 配置并测试连接。
-5. 进入工作流管理，导入两个 JSON，选择图片/视频类型。
+4. 平台模型管理中创建 ComfyUI API 配置并测试连接。
+5. 在该 ComfyUI 供应商卡片中进入工作流管理；新建工作流自动绑定当前供应商，再导入两个 JSON 并选择图片/视频类型。
 6. 平台解析节点并向目标实例校验 class_type 与依赖。
 7. 管理员映射业务输入与输出节点，配置能力范围。
 8. 平台先做目标实例在线校验，再执行真实测试任务；两项均成功后才允许发布。
@@ -207,6 +208,7 @@ v0.30.0 精确响应契约：`/system_stats` 的版本字段为 `system.comfyui_
 - API 配置 Dialog 对 ComfyUI 显示实例地址、Bearer Token、代理和连接测试，不显示远程模型同步入口。
 - 模型 Dialog 在选择 ComfyUI 图片/视频模型时显示工作流选择器，模型协议固定为 `comfyui`。
 - 选择工作流后按已发布版本的绑定同步图片参考能力；传输格式明确写为 `url` 与 `data_uri`，视频/音频文件上传能力不在第一版宣告。
+- 工作流入口位于对应的 ComfyUI 供应商卡片，目录与新建操作固定按 `apiConfigId` 隔离，不提供脱离供应商的全局入口。
 - 新增路由专用组件，承载工作流列表、导入向导、绑定编辑器、版本记录和测试结果，避免继续扩大现有页面文件。
 - 导入向导控制在六步：基本信息、导入、依赖检查、输入绑定、输出绑定、测试发布。
 - 浮层、按钮、Select、滚动严格遵守项目 `AGENTS.md` 设计系统。
@@ -255,7 +257,7 @@ v0.30.0 精确响应契约：`/system_stats` 的版本字段为 `system.comfyui_
 
 - `FlywayMigrationNamingTests`：2/2 通过，确认产品 `1.1.0` 首条迁移为 `V1.1.1.0.0`。
 - ComfyUI 文档、Renderer、Native Client、输入/输出资源、领域服务、模型绑定、图片/视频 Strategy、版本固化与取消
-  路径，加上 Flyway 命名测试：选定后端验证集 45/45 通过。
+  路径，加上 Flyway 命名测试：选定后端验证集 46/46 通过。
 - Native Client 已按官方 v0.30.0 `server.py` 与 `comfy_execution/jobs.py` 终审；连接版本字段不做 fallback，未知
   `Content-Length` 的 JSON、输入图片和输出下载也分别在缓冲/写入前执行 16MB、20MB、1GB 硬上限。
 - 前端：`pnpm exec tsc --noEmit`、`pnpm lint`（0 error）和 `pnpm build` 通过。

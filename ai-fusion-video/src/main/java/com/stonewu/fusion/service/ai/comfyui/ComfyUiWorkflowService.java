@@ -77,18 +77,19 @@ public class ComfyUiWorkflowService {
                                String description,
                                Integer status) {
         ComfyUiWorkflow workflow = requireWorkflow(id);
-        Long nextApiConfigId = apiConfigId != null ? apiConfigId : workflow.getApiConfigId();
+        if (apiConfigId != null && !apiConfigId.equals(workflow.getApiConfigId())) {
+            throw new BusinessException(400, "ComfyUI 工作流创建后不能更换所属供应商");
+        }
+        Long nextApiConfigId = workflow.getApiConfigId();
         String nextCode = code != null ? code : workflow.getCode();
         Integer nextModelType = modelType != null ? modelType : workflow.getModelType();
         requireComfyUiApiConfig(nextApiConfigId);
         requireModelType(nextModelType);
         if (workflow.getActiveVersionId() != null
-                && (!nextApiConfigId.equals(workflow.getApiConfigId())
-                || !nextModelType.equals(workflow.getModelType()))) {
-            throw new BusinessException(400, "已发布工作流不能更换 ComfyUI 配置或模型类型");
+                && !nextModelType.equals(workflow.getModelType())) {
+            throw new BusinessException(400, "已发布工作流不能更换模型类型");
         }
         validateUniqueCode(id, nextApiConfigId, nextCode);
-        if (apiConfigId != null) workflow.setApiConfigId(apiConfigId);
         if (name != null) {
             if (name.isBlank()) throw new BusinessException(400, "工作流名称不能为空");
             workflow.setName(name.trim());
