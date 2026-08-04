@@ -99,8 +99,10 @@
 - Flyway 迁移统一放在 `ai-fusion-video/src/main/resources/db/migration/`，文件名使用 `V1.<产品主版本>.<产品次版本>.<产品修订版本>.<迁移序号>__<英文描述>.sql`。
 - 第一个 `V1` 是为兼容历史数据库永久保留的固定前缀；其后的产品版本三段必须与迁移所属版本一致。例如产品版本 `1.0.0` 使用 `V1.1.0.0.<迁移序号>__...sql`。
 - 同一产品版本的迁移序号从 `0` 开始连续递增，描述使用小写 snake_case；创建迁移前先检查目录和目标数据库的 `flyway_schema_history`，避免版本号冲突。
+- SQL 中表、字段等数据库 `COMMENT` 使用中文（产品或协议专名除外），禁止英文说明。
 - 稳定版本可以增加 `B1.<产品主版本>.<产品次版本>.<产品修订版本>.<迁移序号>__baseline_<产品版本>.sql` 基线；B 的版本必须与快照覆盖的最后一条 V 完全一致。基线必须从执行完全部对应 V 的全新数据库导出，包含最终结构和必要初始化数据，并排除 `flyway_schema_history`、数据库名、`CREATE DATABASE` 与 `USE`。
 - 基线只优化全新空数据库的首次部署，不能删除或替代旧 V 迁移；已有历史的数据库仍依赖 V 增量升级。已发布的 B 与 V 一样不可修改或删除。
 - 已在任何持久化、共享、测试或生产数据库执行的迁移是不可变历史，禁止修改 SQL 内容、版本或文件名。`V1__init_mysql.sql` 以及 `V1.0.2.0.1` 至 `V1.0.6.1.5` 是历史兼容例外，必须原样保留。
 - 尚未发布且只在可丢弃的本地开发库执行过的迁移需要改名时，优先重建本地数据库；必须保留数据时，只能在确认 SQL 内容与 checksum 未变化后同步本地 `flyway_schema_history.version` 和 `script`，随后执行 Flyway validate。禁止用这种方式改写共享环境历史，`flyway repair` 不能把旧版本映射为新版本。
+- 未发布迁移若已在本地执行，用户明确要求修改注释时，需同步本地结构和 `flyway_schema_history.checksum` 并完成 validate；禁止改共享环境或增加代码 fallback。
 - 新增或调整迁移后，至少在 `ai-fusion-video/` 目录运行 `./mvnw -Dtest=FlywayMigrationNamingTests test`，并通过应用启动或等价方式完成 Flyway validate。详细约定见迁移目录下的 `README.md`。
