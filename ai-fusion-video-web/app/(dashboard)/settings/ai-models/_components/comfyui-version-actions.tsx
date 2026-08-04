@@ -156,13 +156,13 @@ export function ComfyUiVersionActions({ workflow, version, onUpdated }: ComfyUiV
       const result = await comfyUiWorkflowApi.testVersion(version.id, buildInputs());
       setTestRun({ versionId: version.id, result });
       if (result.passed) {
-        toast.success("真实试运行成功", { description: `生成 ${result.outputs.length} 个结果，耗时 ${result.durationMillis}ms` });
+        toast.success("试运行成功", { description: `生成 ${result.outputs.length} 个结果，耗时 ${result.durationMillis}ms` });
       } else {
-        toast.error("真实试运行失败", { description: result.message });
+        toast.error("试运行失败", { description: result.message });
       }
       await onUpdated();
     } catch (error) {
-      toastApiError(error, "真实试运行失败");
+      toastApiError(error, "试运行失败");
       await onUpdated();
     } finally {
       setRunning(null);
@@ -186,7 +186,7 @@ export function ComfyUiVersionActions({ workflow, version, onUpdated }: ComfyUiV
   if (!version) {
     return (
       <div className="rounded-lg border border-border/20 bg-background/70 p-4 text-sm text-muted-foreground">
-        先保存工作流版本，才能在线校验、真实试运行和发布。
+        先保存工作流版本，才能在线校验、试运行和发布。
       </div>
     );
   }
@@ -208,7 +208,7 @@ export function ComfyUiVersionActions({ workflow, version, onUpdated }: ComfyUiV
           {version.validationMessage && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{version.validationMessage}</p>}
         </div>
         <div className="rounded-lg border border-border/20 bg-background/70 p-3">
-          <p className="text-xs text-muted-foreground">真实试运行</p>
+          <p className="text-xs text-muted-foreground">试运行</p>
           <p className="mt-1 text-sm font-medium">{statusLabel(version.testStatus, "已成功", "失败", "未运行")}</p>
           {version.testMessage && <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{version.testMessage}</p>}
         </div>
@@ -278,7 +278,7 @@ export function ComfyUiVersionActions({ workflow, version, onUpdated }: ComfyUiV
         </Button>
         <Button variant="secondary" size="sm" onClick={test} disabled={running !== null || version.validationStatus !== 1}>
           {running === "test" ? <Loader2 className="animate-spin" /> : <FlaskConical />}
-          真实试运行
+          试运行
         </Button>
         <Button size="sm" onClick={publish} disabled={running !== null || !publishReady || isActive}>
           {running === "publish" ? <Loader2 className="animate-spin" /> : <Rocket />}

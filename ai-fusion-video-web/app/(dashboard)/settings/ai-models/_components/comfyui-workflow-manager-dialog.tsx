@@ -87,7 +87,7 @@ export function ComfyUiWorkflowManagerDialog({
       <DialogContent className="sm:max-w-[min(96vw,1400px)] h-[min(900px,calc(100vh-2rem))] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle>{apiConfig?.name || "ComfyUI"} · 工作流</DialogTitle>
-          <DialogDescription>工作流固定归属于当前 ComfyUI 供应商。导入 API-format 后，需完成输入输出绑定、在线校验和真实试运行。</DialogDescription>
+          <DialogDescription>通过导入 ComfyUI 的 API-JSON，并且完成输入输出绑定、在线校验和试运行，即可将工作流配置到模型中，在添加模型的时候关联已发布的工作流即可。</DialogDescription>
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">

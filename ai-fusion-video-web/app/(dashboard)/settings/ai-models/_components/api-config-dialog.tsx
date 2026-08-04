@@ -207,7 +207,7 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
                     <SelectItem key={opt.value} value={opt.value} className="text-sm">
                       <ProviderVendorIcon
                         provider={opt.value}
-                        className="size-4"
+                        className="size-4 self-center"
                       />
                       <div className="min-w-0">
                         <div>{opt.label}</div>

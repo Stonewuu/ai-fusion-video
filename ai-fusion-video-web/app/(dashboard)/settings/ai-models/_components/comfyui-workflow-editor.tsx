@@ -228,7 +228,7 @@ export function ComfyUiWorkflowEditor({
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-semibold">{workflow?.name || "新建 ComfyUI 工作流"}</p>
-            <p className="mt-1 text-xs text-muted-foreground">按 6 步完成导入、绑定、真实试运行与发布。</p>
+            <p className="mt-1 text-xs text-muted-foreground">按 6 步完成导入、绑定、试运行与发布。</p>
           </div>
           {workflow && (
             <div className="flex flex-col items-end gap-1.5">

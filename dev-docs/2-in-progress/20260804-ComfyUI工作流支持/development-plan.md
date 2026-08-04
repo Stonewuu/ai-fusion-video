@@ -115,7 +115,7 @@ v0.30.0 精确响应契约：`/system_stats` 的版本字段为 `system.comfyui_
 - `validation_message`：LONGTEXT
 - `test_status`：0 未试运行、1 成功、2 失败
 - `test_message`：LONGTEXT
-- `last_test_time`：最后一次真实试运行时间
+- `last_test_time`：最后一次试运行时间
 - `published`：是否曾发布
 - `create_time`、`update_time`
 

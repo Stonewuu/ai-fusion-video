@@ -480,37 +480,45 @@ export default function AiModelsPage() {
               ) : null)}
             </div>
           </div>
-          <div className="flex items-center gap-1 shrink-0 mt-0.5">
+          <div className="flex items-center gap-2 shrink-0 mt-0.5">
             {config.platform !== "comfyui" && (
               <button
+                type="button"
                 onClick={() => { setFetchModelsConfig(config); setFetchModelsDialogOpen(true); }}
-                className="p-1.5 rounded-md text-sky-500 hover:text-sky-600 hover:bg-sky-500/10 transition-colors"
+                className="flex h-8 w-8 items-center justify-center rounded-xl text-sky-500 transition-colors hover:bg-sky-500/10 hover:text-sky-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 title="获取可用模型列表"
               >
                 <CloudDownload className="h-3.5 w-3.5" />
               </button>
             )}
             {config.platform === "comfyui" && (
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
+                className="hover:bg-primary/10"
                 onClick={() => setWorkflowManagerConfig(config)}
-                className="rounded-md p-1.5 text-primary transition-colors hover:bg-primary/10"
                 title="管理 ComfyUI 工作流"
                 aria-label={`管理 ${config.name} 的 ComfyUI 工作流`}
               >
-                <Workflow className="h-3.5 w-3.5" />
-              </button>
+                <span className="inline-flex items-center gap-1.5 text-primary">
+                  <Workflow />
+                  管理工作流
+                </span>
+              </Button>
             )}
             <button
+              type="button"
               onClick={() => { setEditingConfig(config); setConfigDialogOpen(true); }}
-              className="p-1.5 rounded-md text-emerald-500 hover:text-emerald-600 hover:bg-emerald-500/10 transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-emerald-500 transition-colors hover:bg-emerald-500/10 hover:text-emerald-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               title="编辑 API 配置"
             >
               <Edit2 className="h-3.5 w-3.5" />
             </button>
             <button
+              type="button"
               onClick={() => handleDeleteConfig(config.id)}
-              className="p-1.5 rounded-md text-rose-500 hover:text-rose-600 hover:bg-rose-500/10 transition-colors"
+              className="flex h-8 w-8 items-center justify-center rounded-xl text-rose-500 transition-colors hover:bg-rose-500/10 hover:text-rose-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               title="删除 API 配置"
             >
               <Trash2 className="h-3.5 w-3.5" />
