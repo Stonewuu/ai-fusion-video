@@ -31,6 +31,7 @@ import { cn } from "@/lib/utils";
 import { ComfyUiBindingEditor } from "./comfyui-binding-editor";
 import { ComfyUiVersionActions } from "./comfyui-version-actions";
 import {
+  formatComfyUiNodeLabel,
   parseComfyUiNodes,
   parseInputBindingsJson,
   parseOutputBindingsJson,
@@ -230,26 +231,32 @@ export function ComfyUiWorkflowEditor({
             <p className="mt-1 text-xs text-muted-foreground">按 6 步完成导入、绑定、真实试运行与发布。</p>
           </div>
           {workflow && (
-            <div className="flex items-center gap-2">
-              <Select
-                value={selectedVersion ? String(selectedVersion.id) : undefined}
-                onValueChange={value => {
-                  const version = versions.find(item => item.id === Number(value)) || null;
-                  setSelectedVersion(version);
-                  setVersionDraft(version ? versionToDraft(version) : EMPTY_VERSION);
-                }}
-                items={versionOptions}
-              >
-                <SelectTrigger className="w-44 text-xs"><SelectValue placeholder={versionsLoading ? "加载中" : "选择版本"} /></SelectTrigger>
-                <SelectContent className="text-xs"><SelectGroup>{versionOptions.map(option => <SelectItem key={option.value} value={option.value} className="text-xs">{option.label}</SelectItem>)}</SelectGroup></SelectContent>
-              </Select>
-              <Button variant="outline" onClick={() => { setSelectedVersion(null); setVersionDraft({ ...versionDraft, id: undefined }); setStep(1); }}>
-                <Copy />{selectedVersion ? "复制为新版本" : "新建版本"}
-              </Button>
-              {selectedVersion && !selectedVersion.published && (
-                <Button variant="destructive-ghost" size="icon" aria-label="删除工作流草稿" onClick={() => void deleteDraftVersion()}>
-                  <Trash2 />
+            <div className="flex flex-col items-end gap-1.5">
+              <div className="flex items-center gap-2">
+                <Select
+                  value={selectedVersion ? String(selectedVersion.id) : null}
+                  onValueChange={value => {
+                    const version = versions.find(item => item.id === Number(value)) || null;
+                    setSelectedVersion(version);
+                    setVersionDraft(version ? versionToDraft(version) : EMPTY_VERSION);
+                  }}
+                  items={versionOptions}
+                  disabled={versionsLoading || versions.length === 0}
+                >
+                  <SelectTrigger className="w-44 text-xs"><SelectValue placeholder={versionsLoading ? "加载中" : versions.length === 0 ? "暂无版本" : "选择版本"} /></SelectTrigger>
+                  <SelectContent className="text-xs"><SelectGroup>{versionOptions.map(option => <SelectItem key={option.value} value={option.value} className="text-xs">{option.label}</SelectItem>)}</SelectGroup></SelectContent>
+                </Select>
+                <Button variant="outline" onClick={() => { setSelectedVersion(null); setVersionDraft({ ...versionDraft, id: undefined }); setStep(1); }}>
+                  <Copy />{selectedVersion ? "复制为新版本" : "新建版本"}
                 </Button>
+                {selectedVersion && !selectedVersion.published && (
+                  <Button variant="destructive-ghost" size="icon" aria-label="删除工作流草稿" onClick={() => void deleteDraftVersion()}>
+                    <Trash2 />
+                  </Button>
+                )}
+              </div>
+              {!versionsLoading && versions.length === 0 && (
+                <p className="text-xs text-muted-foreground">暂无工作流版本，请点击“新建版本”开始导入。</p>
               )}
             </div>
           )}
@@ -320,7 +327,7 @@ export function ComfyUiWorkflowEditor({
         {step === 2 && workflow && (
           <div className="space-y-3">
             {parsedNodes.error ? <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{parsedNodes.error}</div> : <p className="text-sm text-muted-foreground">解析到 {parsedNodes.nodes.length} 个节点。绑定前请确认节点类型与目标 ComfyUI 实例一致。</p>}
-            <div className="grid gap-2 md:grid-cols-2">{parsedNodes.nodes.map(node => <div key={node.id} className="rounded-lg border border-border/20 bg-background/70 p-3"><p className="font-mono text-xs font-medium">{node.id} · {node.classType}</p><p className="mt-1 text-[11px] text-muted-foreground">{node.inputNames.join("、") || "无输入"}</p></div>)}</div>
+            <div className="grid gap-2 md:grid-cols-2">{parsedNodes.nodes.map(node => <div key={node.id} className="rounded-lg border border-border/20 bg-background/70 p-3"><p className="font-mono text-xs font-medium">{formatComfyUiNodeLabel(node)}</p><p className="mt-1 text-[11px] text-muted-foreground">{node.inputNames.join("、") || "无输入"}</p></div>)}</div>
           </div>
         )}
 

@@ -1,17 +1,21 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CheckCircle2, FlaskConical, Loader2, Rocket, ShieldCheck } from "lucide-react";
+import { CheckCircle2, ExternalLink, FileText, FlaskConical, Loader2, Rocket, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { SafeImage } from "@/components/ui/safe-image";
 import { Textarea } from "@/components/ui/textarea";
+import { resolveMediaUrl } from "@/lib/api/client";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import {
   comfyUiWorkflowApi,
   type ComfyUiBindingValueType,
+  type ComfyUiStoredOutput,
   type ComfyUiWorkflow,
+  type ComfyUiWorkflowTestResult,
   type ComfyUiWorkflowVersion,
 } from "@/lib/api/comfyui-workflow";
 import { parseInputBindingsJson } from "./comfyui-workflow-support";
@@ -35,9 +39,69 @@ function inputKind(valueType: ComfyUiBindingValueType): "text" | "number" | "boo
   return "text";
 }
 
+const OUTPUT_MEDIA_LABELS: Record<string, string> = {
+  image: "图片",
+  video: "视频",
+  audio: "音频",
+  file: "文件",
+};
+
+const OUTPUT_ROLE_LABELS: Record<string, string> = {
+  primary: "主结果",
+  cover: "视频封面",
+  auxiliary: "附加结果",
+};
+
+function formatFileSize(size: number): string {
+  if (size < 1024) return `${size} B`;
+  if (size < 1024 * 1024) return `${(size / 1024).toFixed(size < 10 * 1024 ? 1 : 0)} KB`;
+  return `${(size / 1024 / 1024).toFixed(size < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
+function TestOutputPreview({ output, index }: { output: ComfyUiStoredOutput; index: number }) {
+  const source = resolveMediaUrl(output.url) || output.url;
+  const label = `${OUTPUT_ROLE_LABELS[output.role] || output.role} ${index + 1}`;
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border/20 bg-card">
+      <div className="flex aspect-video items-center justify-center overflow-hidden bg-muted/30">
+        {output.mediaType === "image" ? (
+          <SafeImage src={source} alt={label} className="size-full object-contain" />
+        ) : output.mediaType === "video" ? (
+          <video src={source} controls preload="metadata" className="size-full bg-black object-contain" aria-label={label} />
+        ) : output.mediaType === "audio" ? (
+          <div className="w-full p-4">
+            <audio src={source} controls preload="metadata" className="w-full" aria-label={label} />
+          </div>
+        ) : (
+          <FileText className="size-10 text-muted-foreground" />
+        )}
+      </div>
+      <div className="flex items-center justify-between gap-2 p-3">
+        <div className="min-w-0">
+          <p className="truncate text-xs font-medium">{label}</p>
+          <p className="mt-1 text-[11px] text-muted-foreground">
+            {OUTPUT_MEDIA_LABELS[output.mediaType] || output.mediaType} · {formatFileSize(output.size)}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="icon-sm"
+          aria-label={`打开${label}`}
+          title="打开原文件"
+          render={<a href={source} target="_blank" rel="noreferrer" />}
+        >
+          <ExternalLink />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function ComfyUiVersionActions({ workflow, version, onUpdated }: ComfyUiVersionActionsProps) {
   const [running, setRunning] = useState<"validate" | "test" | "publish" | null>(null);
   const [testValues, setTestValues] = useState<Record<string, string>>({ prompt: "一张电影感的测试画面" });
+  const [testRun, setTestRun] = useState<{ versionId: number; result: ComfyUiWorkflowTestResult } | null>(null);
 
   const testFields = useMemo(() => {
     if (!version) return [];
@@ -86,8 +150,10 @@ export function ComfyUiVersionActions({ workflow, version, onUpdated }: ComfyUiV
   const test = async () => {
     if (!version) return;
     setRunning("test");
+    setTestRun(null);
     try {
       const result = await comfyUiWorkflowApi.testVersion(version.id, buildInputs());
+      setTestRun({ versionId: version.id, result });
       if (result.passed) {
         toast.success("真实试运行成功", { description: `生成 ${result.outputs.length} 个结果，耗时 ${result.durationMillis}ms` });
       } else {
@@ -126,6 +192,7 @@ export function ComfyUiVersionActions({ workflow, version, onUpdated }: ComfyUiV
 
   const isActive = workflow.activeVersionId === version.id;
   const publishReady = version.validationStatus === 1 && version.testStatus === 1;
+  const testResult = testRun?.versionId === version.id ? testRun.result : null;
 
   return (
     <div className="space-y-4">
@@ -179,6 +246,29 @@ export function ComfyUiVersionActions({ workflow, version, onUpdated }: ComfyUiV
           </div>
         )}
       </div>
+
+      {testResult && (
+        <div className="space-y-3 rounded-lg border border-border/20 bg-background/70 p-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <p className="text-sm font-medium">本次试运行结果</p>
+              <p className="mt-1 text-xs text-muted-foreground">{testResult.message}</p>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {testResult.outputs.length} 个结果 · {(testResult.durationMillis / 1000).toFixed(1)} 秒
+            </p>
+          </div>
+          {testResult.outputs.length > 0 ? (
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {testResult.outputs.map((output, index) => (
+                <TestOutputPreview key={`${output.url}-${output.role}-${index}`} output={output} index={index} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">本次试运行没有返回可渲染的媒体结果。</p>
+          )}
+        </div>
+      )}
 
       <div className="flex flex-wrap justify-end gap-2">
         <Button variant="outline" size="sm" onClick={validate} disabled={running !== null}>

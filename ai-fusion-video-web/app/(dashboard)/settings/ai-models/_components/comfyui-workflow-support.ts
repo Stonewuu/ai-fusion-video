@@ -8,6 +8,7 @@ import type {
 export interface ComfyUiNodeOption {
   id: string;
   classType: string;
+  title?: string;
   inputNames: string[];
 }
 
@@ -50,8 +51,8 @@ export const COMFYUI_MEDIA_TYPE_OPTIONS = [
 
 export const COMFYUI_OUTPUT_ROLE_OPTIONS = [
   { value: "primary", label: "主结果" },
-  { value: "cover", label: "封面" },
-  { value: "auxiliary", label: "辅助结果" },
+  { value: "cover", label: "视频封面" },
+  { value: "auxiliary", label: "附加结果" },
 ] as const;
 
 export function getComfyUiBusinessFields(modelType: ComfyUiWorkflowModelType): string[] {
@@ -71,19 +72,30 @@ export function parseComfyUiNodes(apiWorkflowJson: string): ComfyUiNodeOption[] 
     throw new Error("检测到 UI-format，请在 ComfyUI 中使用 Export (API) 导出");
   }
   return Object.entries(parsed).map(([id, rawNode]) => {
-    const node = rawNode as { class_type?: unknown; inputs?: unknown };
+    const node = rawNode as { class_type?: unknown; inputs?: unknown; _meta?: unknown };
     if (!node || typeof node !== "object" || typeof node.class_type !== "string") {
       throw new Error(`节点 ${id} 缺少 class_type`);
     }
     if (!node.inputs || Array.isArray(node.inputs) || typeof node.inputs !== "object") {
       throw new Error(`节点 ${id} 缺少 inputs 对象`);
     }
+    const metadata = node._meta && !Array.isArray(node._meta) && typeof node._meta === "object"
+      ? node._meta as { title?: unknown }
+      : undefined;
+    const title = typeof metadata?.title === "string" ? metadata.title.trim() : "";
     return {
       id,
       classType: node.class_type,
+      title: title || undefined,
       inputNames: Object.keys(node.inputs as Record<string, unknown>),
     };
   });
+}
+
+export function formatComfyUiNodeLabel(node: ComfyUiNodeOption): string {
+  return node.title
+    ? `${node.id} · ${node.title}（${node.classType}）`
+    : `${node.id} · ${node.classType}`;
 }
 
 export function flattenInputBindings(bindings: ComfyUiInputBindings): FlatComfyUiInputBinding[] {

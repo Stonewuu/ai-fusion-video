@@ -25,6 +25,7 @@ import {
   COMFYUI_OUTPUT_ROLE_OPTIONS,
   COMFYUI_VALUE_TYPE_OPTIONS,
   flattenInputBindings,
+  formatComfyUiNodeLabel,
   getComfyUiBusinessFields,
   groupInputBindings,
   parseComfyUiNodes,
@@ -54,8 +55,10 @@ function OptionSelect({
 }) {
   return (
     <Select
-      value={value || undefined}
-      onValueChange={next => onChange(String(next))}
+      value={value || null}
+      onValueChange={next => {
+        if (next !== null) onChange(String(next));
+      }}
       items={options.map(option => ({ value: option.value, label: option.label }))}
     >
       <SelectTrigger className="w-full text-xs">
@@ -93,7 +96,7 @@ export function ComfyUiBindingEditor({
 
   const nodeOptions = nodes.map(node => ({
     value: node.id,
-    label: `${node.id} · ${node.classType}`,
+    label: formatComfyUiNodeLabel(node),
   }));
   const inputRows = flattenInputBindings(inputBindings);
 
@@ -126,7 +129,7 @@ export function ComfyUiBindingEditor({
     onOutputBindingsChange([
       ...outputBindings,
       {
-        nodeId: nodes[0]?.id || "",
+        nodeId: "",
         mediaType: modelType === 2 ? "image" : "video",
         role: outputBindings.length === 0 ? "primary" : "auxiliary",
       },
@@ -228,11 +231,15 @@ export function ComfyUiBindingEditor({
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-sm font-medium">结果输出绑定</p>
-          <p className="mt-1 text-xs text-muted-foreground">图片工作流必须有 primary image；视频工作流必须有 primary video。</p>
+          <p className="mt-1 text-xs text-muted-foreground">选择会向 ComfyUI 任务历史写入文件的最终节点，如 SaveImage 或视频合成/保存节点；不要选择采样、解码等中间节点。</p>
         </div>
         <Button variant="outline" size="sm" onClick={addOutputRow}>
           <Plus />添加输出
         </Button>
+      </div>
+
+      <div className="rounded-lg border border-border/20 bg-background/70 p-3 text-xs text-muted-foreground">
+        平台会从所选节点返回的文件中按媒体类型提取结果，不需要选择节点连线上的输出插槽。主结果用于生成成品；视频封面仅用于视频任务的封面图；附加结果不会作为主图或主视频。
       </div>
 
       {outputBindings.length === 0 ? (
@@ -241,30 +248,41 @@ export function ComfyUiBindingEditor({
         <div key={`${row.nodeId}-${row.mediaType}-${row.role}-${index}`} className="rounded-lg border border-border/20 bg-background/70 p-3">
           <div className="grid gap-2 md:grid-cols-[1.5fr_1fr_1fr_36px]">
             <div className="space-y-1.5">
-              <Label className="text-[11px] text-muted-foreground">输出节点</Label>
+              <Label className="text-[11px] text-muted-foreground">文件输出节点</Label>
               <OptionSelect
                 value={row.nodeId}
                 options={nodeOptions}
-                placeholder="选择节点"
+                placeholder="选择保存结果的节点"
                 onChange={nodeId => onOutputBindingsChange(outputBindings.map((item, rowIndex) => rowIndex === index ? { ...item, nodeId } : item))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] text-muted-foreground">媒体类型</Label>
+              <Label className="text-[11px] text-muted-foreground">提取媒体类型</Label>
               <OptionSelect
                 value={row.mediaType}
-                options={COMFYUI_MEDIA_TYPE_OPTIONS}
+                options={COMFYUI_MEDIA_TYPE_OPTIONS.filter(option => {
+                  if (row.role === "primary") return option.value === (modelType === 2 ? "image" : "video");
+                  if (row.role === "cover") return option.value === "image";
+                  return true;
+                })}
                 placeholder="选择媒体"
                 onChange={mediaType => onOutputBindingsChange(outputBindings.map((item, rowIndex) => rowIndex === index ? { ...item, mediaType: mediaType as ComfyUiOutputMediaType } : item))}
               />
             </div>
             <div className="space-y-1.5">
-              <Label className="text-[11px] text-muted-foreground">结果角色</Label>
+              <Label className="text-[11px] text-muted-foreground">结果用途</Label>
               <OptionSelect
                 value={row.role}
-                options={COMFYUI_OUTPUT_ROLE_OPTIONS}
-                placeholder="选择角色"
-                onChange={role => onOutputBindingsChange(outputBindings.map((item, rowIndex) => rowIndex === index ? { ...item, role: role as ComfyUiOutputRole } : item))}
+                options={COMFYUI_OUTPUT_ROLE_OPTIONS.filter(option => modelType === 3 || option.value !== "cover")}
+                placeholder="选择用途"
+                onChange={role => onOutputBindingsChange(outputBindings.map((item, rowIndex) => {
+                  if (rowIndex !== index) return item;
+                  const nextRole = role as ComfyUiOutputRole;
+                  const requiredMediaType = nextRole === "primary"
+                    ? modelType === 2 ? "image" : "video"
+                    : nextRole === "cover" ? "image" : item.mediaType;
+                  return { ...item, role: nextRole, mediaType: requiredMediaType };
+                }))}
               />
             </div>
             <div className="flex items-end">

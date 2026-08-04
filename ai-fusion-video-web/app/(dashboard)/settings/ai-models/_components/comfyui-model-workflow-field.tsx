@@ -111,8 +111,10 @@ export function ComfyUiModelWorkflowField({
         </p>
       </div>
       <Select
-        value={value}
-        onValueChange={next => void selectWorkflow(Number(next))}
+        value={value ?? null}
+        onValueChange={next => {
+          if (next !== null) void selectWorkflow(Number(next));
+        }}
         items={visibleWorkflows.map(workflow => ({ value: workflow.id, label: `${workflow.name} (${workflow.code})` }))}
       >
         <SelectTrigger className="w-full text-sm">
