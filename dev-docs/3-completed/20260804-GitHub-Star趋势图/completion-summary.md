@@ -35,3 +35,11 @@
 无代码遗留事项。GitHub Pages 的首次启用和首次手动运行属于仓库外部配置。
 
 实现已通过提交 `a1e70c8` 推送至 `v-1.1.0`，并纳入草稿 PR `#52`。
+
+## 迁移说明
+
+由于 GitHub 新权限限制拒绝仓库内置 `GITHUB_TOKEN` 读取 Stargazers 列表，生成器与 Pages 工作流已迁移到个人主页仓库 `Stonewuu/Stonewuu`。本仓库只保留 README 图片引用，不再包含 Star History 脚本、测试或工作流，因此不会参与本仓库的 Tag 发版或其他构建。
+
+迁移后的固定地址为：
+
+`https://stonewuu.github.io/Stonewuu/star-history/Stonewuu/ai-fusion-video.svg`
