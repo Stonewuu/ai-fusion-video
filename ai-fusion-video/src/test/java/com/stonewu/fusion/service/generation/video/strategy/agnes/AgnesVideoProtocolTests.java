@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.generation.video.strategy.agnes;
 
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.VideoTask;
@@ -13,7 +14,10 @@ import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import okio.Buffer;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 class AgnesVideoProtocolTests {
@@ -76,6 +80,24 @@ class AgnesVideoProtocolTests {
         assertThat(json.getJSONObject("extra_body").getJSONArray("image").toList(String.class))
                 .containsExactly("https://example.com/a.png", "https://example.com/b.png");
         assertThat(json.getJSONObject("extra_body").getStr("mode")).isEqualTo("keyframes");
+    }
+
+    @Test
+    void rejectsConsistencyReferenceImagesInsteadOfTreatingThemAsKeyframes() {
+        VideoTask task = VideoTask.builder()
+                .prompt("preserve the characters between keyframes")
+                .firstFrameImageUrl("https://example.com/first.png")
+                .lastFrameImageUrl("https://example.com/last.png")
+                .referenceImageUrls(JSONUtil.toJsonStr(List.of(
+                        "https://example.com/style.png",
+                        "https://example.com/character.png")))
+                .build();
+
+        assertThatThrownBy(() -> adapter.buildSubmitBody(
+                context(task, JSONUtil.createObj().set("frameRate", 24))))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("不支持独立的风格、角色或场景参考图")
+                .hasMessageContaining("referenceImageUrls");
     }
 
     @Test

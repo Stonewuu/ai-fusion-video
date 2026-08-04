@@ -352,11 +352,15 @@ public class OpenAiCompatibleVideoProtocolSupport {
     }
 
     public List<String> resolveAgnesImageInputs(VideoTask task) {
+        List<String> referenceImages = parseJsonUrls(task.getReferenceImageUrls());
+        if (!referenceImages.isEmpty()) {
+            throw new BusinessException("Agnes Video 不支持独立的风格、角色或场景参考图；"
+                    + "image 数组仅用于首尾关键帧，请不要传 referenceImageUrls");
+        }
         Set<String> ordered = new LinkedHashSet<>();
         if (StrUtil.isNotBlank(task.getFirstFrameImageUrl())) {
             ordered.add(task.getFirstFrameImageUrl().trim());
         }
-        ordered.addAll(parseJsonUrls(task.getReferenceImageUrls()));
         if (StrUtil.isNotBlank(task.getLastFrameImageUrl())) {
             ordered.add(task.getLastFrameImageUrl().trim());
         }

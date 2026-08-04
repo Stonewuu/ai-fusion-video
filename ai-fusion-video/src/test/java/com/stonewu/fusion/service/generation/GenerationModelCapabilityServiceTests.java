@@ -488,8 +488,9 @@ class GenerationModelCapabilityServiceTests {
 
         assertTrue(capability.supportsFirstFrame());
         assertTrue(capability.supportsLastFrame());
-        assertTrue(capability.supportsReferenceImages());
-        assertEquals(16, capability.maxReferenceImages());
+        assertFalse(capability.supportsReferenceImages());
+        assertEquals(2, capability.maxImageInputs());
+        assertEquals(0, capability.maxReferenceImages());
         assertEquals(List.of("url", "data_uri"), capability.referenceImageInputFormats());
         assertEquals(List.of("480p", "720p", "1080p"),
                 JSONUtil.toList(snapshot.getJSONArray("supportedResolutions"), String.class));
