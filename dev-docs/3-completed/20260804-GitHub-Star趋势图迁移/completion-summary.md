@@ -4,7 +4,8 @@
 
 - Star History 生成器和定时 Pages 工作流归属 `Stonewuu/Stonewuu`。
 - `STAR_HISTORY_REPOSITORIES` 控制生成目标；空值默认只生成 `Stonewuu/ai-fusion-video`。
-- `STAR_HISTORY_TOKEN` 提供用户身份，用于满足 GitHub 对 Stargazers 列表的管理员或协作者限制。
+- 工作流只读取不受限制的公开仓库 `stargazers_count`，使用 Pages 上一次部署的 JSON 作为历史状态，不需要 PAT 或自定义 Secret。
+- `ai-fusion-video` 的现有历史曲线以一次性种子迁入 Profile 仓库；新增仓库从首次成功运行开始采样。
 - 本仓库只保留 README 图片引用，不再运行 Star History Action。
 
 ## 固定地址
@@ -33,7 +34,6 @@
 
 ## 用户配置
 
-1. 在 Profile 仓库添加 Secret `STAR_HISTORY_TOKEN`。
-2. 可选添加 Variable `STAR_HISTORY_REPOSITORIES`。
-3. 将 Profile 仓库 Pages Source 设置为 `GitHub Actions`。
-4. 合并 Profile PR 后手动运行一次 `Generate Repository Star History`。
+1. 可选添加 Variable `STAR_HISTORY_REPOSITORIES`。
+2. 将 Profile 仓库 Pages Source 设置为 `GitHub Actions`。
+3. 合并 Profile PR 后手动运行一次 `Generate Repository Star History`。
