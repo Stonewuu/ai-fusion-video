@@ -41,6 +41,7 @@ import { CapabilityPresetSelect } from "./capability-preset-select";
 import { ModelConfigForm } from "./model-config-form";
 import { MultimodalCapabilityEditor } from "./multimodal-capability-editor";
 import { ReasoningEffortLevelsEditor } from "./reasoning-effort-levels-editor";
+import { ComfyUiModelWorkflowField } from "./comfyui-model-workflow-field";
 import {
   parseConfigJson,
   mergeConfigObjects,
@@ -116,6 +117,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           reasoningEffortLevels: editingModel.reasoningEffortLevels ?? [],
           contextWindow: editingModel.contextWindow ?? 0,
           apiConfigId: editingModel.apiConfigId ?? undefined,
+          comfyuiWorkflowId: editingModel.comfyuiWorkflowId ?? undefined,
           status: editingModel.status,
         });
       } else {
@@ -134,6 +136,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           reasoningEffortLevels: [],
           contextWindow: 0,
           apiConfigId: defaultApiConfigId,
+          comfyuiWorkflowId: undefined,
         });
       }
       setShowAdvanced(false);
@@ -155,6 +158,8 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
 
   const selectedApiConfig = apiConfigs.find(c => c.id === form.apiConfigId);
   const selectedPlatform = selectedApiConfig?.platform;
+  const requiresComfyUiWorkflow = selectedPlatform === "comfyui" && (form.modelType === 2 || form.modelType === 3);
+
   const selectedCapabilityPreset = form.capabilityPresetCode
     ? presets.find(p => p.code === form.capabilityPresetCode) || null
     : null;
@@ -178,6 +183,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
     ...protocolOptions,
   ];
   const protocolConfigured = !hasRequestProtocol || Boolean(effectiveModelProtocol);
+  const comfyUiWorkflowConfigured = !requiresComfyUiWorkflow || Boolean(form.comfyuiWorkflowId);
   const compatibleCapabilityPresets = presets.filter(preset => isCapabilityPresetCompatible({
     preset,
     modelType: form.modelType,
@@ -266,7 +272,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.code.trim() || !form.apiConfigId || !protocolConfigured) return;
+    if (!form.name.trim() || !form.code.trim() || !form.apiConfigId || !protocolConfigured || !comfyUiWorkflowConfigured) return;
     setSaving(true);
     try {
       const normalizedConfig = sanitizeModelConfigJson({
@@ -299,6 +305,11 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           reasoningEffortLevels: form.reasoningEffortLevels,
           contextWindow: form.contextWindow,
           apiConfigId: form.apiConfigId,
+          comfyuiWorkflowId: requiresComfyUiWorkflow
+            ? form.comfyuiWorkflowId
+            : editingModel.comfyuiWorkflowId
+              ? 0
+              : undefined,
           status: form.status,
         };
         await aiModelApi.update(updateReq);
@@ -419,6 +430,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                   }
                   if (nextType !== prev.modelType) {
                     next.modelProtocol = "";
+                    next.comfyuiWorkflowId = undefined;
                   }
                   next = detachIncompatibleCapabilityPreset(prev, next, selectedApiConfig);
                   next.config = sanitizeModelConfigJson({
@@ -457,7 +469,17 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                 const nextApiConfig = apiConfigs.find(c => c.id === nextApiConfigId);
                 const nextPlatform = nextApiConfig?.platform;
                 setForm(prev => {
-                  let next: AiModelFormState = { ...prev, apiConfigId: nextApiConfigId };
+                  const nextModelType = nextPlatform === "comfyui" && prev.modelType !== 2 && prev.modelType !== 3
+                    ? 2
+                    : prev.modelType;
+                  let next: AiModelFormState = {
+                    ...prev,
+                    apiConfigId: nextApiConfigId,
+                    modelType: nextModelType,
+                    modelProtocol: nextPlatform === "comfyui" ? "" : prev.modelProtocol,
+                    comfyuiWorkflowId: undefined,
+                    maxConcurrency: nextPlatform === "comfyui" ? 1 : prev.maxConcurrency,
+                  };
                   if (!supportsReasoningConfig(nextPlatform)) {
                     next.supportReasoning = false;
                     next.reasoningEffortLevels = [];
@@ -492,6 +514,21 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
             </Select>
           </div>
           </div>
+
+          {requiresComfyUiWorkflow && (
+            <ComfyUiModelWorkflowField
+              apiConfigId={form.apiConfigId!}
+              modelType={form.modelType as 2 | 3}
+              value={form.comfyuiWorkflowId}
+              configJson={form.config}
+              onChange={(workflowId, config) => setForm(previous => ({
+                ...previous,
+                comfyuiWorkflowId: workflowId,
+                capabilityPresetCode: "",
+                config,
+              }))}
+            />
+          )}
 
           {hasRequestProtocol && (
             <div className="rounded-xl border border-primary/20 bg-primary/[0.035] p-3 space-y-3">
@@ -741,7 +778,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           <DialogClose render={<Button variant="outline" size="sm" />}>
             取消
           </DialogClose>
-          <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim() || !form.code.trim() || !form.apiConfigId || !protocolConfigured}>
+          <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim() || !form.code.trim() || !form.apiConfigId || !protocolConfigured || !comfyUiWorkflowConfigured}>
             {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
             {editingModel ? "保存" : "创建"}
           </Button>

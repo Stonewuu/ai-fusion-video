@@ -59,4 +59,11 @@ public class ImageGenerationController {
         return CommonResult.success(imageGenerationService.pageByUser(userId,
                 pageParam.getPageNo(), pageParam.getPageSize()));
     }
+
+    @Operation(summary = "取消图片生成任务")
+    @PostMapping("/{taskId}/cancel")
+    public CommonResult<Boolean> cancel(@PathVariable String taskId) {
+        return CommonResult.success(imageGenerationConsumer.cancelTask(
+                taskId, requireCurrentUserId()));
+    }
 }

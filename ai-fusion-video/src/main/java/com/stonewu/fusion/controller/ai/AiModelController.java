@@ -53,6 +53,7 @@ public class AiModelController {
             .contextWindow(reqVO.getContextWindow() != null && reqVO.getContextWindow() > 0
                 ? reqVO.getContextWindow() : null)
                 .apiConfigId(reqVO.getApiConfigId())
+                .comfyuiWorkflowId(reqVO.getComfyuiWorkflowId())
                 .build();
         return success(aiModelService.createAiModel(model));
     }
@@ -68,7 +69,7 @@ public class AiModelController {
                 reqVO.getApiConfigId(), reqVO.getMaxConcurrency(), reqVO.getMultimodalInputTypes(),
                 reqVO.getMultimodalInputTransports(),
                 reqVO.getSupportReasoning(), reqVO.getReasoningEffortLevels(),
-                reqVO.getContextWindow());
+                reqVO.getContextWindow(), reqVO.getComfyuiWorkflowId());
         return success(true);
     }
 

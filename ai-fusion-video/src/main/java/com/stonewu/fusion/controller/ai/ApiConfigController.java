@@ -6,10 +6,12 @@ import com.stonewu.fusion.controller.ai.vo.ApiConfigPageReqVO;
 import com.stonewu.fusion.controller.ai.vo.ApiConfigRespVO;
 import com.stonewu.fusion.controller.ai.vo.ApiConfigSaveReqVO;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
+import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiConnectionRespVO;
 import com.stonewu.fusion.convert.ai.ApiConfigConvert;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.provider.AiProviderService;
+import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowValidationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +32,7 @@ public class ApiConfigController {
 
     private final ApiConfigService apiConfigService;
     private final AiProviderService aiProviderService;
+    private final ComfyUiWorkflowValidationService comfyUiWorkflowValidationService;
 
     @PostMapping("/create")
     @Operation(summary = "创建API配置")
@@ -104,5 +107,13 @@ public class ApiConfigController {
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<List<RemoteModelVO>> remoteModels(@RequestParam("id") Long id) {
         return success(aiProviderService.listRemoteModels(id));
+    }
+
+    @PostMapping("/test-comfyui-connectivity")
+    @Operation(summary = "检测 ComfyUI Native API 连接")
+    @PreAuthorize("hasRole('ADMIN')")
+    public CommonResult<ComfyUiConnectionRespVO> testComfyUiConnectivity(
+            @RequestParam("id") Long id) {
+        return success(comfyUiWorkflowValidationService.testConnection(id));
     }
 }

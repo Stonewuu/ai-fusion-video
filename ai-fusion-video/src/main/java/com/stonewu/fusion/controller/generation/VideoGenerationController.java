@@ -59,4 +59,11 @@ public class VideoGenerationController {
         return CommonResult.success(videoGenerationService.pageByUser(userId,
                 pageParam.getPageNo(), pageParam.getPageSize()));
     }
+
+    @Operation(summary = "取消视频生成任务")
+    @PostMapping("/{taskId}/cancel")
+    public CommonResult<Boolean> cancel(@PathVariable String taskId) {
+        return CommonResult.success(videoGenerationConsumer.cancelTask(
+                taskId, requireCurrentUserId()));
+    }
 }

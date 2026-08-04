@@ -9,6 +9,7 @@ import com.stonewu.fusion.controller.ai.vo.AiModelConnectivityRespVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
+import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -37,6 +38,7 @@ public class AiModelService {
     private final ModelPresetService modelPresetService;
     private final AiModelMetadataResolver aiModelMetadataResolver;
     private final ChatModelFactory chatModelFactory;
+    private final ComfyUiWorkflowService comfyUiWorkflowService;
 
     @Transactional
     public Long createAiModel(AiModel aiModel) {
@@ -45,6 +47,7 @@ public class AiModelService {
         normalizeMetadata(aiModel);
         validateRequestProtocol(aiModel);
         validateCapabilityPreset(aiModel);
+        validateComfyUiBinding(aiModel);
         try {
             aiModelMapper.insert(aiModel);
         } catch (DuplicateKeyException e) {
@@ -64,7 +67,7 @@ public class AiModelService {
                                Integer maxConcurrency, List<String> multimodalInputTypes,
                                Map<String, List<String>> multimodalInputTransports,
                                Boolean supportReasoning, List<String> reasoningEffortLevels,
-                               Integer contextWindow) {
+                               Integer contextWindow, Long comfyuiWorkflowId) {
         AiModel model = aiModelMapper.selectById(id);
         if (model == null) throw new BusinessException(404, "AI模型不存在");
         Long nextApiConfigId = apiConfigId != null ? apiConfigId : model.getApiConfigId();
@@ -89,9 +92,13 @@ public class AiModelService {
         if (reasoningEffortLevels != null) model.setReasoningEffortLevels(reasoningEffortLevels);
         if (contextWindow != null) model.setContextWindow(contextWindow > 0 ? contextWindow : null);
         if (apiConfigId != null) model.setApiConfigId(apiConfigId);
+        if (comfyuiWorkflowId != null) {
+            model.setComfyuiWorkflowId(comfyuiWorkflowId > 0 ? comfyuiWorkflowId : null);
+        }
         normalizeMetadata(model);
         validateRequestProtocol(model);
         validateCapabilityPreset(model);
+        validateComfyUiBinding(model);
         try {
             aiModelMapper.updateById(model);
         } catch (DuplicateKeyException e) {
@@ -111,6 +118,17 @@ public class AiModelService {
 
     public AiModel getById(Long id) {
         return aiModelMapper.selectById(id);
+    }
+
+    public AiModel getByCodeAndApiConfig(String code, Long apiConfigId) {
+        if (StrUtil.isBlank(code) || apiConfigId == null) {
+            return null;
+        }
+        return aiModelMapper.selectOne(new LambdaQueryWrapper<AiModel>()
+                .eq(AiModel::getCode, code)
+                .eq(AiModel::getApiConfigId, apiConfigId)
+                .eq(AiModel::getStatus, 1)
+                .last("LIMIT 1"));
     }
 
     public PageResult<AiModel> getPage(String name, String code, Integer modelType, Integer status,
@@ -268,6 +286,21 @@ public class AiModelService {
             throw new BusinessException(400, capability
                     + "模型未配置有效请求协议：请在模型中设置覆盖协议，或在 API 配置中设置对应的默认协议");
         }
+    }
+
+    private void validateComfyUiBinding(AiModel model) {
+        if (model == null || model.getApiConfigId() == null) {
+            return;
+        }
+        var apiConfig = apiConfigService.getById(model.getApiConfigId());
+        if (apiConfig == null) {
+            return;
+        }
+        if (!ComfyUiWorkflowService.PLATFORM.equalsIgnoreCase(apiConfig.getPlatform())) {
+            model.setComfyuiWorkflowId(null);
+            return;
+        }
+        comfyUiWorkflowService.validateModelBinding(model, apiConfig);
     }
 
     private void clearOtherDefaults(Integer modelType, Long excludeId) {
