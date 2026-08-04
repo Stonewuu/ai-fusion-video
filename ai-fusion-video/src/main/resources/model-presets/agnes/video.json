@@ -5,9 +5,10 @@
     "platform": "openai_compatible",
     "modelProtocol": "agnes",
     "modelType": 3,
-    "description": "Agnes Video V2.0 视频生成模型，使用 OpenAI 兼容渠道提交 /v1/videos，但请求体和轮询协议为 Agnes 专有格式。支持文生视频、单图生视频、多图视频和关键帧过渡。",
+    "description": "Agnes Video V2.0 视频生成模型，使用 OpenAI 兼容渠道提交 /v1/videos，但请求体和轮询协议为 Agnes 专有格式。支持文生视频、单图生视频、多图视频和关键帧过渡。时长由 num_frames / frame_rate 控制，分辨率会按 480p/720p/1080p 与宽高比标准化。",
     "capabilities": ["文生视频", "图生视频-首帧", "图生视频-首尾帧", "多图视频", "关键帧过渡"],
     "config": {
+      "videoProtocol": "agnes",
       "referenceImageInputFormats": ["url", "data_uri"],
       "supportDataUriInput": true,
       "supportFirstFrame": true,
@@ -20,14 +21,20 @@
       "maxReferenceImages": 16,
       "maxReferenceVideos": 0,
       "maxReferenceAudios": 0,
+      "supportedResolutions": ["480p", "720p", "1080p"],
+      "supportedAspectRatios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+      "supportedDurations": [3, 5, 10, 18],
       "defaultWidth": 1152,
       "defaultHeight": 768,
+      "defaultAspectRatio": "16:9",
       "minDuration": 3,
       "maxDuration": 18,
       "defaultDuration": 5,
       "frameRate": 24,
       "pollIntervalMillis": 5000,
       "pollTimeoutMillis": 1800000,
+      "supportGenerateAudio": false,
+      "supportWatermark": false,
       "supportCameraFixed": false
     }
   }

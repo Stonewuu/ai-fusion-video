@@ -43,7 +43,7 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
     public String getToolDescription() {
         return """
                 查询指定项目的详细信息，包括项目名称、描述、封面、创建时间，
-                以及项目画风配置（artStyleInfo：画风描述、英文提示词、参考图URL）。
+                以及项目画风配置（artStyleInfo：画风描述、英文提示词、参考图资源地址）。
                 仅能查询当前用户有权限访问的项目。
                 """;
     }
@@ -103,7 +103,9 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
     }
 
     /**
-     * 构建画风信息：从数据库字段读取，预设则补充静态信息，并通过 resolvePublicUrl 生成完整 URL
+     * 构建画风信息：从数据库字段读取，预设则补充静态信息。
+     * 参考图优先返回公网 URL；没有公网地址时保留后端可读取的原始资源地址，
+     * 供支持 Data URI 的生成模型在提交请求前转换为 Base64。
      */
     private JSONObject buildArtStyleInfo(Project project) {
         String artStyleKey = project.getArtStyle();
@@ -129,7 +131,7 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
                 info.set("description", preset.getDescription());
                 info.set("imagePrompt", preset.getImagePrompt());
                 info.set("isPreset", true);
-                // 优先从系统配置获取预设的公网 URL，否则回退到本地静态路径
+                // 优先使用系统配置的预设资源地址，否则使用内置静态资源路径
                 String presetPublicUrl = systemConfigService.getValue("art_preset_url:" + artStyleKey);
                 refImagePath = StrUtil.isNotBlank(presetPublicUrl)
                         ? presetPublicUrl
@@ -150,14 +152,11 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
             refImagePath = project.getArtStyleImageUrl();
         }
 
-        // 解析参考图为完整公网 URL
+        // 公网 URL 可直接交给上游；本地资源地址由生成传输层转换为 Data URI。
         String publicUrl = systemConfigService.resolvePublicUrl(refImagePath);
-        info.set("referenceImageUrl", publicUrl);
-        info.set("referenceImageAvailable", publicUrl != null);
-
-        if (publicUrl == null && StrUtil.isNotBlank(refImagePath)) {
-            info.set("referenceImageWarning", "参考图无法通过网络访问，请在系统设置中配置后端资源公网地址或启用对象存储");
-        }
+        String referenceImageUrl = StrUtil.isNotBlank(publicUrl) ? publicUrl : refImagePath;
+        info.set("referenceImageUrl", referenceImageUrl);
+        info.set("referenceImageAvailable", StrUtil.isNotBlank(referenceImageUrl));
 
         return info;
     }

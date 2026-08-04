@@ -70,7 +70,7 @@ public class UserService {
         return userRoleMapper.exists(new LambdaQueryWrapper<UserRole>().eq(UserRole::getRoleId, adminRole.getId()));
     }
 
-    @Cacheable(value = "userByUsername", key = "#username")
+    @Cacheable(value = "userByUsername", key = "#username", unless = "#result == null")
     public User getByUsername(String username) {
         return userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUsername, username));
     }

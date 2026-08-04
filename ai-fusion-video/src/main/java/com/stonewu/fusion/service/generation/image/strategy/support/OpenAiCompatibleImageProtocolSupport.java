@@ -11,6 +11,7 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.entity.storage.StorageConfig;
+import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.storage.MediaStorageService;
@@ -160,7 +161,7 @@ public class OpenAiCompatibleImageProtocolSupport {
                 context.imageUrls().stream()
                         .filter(StrUtil::isNotBlank)
                         .map(String::trim)
-                        .map(imageUrl -> resolveAgnesImageInput(imageUrl, context.modelCode()))
+                        .map(imageUrl -> resolveAgnesImageInput(imageUrl, context))
                         .forEach(imageArray::add);
             }
 
@@ -413,7 +414,7 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     public String resolveImagesGenerateUrl(ApiConfig apiConfig) {
-        String baseUrl = normalizeBaseUrl(apiConfig != null ? apiConfig.getApiUrl() : null);
+        String baseUrl = normalizeBaseUrl(apiConfig);
         if (endsWithIgnoreCase(baseUrl, "/images/generations")) {
             return baseUrl;
         }
@@ -758,16 +759,23 @@ public class OpenAiCompatibleImageProtocolSupport {
         throw new BusinessException("参考图地址不可访问: " + trimmed);
     }
 
-    private String resolveAgnesImageInput(String imageUrl, String modelCode) {
+    private String resolveAgnesImageInput(String imageUrl,
+                                          OpenAiCompatibleImageProtocolContext context) {
         String trimmed = StrUtil.blankToDefault(imageUrl, "").trim();
         if (StrUtil.isBlank(trimmed)) {
             throw new BusinessException("Agnes 参考图地址为空");
         }
-        if (StrUtil.startWithIgnoreCase(trimmed, "data:") || isHttpUrl(trimmed)) {
+        if (StrUtil.startWithIgnoreCase(trimmed, "data:")) {
             return trimmed;
         }
-        throw unsupportedReferenceImageInput(modelCode,
-                "参考图尚未按模型能力解析为公网 URL 或 base64/Data URI");
+        try {
+            BinaryResource resource = loadBinaryResource(trimmed, context.apiConfig());
+            return "data:" + resource.mimeType() + ";base64,"
+                    + Base64.getEncoder().encodeToString(resource.bytes());
+        } catch (IOException e) {
+            throw unsupportedReferenceImageInput(context.modelCode(),
+                    "转换为 Data URI Base64 失败: " + e.getMessage());
+        }
     }
 
     private BusinessException unsupportedReferenceImageInput(String modelCode, String reason) {
@@ -947,14 +955,14 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private String resolveImagesEditUrl(ApiConfig apiConfig) {
-        String baseUrl = normalizeBaseUrl(apiConfig != null ? apiConfig.getApiUrl() : null);
+        String baseUrl = normalizeBaseUrl(apiConfig);
         if (endsWithIgnoreCase(baseUrl, "/images/edits")) return baseUrl;
         if (endsWithIgnoreCase(baseUrl, "/v1")) return baseUrl + "/images/edits";
         return baseUrl + (shouldAutoAppendV1Path(apiConfig) ? "/v1/images/edits" : "/images/edits");
     }
 
     private String resolveApiRootUrl(ApiConfig apiConfig) {
-        String baseUrl = normalizeBaseUrl(apiConfig != null ? apiConfig.getApiUrl() : null);
+        String baseUrl = normalizeBaseUrl(apiConfig);
         if (endsWithIgnoreCase(baseUrl, "/images/generations")) {
             return baseUrl.substring(0, baseUrl.length() - "/images/generations".length());
         }
@@ -966,11 +974,15 @@ public class OpenAiCompatibleImageProtocolSupport {
 
     private boolean shouldAutoAppendV1Path(ApiConfig apiConfig) {
         if (apiConfig == null) return true;
-        if (!"openai_compatible".equalsIgnoreCase(apiConfig.getPlatform())) return true;
+        String platform = apiConfig.getPlatform();
+        if (!"openai_compatible".equalsIgnoreCase(platform) && !"agnes".equalsIgnoreCase(platform)) {
+            return true;
+        }
         return !Boolean.FALSE.equals(apiConfig.getAutoAppendV1Path());
     }
 
-    private String normalizeBaseUrl(String baseUrl) {
+    private String normalizeBaseUrl(ApiConfig apiConfig) {
+        String baseUrl = ApiConfigService.resolveEffectiveApiUrlStatic(apiConfig);
         return StrUtil.blankToDefault(baseUrl, DEFAULT_BASE_URL).trim().replaceAll("/+$", "");
     }
 

@@ -28,7 +28,7 @@ public class ApiConfig extends BaseEntity {
     /** 配置名称 */
     private String name;
 
-    /** 平台标识：deepseek / dashscope / openai_compatible / newapi / gemini / ollama / anthropic / vertex_ai / GoogleFlowReverseApi */
+    /** 平台标识：deepseek / dashscope / openai_compatible / agnes / newapi / gemini / ollama / anthropic / vertex_ai / GoogleFlowReverseApi */
     private String platform;
 
     /** 文本模型默认请求协议；同一接入配置可按能力类型使用不同协议 */
@@ -48,7 +48,7 @@ public class ApiConfig extends BaseEntity {
 
     /**
      * 是否为 OpenAI 兼容请求自动补充 /v1 前缀。
-     * 仅对 openai_compatible 平台生效。
+     * 对 openai_compatible、agnes 平台生效。
      */
     @Builder.Default
     private Boolean autoAppendV1Path = true;

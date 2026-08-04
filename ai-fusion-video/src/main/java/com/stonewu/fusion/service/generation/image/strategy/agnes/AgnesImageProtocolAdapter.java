@@ -14,8 +14,8 @@ import java.util.List;
  *
  * <p>Both model versions intentionally share this adapter.  Agnes exposes
  * image-to-image through the generations endpoint and places reference images
- * and response format under {@code extra_body}; Data URIs are passed through
- * unchanged by the support layer.</p>
+ * and response format under {@code extra_body}; reference images are sent as
+ * Data URI Base64 values as required by the Agnes integration.</p>
  */
 @Component
 public class AgnesImageProtocolAdapter implements OpenAiCompatibleImageProtocolAdapter {

@@ -125,7 +125,7 @@ class GenerationModelCapabilityServiceTests {
         assertEquals("agnes", config.getStr("imageProtocol"));
         assertFalse(config.containsKey("agnesSizeMode"));
         assertTrue(config.getBool("supportDataUriInput"));
-        assertEquals(List.of("url", "data_uri"),
+        assertEquals(List.of("data_uri"),
                 JSONUtil.toList(config.getJSONArray("referenceImageInputFormats"), String.class));
         assertEquals(List.of("1K", "2K", "3K", "4K"),
                 JSONUtil.toList(config.getJSONArray("supportedResolutions"), String.class));
@@ -152,7 +152,7 @@ class GenerationModelCapabilityServiceTests {
         assertEquals("agnes", config.getStr("imageProtocol"));
         assertFalse(config.containsKey("agnesSizeMode"));
         assertTrue(config.getBool("supportDataUriInput"));
-        assertEquals(List.of("url", "data_uri"),
+        assertEquals(List.of("data_uri"),
                 JSONUtil.toList(config.getJSONArray("referenceImageInputFormats"), String.class));
         assertEquals("1024x768",
                 config.getJSONObject("supportedSizes").getJSONObject("standard").getStr("4:3"));
@@ -470,5 +470,35 @@ class GenerationModelCapabilityServiceTests {
         assertFalse(capability.supportsReferenceImages());
         assertFalse(capability.supportsReferenceVideos());
         assertFalse(capability.supportsReferenceAudios());
+    }
+
+    @Test
+    void shouldExposeAgnesVideoPresetCapabilities() {
+        AiModel model = AiModel.builder()
+                .name("Agnes Video V2.0")
+                .code("agnes-video-v2.0")
+                .capabilityPresetCode("agnes-video-v2.0")
+                .modelProtocol("agnes")
+                .build();
+
+        GenerationModelCapabilityService.VideoModelCapability capability =
+                service.resolveVideoCapability(model, "openai_compatible");
+        var snapshot = service.buildVideoCapabilitySnapshot(model);
+        var config = service.getMergedModelConfig(model);
+
+        assertTrue(capability.supportsFirstFrame());
+        assertTrue(capability.supportsLastFrame());
+        assertTrue(capability.supportsReferenceImages());
+        assertEquals(16, capability.maxReferenceImages());
+        assertEquals(List.of("url", "data_uri"), capability.referenceImageInputFormats());
+        assertEquals(List.of("480p", "720p", "1080p"),
+                JSONUtil.toList(snapshot.getJSONArray("supportedResolutions"), String.class));
+        assertEquals(List.of("16:9", "9:16", "1:1", "4:3", "3:4"),
+                JSONUtil.toList(snapshot.getJSONArray("supportedAspectRatios"), String.class));
+        assertEquals(3, snapshot.getInt("minDuration"));
+        assertEquals(18, snapshot.getInt("maxDuration"));
+        assertEquals(5, snapshot.getInt("defaultDuration"));
+        assertEquals("agnes", config.getStr("videoProtocol"));
+        assertEquals(24, config.getInt("frameRate"));
     }
 }

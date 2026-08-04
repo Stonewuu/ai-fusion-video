@@ -11,6 +11,7 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.entity.storage.StorageConfig;
+import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
@@ -166,8 +167,7 @@ public class OpenAiCompatibleVideoProtocolSupport {
     }
 
     public String resolveOpenAiVideosUrl(ApiConfig apiConfig) {
-        String baseUrl = normalizeBaseUrl(StrUtil.blankToDefault(apiConfig != null ? apiConfig.getApiUrl() : null,
-                DEFAULT_BASE_URL));
+        String baseUrl = normalizeBaseUrl(apiConfig);
         if (endsWithIgnoreCase(baseUrl, "/videos")) {
             return baseUrl;
         }
@@ -183,8 +183,7 @@ public class OpenAiCompatibleVideoProtocolSupport {
     }
 
     public String resolveApiRoot(ApiConfig apiConfig) {
-        String baseUrl = normalizeBaseUrl(StrUtil.blankToDefault(apiConfig != null ? apiConfig.getApiUrl() : null,
-                DEFAULT_BASE_URL));
+        String baseUrl = normalizeBaseUrl(apiConfig);
         if (endsWithIgnoreCase(baseUrl, "/v1/videos")) {
             return baseUrl.substring(0, baseUrl.length() - "/v1/videos".length());
         }
@@ -426,9 +425,17 @@ public class OpenAiCompatibleVideoProtocolSupport {
     }
 
     public int[] resolveAgnesDimensions(VideoTask task, JSONObject modelConfig) {
-        int[] parsed = parseDimensions(task.getResolution());
+        int[] parsed = parseDimensions(task != null ? task.getResolution() : null);
         if (parsed != null) {
             return parsed;
+        }
+
+        int[] named = resolveAgnesNamedDimensions(
+                task != null ? task.getResolution() : null,
+                task != null ? task.getRatio() : null,
+                modelConfig);
+        if (named != null) {
+            return named;
         }
 
         Integer width = getPositiveInteger(modelConfig, "width", "defaultWidth", "videoWidth", "video_width");
@@ -442,7 +449,55 @@ public class OpenAiCompatibleVideoProtocolSupport {
             return parsed;
         }
 
-        return defaultDimensionsByRatio(task.getRatio());
+        String defaultTier = getString(modelConfig, "defaultResolution", "defaultResolutionTier");
+        named = resolveAgnesNamedDimensions(defaultTier, task != null ? task.getRatio() : null, modelConfig);
+        if (named != null) {
+            return named;
+        }
+
+        return defaultDimensionsByRatio(task != null ? task.getRatio() : null);
+    }
+
+    /**
+     * Map Agnes resolution tiers (480p/720p/1080p) + aspect ratio to request width/height.
+     * Agnes may further normalize unsupported exact sizes server-side.
+     */
+    public int[] resolveAgnesNamedDimensions(String resolution, String aspectRatio, JSONObject modelConfig) {
+        Integer shortEdge = resolveAgnesResolutionShortEdge(resolution);
+        if (shortEdge == null) {
+            return null;
+        }
+
+        String ratio = StrUtil.blankToDefault(StrUtil.trim(aspectRatio),
+                getString(modelConfig, "defaultAspectRatio", "aspectRatio", "ratio"));
+        ratio = StrUtil.blankToDefault(ratio, "16:9")
+                .trim()
+                .replace('：', ':')
+                .replace(" ", "");
+
+        return switch (ratio) {
+            case "9:16" -> new int[]{shortEdge, shortEdge * 16 / 9};
+            case "1:1" -> new int[]{shortEdge, shortEdge};
+            case "4:3" -> new int[]{shortEdge * 4 / 3, shortEdge};
+            case "3:4" -> new int[]{shortEdge, shortEdge * 4 / 3};
+            case "21:9" -> new int[]{shortEdge * 21 / 9, shortEdge};
+            case "3:2" -> new int[]{shortEdge * 3 / 2, shortEdge};
+            case "2:3" -> new int[]{shortEdge, shortEdge * 3 / 2};
+            default -> new int[]{shortEdge * 16 / 9, shortEdge};
+        };
+    }
+
+    private Integer resolveAgnesResolutionShortEdge(String resolution) {
+        if (StrUtil.isBlank(resolution)) {
+            return null;
+        }
+        String normalized = resolution.trim().toLowerCase(Locale.ROOT).replace(" ", "");
+        return switch (normalized) {
+            case "480p", "480", "sd" -> 480;
+            case "720p", "720", "hd" -> 720;
+            case "1080p", "1080", "fhd" -> 1080;
+            default -> null;
+        };
     }
 
     public BinaryResource loadBinaryResource(String sourceUrl, ApiConfig apiConfig) throws IOException {
@@ -552,12 +607,20 @@ public class OpenAiCompatibleVideoProtocolSupport {
             return explicitMode;
         }
 
-        String generateMode = StrUtil.blankToDefault(task.getGenerateMode(), "").toLowerCase(Locale.ROOT);
-        if (generateMode.contains("keyframe")) {
+        String generateMode = StrUtil.blankToDefault(
+                task != null ? task.getGenerateMode() : null, "").toLowerCase(Locale.ROOT);
+        if (generateMode.contains("keyframe")
+                || imageCount >= 2
+                || (task != null && StrUtil.isNotBlank(task.getLastFrameImageUrl()) && imageCount >= 2)) {
             return "keyframes";
         }
-        if (StrUtil.isNotBlank(task.getLastFrameImageUrl()) && imageCount >= 2) {
-            return "keyframes";
+        // 单图生视频：文档示例可省略 mode，也可显式传 ti2vid。
+        if (imageCount == 1
+                || generateMode.contains("image2video")
+                || generateMode.contains("i2v")
+                || generateMode.contains("img2vid")
+                || generateMode.contains("ti2vid")) {
+            return "ti2vid";
         }
         return null;
     }
@@ -626,6 +689,11 @@ public class OpenAiCompatibleVideoProtocolSupport {
             return true;
         }
         return !Boolean.FALSE.equals(apiConfig.getAutoAppendV1Path());
+    }
+
+    private String normalizeBaseUrl(ApiConfig apiConfig) {
+        String baseUrl = ApiConfigService.resolveEffectiveApiUrlStatic(apiConfig);
+        return StrUtil.blankToDefault(baseUrl, DEFAULT_BASE_URL).trim().replaceAll("/+$", "");
     }
 
     private String normalizeBaseUrl(String baseUrl) {

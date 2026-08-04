@@ -1,0 +1,4 @@
+# Shell scripts must keep LF so Linux containers can execute them.
+*.sh text eol=lf
+**/docker-entrypoint.sh text eol=lf
+mvnw text eol=lf

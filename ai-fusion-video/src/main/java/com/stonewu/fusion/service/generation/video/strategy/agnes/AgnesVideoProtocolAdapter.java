@@ -64,12 +64,16 @@ public class AgnesVideoProtocolAdapter implements OpenAiCompatibleVideoProtocolA
         );
         String status = support.firstText(root, "status", "state");
         Integer duration = support.parsePositiveSeconds(support.firstText(root, "seconds", "duration"));
-        String videoUrl = support.firstText(root,
-                "video_url",
-                "url",
-                "remixed_from_video_id",
-                "remixedFromVideoId");
-        String coverUrl = support.firstText(root, "cover_url", "coverUrl", "thumbnail_url", "thumbnailUrl");
+        JsonNode metadata = root.path("metadata");
+        // Agnes 官方完成态视频地址位于 metadata.url；其余字段兼容旧网关/代理返回。
+        String videoUrl = firstNonBlank(
+                support.firstText(metadata, "url", "video_url", "videoUrl"),
+                support.firstText(root, "video_url", "url", "remixed_from_video_id", "remixedFromVideoId")
+        );
+        String coverUrl = firstNonBlank(
+                support.firstText(metadata, "cover_url", "coverUrl", "thumbnail_url", "thumbnailUrl"),
+                support.firstText(root, "cover_url", "coverUrl", "thumbnail_url", "thumbnailUrl")
+        );
         String errorMessage = support.extractErrorMessage(root);
         return new OpenAiCompatibleVideoTaskResult(trackingId, status, duration, videoUrl, coverUrl, errorMessage);
     }

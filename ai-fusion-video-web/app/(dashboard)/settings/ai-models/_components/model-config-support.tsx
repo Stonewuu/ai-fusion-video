@@ -44,6 +44,7 @@ export const COMMON_TIERS = ["1K", "2K", "3K", "4K"];
 
 export const OPENAI_REASONING_PLATFORMS = new Set([
   "openai_compatible",
+  "agnes",
   "newapi",
   "deepseek",
   "zhipu",

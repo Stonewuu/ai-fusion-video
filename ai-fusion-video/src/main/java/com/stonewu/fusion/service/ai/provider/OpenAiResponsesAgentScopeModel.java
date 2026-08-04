@@ -524,7 +524,8 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
         if (apiConfig == null) {
             return true;
         }
-        if (!"openai_compatible".equalsIgnoreCase(apiConfig.getPlatform())) {
+        String platform = apiConfig.getPlatform();
+        if (!"openai_compatible".equalsIgnoreCase(platform) && !"agnes".equalsIgnoreCase(platform)) {
             return true;
         }
         return !Boolean.FALSE.equals(apiConfig.getAutoAppendV1Path());

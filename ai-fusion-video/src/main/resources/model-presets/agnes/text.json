@@ -1,0 +1,25 @@
+[
+  {
+    "code": "agnes-2.0-flash",
+    "name": "Agnes 2.0 Flash",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_compatible",
+    "modelType": 1,
+    "description": "Agnes 2.0 Flash 语言模型，面向智能体工作流、工具调用、编码和图像理解。OpenAI 兼容 chat/completions 接口，支持流式输出、多轮对话与 Thinking 模式。",
+    "capabilities": ["文本对话", "图片理解", "工具调用", "深度推理", "流式输出"],
+    "supportReasoning": true,
+    "reasoningEffortLevels": [],
+    "contextWindow": 512000,
+    "multimodalInputTypes": ["image"],
+    "multimodalInputTransports": {
+      "image": ["url"]
+    },
+    "config": {
+      "temperature": 0.7,
+      "maxTokens": 1024,
+      "useChatTemplateThinking": true,
+      "enableThinking": true,
+      "thinkingBudget": 2048
+    }
+  }
+]

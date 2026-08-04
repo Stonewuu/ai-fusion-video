@@ -76,6 +76,17 @@ export function getPlatformFields(platform: string): PlatformField[] {
         },
         { key: "apiKey", label: "API 密钥", placeholder: "sk-...", type: "password", required: true },
       ];
+    case "agnes":
+      return [
+        {
+          key: "apiUrl",
+          label: "API 地址",
+          placeholder: "https://apihub.agnes-ai.com（只填服务根地址）",
+          type: "text",
+          helperText: "Agnes 开放接口根地址。文本走 OpenAI 兼容协议，图片/视频默认使用 Agnes 协议。",
+        },
+        { key: "apiKey", label: "API 密钥", placeholder: "sk-...", type: "password", required: true },
+      ];
     case "volcengine":
       return [
         { key: "apiUrl", label: "API 地址", placeholder: "https://ark.cn-beijing.volces.com", type: "text" },

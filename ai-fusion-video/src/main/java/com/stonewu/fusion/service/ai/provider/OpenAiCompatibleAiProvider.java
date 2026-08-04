@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.provider;
 import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
+import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
@@ -18,7 +19,9 @@ import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -30,7 +33,7 @@ import java.util.Set;
 public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
     private static final Set<String> SUPPORTED_PLATFORMS = Set.of(
-            "openai_compatible", "openai", "deepseek", "zhipu", "moonshot", "volcengine", "siliconflow", "newapi");
+            "openai_compatible", "openai", "agnes", "deepseek", "zhipu", "moonshot", "volcengine", "siliconflow", "newapi");
 
     @Override
     public boolean supports(String platform) {
@@ -41,7 +44,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
     public ChatModel createChatModel(AiProviderContext context) {
         String platform = context.getPlatform();
         String apiKey = context.getApiKey();
-        String baseUrl = resolveRootBaseUrl(platform, context.getBaseUrl());
+        String baseUrl = resolveRootBaseUrl(context);
         String completionsPath = resolveCompletionsPath(context);
         String embeddingsPath = resolveEmbeddingsPath(context);
         Map<String, Object> config = context.getConfig();
@@ -53,6 +56,13 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
             log.warn("[OpenAiCompatibleAiProvider] Responses API 目前仅接入 AgentScope 主链路，Spring AI ChatModel 仍回退到 chat/completions: model={}",
                     context.getModelName());
         }
+
+        log.info("[OpenAiCompatibleAiProvider] 创建 ChatModel: platform={}, authPlatform={}, baseUrl={}, completionsPath={}, model={}",
+                platform,
+                context.getApiConfig() != null ? context.getApiConfig().getPlatform() : null,
+                baseUrl,
+                completionsPath,
+                modelName);
 
         OpenAiApi.Builder apiBuilder = OpenAiApi.builder().apiKey(apiKey);
         apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
@@ -80,7 +90,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
     public ChatModelBase createAgentScopeModel(AiProviderContext context) {
         String platform = context.getPlatform();
         String apiKey = context.getApiKey();
-        String baseUrl = resolveRootBaseUrl(platform, context.getBaseUrl());
+        String baseUrl = resolveRootBaseUrl(context);
         String endpointPath = resolveCompletionsPath(context);
 
         requireApiKey(apiKey, "OpenAI Compatible (" + platform + ")");
@@ -115,7 +125,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
     @Override
     public List<RemoteModelVO> listRemoteModels(AiProviderContext context) {
-        String rootBaseUrl = resolveRootBaseUrl(context.getPlatform(), context.getBaseUrl());
+        String rootBaseUrl = resolveRootBaseUrl(context);
         String url = joinUrl(rootBaseUrl, resolveModelsPath(context));
 
         log.info("[OpenAiCompatibleAiProvider] 获取远程模型列表: {}", url);
@@ -161,7 +171,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         }
 
         Boolean includeReasoning = getConfigBoolean(context.getConfig(), "includeReasoning", "include_reasoning");
-        if (includeReasoning == null && isReasoningEnabled(context)) {
+        if (includeReasoning == null && isReasoningEnabled(context) && !usesChatTemplateThinking(context)) {
             includeReasoning = true;
         }
         if (includeReasoning != null) {
@@ -169,7 +179,53 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
             hasOptions = true;
         }
 
+        // Agnes 等 OpenAI 兼容网关通过 chat_template_kwargs.enable_thinking 开启 Thinking。
+        if (applyChatTemplateThinking(builder, context)) {
+            hasOptions = true;
+        }
+
         return hasOptions ? builder.build() : null;
+    }
+
+    /**
+     * Agnes OpenAI-compatible Thinking uses {@code chat_template_kwargs.enable_thinking}.
+     * Official OpenAI models should keep using include_reasoning / Responses API instead.
+     */
+    private boolean applyChatTemplateThinking(GenerateOptions.Builder builder, AiProviderContext context) {
+        Object configured = getConfigValue(context.getConfig(),
+                "chatTemplateKwargs", "chat_template_kwargs");
+        if (configured instanceof Map<?, ?> map) {
+            builder.additionalBodyParam("chat_template_kwargs", map);
+            return true;
+        }
+
+        if (!usesChatTemplateThinking(context)) {
+            return false;
+        }
+
+        Boolean enableThinking = getConfigBoolean(context.getConfig(),
+                "enableThinking", "enable_thinking");
+        if (enableThinking == null) {
+            if (!isReasoningEnabled(context)) {
+                return false;
+            }
+            enableThinking = true;
+        }
+
+        Map<String, Object> kwargs = new LinkedHashMap<>();
+        kwargs.put("enable_thinking", enableThinking);
+        builder.additionalBodyParam("chat_template_kwargs", kwargs);
+        return true;
+    }
+
+    private boolean usesChatTemplateThinking(AiProviderContext context) {
+        Boolean explicit = getConfigBoolean(context.getConfig(),
+                "useChatTemplateThinking", "use_chat_template_thinking", "chatTemplateThinking");
+        if (explicit != null) {
+            return explicit;
+        }
+        String modelName = context.getModelName();
+        return modelName != null && modelName.toLowerCase(Locale.ROOT).contains("agnes");
     }
 
     private boolean shouldUseResponsesApi(AiProviderContext context) {
@@ -226,27 +282,50 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         };
     }
 
-    private String resolveRootBaseUrl(String platform, String baseUrl) {
-        return StrUtil.isBlank(baseUrl) ? inferRootBaseUrl(platform) : normalizeBaseUrl(baseUrl);
+    /**
+     * 解析实际服务根地址。
+     * <p>
+     * context.platform 可能是请求协议（如 openai_compatible），而不是鉴权平台（如 agnes）。
+     * 当 baseUrl 为空时，必须优先按 API 配置的鉴权平台推断默认域名。
+     */
+    private String resolveRootBaseUrl(AiProviderContext context) {
+        if (StrUtil.isNotBlank(context.getBaseUrl())) {
+            return normalizeBaseUrl(context.getBaseUrl());
+        }
+        ApiConfig apiConfig = context.getApiConfig();
+        if (apiConfig != null) {
+            String fromConfig = ApiConfigService.resolveEffectiveApiUrlStatic(apiConfig);
+            if (StrUtil.isNotBlank(fromConfig)) {
+                return normalizeBaseUrl(fromConfig);
+            }
+        }
+        return inferRootBaseUrl(context.getPlatform());
     }
 
     private boolean shouldAutoAppendV1Path(AiProviderContext context) {
-        if (!"openai_compatible".equalsIgnoreCase(context.getPlatform())) {
+        ApiConfig apiConfig = context.getApiConfig();
+        String authPlatform = apiConfig != null && StrUtil.isNotBlank(apiConfig.getPlatform())
+                ? apiConfig.getPlatform()
+                : context.getPlatform();
+        if (!"openai_compatible".equalsIgnoreCase(authPlatform) && !"agnes".equalsIgnoreCase(authPlatform)) {
             return true;
         }
-        ApiConfig apiConfig = context.getApiConfig();
         return apiConfig == null || !Boolean.FALSE.equals(apiConfig.getAutoAppendV1Path());
     }
 
     private String inferRootBaseUrl(String platform) {
-        return switch (platform.toLowerCase()) {
+        if (StrUtil.isBlank(platform)) {
+            return "https://api.openai.com";
+        }
+        String defaultUrl = ApiConfigService.platformDefaultApiUrl(platform);
+        if (StrUtil.isNotBlank(defaultUrl) && defaultUrl.startsWith("http")) {
+            return defaultUrl;
+        }
+        return switch (platform.toLowerCase(Locale.ROOT)) {
             case "deepseek" -> "https://api.deepseek.com";
             case "zhipu" -> "https://open.bigmodel.cn";
-            case "volcengine" -> "https://ark.cn-beijing.volces.com";
             case "moonshot" -> "https://api.moonshot.cn";
             case "siliconflow" -> "https://api.siliconflow.cn";
-            case "newapi" -> "https://docs.newapi.ai";
-            case "openai" -> "https://api.openai.com";
             default -> "https://api.openai.com";
         };
     }

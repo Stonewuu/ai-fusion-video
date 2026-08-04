@@ -73,6 +73,65 @@ class OpenAiCompatibleAiProviderTests {
     }
 
     @Test
+    void createAgentScopeModelEnablesAgnesChatTemplateThinking() throws Exception {
+        OpenAiCompatibleAiProvider provider = new OpenAiCompatibleAiProvider();
+
+        AiProviderContext context = AiProviderContext.builder()
+                .platform("openai_compatible")
+                .apiKey("test-key")
+                .baseUrl("https://apihub.agnes-ai.com")
+                .modelName("agnes-2.0-flash")
+                .config(Map.of(
+                        "temperature", 0.7,
+                        "maxTokens", 1024,
+                        "useChatTemplateThinking", true,
+                        "enableThinking", true
+                ))
+                .apiConfig(ApiConfig.builder()
+                        .platform("openai_compatible")
+                        .apiUrl("https://apihub.agnes-ai.com")
+                        .build())
+                .build();
+
+        ChatModelBase model = provider.createAgentScopeModel(context);
+
+        assertThat(model).isInstanceOf(OpenAIChatModel.class);
+        GenerateOptions options = (GenerateOptions) readField(model, "configuredOptions");
+        assertThat(options.getTemperature()).isEqualTo(0.7);
+        assertThat(options.getMaxTokens()).isEqualTo(1024);
+        assertThat(options.getAdditionalBodyParams())
+                .containsEntry("chat_template_kwargs", Map.of("enable_thinking", true));
+        assertThat(options.getAdditionalBodyParams()).doesNotContainKey("include_reasoning");
+    }
+
+    @Test
+    void createChatModelRestoresAgnesDefaultUrlWhenStoredApiUrlIsNull() throws Exception {
+        OpenAiCompatibleAiProvider provider = new OpenAiCompatibleAiProvider();
+
+        // 模拟真实上下文：文本协议 openai_compatible 用于路由，鉴权平台 agnes，默认 URL 入库为 null
+        AiProviderContext context = AiProviderContext.builder()
+                .platform("openai_compatible")
+                .apiKey("agnes-key")
+                .baseUrl(null)
+                .modelName("agnes-2.0-flash")
+                .config(Map.of())
+                .apiConfig(ApiConfig.builder()
+                        .platform("agnes")
+                        .apiKey("agnes-key")
+                        .apiUrl(null)
+                        .autoAppendV1Path(true)
+                        .build())
+                .build();
+
+        var chatModel = provider.createChatModel(context);
+        assertThat(chatModel).isInstanceOf(org.springframework.ai.openai.OpenAiChatModel.class);
+
+        Object openAiApi = readField(chatModel, "openAiApi");
+        assertThat(readField(openAiApi, "baseUrl").toString()).isEqualTo("https://apihub.agnes-ai.com");
+        assertThat(readField(openAiApi, "completionsPath").toString()).isEqualTo("/v1/chat/completions");
+    }
+
+    @Test
     void responsesModelMapsMessagesToolsAndReasoningOptions() {
         OpenAiResponsesAgentScopeModel model = new OpenAiResponsesAgentScopeModel(
                                 ApiConfig.builder().platform("openai_compatible").apiUrl("https://api.openai.com").build(),

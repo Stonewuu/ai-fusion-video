@@ -40,9 +40,10 @@ public class AiProviderContextFactory {
                 .model(model)
                 .apiConfig(apiConfig)
                 .config(config)
+                // platform 使用请求协议，用于路由到对应协议实现；鉴权地址必须按 API 配置平台还原
                 .platform(normalizePlatform(requestProtocol))
                 .apiKey(apiConfig.getApiKey())
-                .baseUrl(apiConfig.getApiUrl())
+                .baseUrl(apiConfigService.resolveEffectiveApiUrl(apiConfig))
                 .modelName(resolveModelName(model, config))
                 .build();
     }
@@ -63,7 +64,7 @@ public class AiProviderContextFactory {
                 .apiConfig(apiConfig)
                 .platform(normalizePlatform(apiConfig.getPlatform()))
                 .apiKey(apiConfig.getApiKey())
-                .baseUrl(apiConfig.getApiUrl())
+                .baseUrl(ApiConfigService.resolveEffectiveApiUrlStatic(apiConfig))
                 .build();
     }
 

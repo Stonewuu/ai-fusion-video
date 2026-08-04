@@ -196,7 +196,7 @@ class OpenAiAndAgnesVideoStrategyTests {
             queryPath.set(exchange.getRequestURI().getPath());
             queryString.set(exchange.getRequestURI().getQuery());
             writeJson(exchange, """
-                {"id":"task_123","video_id":"video_abc","status":"completed","seconds":"5.0","remixed_from_video_id":"https://cdn.example.com/result.mp4","error":null}
+                {"id":"task_123","video_id":"video_abc","status":"completed","seconds":"5.0","size":"1280x720","metadata":{"url":"https://cdn.example.com/result.mp4","size_mapping":{"adjusted":false,"ratio":"16:9","resolution":"720p","width":1280,"height":720}},"error":null}
                 """);
         });
         server.start();

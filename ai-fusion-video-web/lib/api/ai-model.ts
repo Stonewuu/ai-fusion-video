@@ -196,6 +196,7 @@ export interface ApiConfigPageReq {
 /** 接入与鉴权类型选项 */
 export const PLATFORM_OPTIONS = [
   { value: "openai_compatible", label: "OpenAI / 兼容接入", description: "API Key / Bearer 鉴权；文本、图片、视频协议可分别配置" },
+  { value: "agnes", label: "Agnes AI", description: "Agnes 开放接口：文本 OpenAI 兼容，图片/视频使用 Agnes 协议" },
   { value: "newapi", label: "New API", description: "New API 聚合网关，支持远程模型发现与视频任务接口" },
   { value: "volcengine", label: "火山引擎（豆包）", description: "字节跳动火山引擎豆包大模型" },
   { value: "vertex_ai", label: "Google Vertex AI", description: "Google Cloud Vertex AI Gemini" },
@@ -228,6 +229,7 @@ export const MODEL_TYPE_LABELS: Record<number, string> = {
 export const PLATFORM_LABELS: Record<string, string> = {
   openai_compatible: "OpenAI / 兼容接入",
   openai: "OpenAI / 兼容接入",
+  agnes: "Agnes AI",
   newapi: "New API",
   deepseek: "OpenAI / 兼容接入",
   volcengine: "火山引擎",

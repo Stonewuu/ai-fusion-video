@@ -112,12 +112,57 @@ public class ApiConfigService {
                 .in(ApiConfig::getPlatform, platforms));
     }
 
+    /**
+     * 解析实际请求地址。
+     * <p>
+     * 保存时若 URL 与平台默认地址相同会被归一为 null；调用侧必须通过本方法还原真实地址，
+     * 不能仅用文本/图片协议去推断默认域名，否则 Agnes 等平台会错误落到 OpenAI。
+     */
+    public String resolveEffectiveApiUrl(ApiConfig config) {
+        return resolveEffectiveApiUrlStatic(config);
+    }
+
+    /**
+     * 静态版本，供不方便注入本服务的协议支持类使用。
+     */
+    public static String resolveEffectiveApiUrlStatic(ApiConfig config) {
+        if (config == null) {
+            return null;
+        }
+        if (StrUtil.isNotBlank(config.getApiUrl())) {
+            return config.getApiUrl().trim().replaceAll("/+$", "");
+        }
+        return platformDefaultApiUrl(config.getPlatform());
+    }
+
+    /**
+     * 平台默认根地址；未知平台返回 null。
+     */
+    public static String platformDefaultApiUrl(String platform) {
+        if (StrUtil.isBlank(platform)) {
+            return null;
+        }
+        return switch (platform.trim()) {
+            case "openai_compatible", "openai" -> "https://api.openai.com";
+            case "agnes" -> "https://apihub.agnes-ai.com";
+            case "newapi" -> "https://docs.newapi.ai";
+            case "volcengine" -> "https://ark.cn-beijing.volces.com";
+            case "vertex_ai" -> "us-central1";
+            case "GoogleFlowReverseApi" -> "http://localhost:8000";
+            case "dashscope" -> "https://dashscope.aliyuncs.com";
+            case "anthropic" -> "https://api.anthropic.com";
+            case "ollama" -> "http://localhost:11434";
+            case "deepseek" -> "https://api.deepseek.com";
+            default -> null;
+        };
+    }
+
     private String normalizeApiUrl(String platform, String apiUrl) {
         if (StrUtil.isBlank(apiUrl)) {
             return null;
         }
         String normalizedApiUrl = apiUrl.trim();
-        String defaultApiUrl = getPlatformDefaultApiUrl(platform);
+        String defaultApiUrl = platformDefaultApiUrl(platform);
         if (StrUtil.isNotBlank(defaultApiUrl) && isSameApiUrl(normalizedApiUrl, defaultApiUrl)) {
             return null;
         }
@@ -175,23 +220,6 @@ public class ApiConfigService {
             return "";
         }
         return apiUrl.trim().replaceAll("/+$", "");
-    }
-
-    private String getPlatformDefaultApiUrl(String platform) {
-        if (StrUtil.isBlank(platform)) {
-            return null;
-        }
-        return switch (platform) {
-            case "openai_compatible", "openai" -> "https://api.openai.com";
-            case "newapi" -> "https://docs.newapi.ai";
-            case "volcengine" -> "https://ark.cn-beijing.volces.com";
-            case "vertex_ai" -> "us-central1";
-            case "GoogleFlowReverseApi" -> "http://localhost:8000";
-            case "dashscope" -> "https://dashscope.aliyuncs.com";
-            case "anthropic" -> "https://api.anthropic.com";
-            case "ollama" -> "http://localhost:11434";
-            default -> null;
-        };
     }
 
     private void evictModelCaches() {
