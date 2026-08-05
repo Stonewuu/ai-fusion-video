@@ -2,6 +2,10 @@ spring:
   application:
     name: ai-fusion-video
 
+  datasource:
+    hikari:
+      connection-init-sql: "SET time_zone = '${app.mysql.session-time-zone}'"
+
   threads:
     virtual:
       enabled: true
@@ -44,6 +48,10 @@ server:
 
 # 应用配置
 app:
+  # Java 时区使用 IANA Zone ID；MySQL 会话使用无需安装命名时区表的 UTC 偏移。
+  time-zone: ${APP_TIME_ZONE:Asia/Shanghai}
+  mysql:
+    session-time-zone: ${MYSQL_SESSION_TIME_ZONE:+08:00}
   cors:
     # 默认全局允许跨域；生产环境可通过 CORS_ALLOWED_ORIGIN_PATTERNS 配置明确来源，多个值使用逗号分隔。
     allowed-origin-patterns: ${CORS_ALLOWED_ORIGIN_PATTERNS:*}

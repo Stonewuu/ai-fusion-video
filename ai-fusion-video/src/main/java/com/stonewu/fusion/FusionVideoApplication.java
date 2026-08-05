@@ -1,5 +1,6 @@
 package com.stonewu.fusion;
 
+import com.stonewu.fusion.config.ApplicationTimeZoneInitializer;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.web.context.WebServerInitializedEvent;
@@ -14,7 +15,9 @@ import lombok.extern.slf4j.Slf4j;
 public class FusionVideoApplication {
 
 	public static void main(String[] args) {
-		SpringApplication.run(FusionVideoApplication.class, args);
+		SpringApplication application = new SpringApplication(FusionVideoApplication.class);
+		application.addInitializers(new ApplicationTimeZoneInitializer());
+		application.run(args);
 	}
 
 	@EventListener
