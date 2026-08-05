@@ -3,7 +3,6 @@ package com.stonewu.fusion.service.ai.provider;
 import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
-import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
@@ -33,7 +32,7 @@ import java.util.Set;
 public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
     private static final Set<String> SUPPORTED_PLATFORMS = Set.of(
-            "openai_compatible", "openai", "agnes", "deepseek", "zhipu", "moonshot", "volcengine", "siliconflow", "newapi");
+            "openai_compatible", "openai", "deepseek", "zhipu", "moonshot", "volcengine", "siliconflow", "newapi");
 
     @Override
     public boolean supports(String platform) {
@@ -44,7 +43,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
     public ChatModel createChatModel(AiProviderContext context) {
         String platform = context.getPlatform();
         String apiKey = context.getApiKey();
-        String baseUrl = resolveRootBaseUrl(context);
+        String baseUrl = resolveRootBaseUrl(platform, context.getBaseUrl());
         String completionsPath = resolveCompletionsPath(context);
         String embeddingsPath = resolveEmbeddingsPath(context);
         Map<String, Object> config = context.getConfig();
@@ -56,13 +55,6 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
             log.warn("[OpenAiCompatibleAiProvider] Responses API 目前仅接入 AgentScope 主链路，Spring AI ChatModel 仍回退到 chat/completions: model={}",
                     context.getModelName());
         }
-
-        log.info("[OpenAiCompatibleAiProvider] 创建 ChatModel: platform={}, authPlatform={}, baseUrl={}, completionsPath={}, model={}",
-                platform,
-                context.getApiConfig() != null ? context.getApiConfig().getPlatform() : null,
-                baseUrl,
-                completionsPath,
-                modelName);
 
         OpenAiApi.Builder apiBuilder = OpenAiApi.builder().apiKey(apiKey);
         apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
@@ -90,7 +82,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
     public ChatModelBase createAgentScopeModel(AiProviderContext context) {
         String platform = context.getPlatform();
         String apiKey = context.getApiKey();
-        String baseUrl = resolveRootBaseUrl(context);
+        String baseUrl = resolveRootBaseUrl(platform, context.getBaseUrl());
         String endpointPath = resolveCompletionsPath(context);
 
         requireApiKey(apiKey, "OpenAI Compatible (" + platform + ")");
@@ -125,7 +117,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
     @Override
     public List<RemoteModelVO> listRemoteModels(AiProviderContext context) {
-        String rootBaseUrl = resolveRootBaseUrl(context);
+        String rootBaseUrl = resolveRootBaseUrl(context.getPlatform(), context.getBaseUrl());
         String url = joinUrl(rootBaseUrl, resolveModelsPath(context));
 
         log.info("[OpenAiCompatibleAiProvider] 获取远程模型列表: {}", url);
@@ -282,50 +274,27 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         };
     }
 
-    /**
-     * 解析实际服务根地址。
-     * <p>
-     * context.platform 可能是请求协议（如 openai_compatible），而不是鉴权平台（如 agnes）。
-     * 当 baseUrl 为空时，必须优先按 API 配置的鉴权平台推断默认域名。
-     */
-    private String resolveRootBaseUrl(AiProviderContext context) {
-        if (StrUtil.isNotBlank(context.getBaseUrl())) {
-            return normalizeBaseUrl(context.getBaseUrl());
-        }
-        ApiConfig apiConfig = context.getApiConfig();
-        if (apiConfig != null) {
-            String fromConfig = ApiConfigService.resolveEffectiveApiUrlStatic(apiConfig);
-            if (StrUtil.isNotBlank(fromConfig)) {
-                return normalizeBaseUrl(fromConfig);
-            }
-        }
-        return inferRootBaseUrl(context.getPlatform());
+    private String resolveRootBaseUrl(String platform, String baseUrl) {
+        return StrUtil.isBlank(baseUrl) ? inferRootBaseUrl(platform) : normalizeBaseUrl(baseUrl);
     }
 
     private boolean shouldAutoAppendV1Path(AiProviderContext context) {
-        ApiConfig apiConfig = context.getApiConfig();
-        String authPlatform = apiConfig != null && StrUtil.isNotBlank(apiConfig.getPlatform())
-                ? apiConfig.getPlatform()
-                : context.getPlatform();
-        if (!"openai_compatible".equalsIgnoreCase(authPlatform) && !"agnes".equalsIgnoreCase(authPlatform)) {
+        if (!"openai_compatible".equalsIgnoreCase(context.getPlatform())) {
             return true;
         }
+        ApiConfig apiConfig = context.getApiConfig();
         return apiConfig == null || !Boolean.FALSE.equals(apiConfig.getAutoAppendV1Path());
     }
 
     private String inferRootBaseUrl(String platform) {
-        if (StrUtil.isBlank(platform)) {
-            return "https://api.openai.com";
-        }
-        String defaultUrl = ApiConfigService.platformDefaultApiUrl(platform);
-        if (StrUtil.isNotBlank(defaultUrl) && defaultUrl.startsWith("http")) {
-            return defaultUrl;
-        }
-        return switch (platform.toLowerCase(Locale.ROOT)) {
+        return switch (platform.toLowerCase()) {
             case "deepseek" -> "https://api.deepseek.com";
             case "zhipu" -> "https://open.bigmodel.cn";
+            case "volcengine" -> "https://ark.cn-beijing.volces.com";
             case "moonshot" -> "https://api.moonshot.cn";
             case "siliconflow" -> "https://api.siliconflow.cn";
+            case "newapi" -> "https://docs.newapi.ai";
+            case "openai" -> "https://api.openai.com";
             default -> "https://api.openai.com";
         };
     }

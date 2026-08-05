@@ -105,33 +105,6 @@ class OpenAiCompatibleAiProviderTests {
     }
 
     @Test
-    void createChatModelRestoresAgnesDefaultUrlWhenStoredApiUrlIsNull() throws Exception {
-        OpenAiCompatibleAiProvider provider = new OpenAiCompatibleAiProvider();
-
-        // 模拟真实上下文：文本协议 openai_compatible 用于路由，鉴权平台 agnes，默认 URL 入库为 null
-        AiProviderContext context = AiProviderContext.builder()
-                .platform("openai_compatible")
-                .apiKey("agnes-key")
-                .baseUrl(null)
-                .modelName("agnes-2.0-flash")
-                .config(Map.of())
-                .apiConfig(ApiConfig.builder()
-                        .platform("agnes")
-                        .apiKey("agnes-key")
-                        .apiUrl(null)
-                        .autoAppendV1Path(true)
-                        .build())
-                .build();
-
-        var chatModel = provider.createChatModel(context);
-        assertThat(chatModel).isInstanceOf(org.springframework.ai.openai.OpenAiChatModel.class);
-
-        Object openAiApi = readField(chatModel, "openAiApi");
-        assertThat(readField(openAiApi, "baseUrl").toString()).isEqualTo("https://apihub.agnes-ai.com");
-        assertThat(readField(openAiApi, "completionsPath").toString()).isEqualTo("/v1/chat/completions");
-    }
-
-    @Test
     void responsesModelMapsMessagesToolsAndReasoningOptions() {
         OpenAiResponsesAgentScopeModel model = new OpenAiResponsesAgentScopeModel(
                                 ApiConfig.builder().platform("openai_compatible").apiUrl("https://api.openai.com").build(),

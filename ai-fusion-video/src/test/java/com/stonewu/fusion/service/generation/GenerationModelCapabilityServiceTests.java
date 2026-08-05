@@ -125,7 +125,7 @@ class GenerationModelCapabilityServiceTests {
         assertEquals("agnes", config.getStr("imageProtocol"));
         assertFalse(config.containsKey("agnesSizeMode"));
         assertTrue(config.getBool("supportDataUriInput"));
-        assertEquals(List.of("data_uri"),
+        assertEquals(List.of("url", "data_uri"),
                 JSONUtil.toList(config.getJSONArray("referenceImageInputFormats"), String.class));
         assertEquals(List.of("1K", "2K", "3K", "4K"),
                 JSONUtil.toList(config.getJSONArray("supportedResolutions"), String.class));
@@ -152,7 +152,7 @@ class GenerationModelCapabilityServiceTests {
         assertEquals("agnes", config.getStr("imageProtocol"));
         assertFalse(config.containsKey("agnesSizeMode"));
         assertTrue(config.getBool("supportDataUriInput"));
-        assertEquals(List.of("data_uri"),
+        assertEquals(List.of("url", "data_uri"),
                 JSONUtil.toList(config.getJSONArray("referenceImageInputFormats"), String.class));
         assertEquals("1024x768",
                 config.getJSONObject("supportedSizes").getJSONObject("standard").getStr("4:3"));

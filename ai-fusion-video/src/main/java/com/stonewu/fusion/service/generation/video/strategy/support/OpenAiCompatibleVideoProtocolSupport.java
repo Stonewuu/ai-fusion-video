@@ -11,7 +11,6 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.entity.storage.StorageConfig;
-import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
@@ -167,7 +166,8 @@ public class OpenAiCompatibleVideoProtocolSupport {
     }
 
     public String resolveOpenAiVideosUrl(ApiConfig apiConfig) {
-        String baseUrl = normalizeBaseUrl(apiConfig);
+        String baseUrl = normalizeBaseUrl(StrUtil.blankToDefault(apiConfig != null ? apiConfig.getApiUrl() : null,
+                DEFAULT_BASE_URL));
         if (endsWithIgnoreCase(baseUrl, "/videos")) {
             return baseUrl;
         }
@@ -183,7 +183,8 @@ public class OpenAiCompatibleVideoProtocolSupport {
     }
 
     public String resolveApiRoot(ApiConfig apiConfig) {
-        String baseUrl = normalizeBaseUrl(apiConfig);
+        String baseUrl = normalizeBaseUrl(StrUtil.blankToDefault(apiConfig != null ? apiConfig.getApiUrl() : null,
+                DEFAULT_BASE_URL));
         if (endsWithIgnoreCase(baseUrl, "/v1/videos")) {
             return baseUrl.substring(0, baseUrl.length() - "/v1/videos".length());
         }
@@ -693,11 +694,6 @@ public class OpenAiCompatibleVideoProtocolSupport {
             return true;
         }
         return !Boolean.FALSE.equals(apiConfig.getAutoAppendV1Path());
-    }
-
-    private String normalizeBaseUrl(ApiConfig apiConfig) {
-        String baseUrl = ApiConfigService.resolveEffectiveApiUrlStatic(apiConfig);
-        return StrUtil.blankToDefault(baseUrl, DEFAULT_BASE_URL).trim().replaceAll("/+$", "");
     }
 
     private String normalizeBaseUrl(String baseUrl) {

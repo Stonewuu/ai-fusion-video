@@ -56,95 +56,9 @@ export const API_PROVIDER_PRESETS = [
   { id: "deepseek", platform: "openai_compatible", label: "DeepSeek", url: "https://api.deepseek.com", textProtocol: "openai_compatible", imageProtocol: "", videoProtocol: "" },
   { id: "dashscope", platform: "dashscope", label: "通义千问", url: "https://dashscope.aliyuncs.com", textProtocol: "dashscope", imageProtocol: "dashscope", videoProtocol: "dashscope" },
   { id: "openai", platform: "openai_compatible", label: "OpenAI", url: "https://api.openai.com", textProtocol: "openai_compatible", imageProtocol: "openai", videoProtocol: "openai" },
-  { id: "agnes", platform: "agnes", label: "Agnes AI", url: "https://apihub.agnes-ai.com", textProtocol: "openai_compatible", imageProtocol: "agnes", videoProtocol: "agnes" },
+  { id: "agnes", platform: "openai_compatible", label: "Agnes AI", url: "https://apihub.agnes-ai.com", textProtocol: "openai_compatible", imageProtocol: "agnes", videoProtocol: "agnes" },
   { id: "comfyui", platform: "comfyui", label: "ComfyUI", url: "http://localhost:8188", textProtocol: "", imageProtocol: "comfyui", videoProtocol: "comfyui" },
 ] as const;
-
-const KNOWN_DEFAULT_API_URLS = new Set([
-  "https://api.openai.com",
-  "https://apihub.agnes-ai.com",
-  "https://docs.newapi.ai",
-  "https://ark.cn-beijing.volces.com",
-  "https://dashscope.aliyuncs.com",
-  "https://api.anthropic.com",
-  "http://localhost:11434",
-  "http://localhost:8000",
-  "https://api.deepseek.com",
-  "http://localhost:8188",
-]);
-
-function isKnownDefaultApiUrl(apiUrl: string | undefined): boolean {
-  if (!apiUrl?.trim()) return true;
-  return KNOWN_DEFAULT_API_URLS.has(apiUrl.trim().replace(/\/+$/, ""));
-}
-
-/** 选择接入类型时的默认协议与地址 */
-const PLATFORM_DEFAULTS: Record<string, Partial<ApiConfigSaveReq>> = {
-  openai_compatible: {
-    textProtocol: "openai_compatible",
-    imageProtocol: "openai",
-    videoProtocol: "openai",
-    autoAppendV1Path: true,
-  },
-  agnes: {
-    apiUrl: "https://apihub.agnes-ai.com",
-    textProtocol: "openai_compatible",
-    imageProtocol: "agnes",
-    videoProtocol: "agnes",
-    autoAppendV1Path: true,
-  },
-  newapi: {
-    textProtocol: "openai_compatible",
-    imageProtocol: "newapi",
-    videoProtocol: "newapi",
-  },
-  dashscope: {
-    apiUrl: "https://dashscope.aliyuncs.com",
-    textProtocol: "dashscope",
-    imageProtocol: "dashscope",
-    videoProtocol: "dashscope",
-  },
-  volcengine: {
-    apiUrl: "https://ark.cn-beijing.volces.com",
-    textProtocol: "volcengine",
-    imageProtocol: "volcengine",
-    videoProtocol: "volcengine",
-  },
-  gemini: {
-    textProtocol: "gemini",
-    imageProtocol: "gemini",
-    videoProtocol: "",
-  },
-  vertex_ai: {
-    textProtocol: "vertex_ai",
-    imageProtocol: "vertex_ai",
-    videoProtocol: "",
-  },
-  GoogleFlowReverseApi: {
-    textProtocol: "",
-    imageProtocol: "google_flow",
-    videoProtocol: "google_flow",
-  },
-  anthropic: {
-    apiUrl: "https://api.anthropic.com",
-    textProtocol: "anthropic",
-    imageProtocol: "",
-    videoProtocol: "",
-  },
-  ollama: {
-    apiUrl: "http://localhost:11434",
-    textProtocol: "ollama",
-    imageProtocol: "",
-    videoProtocol: "",
-  },
-  comfyui: {
-    apiUrl: "http://localhost:8188",
-    textProtocol: "",
-    imageProtocol: "comfyui",
-    videoProtocol: "comfyui",
-    autoAppendV1Path: false,
-  },
-};
 
 export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: ApiConfigDialogProps) {
   const [saving, setSaving] = useState(false);
@@ -266,16 +180,21 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
               value={form.platform || "openai_compatible"}
               onValueChange={v => {
                 const platform = String(v);
-                const defaults = PLATFORM_DEFAULTS[platform] || {};
-                setForm(prev => ({
-                  ...prev,
-                  platform,
-                  ...defaults,
-                  // 仅在地址为空或仍是已知平台默认地址时覆盖，避免冲掉用户自定义地址
-                  apiUrl: !prev.apiUrl?.trim() || isKnownDefaultApiUrl(prev.apiUrl)
-                    ? (defaults.apiUrl || "")
-                    : prev.apiUrl,
-                }));
+                updateField("platform", platform);
+                if (v === "openai_compatible") {
+                  updateField("autoAppendV1Path", true);
+                }
+                if (platform === "comfyui") {
+                  setForm(previous => ({
+                    ...previous,
+                    platform,
+                    textProtocol: "",
+                    imageProtocol: "comfyui",
+                    videoProtocol: "comfyui",
+                    apiUrl: "http://localhost:8188",
+                    autoAppendV1Path: false,
+                  }));
+                }
               }}
               items={PLATFORM_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
             >
@@ -327,7 +246,7 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
                       updateField("textProtocol", provider.textProtocol);
                       updateField("imageProtocol", provider.imageProtocol);
                       updateField("videoProtocol", provider.videoProtocol);
-                      if (provider.platform === "openai_compatible" || provider.platform === "agnes") {
+                      if (provider.platform === "openai_compatible") {
                         updateField("autoAppendV1Path", true);
                       }
                       if (provider.platform === "comfyui") {
@@ -447,7 +366,7 @@ export function ApiConfigDialog({ open, onOpenChange, editingConfig, onSaved }: 
             </div>
           ))}
 
-          {(form.platform === "openai_compatible" || form.platform === "agnes") && (
+          {form.platform === "openai_compatible" && (
             <div className="rounded-lg border border-border/40 bg-muted/20 px-3 py-2.5">
               <div className="flex items-center gap-3">
                 <button

@@ -244,13 +244,6 @@ class OpenAiAndAgnesImageStrategyTests {
                     {"data":[{"url":"https://example.com/agnes-%d.png"}]}
                     """.formatted(currentRequest));
         });
-        server.createContext("/reference.png", exchange -> {
-            byte[] bytes = "agnes-reference".getBytes(StandardCharsets.UTF_8);
-            exchange.getResponseHeaders().set("Content-Type", "image/png");
-            exchange.sendResponseHeaders(200, bytes.length);
-            exchange.getResponseBody().write(bytes);
-            exchange.close();
-        });
         server.start();
 
         ModelPresetService modelPresetService = mock(ModelPresetService.class);
@@ -280,7 +273,7 @@ class OpenAiAndAgnesImageStrategyTests {
                 1472,
                 2,
                 List.of(
-                        "http://localhost:" + server.getAddress().getPort() + "/reference.png",
+                        "https://example.com/reference.png",
                         "data:image/png;base64,cmVmZXJlbmNl"
                 ),
                 apiConfig
@@ -303,7 +296,7 @@ class OpenAiAndAgnesImageStrategyTests {
             assertThat(json.getJSONObject("extra_body").getStr("response_format")).isEqualTo("url");
             assertThat(json.getJSONObject("extra_body").getJSONArray("image").toList(String.class))
                     .containsExactly(
-                            "data:image/png;base64,YWduZXMtcmVmZXJlbmNl",
+                            "https://example.com/reference.png",
                             "data:image/png;base64,cmVmZXJlbmNl"
                     );
         }
