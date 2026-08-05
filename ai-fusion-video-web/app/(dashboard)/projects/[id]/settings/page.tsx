@@ -15,6 +15,7 @@ import {
   ImageIcon,
   X,
   AlertTriangle,
+  FolderPen,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
@@ -28,6 +29,8 @@ import { storageConfigApi, uploadFile } from "@/lib/api/storage";
 import { getApiErrorMessage, readApiResponseError } from "@/lib/api/api-error";
 import { resolveMediaUrl, http } from "@/lib/api/client";
 import { SafeImage } from "@/components/ui/safe-image";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -64,9 +67,13 @@ export default function ProjectSettingsPage() {
   const { project, refresh } = useProject();
 
   // properties 中的简单配置
-  const savedProperties = (project?.properties as Record<string, string>) || {};
+  const savedProperties = useMemo(
+    () => (project?.properties as Record<string, string>) || {},
+    [project?.properties],
+  );
 
   // 本地暂存
+  const [projectName, setProjectName] = useState("");
   const [propsDraft, setPropsDraft] = useState<Record<string, string>>({});
   const [artStyle, setArtStyle] = useState<string>("");
   const [artStyleDescription, setArtStyleDescription] = useState<string>("");
@@ -92,6 +99,7 @@ export default function ProjectSettingsPage() {
   // 当后端数据变化时，同步到本地
   useEffect(() => {
     if (!project) return;
+    setProjectName(project.name);
     setPropsDraft({ ...savedProperties });
     setArtStyle(project.artStyle || "");
     setArtStyleDescription(project.artStyleDescription || "");
@@ -103,6 +111,7 @@ export default function ProjectSettingsPage() {
   // 是否有未保存的修改
   const hasChanges = useMemo(() => {
     if (!project) return false;
+    if (projectName !== project.name) return true;
     // 检查 properties
     const keys = new Set([...Object.keys(propsDraft), ...Object.keys(savedProperties)]);
     for (const k of keys) {
@@ -114,7 +123,7 @@ export default function ProjectSettingsPage() {
     if ((artStyleImagePrompt || "") !== (project.artStyleImagePrompt || "")) return true;
     if ((artStyleImageUrl || "") !== (project.artStyleImageUrl || "")) return true;
     return false;
-  }, [propsDraft, savedProperties, artStyle, artStyleDescription, artStyleImagePrompt, artStyleImageUrl, project]);
+  }, [projectName, propsDraft, savedProperties, artStyle, artStyleDescription, artStyleImagePrompt, artStyleImageUrl, project]);
 
   const handleToggleProp = (key: string, value: string) => {
     setPropsDraft((prev) => {
@@ -226,10 +235,6 @@ export default function ProjectSettingsPage() {
     }
   }, []);
 
-  // 自定义画风的参考图是否可用
-  const isCustomRefAvailable = artStyleImageUrl?.startsWith("http://") || artStyleImageUrl?.startsWith("https://");
-
-
   const handleDeleteProject = async () => {
     if (!project) return;
     const ok = await confirm({ title: "彻底删除项目", description: "确定要删除该项目吗？此操作将永久移除所有剧本、分镜、资产等数据，不可恢复。", variant: "destructive", confirmText: "彻底删除项目" }); if (!ok) return;
@@ -247,6 +252,11 @@ export default function ProjectSettingsPage() {
 
   const handleSave = async () => {
     if (!project || !hasChanges) return;
+    const normalizedProjectName = projectName.trim();
+    if (!normalizedProjectName) {
+      toast.error("项目名称不能为空");
+      return;
+    }
     setSaving(true);
     try {
       // 更新 properties（JSON 字段）
@@ -254,12 +264,14 @@ export default function ProjectSettingsPage() {
       // 更新画风独立字段
       await projectApi.update({
         id: project.id,
+        name: normalizedProjectName,
         artStyle: artStyle || null,
         artStyleDescription: artStyleDescription || null,
         artStyleImagePrompt: artStyleImagePrompt || null,
         artStyleImageUrl: artStyleImageUrl || null,
       });
       await refresh();
+      toast.success("项目设置已保存");
     } catch (err) {
       console.error("保存设置失败:", err);
       toast.error(getApiErrorMessage(err));
@@ -281,15 +293,9 @@ export default function ProjectSettingsPage() {
           <Settings className="h-5 w-5 text-primary" />
           项目设置
         </h2>
-        <button
+        <Button
           onClick={handleSave}
-          disabled={!hasChanges || saving}
-          className={cn(
-            "flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium transition-all duration-200",
-            hasChanges
-              ? "bg-primary text-primary-foreground shadow-sm hover:opacity-90"
-              : "bg-muted/50 text-muted-foreground cursor-not-allowed border border-border/30"
-          )}
+          disabled={!hasChanges || saving || !projectName.trim()}
         >
           {saving ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -297,7 +303,32 @@ export default function ProjectSettingsPage() {
             <Save className="h-4 w-4" />
           )}
           {saving ? "保存中…" : "保存设置"}
-        </button>
+        </Button>
+      </motion.div>
+
+      {/* 项目名称 */}
+      <motion.div
+        variants={itemVariants}
+        className="mb-4 rounded-xl border border-border/30 bg-card/50 p-5 backdrop-blur-sm"
+      >
+        <label htmlFor="project-name" className="mb-3 flex items-center gap-2">
+          <FolderPen className="h-4 w-4 text-primary" />
+          <span className="text-sm font-semibold">项目名称</span>
+        </label>
+        <div className="max-w-xl space-y-2">
+          <Input
+            id="project-name"
+            value={projectName}
+            onChange={(event) => setProjectName(event.target.value)}
+            placeholder="请输入项目名称"
+            maxLength={256}
+            autoComplete="off"
+            aria-invalid={project ? !projectName.trim() : undefined}
+          />
+          <p className="text-xs text-muted-foreground">
+            用于项目列表、工作区以及关联剧本和分镜的标题。
+          </p>
+        </div>
       </motion.div>
 
       {/* 项目类型 */}
@@ -623,14 +654,10 @@ export default function ProjectSettingsPage() {
         <p className="text-xs text-muted-foreground mb-3">
           删除项目将永久移除所有剧本、分镜、资产等数据，此操作不可恢复。
         </p>
-        <button
+        <Button
+          variant="destructive"
           onClick={handleDeleteProject}
           disabled={deleting}
-          className={cn(
-            "flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium",
-            "border border-destructive/30 text-destructive",
-            "hover:bg-destructive/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          )}
         >
           {deleting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -638,7 +665,7 @@ export default function ProjectSettingsPage() {
             <Trash2 className="h-4 w-4" />
           )}
           {deleting ? "删除中…" : "删除项目"}
-        </button>
+        </Button>
       </motion.div>
     </motion.div>
   );

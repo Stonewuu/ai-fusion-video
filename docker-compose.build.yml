@@ -12,11 +12,12 @@ services:
     container_name: fusion-mysql
     restart: unless-stopped
     environment:
+      TZ: ${APP_TIME_ZONE:-Asia/Shanghai}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-123456}
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_fusion_video}
       MYSQL_USER: "${MYSQL_USERNAME:-}"
       MYSQL_PASSWORD: "${MYSQL_PASSWORD:-}"
-    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci
+    command: --character-set-server=utf8mb4 --collation-server=utf8mb4_unicode_ci --default-time-zone=${MYSQL_SESSION_TIME_ZONE:-+08:00}
     volumes:
       - mysql_data:/var/lib/mysql
     # 如需从宿主机访问 MySQL，取消以下注释：
@@ -54,6 +55,8 @@ services:
     restart: unless-stopped
     environment:
       SPRING_PROFILES_ACTIVE: docker
+      APP_TIME_ZONE: ${APP_TIME_ZONE:-Asia/Shanghai}
+      MYSQL_SESSION_TIME_ZONE: ${MYSQL_SESSION_TIME_ZONE:-+08:00}
       MYSQL_HOST: mysql
       MYSQL_PORT: 3306
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_fusion_video}
