@@ -17,6 +17,10 @@
   <img src="https://img.shields.io/badge/Next.js-16-000000" alt="Next.js 16" />
 </p>
 
+<p align="center">
+  <img src="https://stonewuu.github.io/Stonewuu/star-history/Stonewuu/ai-fusion-video.svg" alt="GitHub Star History" width="920" />
+</p>
+
 <table align="center" style="margin: 0 auto; display: table;">
   <tr>
     <td align="center">

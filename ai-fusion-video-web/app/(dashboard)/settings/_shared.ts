@@ -153,6 +153,24 @@ export function getPlatformFields(platform: string): PlatformField[] {
       return [
         { key: "apiUrl", label: "服务地址", placeholder: "http://localhost:11434", type: "text" },
       ];
+    case "comfyui":
+      return [
+        {
+          key: "apiUrl",
+          label: "ComfyUI 地址",
+          placeholder: "http://localhost:8188",
+          type: "text",
+          required: true,
+          helperText: "填写 ComfyUI 服务根地址，不要追加 /api 或 /v1。",
+        },
+        {
+          key: "apiKey",
+          label: "Bearer Token（可选）",
+          placeholder: "未启用鉴权时留空",
+          type: "password",
+          helperText: "仅在 ComfyUI 前置网关要求 Bearer 鉴权时填写。",
+        },
+      ];
     default:
       return [
         { key: "apiUrl", label: "API 地址", placeholder: "https://...", type: "text" },

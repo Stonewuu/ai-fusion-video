@@ -11,6 +11,7 @@ import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.infrastructure.queue.RedisTaskQueue;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.ApiConfigService;
+import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import com.stonewu.fusion.service.generation.ReferenceImageTransportService;
 import com.stonewu.fusion.service.generation.video.VideoFrameExtractor;
@@ -25,8 +26,10 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -52,6 +55,7 @@ public class VideoGenerationConsumer {
     private final VideoGenerationStrategyRouter videoGenerationStrategyRouter;
     private final MediaStorageService mediaStorageService;
     private final VideoFrameExtractor videoFrameExtractor;
+    private final ComfyUiWorkflowService comfyUiWorkflowService;
 
     private final AtomicInteger workerThreadCounter = new AtomicInteger(1);
     private final ExecutorService workerExecutor = Executors.newCachedThreadPool(r -> {
@@ -69,6 +73,7 @@ public class VideoGenerationConsumer {
             throw new BusinessException("没有可用的视频生成模型");
         }
         task.setModelId(queueModel.getId());
+        pinWorkflowVersion(queueModel, task);
         applyTaskDefaults(task, queueModel);
         generationModelCapabilityService.validateVideoTask(queueModel, task);
 
@@ -144,6 +149,51 @@ public class VideoGenerationConsumer {
         throw new RuntimeException("生视频任务排队超时（等待 " + (timeoutMs / 1000) + " 秒），当前任务较多，请稍后重试");
     }
 
+    public boolean cancelTask(String taskId, Long userId) {
+        VideoTask task = videoGenerationService.getByTaskId(taskId);
+        if (task == null || userId == null || !userId.equals(task.getUserId())) {
+            throw new BusinessException(404, "视频任务不存在");
+        }
+        if (Integer.valueOf(2).equals(task.getStatus()) || Integer.valueOf(3).equals(task.getStatus())) {
+            return false;
+        }
+        String queueName = resolveQueueName(task.getModelId());
+        if (Integer.valueOf(0).equals(task.getStatus()) && taskQueue.remove(queueName, taskId)) {
+            markCancelled(task);
+            return true;
+        }
+        AiModel model = aiModelService.getById(task.getModelId());
+        if (model == null) {
+            throw new BusinessException("视频任务缺少模型，无法取消");
+        }
+        VideoGenerationStrategy strategy = videoGenerationStrategyRouter.resolve(model);
+        Set<String> platformTaskIds = new LinkedHashSet<>();
+        videoGenerationService.listItems(task.getId()).stream()
+                .map(VideoItem::getPlatformTaskId)
+                .filter(StrUtil::isNotBlank)
+                .forEach(platformTaskIds::add);
+        boolean cancelled = false;
+        for (String platformTaskId : platformTaskIds) {
+            cancelled |= strategy.cancel(platformTaskId, task);
+        }
+        if (!cancelled) {
+            throw new BusinessException(400, "当前视频任务尚不能取消或远端任务已结束");
+        }
+        markCancelled(task);
+        return true;
+    }
+
+    private void markCancelled(VideoTask task) {
+        for (VideoItem item : videoGenerationService.listItems(task.getId())) {
+            if (!Integer.valueOf(1).equals(item.getStatus())) {
+                item.setStatus(2);
+                item.setErrorMsg("用户取消");
+                videoGenerationService.updateItem(item);
+            }
+        }
+        videoGenerationService.updateStatus(task.getId(), 3, "用户取消");
+    }
+
     @Scheduled(fixedDelay = 5000)
     public void consume() {
         for (String queueName : collectQueueNamesToConsume()) {
@@ -211,7 +261,9 @@ public class VideoGenerationConsumer {
             strategy.poll(platformTaskId, task);
 
             // 持久化远程视频文件到本地/OSS 存储
-            persistVideoItems(task);
+            if (!strategy.persistsResults()) {
+                persistVideoItems(task);
+            }
 
             videoGenerationService.updateStatus(task.getId(), 2, null);
         } catch (Exception e) {
@@ -242,6 +294,17 @@ public class VideoGenerationConsumer {
         List<String> queueNames = new ArrayList<>(taskQueue.listRegisteredQueuesByPrefix(MODEL_QUEUE_PREFIX));
         queueNames.sort(String::compareTo);
         return queueNames;
+    }
+
+    private void pinWorkflowVersion(AiModel model, VideoTask task) {
+        if (model.getComfyuiWorkflowId() == null) return;
+        var workflow = comfyUiWorkflowService.requireWorkflow(model.getComfyuiWorkflowId());
+        if (!Integer.valueOf(1).equals(workflow.getStatus())
+                || workflow.getActiveVersionId() == null) {
+            throw new BusinessException("ComfyUI 工作流已禁用或没有已发布版本");
+        }
+        var version = comfyUiWorkflowService.requireVersion(workflow.getActiveVersionId());
+        task.setWorkflowVersionId(version.getId());
     }
 
     private void refreshQueueMaxConcurrent(String queueName, Long modelId) {

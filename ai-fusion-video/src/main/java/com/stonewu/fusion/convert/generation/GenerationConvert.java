@@ -24,6 +24,7 @@ public interface GenerationConvert {
     @Mapping(target = "errorMsg", ignore = true)
     @Mapping(target = "ownerType", ignore = true)
     @Mapping(target = "ownerId", ignore = true)
+    @Mapping(target = "workflowVersionId", ignore = true)
     ImageTask convert(ImageTaskSubmitReqVO reqVO);
 
     @Mapping(target = "id", ignore = true)
@@ -34,5 +35,6 @@ public interface GenerationConvert {
     @Mapping(target = "errorMsg", ignore = true)
     @Mapping(target = "ownerType", ignore = true)
     @Mapping(target = "ownerId", ignore = true)
+    @Mapping(target = "workflowVersionId", ignore = true)
     VideoTask convert(VideoTaskSubmitReqVO reqVO);
 }

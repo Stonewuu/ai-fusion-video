@@ -28,6 +28,7 @@ export interface AiModel {
   reasoningEffortLevels: string[];
   contextWindow: number | null;
   apiConfigId: number | null;
+  comfyuiWorkflowId: number | null;
   createTime: string;
   updateTime: string;
 }
@@ -61,6 +62,7 @@ export interface AiModelCreateReq {
   reasoningEffortLevels?: string[];
   contextWindow?: number;
   apiConfigId?: number;
+  comfyuiWorkflowId?: number;
 }
 
 /** 更新 AI 模型请求 */
@@ -85,6 +87,7 @@ export interface AiModelUpdateReq {
   reasoningEffortLevels?: string[];
   contextWindow?: number;
   apiConfigId?: number;
+  comfyuiWorkflowId?: number;
 }
 
 /** 模型能力预设（从后端 JSON 加载） */
@@ -205,6 +208,7 @@ export const PLATFORM_OPTIONS = [
   { value: "dashscope", label: "阿里 DashScope", description: "阿里云百炼 / DashScope（通义千问、万相、Qwen-Image）" },
   { value: "anthropic", label: "Anthropic", description: "Claude 系列模型" },
   { value: "ollama", label: "Ollama", description: "本地部署的开源模型" },
+  { value: "comfyui", label: "ComfyUI", description: "ComfyUI Native API；通过已发布工作流生成图片或视频" },
 ] as const;
 
 /** 模型类型选项 */
@@ -243,6 +247,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
   dashscope: "DashScope",
   anthropic: "Anthropic",
   ollama: "Ollama",
+  comfyui: "ComfyUI",
 };
 
 // ========== API ==========

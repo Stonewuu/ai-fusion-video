@@ -6,6 +6,7 @@ export interface GenerationTaskBase {
   taskId: string;
   prompt: string;
   modelId: number | null;
+  workflowVersionId: number | null;
   count: number;
   successCount: number;
   status: number;
@@ -110,6 +111,8 @@ export const generationApi = {
     http.get<never, PageResult<ImageGenerationTask>>(
       `/api/generation/image/page?pageNo=${pageNo}&pageSize=${pageSize}`,
     ),
+  cancelImage: (taskId: string) =>
+    http.post<never, boolean>(`/api/generation/image/${encodeURIComponent(taskId)}/cancel`),
 
   submitVideo: (data: VideoGenerationSubmitReq) =>
     http.post<never, string>("/api/generation/video/submit", data),
@@ -121,4 +124,6 @@ export const generationApi = {
     http.get<never, PageResult<VideoGenerationTask>>(
       `/api/generation/video/page?pageNo=${pageNo}&pageSize=${pageSize}`,
     ),
+  cancelVideo: (taskId: string) =>
+    http.post<never, boolean>(`/api/generation/video/${encodeURIComponent(taskId)}/cancel`),
 };

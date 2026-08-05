@@ -62,6 +62,7 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyLimit, setHistoryLimit] = useState(10);
   const [historyLoading, setHistoryLoading] = useState(true);
+  const [cancellingTaskIds, setCancellingTaskIds] = useState<Set<string>>(new Set());
   const [assetTarget, setAssetTarget] = useState<GenerationAssetTarget | null>(null);
   const simpleComposerRef = useRef<HTMLDivElement>(null);
   const advancedComposerRef = useRef<HTMLDivElement>(null);
@@ -246,6 +247,27 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
       activePollInFlightRef.current = false;
     }
   }, [mode]);
+
+  const cancelTask = async (taskId: string) => {
+    setCancellingTaskIds(current => new Set(current).add(taskId));
+    try {
+      if (mode === "image") {
+        await generationApi.cancelImage(taskId);
+      } else {
+        await generationApi.cancelVideo(taskId);
+      }
+      toast.success("生成任务已取消");
+      await loadHistory(historyLimit);
+    } catch (error) {
+      toastApiError(error, "取消生成任务失败");
+    } finally {
+      setCancellingTaskIds(current => {
+        const next = new Set(current);
+        next.delete(taskId);
+        return next;
+      });
+    }
+  };
 
   useEffect(() => {
     void loadHistory(historyLimit);
@@ -852,6 +874,8 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
                     onUseSuggestion={reusePrompt}
                     onReusePrompt={reusePrompt}
                     onUseReference={useReference}
+                    onCancel={taskId => void cancelTask(taskId)}
+                    cancellingTaskIds={cancellingTaskIds}
                     onAddAsset={(item, prompt) =>
                       setAssetTarget({ mode, item, prompt })
                     }

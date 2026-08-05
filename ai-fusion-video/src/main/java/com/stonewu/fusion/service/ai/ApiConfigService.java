@@ -24,6 +24,7 @@ public class ApiConfigService {
 
     @Transactional
     public Long createApiConfig(ApiConfig apiConfig) {
+        applyPlatformDefaults(apiConfig);
         if (apiConfig.getAutoAppendV1Path() == null) {
             apiConfig.setAutoAppendV1Path(true);
         }
@@ -66,6 +67,7 @@ public class ApiConfigService {
         if (modelId != null) config.setModelId(modelId);
         if (status != null) config.setStatus(status);
         if (remark != null) config.setRemark(remark);
+        applyPlatformDefaults(config);
         normalizeProxyConfig(config);
         apiConfigMapper.updateById(config);
         evictModelCaches();
@@ -153,6 +155,7 @@ public class ApiConfigService {
             case "anthropic" -> "https://api.anthropic.com";
             case "ollama" -> "http://localhost:11434";
             case "deepseek" -> "https://api.deepseek.com";
+            case "comfyui" -> "http://localhost:8188";
             default -> null;
         };
     }
@@ -220,6 +223,24 @@ public class ApiConfigService {
             return "";
         }
         return apiUrl.trim().replaceAll("/+$", "");
+    }
+
+    private void applyPlatformDefaults(ApiConfig config) {
+        if (config == null || !"comfyui".equalsIgnoreCase(config.getPlatform())) {
+            return;
+        }
+        config.setTextProtocol(null);
+        if (StrUtil.isBlank(config.getImageProtocol())) {
+            config.setImageProtocol("comfyui");
+        }
+        if (StrUtil.isBlank(config.getVideoProtocol())) {
+            config.setVideoProtocol("comfyui");
+        }
+        if (!"comfyui".equalsIgnoreCase(config.getImageProtocol())
+                || !"comfyui".equalsIgnoreCase(config.getVideoProtocol())) {
+            throw new BusinessException(400, "ComfyUI 图片和视频默认协议必须为 comfyui");
+        }
+        config.setAutoAppendV1Path(false);
     }
 
     private void evictModelCaches() {

@@ -6,6 +6,7 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
+  Square,
   Sparkles,
 } from "lucide-react";
 import type { AiModel } from "@/lib/api/ai-model";
@@ -65,6 +66,8 @@ interface GenerationHistoryProps {
   onReusePrompt: (prompt: string) => void;
   onUseReference: (item: GenerationResultItem) => void;
   onAddAsset: (item: GenerationResultItem, prompt: string) => void;
+  onCancel: (taskId: string) => void;
+  cancellingTaskIds: Set<string>;
 }
 
 export function GenerationHistory({
@@ -79,6 +82,8 @@ export function GenerationHistory({
   onReusePrompt,
   onUseReference,
   onAddAsset,
+  onCancel,
+  cancellingTaskIds,
 }: GenerationHistoryProps) {
   const [mediaPreview, setMediaPreview] = useState<GenerationMediaPreview | null>(null);
   const modelsById = new Map(models.map((model) => [model.id, model]));
@@ -246,16 +251,28 @@ export function GenerationHistory({
                   </span>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="xs"
-                onClick={() => onReusePrompt(task.prompt)}
-                title="复用提示词"
-                className="shrink-0"
-              >
-                <RotateCcw className="h-3 w-3" />
-                再次使用
-              </Button>
+              <div className="flex shrink-0 items-center gap-2">
+                {(status.tone === "queued" || (status.tone === "running" && model?.comfyuiWorkflowId)) && (
+                  <Button
+                    variant="destructive-ghost"
+                    size="xs"
+                    onClick={() => onCancel(task.taskId)}
+                    disabled={cancellingTaskIds.has(task.taskId)}
+                  >
+                    {cancellingTaskIds.has(task.taskId) ? <Loader2 className="animate-spin" /> : <Square />}
+                    取消
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => onReusePrompt(task.prompt)}
+                  title="复用提示词"
+                >
+                  <RotateCcw className="h-3 w-3" />
+                  再次使用
+                </Button>
+              </div>
             </header>
 
             <GenerationHistoryReferences
