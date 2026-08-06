@@ -2,6 +2,11 @@ import axios from "axios";
 import type { CommonResult } from "./types";
 import { getApiPayloadMessage, toApiError } from "./api-error";
 import { getApiBaseUrl } from "@/lib/runtime-config";
+import {
+  AUTH_REFRESH_FAILED_ERROR_CODE,
+  AUTH_SESSION_EXPIRED_ERROR_CODE,
+  AuthFlowError,
+} from "@/lib/auth-flow-error";
 
 // 默认同源；Docker 可在容器启动时通过 PUBLIC_API_URL 注入分域后端地址。
 const API_BASE_URL = getApiBaseUrl();
@@ -139,7 +144,12 @@ http.interceptors.response.use(
     // 已经是重试请求 → 不再重复刷新
     if (originalRequest._retry) {
       handleAuthFailure();
-      return Promise.reject(new Error("登录已过期，请重新登录"));
+      return Promise.reject(
+        new AuthFlowError(
+          AUTH_SESSION_EXPIRED_ERROR_CODE,
+          "登录已过期，请重新登录"
+        )
+      );
     }
 
     // 如果正在刷新中，将请求排队等待
@@ -161,7 +171,12 @@ http.interceptors.response.use(
     // 没有 refresh_token → 直接清除状态跳登录页
     if (!storedRefreshToken) {
       handleAuthFailure();
-      return Promise.reject(new Error("登录已过期，请重新登录"));
+      return Promise.reject(
+        new AuthFlowError(
+          AUTH_SESSION_EXPIRED_ERROR_CODE,
+          "登录已过期，请重新登录"
+        )
+      );
     }
 
     originalRequest._retry = true;
@@ -210,9 +225,14 @@ http.interceptors.response.use(
     } catch (refreshError) {
       // 刷新失败 → 清除认证状态，跳登录页
       const normalizedError = toApiError(refreshError);
-      processQueue(normalizedError, null);
+      const authError = new AuthFlowError(
+        AUTH_REFRESH_FAILED_ERROR_CODE,
+        normalizedError.message,
+        normalizedError
+      );
+      processQueue(authError, null);
       handleAuthFailure();
-      return Promise.reject(normalizedError);
+      return Promise.reject(authError);
     } finally {
       isRefreshing = false;
     }

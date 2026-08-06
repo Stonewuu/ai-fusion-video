@@ -152,6 +152,64 @@ function requireToolMessageIdentity(message: AgentMessage): {
   return { toolCallId: message.toolCallId, toolName: message.toolName };
 }
 
+type PersistedToolItem = Extract<
+  TimelineItem | SubTimelineItem,
+  { type: "tool" }
+>;
+
+function fillPersistedToolArguments(
+  item: PersistedToolItem,
+  toolCallId: string,
+  toolName: string,
+  toolArguments: string,
+  child: boolean
+): void {
+  if (item.name !== toolName) {
+    throw new Error(
+      `Persisted ${child ? "child " : ""}tool name changed: ${toolCallId}`
+    );
+  }
+  if (item.status === "calling") {
+    throw new Error(
+      `Persisted ${child ? "child " : ""}tool call is duplicated: ${toolCallId}`
+    );
+  }
+  item.arguments = toolArguments;
+}
+
+function createPersistedSettledTool(
+  toolCallId: string,
+  toolName: string,
+  toolStatus: string | undefined,
+  content: string | undefined,
+  child: boolean
+): PersistedToolItem {
+  const status = persistedToolTimelineStatus(toolStatus);
+  if (status === "cancelled") {
+    if (typeof content !== "string") {
+      throw new Error(
+        `Persisted cancelled ${child ? "child " : ""}tool ${toolCallId} has no arguments`
+      );
+    }
+    return {
+      type: "tool",
+      id: toolCallId,
+      name: toolName,
+      arguments: content,
+      status,
+    };
+  }
+
+  return {
+    type: "tool",
+    id: toolCallId,
+    name: toolName,
+    arguments: "",
+    status,
+    result: normalizeToolResult(toolName, content),
+  };
+}
+
 export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
   const timeline: TimelineItem[] = [];
   const toolIndexMap = new Map<string, number>();
@@ -209,6 +267,19 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
             if (typeof msg.content !== "string") {
               throw new Error(`Persisted tool call ${toolCallId} has no arguments`);
             }
+            const existingChild = children.find(
+              (child) => child.type === "tool" && child.id === toolCallId
+            );
+            if (existingChild?.type === "tool") {
+              fillPersistedToolArguments(
+                existingChild,
+                toolCallId,
+                toolName,
+                msg.content,
+                true
+              );
+              return;
+            }
             children.push({
               type: "tool",
               id: toolCallId,
@@ -233,27 +304,34 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
             );
             return;
           }
-          if (msg.toolStatus === "cancelled") {
-            if (typeof msg.content !== "string") {
-              throw new Error(`Persisted cancelled child tool ${toolCallId} has no arguments`);
-            }
-            children.push({
-              type: "tool",
-              id: toolCallId,
-              name: toolName,
-              arguments: msg.content,
-              status: "cancelled",
-            });
-            return;
-          }
-          throw new Error(`Persisted child tool result has no call: ${toolCallId}`);
+          children.push(createPersistedSettledTool(
+            toolCallId,
+            toolName,
+            msg.toolStatus,
+            msg.content,
+            true
+          ));
         });
         continue;
       }
 
+      const existingIdx = toolIndexMap.get(toolCallId);
       if (msg.toolStatus === "running") {
         if (typeof msg.content !== "string") {
           throw new Error(`Persisted tool call ${toolCallId} has no arguments`);
+        }
+        if (existingIdx !== undefined) {
+          const existingItem = timeline[existingIdx];
+          if (existingItem.type === "tool") {
+            fillPersistedToolArguments(
+              existingItem,
+              toolCallId,
+              toolName,
+              msg.content,
+              false
+            );
+          }
+          continue;
         }
         const idx = timeline.length;
         timeline.push({
@@ -267,7 +345,6 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
         continue;
       }
 
-      const existingIdx = toolIndexMap.get(toolCallId);
       if (existingIdx !== undefined) {
         const existingItem = timeline[existingIdx];
         if (existingItem.type === "tool") {
@@ -279,22 +356,16 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
         }
         continue;
       }
-      if (msg.toolStatus === "cancelled") {
-        if (typeof msg.content !== "string") {
-          throw new Error(`Persisted cancelled tool ${toolCallId} has no arguments`);
-        }
-        const idx = timeline.length;
-        timeline.push({
-          type: "tool",
-          id: toolCallId,
-          name: toolName,
-          arguments: msg.content,
-          status: "cancelled",
-        });
-        registerTool(toolCallId, idx);
-        continue;
-      }
-      throw new Error(`Persisted tool result has no call: ${toolCallId}`);
+      const idx = timeline.length;
+      timeline.push(createPersistedSettledTool(
+        toolCallId,
+        toolName,
+        msg.toolStatus,
+        msg.content,
+        false
+      ));
+      registerTool(toolCallId, idx);
+      continue;
     }
 
     if (msg.parentToolCallId) {

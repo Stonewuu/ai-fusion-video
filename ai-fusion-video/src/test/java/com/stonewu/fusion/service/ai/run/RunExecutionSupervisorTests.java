@@ -514,7 +514,7 @@ class RunExecutionSupervisorTests {
                 shutdown,
                 leases,
                 signals,
-                new AgentEventEnvelopeSanitizer(),
+                new AgentEventEnvelopeSanitizer(objectMapper),
                 waitingState);
         Instant deadline = Instant.now().plus(deadlineDelay);
         AgentKernelSpec spec = spec();

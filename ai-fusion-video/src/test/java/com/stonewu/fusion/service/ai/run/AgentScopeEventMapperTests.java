@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.ai.run;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.BinaryNode;
 import com.fasterxml.jackson.databind.node.TextNode;
@@ -56,7 +57,8 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class AgentScopeEventMapperTests {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    private final AgentEventEnvelopeSanitizer sanitizer = new AgentEventEnvelopeSanitizer();
+    private final AgentEventEnvelopeSanitizer sanitizer =
+            new AgentEventEnvelopeSanitizer(objectMapper);
     private final AgentScopeEventMapper mapper = new AgentScopeEventMapper(objectMapper, sanitizer);
 
     @Test
@@ -192,6 +194,23 @@ class AgentScopeEventMapperTests {
                         "[SIGNED_URL_REDACTED]", "[FILE_PATH_REDACTED]", "preserved")
                 .doesNotContain("abcdefgh123456", "credential-value", "aGVsbG8=",
                         "X-Amz-Signature", "Users\\\\admin");
+    }
+
+    @Test
+    void sanitizesSerializedJsonWithoutReplacingTheWholeToolResult() throws Exception {
+        String result = objectMapper.writeValueAsString(Map.of(
+                "episodeNumber", 2,
+                "title", "变量与架构",
+                "rawContent", "保留前文 C:\\Users\\admin\\secret.txt 保留后文"));
+
+        String sanitized = sanitizer.sanitize(TextNode.valueOf(result)).asText();
+        JsonNode parsed = objectMapper.readTree(sanitized);
+
+        assertThat(sanitized).isNotEqualTo(AgentEventEnvelopeSanitizer.FILE_PATH_REDACTED);
+        assertThat(parsed.path("episodeNumber").asInt()).isEqualTo(2);
+        assertThat(parsed.path("title").asText()).isEqualTo("变量与架构");
+        assertThat(parsed.path("rawContent").asText())
+                .isEqualTo(AgentEventEnvelopeSanitizer.FILE_PATH_REDACTED);
     }
 
     @Test

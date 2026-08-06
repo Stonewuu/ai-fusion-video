@@ -53,7 +53,7 @@ public final class AgentScopeEventMapper {
     private final AgentEventEnvelopeSanitizer sanitizer;
 
     public AgentScopeEventMapper(ObjectMapper objectMapper) {
-        this(objectMapper, new AgentEventEnvelopeSanitizer());
+        this(objectMapper, new AgentEventEnvelopeSanitizer(objectMapper));
     }
 
     @Autowired

@@ -44,15 +44,16 @@ class AgentConfirmationExpiryCoordinatorTests {
         eventMapper = mock(AgentEventMapper.class);
         terminals = mock(RunTerminalCoordinator.class);
         projections = mock(AgentMessageProjectionService.class);
+        ObjectMapper objectMapper = new ObjectMapper().findAndRegisterModules();
         AgentRuntimeSchedulers schedulers = mock(AgentRuntimeSchedulers.class);
         when(schedulers.journal()).thenReturn(Schedulers.immediate());
         coordinator = new AgentConfirmationExpiryCoordinator(
                 runMapper,
                 eventMapper,
-                new ObjectMapper().findAndRegisterModules(),
+                objectMapper,
                 terminals,
                 projections,
-                new AgentEventEnvelopeSanitizer(),
+                new AgentEventEnvelopeSanitizer(objectMapper),
                 schedulers);
     }
 

@@ -19,6 +19,7 @@ import type { MenuDisplayMode } from "@/components/ui/glow-menu";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 import { UserAvatarDropdown } from "@/components/ui/menu";
 import { NotificationPanel } from "@/components/dashboard/notification-panel";
+import { ClientErrorBoundary } from "@/components/client-error-boundary";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { cn } from "@/lib/utils";
@@ -98,7 +99,13 @@ export function AppHeader() {
   const mobileMenuOpen = displayMode === "mobile" && mobileMenuRoute === pathname;
 
   // Pipeline 通知
-  const { tasks, setNotificationOpen, panelExpanded, setPanelExpanded } = usePipelineStore();
+  const {
+    tasks,
+    notificationOpen,
+    setNotificationOpen,
+    panelExpanded,
+    setPanelExpanded,
+  } = usePipelineStore();
   const runningCount = tasks.filter((t) => t.status === "running").length;
   const hasAnyTasks = tasks.length > 0;
 
@@ -161,6 +168,11 @@ export function AppHeader() {
       setMobileMenuRoute(null);
     }
   }, []);
+
+  const handleNotificationPanelError = useCallback(() => {
+    setPanelExpanded(false);
+    setNotificationOpen(false);
+  }, [setNotificationOpen, setPanelExpanded]);
 
   // 用户头像下拉菜单项
   const userMenuItems = [
@@ -265,7 +277,13 @@ export function AppHeader() {
             </button>
 
             {/* 通知面板 */}
-            <NotificationPanel anchorRef={bellRef} />
+            <ClientErrorBoundary
+              key={`notification-panel-${notificationOpen}-${panelExpanded}`}
+              context="AI 任务中心加载失败"
+              onError={handleNotificationPanelError}
+            >
+              <NotificationPanel anchorRef={bellRef} />
+            </ClientErrorBoundary>
 
             <a
               href="https://github.com/Stonewuu/ai-fusion-video"

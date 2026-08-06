@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.ai.run;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -57,6 +59,13 @@ public final class AgentEventEnvelopeSanitizer {
     private static final Pattern BASE64 = Pattern.compile("[A-Za-z0-9+/]+={0,2}");
     private static final Pattern SHA256_HEX = Pattern.compile("[0-9a-fA-F]{64}");
 
+    private final ObjectMapper objectMapper;
+
+    public AgentEventEnvelopeSanitizer(ObjectMapper objectMapper) {
+        this.objectMapper = Objects.requireNonNull(
+                objectMapper, "objectMapper must not be null");
+    }
+
     public JsonNode sanitize(JsonNode payload) {
         return sanitizeNode(Objects.requireNonNull(payload, "payload must not be null"));
     }
@@ -90,6 +99,10 @@ public final class AgentEventEnvelopeSanitizer {
         }
 
         String value = node.textValue();
+        JsonNode structuredJson = parseStructuredJson(value);
+        if (structuredJson != null) {
+            return TextNode.valueOf(sanitizeNode(structuredJson).toString());
+        }
         if (AUTHORIZATION_VALUE.matcher(value).find()) {
             return TextNode.valueOf(SECRET_REDACTED);
         }
@@ -103,6 +116,23 @@ public final class AgentEventEnvelopeSanitizer {
             return TextNode.valueOf(FILE_PATH_REDACTED);
         }
         return TextNode.valueOf(value);
+    }
+
+    private JsonNode parseStructuredJson(String value) {
+        String trimmed = value.trim();
+        boolean object = trimmed.startsWith("{") && trimmed.endsWith("}");
+        boolean array = trimmed.startsWith("[") && trimmed.endsWith("]");
+        if (!object && !array) {
+            return null;
+        }
+        try {
+            JsonNode parsed = objectMapper.readTree(trimmed);
+            return parsed != null && (parsed.isObject() || parsed.isArray())
+                    ? parsed
+                    : null;
+        } catch (JsonProcessingException invalidJson) {
+            return null;
+        }
     }
 
     private boolean containsSignedQuery(String value) {

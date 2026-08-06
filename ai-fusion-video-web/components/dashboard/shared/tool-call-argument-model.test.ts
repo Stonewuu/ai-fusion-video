@@ -62,13 +62,15 @@ test("accepts tools without arguments", () => {
   assert.deepEqual(listToolArgumentEntries({}), []);
 });
 
-test("formats tool results as strict indented JSON", () => {
+test("formats structured and plain-text tool results as valid JSON", () => {
   assert.equal(
     formatToolResultJson('{"status":"success","items":[1,2]}'),
     '{\n  "status": "success",\n  "items": [\n    1,\n    2\n  ]\n}',
   );
   assert.equal(formatToolResultJson(null), "null");
-  assert.throws(() => formatToolResultJson("plain text"), /not valid JSON/);
+  assert.equal(formatToolResultJson("[FILE_PATH_REDACTED]"),
+    '"[FILE_PATH_REDACTED]"');
+  assert.equal(formatToolResultJson(""), '""');
 });
 
 test("renders lifecycle delete arguments with tool-specific Chinese semantics", () => {

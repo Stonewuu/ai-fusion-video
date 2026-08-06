@@ -96,7 +96,9 @@ function ToolCallItem({
     && item.status !== "rejected"
     && item.status !== "expired"
     && item.status !== "cancelled";
-  const argumentsReady = item.status !== "preparing";
+  const argumentsReady = item.status !== "preparing"
+    && item.argumentsText.trim().length > 0;
+  const jsonViewReady = hasResult || argumentsReady;
   const [argumentsExpanded, setArgumentsExpanded] = useState(
     item.status === "awaiting_approval" && !hasResult,
   );
@@ -138,7 +140,7 @@ function ToolCallItem({
           size="xs"
           className={cn(
             "pointer-events-none ml-auto opacity-0 transition-opacity duration-150 group-focus-within/tool-call:pointer-events-auto group-focus-within/tool-call:opacity-100 group-hover/tool-call:pointer-events-auto group-hover/tool-call:opacity-100 motion-reduce:transition-none",
-            !argumentsReady && "hidden",
+            !jsonViewReady && "hidden",
           )}
           onClick={() => setJsonView((current) => !current)}
         >

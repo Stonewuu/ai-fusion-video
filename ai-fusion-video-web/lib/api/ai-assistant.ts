@@ -1,5 +1,9 @@
 import { http, API_BASE_URL } from "./client";
 import { getApiPayloadMessage, readApiResponseError, toApiError } from "./api-error";
+import {
+  AUTH_REFRESH_FAILED_ERROR_CODE,
+  AuthFlowError,
+} from "@/lib/auth-flow-error";
 
 export type AiMultimodalInputType = "image" | "video" | "audio" | "file";
 export type AiMultimodalInputTransport = "url" | "base64";
@@ -190,14 +194,26 @@ async function refreshTokenForSSE(): Promise<string | null> {
       body: JSON.stringify({ refreshToken }),
     });
     if (!resp.ok) {
-      processSseQueue(new Error(await readApiResponseError(resp)), null);
+      processSseQueue(
+        new AuthFlowError(
+          AUTH_REFRESH_FAILED_ERROR_CODE,
+          await readApiResponseError(resp)
+        ),
+        null
+      );
       return null;
     }
 
     const result = await resp.json();
     if (result.code !== 0 || !result.data) {
       const message = getApiPayloadMessage(result);
-      processSseQueue(new Error(message || "请求失败"), null);
+      processSseQueue(
+        new AuthFlowError(
+          AUTH_REFRESH_FAILED_ERROR_CODE,
+          message || "请求失败"
+        ),
+        null
+      );
       return null;
     }
 
@@ -222,7 +238,15 @@ async function refreshTokenForSSE(): Promise<string | null> {
     processSseQueue(null, accessToken);
     return accessToken;
   } catch (error) {
-    processSseQueue(toApiError(error), null);
+    const normalizedError = toApiError(error);
+    processSseQueue(
+      new AuthFlowError(
+        AUTH_REFRESH_FAILED_ERROR_CODE,
+        normalizedError.message,
+        normalizedError
+      ),
+      null
+    );
     return null;
   } finally {
     isRefreshingForSSE = false;

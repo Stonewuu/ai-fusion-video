@@ -120,14 +120,11 @@ export function formatToolArgumentsJson(argumentsValue: ToolArguments): string {
 
 export function formatToolResultJson(resultText: string | null): string {
   if (resultText === null) return "null";
-  if (!resultText.trim()) {
-    throw new Error("Tool result must contain JSON");
-  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(resultText);
-  } catch (cause) {
-    throw new Error("Tool result is not valid JSON", { cause });
+  } catch {
+    parsed = resultText;
   }
   assertArgumentValue(parsed, "$result");
   return JSON.stringify(parsed, null, 2);

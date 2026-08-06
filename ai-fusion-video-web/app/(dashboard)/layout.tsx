@@ -13,6 +13,10 @@ import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { AssistantDockSlot } from "@/components/dashboard/assistant/dock-slot";
+import { ClientErrorBoundary } from "@/components/client-error-boundary";
+import { ErrorRecoveryPanel } from "@/components/error-recovery-panel";
+import { ErrorRegionFallback } from "@/components/error-region-fallback";
+import { getClientErrorMessage } from "@/lib/client-error";
 
 const GLOBAL_SIDEBAR_COLLAPSED_STORAGE_KEY = "fusion-dashboard-sidebar-collapsed";
 
@@ -90,7 +94,9 @@ export default function DashboardLayout({
 
   return (
     <div className="h-screen overflow-hidden flex flex-col bg-background">
-        <VersionUpdateNotifier />
+        <ClientErrorBoundary context="版本更新检查异常">
+          <VersionUpdateNotifier />
+        </ClientErrorBoundary>
 
         {/* 顶部浮动导航栏 */}
         <motion.div
@@ -98,7 +104,14 @@ export default function DashboardLayout({
           animate={ready ? { opacity: 1, y: 0 } : { opacity: 0, y: -20 }}
           transition={{ duration: 0.5, ease: [0.25, 0.46, 0.45, 0.94] }}
         >
-          <AppHeader />
+          <ClientErrorBoundary
+            context="顶部导航运行异常"
+            fallback={(_error, reset) => (
+              <ErrorRegionFallback label="顶部导航加载失败" onRetry={reset} />
+            )}
+          >
+            <AppHeader />
+          </ClientErrorBoundary>
         </motion.div>
 
         {/* 侧边栏 + 主内容 */}
@@ -119,11 +132,13 @@ export default function DashboardLayout({
                   : "w-[clamp(272px,23vw,332px)] px-3"
               )}
             >
-              <SidebarNav
-                project={currentProject}
-                collapsed={isGlobalSidebarCollapsed}
-                onCollapsedChange={handleSetGlobalSidebarCollapsed}
-              />
+              <ClientErrorBoundary context="侧边栏运行异常">
+                <SidebarNav
+                  project={currentProject}
+                  collapsed={isGlobalSidebarCollapsed}
+                  onCollapsedChange={handleSetGlobalSidebarCollapsed}
+                />
+              </ClientErrorBoundary>
             </div>
           )}
 
@@ -146,7 +161,12 @@ export default function DashboardLayout({
                   transition={{ duration: 0.2, ease: "easeOut" }}
                   className="fixed left-4 top-22 z-50 lg:hidden w-[60vw] min-w-[200px] max-w-[300px]"
                 >
-                  <SidebarNav project={currentProject} onNavigate={() => setSidebarRoute(null)} />
+                  <ClientErrorBoundary context="移动侧边栏运行异常">
+                    <SidebarNav
+                      project={currentProject}
+                      onNavigate={() => setSidebarRoute(null)}
+                    />
+                  </ClientErrorBoundary>
                 </motion.div>
               </>
             )}
@@ -176,11 +196,30 @@ export default function DashboardLayout({
           <main className="dashboard-scroll flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden">
             <OverlayScrollArea key={pathname} className="min-h-0 flex-1">
               <div className="dashboard-content flex min-h-full w-full shrink-0 flex-col pt-4">
-                {ready ? children : null}
+                <ClientErrorBoundary
+                  key={pathname}
+                  context="当前页面运行异常"
+                  fallback={(error, reset) => (
+                    <ErrorRecoveryPanel
+                      className="min-h-[60vh]"
+                      title="当前页面发生异常"
+                      description="顶部导航和侧边栏仍可使用；重试只会重新渲染当前页面。"
+                      details={getClientErrorMessage(error)}
+                      onRetry={reset}
+                      onGoHome={() => router.push("/dashboard")}
+                    />
+                  )}
+                >
+                  {ready ? children : null}
+                </ClientErrorBoundary>
               </div>
             </OverlayScrollArea>
           </main>
-          {ready && <AssistantDockSlot projectId={currentProjectId} />}
+          {ready && (
+            <ClientErrorBoundary context="融光助手运行异常">
+              <AssistantDockSlot projectId={currentProjectId} />
+            </ClientErrorBoundary>
+          )}
         </motion.div>
       </div>
   );
