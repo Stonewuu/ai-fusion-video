@@ -47,7 +47,7 @@ services:
 
   # ---------- 后端 ----------
   backend:
-    image: stonewuu/ai-fusion-video:latest
+    image: ai-fusion-video:local
     container_name: fusion-backend
     restart: unless-stopped
     environment:
@@ -59,7 +59,7 @@ services:
       MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_fusion_video}
       # 兼容旧部署：未配置应用账号时继续使用 root 与 MYSQL_ROOT_PASSWORD。
       MYSQL_USERNAME: "${MYSQL_USERNAME:-root}"
-      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-${MYSQL_ROOT_PASSWORD:-123456}}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD:-123456}"
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-123456}
@@ -76,7 +76,7 @@ services:
 
   # ---------- 前端 ----------
   frontend:
-    image: stonewuu/ai-fusion-video-web:latest
+    image: ai-fusion-video-web:local
     container_name: fusion-frontend
     restart: unless-stopped
     environment:

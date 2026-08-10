@@ -113,6 +113,8 @@ export const generationApi = {
     ),
   cancelImage: (taskId: string) =>
     http.post<never, boolean>(`/api/generation/image/${encodeURIComponent(taskId)}/cancel`),
+  deleteImage: (id: number) =>
+    http.delete<never, boolean>(`/api/generation/image/${id}`),
 
   submitVideo: (data: VideoGenerationSubmitReq) =>
     http.post<never, string>("/api/generation/video/submit", data),
@@ -126,4 +128,6 @@ export const generationApi = {
     ),
   cancelVideo: (taskId: string) =>
     http.post<never, boolean>(`/api/generation/video/${encodeURIComponent(taskId)}/cancel`),
+  deleteVideo: (id: number) =>
+    http.delete<never, boolean>(`/api/generation/video/${id}`),
 };

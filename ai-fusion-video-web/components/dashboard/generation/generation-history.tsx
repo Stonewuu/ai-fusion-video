@@ -8,7 +8,9 @@ import {
   RotateCcw,
   Square,
   Sparkles,
+  Trash2,
 } from "lucide-react";
+import { useConfirm } from "@/components/ui/confirm-dialog";
 import type { AiModel } from "@/lib/api/ai-model";
 import { getModelDisplayParts } from "@/lib/model-display";
 import { Button } from "@/components/ui/button";
@@ -67,6 +69,7 @@ interface GenerationHistoryProps {
   onUseReference: (item: GenerationResultItem) => void;
   onAddAsset: (item: GenerationResultItem, prompt: string) => void;
   onCancel: (taskId: string) => void;
+  onDelete: (id: number) => void;
   cancellingTaskIds: Set<string>;
 }
 
@@ -83,9 +86,11 @@ export function GenerationHistory({
   onUseReference,
   onAddAsset,
   onCancel,
+  onDelete,
   cancellingTaskIds,
 }: GenerationHistoryProps) {
   const [mediaPreview, setMediaPreview] = useState<GenerationMediaPreview | null>(null);
+  const { confirm } = useConfirm();
   const modelsById = new Map(models.map((model) => [model.id, model]));
 
   if (loading && entries.length === 0) {
@@ -271,6 +276,24 @@ export function GenerationHistory({
                 >
                   <RotateCcw className="h-3 w-3" />
                   再次使用
+                </Button>
+                <Button
+                  variant="destructive-ghost"
+                  size="icon-xs"
+                  title="删除记录"
+                  aria-label="删除记录"
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: "删除创作记录",
+                      description: "确定要删除这条创作记录吗？此操作不可撤销，所有相关数据将被永久移除。",
+                      variant: "destructive",
+                      confirmText: "确定删除",
+                    });
+                    if (!ok) return;
+                    onDelete(task.id);
+                  }}
+                >
+                  <Trash2 className="h-3 w-3" />
                 </Button>
               </div>
             </header>

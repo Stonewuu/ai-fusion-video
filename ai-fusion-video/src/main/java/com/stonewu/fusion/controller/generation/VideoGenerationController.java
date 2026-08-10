@@ -66,4 +66,16 @@ public class VideoGenerationController {
         return CommonResult.success(videoGenerationConsumer.cancelTask(
                 taskId, requireCurrentUserId()));
     }
+
+    @Operation(summary = "删除视频生成任务")
+    @DeleteMapping("/{id}")
+    public CommonResult<Boolean> delete(@PathVariable Long id) {
+        Long userId = requireCurrentUserId();
+        VideoTask task = videoGenerationService.getById(id);
+        if (task == null || !task.getUserId().equals(userId)) {
+            return CommonResult.error("任务不存在或无权删除");
+        }
+        videoGenerationService.delete(id);
+        return CommonResult.success(true);
+    }
 }

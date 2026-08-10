@@ -72,9 +72,12 @@ public class VideoGenerationService {
         taskMapper.updateById(task);
     }
 
-    @CacheEvict(value = "videoTask", allEntries = true)
+    @CacheEvict(value = {"videoTask", "videoItems"}, allEntries = true)
     @Transactional
     public void delete(Long id) {
+        // 先删除关联的视频条目
+        itemMapper.delete(new LambdaQueryWrapper<VideoItem>().eq(VideoItem::getTaskId, id));
+        // 再删除任务本身
         taskMapper.deleteById(id);
     }
 

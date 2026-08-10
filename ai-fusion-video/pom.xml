@@ -1,3 +1,4 @@
+<<<<<<< Updated upstream
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
 	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
@@ -393,3 +394,400 @@
 		</profile>
 	</profiles>
 </project>
+=======
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+	<parent>
+		<groupId>org.springframework.boot</groupId>
+		<artifactId>spring-boot-starter-parent</artifactId>
+		<version>3.5.14</version>
+		<relativePath /> <!-- lookup parent from repository -->
+	</parent>
+	<groupId>com.stonewu</groupId>
+	<artifactId>ai-fusion-video</artifactId>
+	<version>1.1.1</version>
+	<name>ai-fusion-video</name>
+	<description>AI-driven video creation platform</description>
+	<url>https://github.com/Stonewuu/ai-fusion-video</url>
+	<licenses>
+		<license>
+			<name>MIT License</name>
+			<url>https://opensource.org/license/mit/</url>
+			<distribution>repo</distribution>
+		</license>
+	</licenses>
+	<developers>
+		<developer>
+			<id>Stonewuu</id>
+			<name>Stonewu</name>
+			<url>https://github.com/Stonewuu</url>
+		</developer>
+	</developers>
+	<scm>
+		<connection>scm:git:https://github.com/Stonewuu/ai-fusion-video.git</connection>
+		<developerConnection>scm:git:ssh://git@github.com/Stonewuu/ai-fusion-video.git</developerConnection>
+		<tag>1.1.1</tag>
+		<url>https://github.com/Stonewuu/ai-fusion-video</url>
+	</scm>
+	<properties>
+		<java.version>21</java.version>
+		<mapstruct.version>1.6.3</mapstruct.version>
+		<anthropic-java.version>2.26.0</anthropic-java.version>
+		<dashscope-sdk-java.version>2.22.16</dashscope-sdk-java.version>
+		<agentscope.version>2.0.0</agentscope.version>
+		<victools.version>4.38.0</victools.version>
+		<testcontainers.version>1.21.3</testcontainers.version>
+		<awaitility.version>4.3.0</awaitility.version>
+		<maven-failsafe.version>3.5.4</maven-failsafe.version>
+	</properties>
+	<dependencyManagement>
+		<dependencies>
+			<dependency>
+				<groupId>com.github.victools</groupId>
+				<artifactId>jsonschema-generator-bom</artifactId>
+				<version>${victools.version}</version>
+				<type>pom</type>
+				<scope>import</scope>
+			</dependency>
+		</dependencies>
+	</dependencyManagement>
+	<dependencies>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-cache</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-mail</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.baomidou</groupId>
+			<artifactId>mybatis-plus-spring-boot3-starter</artifactId>
+			<version>3.5.12</version>
+		</dependency>
+		<dependency>
+			<groupId>com.baomidou</groupId>
+			<artifactId>mybatis-plus-jsqlparser</artifactId>
+			<version>3.5.12</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-data-redis</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webflux</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-mysql</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>2.8.16</version>
+		</dependency>
+
+
+		<dependency>
+			<groupId>com.mysql</groupId>
+			<artifactId>mysql-connector-j</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.projectlombok</groupId>
+			<artifactId>lombok</artifactId>
+			<optional>true</optional>
+		</dependency>
+		<dependency>
+			<groupId>org.mapstruct</groupId>
+			<artifactId>mapstruct</artifactId>
+			<version>${mapstruct.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.projectreactor</groupId>
+			<artifactId>reactor-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.security</groupId>
+			<artifactId>spring-security-test</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>${testcontainers.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>mysql</artifactId>
+			<version>${testcontainers.version}</version>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.awaitility</groupId>
+			<artifactId>awaitility</artifactId>
+			<version>${awaitility.version}</version>
+			<scope>test</scope>
+		</dependency>
+
+
+		<dependency>
+			<groupId>com.alibaba.cloud.ai</groupId>
+			<artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+			<version>1.1.2.0</version>
+		</dependency>
+		<!-- DashScope 官方 Java SDK（AgentScope 多模态工具同样基于该 SDK） -->
+		<dependency>
+			<groupId>com.alibaba</groupId>
+			<artifactId>dashscope-sdk-java</artifactId>
+			<version>${dashscope-sdk-java.version}</version>
+			<exclusions>
+				<exclusion>
+					<groupId>org.slf4j</groupId>
+					<artifactId>slf4j-simple</artifactId>
+				</exclusion>
+			</exclusions>
+		</dependency>
+		<!-- Spring AI OpenAI (兼容 DeepSeek/智谱/豆包/Moonshot/硅基流动等) -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-openai</artifactId>
+			<version>1.1.2</version>
+		</dependency>
+		<!-- Spring AI Ollama (本地模型) -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-ollama</artifactId>
+			<version>1.1.2</version>
+		</dependency>
+		<!-- Spring AI Anthropic (Claude 系列) -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-anthropic</artifactId>
+			<version>1.1.2</version>
+		</dependency>
+		<!-- Anthropic 官方 Java SDK（AgentScope AnthropicChatModel 运行时依赖） -->
+		<dependency>
+			<groupId>com.anthropic</groupId>
+			<artifactId>anthropic-java</artifactId>
+			<version>${anthropic-java.version}</version>
+		</dependency>
+		<!-- Spring AI Vertex AI Gemini (Google Gemini 系列) -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-vertex-ai-gemini</artifactId>
+			<version>1.1.2</version>
+		</dependency>
+		<!-- Spring AI Google GenAI (Gemini Developer API) -->
+		<dependency>
+			<groupId>org.springframework.ai</groupId>
+			<artifactId>spring-ai-google-genai</artifactId>
+			<version>1.1.2</version>
+		</dependency>
+		<!-- 与 AgentScope Gemini 2.0.0 GA 对齐，Spring AI 1.1.2 的旧版缺少 ProxyOptions -->
+		<dependency>
+			<groupId>com.google.genai</groupId>
+			<artifactId>google-genai</artifactId>
+			<version>1.45.0</version>
+		</dependency>
+
+		<!-- OkHttp (平台 API 调用) -->
+		<dependency>
+			<groupId>com.squareup.okhttp3</groupId>
+			<artifactId>okhttp</artifactId>
+			<version>4.12.0</version>
+		</dependency>
+
+
+		<!-- Hutool -->
+		<dependency>
+			<groupId>cn.hutool</groupId>
+			<artifactId>hutool-all</artifactId>
+			<version>5.8.34</version>
+		</dependency>
+
+		<!-- AgentScope Java 2.0.0 GA -->
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-harness</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-mysql</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-model-openai</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-model-anthropic</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-model-gemini</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-model-dashscope</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>io.agentscope</groupId>
+			<artifactId>agentscope-extensions-model-ollama</artifactId>
+			<version>${agentscope.version}</version>
+		</dependency>
+		<!-- OpenAI Java SDK (AgentScope OpenAIChatModel 需要) -->
+		<dependency>
+			<groupId>com.openai</groupId>
+			<artifactId>openai-java</artifactId>
+			<version>4.32.0</version>
+		</dependency>
+
+		<!-- 火山引擎 Ark Runtime SDK (Seedream 文生图/图生图) -->
+		<dependency>
+			<groupId>com.volcengine</groupId>
+			<artifactId>volcengine-java-sdk-ark-runtime</artifactId>
+			<version>2.0.19</version>
+		</dependency>
+		<!-- Java 9+ 需要单独引入 javax.annotation-api (volcengine SDK 依赖) -->
+		<dependency>
+			<groupId>javax.annotation</groupId>
+			<artifactId>javax.annotation-api</artifactId>
+			<version>1.3.2</version>
+		</dependency>
+
+		<!-- Google Cloud Vertex AI SDK (Imagen 文生图)
+		需要与 spring-ai-vertex-ai-gemini 对齐，避免 GenerationConfig NoSuchMethodError -->
+		<dependency>
+			<groupId>com.google.cloud</groupId>
+			<artifactId>google-cloud-vertexai</artifactId>
+			<version>1.40.0</version>
+		</dependency>
+
+		<!-- AWS S3 SDK v2（兼容阿里云 OSS / 腾讯 COS / MinIO 等 S3 协议存储） -->
+		<dependency>
+			<groupId>software.amazon.awssdk</groupId>
+			<artifactId>s3</artifactId>
+			<version>2.31.23</version>
+		</dependency>
+
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<annotationProcessorPaths>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</path>
+						<path>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok-mapstruct-binding</artifactId>
+							<version>0.2.0</version>
+						</path>
+						<path>
+							<groupId>org.mapstruct</groupId>
+							<artifactId>mapstruct-processor</artifactId>
+							<version>${mapstruct.version}</version>
+						</path>
+					</annotationProcessorPaths>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<goals>
+							<goal>build-info</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<excludes>
+						<exclude>
+							<groupId>org.projectlombok</groupId>
+							<artifactId>lombok</artifactId>
+						</exclude>
+					</excludes>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+
+	<profiles>
+		<profile>
+			<id>agentscope-integration</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.apache.maven.plugins</groupId>
+						<artifactId>maven-failsafe-plugin</artifactId>
+						<version>${maven-failsafe.version}</version>
+						<executions>
+							<execution>
+								<goals>
+									<goal>integration-test</goal>
+									<goal>verify</goal>
+								</goals>
+							</execution>
+						</executions>
+						<configuration>
+							<includes>
+								<include>**/AgentPersistenceMigrationIT.java</include>
+								<include>**/AgentMessageAllocatorIT.java</include>
+								<include>**/AgentRunStartIT.java</include>
+								<include>**/AgentJournalTerminalIT.java</include>
+								<include>**/AgentModelCallUsageIT.java</include>
+								<include>**/AgentOutboxMultiInstanceIT.java</include>
+								<include>**/AgentProjectionRecoveryIT.java</include>
+								<include>**/PlatformSubAgentRunServiceIT.java</include>
+								<include>**/AgentWaitingStateIT.java</include>
+								<include>**/AgentFencingCancellationIT.java</include>
+								<include>**/AgentOwnedJournalTakeoverIT.java</include>
+								<include>**/AgentReplayLiveIT.java</include>
+								<include>**/AgentIntegrationProfileSentinelIT.java</include>
+								<include>**/AgentDurableRuntimeMultiInstanceIT.java</include>
+							</includes>
+							<failIfNoTests>true</failIfNoTests>
+							<failIfNoSpecifiedTests>true</failIfNoSpecifiedTests>
+						</configuration>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
+</project>
+>>>>>>> Stashed changes

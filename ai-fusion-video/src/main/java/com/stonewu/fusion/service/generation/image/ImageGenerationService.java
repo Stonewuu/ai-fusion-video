@@ -72,9 +72,12 @@ public class ImageGenerationService {
         taskMapper.updateById(task);
     }
 
-    @CacheEvict(value = "imageTask", allEntries = true)
+    @CacheEvict(value = {"imageTask", "imageItems"}, allEntries = true)
     @Transactional
     public void delete(Long id) {
+        // 先删除关联的图片条目
+        itemMapper.delete(new LambdaQueryWrapper<ImageItem>().eq(ImageItem::getTaskId, id));
+        // 再删除任务本身
         taskMapper.deleteById(id);
     }
 
