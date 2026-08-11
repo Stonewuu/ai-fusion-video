@@ -66,4 +66,12 @@ public class ImageGenerationController {
         return CommonResult.success(imageGenerationConsumer.cancelTask(
                 taskId, requireCurrentUserId()));
     }
+
+    @Operation(summary = "删除图片生成任务")
+    @DeleteMapping("/{id}")
+    public CommonResult<Boolean> deleteImageTask(@PathVariable Long id) {
+        Long userId = requireCurrentUserId();
+        imageGenerationService.delete(id, userId);
+        return CommonResult.success(true);
+    }
 }

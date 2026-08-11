@@ -100,6 +100,8 @@ public class AiAgentRegistry {
                                                 "delete_storyboard_child_resource",
                                                 "get_generation_model_capabilities",
                                                 "generate_image",
+                                                "delete_image_task",
+                                                "delete_video_task",
                                                 "query_asset_metadata"))
                                 .systemPrompt(loadPrompt("ai-media.system.md"))
                                 .instructionTemplate(loadPrompt("ai-media.instruction.md"))

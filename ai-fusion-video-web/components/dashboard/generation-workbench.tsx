@@ -269,6 +269,20 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
     }
   };
 
+  const deleteTask = async (id: number) => {
+    try {
+      if (mode === "image") {
+        await generationApi.deleteImage(id);
+      } else {
+        await generationApi.deleteVideo(id);
+      }
+      toast.success("创作记录已删除");
+      await loadHistory(historyLimit);
+    } catch (error) {
+      toastApiError(error, "删除创作记录失败");
+    }
+  };
+
   useEffect(() => {
     void loadHistory(historyLimit);
   }, [historyLimit, loadHistory]);
@@ -876,6 +890,7 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
                     onUseReference={useReference}
                     onCancel={taskId => void cancelTask(taskId)}
                     cancellingTaskIds={cancellingTaskIds}
+                    onDelete={id => void deleteTask(id)}
                     onAddAsset={(item, prompt) =>
                       setAssetTarget({ mode, item, prompt })
                     }

@@ -11,6 +11,7 @@ import com.stonewu.fusion.mapper.generation.VideoTaskMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,9 +73,18 @@ public class VideoGenerationService {
         taskMapper.updateById(task);
     }
 
-    @CacheEvict(value = "videoTask", allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = "videoTask", allEntries = true),
+            @CacheEvict(value = "videoItems", allEntries = true)
+    })
     @Transactional
-    public void delete(Long id) {
+    public void delete(Long id, Long userId) {
+        VideoTask task = taskMapper.selectById(id);
+        if (task == null || !task.getUserId().equals(userId)) {
+            return;
+        }
+        // 删除关联的视频条目
+        itemMapper.delete(new LambdaQueryWrapper<VideoItem>().eq(VideoItem::getTaskId, id));
         taskMapper.deleteById(id);
     }
 
