@@ -40,9 +40,35 @@ public class ComfyUiWorkflowRenderer {
             Object selectedValue = selectIndexedValue(rawValue, binding);
             JsonNode renderedValue = convertValue(selectedValue, binding);
             ObjectNode node = (ObjectNode) workflow.get(binding.nodeId());
-            ((ObjectNode) node.get("inputs")).set(binding.inputName(), renderedValue);
+            ObjectNode nodeInputs = (ObjectNode) node.get("inputs");
+            JsonNode current = nodeInputs.get(binding.inputName());
+            if (isUploadedMedia(binding.valueType()) && isLink(current)) {
+                // IMAGE 类输入需要张量而非文件名：目标输入当前是连线（如 LoadImage → 节点）时，
+                // 把上传文件名写到连线源节点的 image 输入，由 ComfyUI 加载成张量后经连线传入；
+                // 直接覆盖目标输入会把字符串塞进 IMAGE 输入导致 TypeError。
+                String sourceNodeId = current.get(0).asText();
+                ObjectNode sourceNode = (ObjectNode) workflow.get(sourceNodeId);
+                if (sourceNode != null && sourceNode.path("inputs").isObject()
+                        && sourceNode.path("inputs").has("image")) {
+                    ((ObjectNode) sourceNode.get("inputs")).set("image", renderedValue);
+                    continue;
+                }
+            }
+            nodeInputs.set(binding.inputName(), renderedValue);
         }
         return workflow;
+    }
+
+    private static boolean isUploadedMedia(String valueType) {
+        return "uploaded_image".equals(valueType)
+                || "uploaded_video".equals(valueType)
+                || "uploaded_audio".equals(valueType);
+    }
+
+    /** ComfyUI 连线格式：["源节点ID", 槽位索引]。 */
+    private static boolean isLink(JsonNode value) {
+        return value != null && value.isArray() && value.size() >= 2
+                && value.get(0).isTextual() && value.get(1).isInt();
     }
 
     private Object selectIndexedValue(Object rawValue, ComfyUiInputBinding binding) {

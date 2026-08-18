@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.comfyui;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiJobResult;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -14,6 +15,7 @@ import java.util.Map;
 import java.util.Set;
 
 /** Resolves only explicitly bound output nodes from a completed ComfyUI job. */
+@Slf4j
 @Component
 public class ComfyUiOutputResolver {
 
@@ -35,7 +37,12 @@ public class ComfyUiOutputResolver {
                 for (JsonNode item : field.getValue()) {
                     if (!item.isObject() || !item.path("filename").isTextual()) continue;
                     String actualMediaType = classify(field.getKey(), item);
-                    if (!matches(binding.mediaType(), actualMediaType)) continue;
+                    if (!matches(binding.mediaType(), actualMediaType)) {
+                        log.debug("ComfyUI output resolve skipped: nodeId={}, outputKey={}, filename={}, expectedMediaType={}, actualMediaType={}",
+                                binding.nodeId(), field.getKey(), item.path("filename").asText(),
+                                binding.mediaType(), actualMediaType);
+                        continue;
+                    }
                     String filename = item.path("filename").asText();
                     JsonNode subfolderNode = item.get("subfolder");
                     JsonNode typeNode = item.get("type");
@@ -68,12 +75,21 @@ public class ComfyUiOutputResolver {
         String key = outputKey.toLowerCase(Locale.ROOT);
         String format = item.path("format").asText("").toLowerCase(Locale.ROOT);
         String filename = item.path("filename").asText("").toLowerCase(Locale.ROOT);
-        if (key.contains("image") || format.startsWith("image/") || hasExtension(filename,
-                "png", "jpg", "jpeg", "webp", "gif")) return "image";
-        if (key.contains("video") || key.equals("gifs") || format.startsWith("video/")
-                || hasExtension(filename, "mp4", "webm", "mov", "mkv")) return "video";
-        if (key.contains("audio") || format.startsWith("audio/")
-                || hasExtension(filename, "mp3", "wav", "flac", "m4a", "ogg")) return "audio";
+
+        // ComfyUI 的输出字段名不可靠：视频常被放在 images 字段下（animated 输出）。
+        // 因此文件扩展名优先级最高，其次 MIME format，最后才是输出字段名。
+        if (hasExtension(filename, "mp4", "webm", "mov", "mkv", "avi", "m4v")) return "video";
+        if (hasExtension(filename, "mp3", "wav", "flac", "m4a", "ogg", "aac")) return "audio";
+        if (hasExtension(filename, "png", "jpg", "jpeg", "webp", "gif", "bmp", "tiff")) return "image";
+
+        if (format.startsWith("video/")) return "video";
+        if (format.startsWith("audio/")) return "audio";
+        if (format.startsWith("image/")) return "image";
+
+        if (key.contains("video") || key.equals("gifs")) return "video";
+        if (key.contains("audio")) return "audio";
+        if (key.contains("image")) return "image";
+
         return "file";
     }
 
