@@ -11,6 +11,7 @@ import com.stonewu.fusion.mapper.generation.ImageTaskMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Caching;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -72,9 +73,18 @@ public class ImageGenerationService {
         taskMapper.updateById(task);
     }
 
-    @CacheEvict(value = "imageTask", allEntries = true)
+    @Caching(evict = {
+            @CacheEvict(value = "imageTask", allEntries = true),
+            @CacheEvict(value = "imageItems", allEntries = true)
+    })
     @Transactional
-    public void delete(Long id) {
+    public void delete(Long id, Long userId) {
+        ImageTask task = taskMapper.selectById(id);
+        if (task == null || !task.getUserId().equals(userId)) {
+            return;
+        }
+        // 删除关联的图片条目
+        itemMapper.delete(new LambdaQueryWrapper<ImageItem>().eq(ImageItem::getTaskId, id));
         taskMapper.deleteById(id);
     }
 
