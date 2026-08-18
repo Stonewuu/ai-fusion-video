@@ -44,6 +44,9 @@
       </td>
       <td align="center" width="33%">
         <img src="https://image.stonewu.com/file/ai-fusion-video-qrcode-group.png" alt="交流群二维码" width="220" />
+        <p align="center">
+          <sub><b>1群人已满500，请加2群</b></sub>
+        </p>
       </td>
       <td align="center" width="33%">
         <img src="https://image.stonewu.com/file/alipay_qrcode.png" alt="打赏" width="220" />
@@ -52,9 +55,9 @@
   </tbody>
 </table>
 
-<p align="center">
+<!-- <p align="center">
   <sub><b>微信群超过 200 人后无法扫码加入。请添加作者微信并备注“融光”。</b></sub>
-</p>
+</p> -->
 
 <hr/>
 
