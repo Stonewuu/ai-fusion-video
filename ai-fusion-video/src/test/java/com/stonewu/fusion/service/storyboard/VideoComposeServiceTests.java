@@ -50,6 +50,9 @@ class VideoComposeServiceTests {
     private TaskStreamService taskStreamService;
 
     @Mock
+    private EpisodeBgmService episodeBgmService;
+
+    @Mock
     private Executor videoComposeExecutor;
 
     private VideoComposeService videoComposeService;
@@ -62,6 +65,7 @@ class VideoComposeServiceTests {
                 mediaStorageService,
                 storageConfigService,
                 taskStreamService,
+                episodeBgmService,
                 videoComposeExecutor
         );
         ReflectionTestUtils.setField(videoComposeService, "mediaLocalPath", "D:/media-root");

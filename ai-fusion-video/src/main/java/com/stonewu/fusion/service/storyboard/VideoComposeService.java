@@ -10,6 +10,7 @@ import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.mapper.storyboard.StoryboardEpisodeMapper;
 import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
+import com.stonewu.fusion.service.storyboard.dto.EpisodeBgmOutcome;
 import com.stonewu.fusion.service.task.TaskStreamService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -69,6 +70,7 @@ public class VideoComposeService {
     private final MediaStorageService mediaStorageService;
     private final StorageConfigService storageConfigService;
     private final TaskStreamService taskStreamService;
+    private final EpisodeBgmService episodeBgmService;
     private final Executor videoComposeExecutor;
 
     @Value("${app.storage.local-base-path:./data/media}")
@@ -91,12 +93,14 @@ public class VideoComposeService {
                                MediaStorageService mediaStorageService,
                                StorageConfigService storageConfigService,
                                TaskStreamService taskStreamService,
+                               EpisodeBgmService episodeBgmService,
                                @Qualifier("videoComposeExecutor") Executor videoComposeExecutor) {
         this.storyboardService = storyboardService;
         this.episodeMapper = episodeMapper;
         this.mediaStorageService = mediaStorageService;
         this.storageConfigService = storageConfigService;
         this.taskStreamService = taskStreamService;
+        this.episodeBgmService = episodeBgmService;
         this.videoComposeExecutor = videoComposeExecutor;
     }
 
@@ -139,7 +143,12 @@ public class VideoComposeService {
             .set("compose_status", STATUS_RUNNING)
             .set("compose_error_msg", null)
             .set("composed_video_url", null)
-            .set("composed_at", null));
+            .set("composed_at", null)
+            .set("bgm_audio_url", null)
+            .set("bgm_license_id", null)
+            .set("bgm_sfx_audio_url", null)
+            .set("bgm_sfx_license_id", null)
+            .set("bgm_error_msg", null));
         if (updated == 0) {
             taskStreamService.fail(taskId, "本集已在合成中，请稍候");
             return taskId;
@@ -196,7 +205,25 @@ public class VideoComposeService {
                 throw new RuntimeException("ffmpeg 合成失败（concat 与 filter 均失败）");
             }
 
-            String storedUrl = mediaStorageService.storeFile(output, "videos/composed", "mp4");
+            // 可选的合成后配乐：失败或跳过都不影响本集合成结果
+            Path finalVideo = output;
+            EpisodeBgmOutcome bgmOutcome = null;
+            String bgmError = null;
+            if (episodeBgmService.isEnabled()) {
+                try {
+                    bgmOutcome = episodeBgmService.apply(output, workDir,
+                            message -> taskStreamService.publishContent(taskId, message));
+                    if (bgmOutcome.scoredVideoFile() != null) {
+                        finalVideo = bgmOutcome.scoredVideoFile();
+                    }
+                } catch (Exception e) {
+                    bgmError = StringUtils.hasText(e.getMessage()) ? e.getMessage() : "配乐失败";
+                    log.error("[VideoCompose] 配乐失败，保留无配乐成片: episodeId={}", episodeId, e);
+                    taskStreamService.publishContent(taskId, "配乐失败：" + bgmError + "（本集视频不受影响）");
+                }
+            }
+
+            String storedUrl = mediaStorageService.storeFile(finalVideo, "videos/composed", "mp4");
             log.info("[VideoCompose] 已保存到存储: {}", storedUrl);
 
             StoryboardEpisode update = new StoryboardEpisode();
@@ -205,9 +232,16 @@ public class VideoComposeService {
             update.setComposeStatus(STATUS_DONE);
             update.setComposedAt(LocalDateTime.now());
             update.setComposeErrorMsg(null);
+            if (bgmOutcome != null) {
+                update.setBgmAudioUrl(bgmOutcome.musicAudioUrl());
+                update.setBgmLicenseId(bgmOutcome.musicLicenseId());
+                update.setBgmSfxAudioUrl(bgmOutcome.sfxAudioUrl());
+                update.setBgmSfxLicenseId(bgmOutcome.sfxLicenseId());
+            }
+            update.setBgmErrorMsg(bgmError);
             episodeMapper.updateById(update);
 
-                taskStreamService.complete(taskId, "✓ 合成完成 · 视频地址：" + storedUrl);
+                taskStreamService.complete(taskId, buildCompleteMessage(storedUrl, bgmOutcome, bgmError));
 
             log.info("[VideoCompose] 完成 episodeId={}, 耗时={}ms, 视频数={}",
                     episodeId, System.currentTimeMillis() - startMs, videoUrls.size());
@@ -218,6 +252,21 @@ public class VideoComposeService {
                 log.warn("[VideoCompose] 临时目录清理失败 {}", workDir, e);
             }
         }
+    }
+
+    private String buildCompleteMessage(String storedUrl, EpisodeBgmOutcome bgmOutcome, String bgmError) {
+        StringBuilder message = new StringBuilder("✓ 合成完成 · 视频地址：").append(storedUrl);
+        if (bgmOutcome != null && bgmOutcome.scoredVideoFile() != null) {
+            message.append(" · 配乐已合入");
+            if (StringUtils.hasText(bgmOutcome.musicLicenseId())) {
+                message.append("（license_id: ").append(bgmOutcome.musicLicenseId()).append("）");
+            }
+        } else if (bgmOutcome != null && StringUtils.hasText(bgmOutcome.skippedReason())) {
+            message.append(" · ").append(bgmOutcome.skippedReason());
+        } else if (StringUtils.hasText(bgmError)) {
+            message.append(" · 配乐失败：").append(bgmError);
+        }
+        return message.toString();
     }
 
     private String buildTaskTitle(StoryboardEpisode episode) {

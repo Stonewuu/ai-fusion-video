@@ -64,6 +64,19 @@ video:
   compose:
     ffmpeg-path: ${VIDEO_COMPOSE_FFMPEG_PATH:ffmpeg}
     ffprobe-path: ${VIDEO_COMPOSE_FFPROBE_PATH:ffprobe}
+    # 合成后配乐（Sonilo），默认关闭；开启后本集合成完成时自动生成配乐并混入成片
+    bgm:
+      enabled: ${VIDEO_COMPOSE_BGM_ENABLED:false}
+      api-key: ${SONILO_API_KEY:}
+      base-url: ${SONILO_BASE_URL:https://api.sonilo.com}
+      # 配乐风格提示，可留空（留空按画面内容自动作曲）
+      music-prompt: ${VIDEO_COMPOSE_BGM_MUSIC_PROMPT:}
+      # 与成片原声混音时配乐音轨的音量（0~1）
+      music-volume: ${VIDEO_COMPOSE_BGM_MUSIC_VOLUME:0.7}
+      # 是否同时生成音效音轨
+      sfx-enabled: ${VIDEO_COMPOSE_BGM_SFX_ENABLED:false}
+      poll-interval-seconds: ${VIDEO_COMPOSE_BGM_POLL_INTERVAL_SECONDS:5}
+      timeout-seconds: ${VIDEO_COMPOSE_BGM_TIMEOUT_SECONDS:900}
 
 fusion:
   agentscope:

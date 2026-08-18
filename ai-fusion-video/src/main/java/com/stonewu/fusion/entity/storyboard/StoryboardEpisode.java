@@ -69,4 +69,19 @@ public class StoryboardEpisode extends BaseEntity {
 
     /** 合成完成时间 */
     private LocalDateTime composedAt;
+
+    /** 配乐音轨URL（持久化存档） */
+    private String bgmAudioUrl;
+
+    /** 配乐音轨授权凭证ID（商用留档） */
+    private String bgmLicenseId;
+
+    /** 音效音轨URL（持久化存档） */
+    private String bgmSfxAudioUrl;
+
+    /** 音效音轨授权凭证ID（商用留档） */
+    private String bgmSfxLicenseId;
+
+    /** 配乐失败原因（配乐失败不影响本集合成结果） */
+    private String bgmErrorMsg;
 }
