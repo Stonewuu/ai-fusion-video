@@ -5,7 +5,7 @@ import type { AssetWithItems } from "@/lib/api/asset";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { ASSET_TYPES, getAssetType } from "./asset-types";
 

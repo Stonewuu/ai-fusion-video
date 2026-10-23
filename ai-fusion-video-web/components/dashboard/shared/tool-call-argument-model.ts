@@ -64,6 +64,16 @@ export function parseToolArguments(argumentsText: string): ToolArguments {
   return parsed;
 }
 
+export function inspectToolArguments(argumentsText: string):
+  | { valid: true; value: ToolArguments }
+  | { valid: false; message: string } {
+  try {
+    return { valid: true, value: parseToolArguments(argumentsText) };
+  } catch {
+    return { valid: false, message: "工具参数不完整或格式错误，无法执行。请停止本轮并重新提交要求。" };
+  }
+}
+
 export function listToolArgumentEntries(
   argumentsValue: ToolArguments,
   toolName?: string,

@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
-const developmentBackendUrl = process.env.DEV_BACKEND_URL?.trim().replace(/\/+$/, "");
+const developmentBackendUrl = process.env.DEV_BACKEND_URL?.trim().replace(
+  /\/+$/,
+  "",
+);
 
 if (process.env.NODE_ENV === "development" && !developmentBackendUrl) {
   throw new Error(
@@ -11,6 +14,16 @@ if (process.env.NODE_ENV === "development" && !developmentBackendUrl) {
 const nextConfig: NextConfig = {
   reactStrictMode: true,
   output: "standalone",
+  serverExternalPackages: ["pdfjs-dist"],
+  outputFileTracingIncludes: {
+    "/pdf-assets/*": [
+      "./node_modules/pdfjs-dist/package.json",
+      "./node_modules/pdfjs-dist/build/pdf.worker.min.mjs",
+      "./node_modules/pdfjs-dist/cmaps/**/*",
+      "./node_modules/pdfjs-dist/standard_fonts/**/*",
+      "./node_modules/pdfjs-dist/wasm/**/*.wasm",
+    ],
+  },
   // Development API rewrites proxy SSE through Next.js. Disable compression
   // there so incremental events are flushed instead of buffered by gzip.
   compress: process.env.NODE_ENV !== "development",
@@ -46,4 +59,3 @@ const nextConfig: NextConfig = {
 };
 
 export default nextConfig;
-

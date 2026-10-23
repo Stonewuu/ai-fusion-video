@@ -10,6 +10,8 @@ import com.google.cloud.vertexai.api.LlmUtilityServiceClient;
 import com.google.cloud.vertexai.api.LlmUtilityServiceSettings;
 import com.google.cloud.vertexai.api.PredictionServiceClient;
 import com.google.cloud.vertexai.api.PredictionServiceSettings;
+import com.google.genai.GenerationHttpApiClient;
+import com.google.genai.types.HttpOptions;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
@@ -18,10 +20,10 @@ import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.transport.ProxyConfig;
 import io.agentscope.extensions.model.gemini.GeminiChatModel;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatModel;
 import org.springframework.ai.vertexai.gemini.VertexAiGeminiChatOptions;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
@@ -62,18 +64,20 @@ public class VertexAiProvider extends AbstractAiProvider {
 
         String endpoint = resolveVertexEndpoint(location);
         VertexAI.Builder builder = new VertexAI.Builder()
-            .setProjectId(projectId)
-            .setLocation(location)
-            .setApiEndpoint(endpoint)
-            .setTransport(Transport.REST);
+                .setProjectId(projectId)
+                .setLocation(location)
+                .setApiEndpoint(endpoint)
+                .setTransport(Transport.REST);
 
         GoogleCredentials credentials = loadGoogleCredentials(context);
         if (credentials != null) {
             builder.setCredentials(credentials);
         }
         if (AiProxySupport.isEnabled(context.getApiConfig())) {
-            builder.setPredictionClientSupplier(() -> createPredictionServiceClient(context.getApiConfig(), endpoint, credentials));
-            builder.setLlmClientSupplier(() -> createLlmUtilityServiceClient(context.getApiConfig(), endpoint, credentials));
+            builder.setPredictionClientSupplier(
+                    () -> createPredictionServiceClient(context.getApiConfig(), endpoint, credentials));
+            builder.setLlmClientSupplier(
+                    () -> createLlmUtilityServiceClient(context.getApiConfig(), endpoint, credentials));
         }
 
         VertexAI vertexAI = builder.build();
@@ -93,6 +97,12 @@ public class VertexAiProvider extends AbstractAiProvider {
 
         GoogleCredentials credentials = loadGoogleCredentials(context);
         GenerateOptions defaultOptions = buildGeminiGenerateOptions(context);
+        if (context.isSingleRequest()) {
+            return new SingleRequestGeminiModel(
+                    new GenerationHttpApiClient(projectId, getLocation(context), credentials,
+                            HttpOptions.builder().build(), context.getApiConfig()), context.getModelName(),
+                    defaultOptions);
+        }
         GeminiChatModel.Builder builder = GeminiChatModel.builder()
                 .modelName(context.getModelName())
                 .formatter(GeminiAiProvider.agentScopeFormatter())
@@ -158,10 +168,13 @@ public class VertexAiProvider extends AbstractAiProvider {
             if (StrUtil.isNotBlank(appSecret)) {
                 var transportFactory = AiProxySupport.googleHttpTransportFactory(apiConfig);
                 credentials = transportFactory == null
-                        ? GoogleCredentials.fromStream(new ByteArrayInputStream(appSecret.getBytes(StandardCharsets.UTF_8)))
-                        : GoogleCredentials.fromStream(new ByteArrayInputStream(appSecret.getBytes(StandardCharsets.UTF_8)), transportFactory);
+                        ? GoogleCredentials.fromStream(
+                        new ByteArrayInputStream(appSecret.getBytes(StandardCharsets.UTF_8)))
+                        : GoogleCredentials.fromStream(
+                        new ByteArrayInputStream(appSecret.getBytes(StandardCharsets.UTF_8)), transportFactory);
             } else if (proxyEnabled) {
-                credentials = GoogleCredentials.getApplicationDefault(AiProxySupport.googleHttpTransportFactory(apiConfig));
+                credentials = GoogleCredentials.getApplicationDefault(
+                        AiProxySupport.googleHttpTransportFactory(apiConfig));
             } else {
                 return null;
             }
@@ -172,7 +185,7 @@ public class VertexAiProvider extends AbstractAiProvider {
     }
 
     private PredictionServiceClient createPredictionServiceClient(ApiConfig apiConfig, String endpoint,
-                                                                 GoogleCredentials credentials) {
+                                                                  GoogleCredentials credentials) {
         try {
             var transportProvider = InstantiatingHttpJsonChannelProvider.newBuilder()
                     .setEndpoint(endpoint)
@@ -191,7 +204,7 @@ public class VertexAiProvider extends AbstractAiProvider {
     }
 
     private LlmUtilityServiceClient createLlmUtilityServiceClient(ApiConfig apiConfig, String endpoint,
-                                                                 GoogleCredentials credentials) {
+                                                                  GoogleCredentials credentials) {
         try {
             var transportProvider = InstantiatingHttpJsonChannelProvider.newBuilder()
                     .setEndpoint(endpoint)

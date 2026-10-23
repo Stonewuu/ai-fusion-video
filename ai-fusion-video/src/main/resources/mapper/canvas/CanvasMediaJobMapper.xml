@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasMediaJobMapper">
+    <update id="acquirePermit">
+        UPDATE afv_canvas_media_job c JOIN afv_media_job j ON j.id = c.job_id
+        SET c.permit_held = TRUE WHERE c.job_id = #{id} AND c.api_config_id IS NOT NULL
+            AND c.result_json IS NULL AND j.cancel_requested = FALSE
+    </update>
+    <update id="pollResult">
+        UPDATE afv_canvas_media_job SET consecutive_errors =
+        <choose><when test="failed">consecutive_errors + 1</when><otherwise>0</otherwise></choose>
+        WHERE job_id = #{id}
+    </update>
+</mapper>

@@ -7,12 +7,7 @@ import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.redis.connection.stream.MapRecord;
-import org.springframework.data.redis.connection.stream.ReadOffset;
-import org.springframework.data.redis.connection.stream.RecordId;
-import org.springframework.data.redis.connection.stream.StreamOffset;
-import org.springframework.data.redis.connection.stream.StreamReadOptions;
-import org.springframework.data.redis.connection.stream.StreamRecords;
+import org.springframework.data.redis.connection.stream.*;
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -49,15 +44,25 @@ public class AiStreamRedisService {
     private static final String RUN_WAKEUP_CHANNEL_PREFIX = "fv:ai:run:wakeup:";
     private static final String RUN_CANCEL_CHANNEL_PREFIX = "fv:ai:run:cancel:";
 
-    /** 状态过期时间：1小时 */
+    /**
+     * 状态过期时间：1小时
+     */
     private static final Duration STATUS_TTL = Duration.ofHours(1);
-    /** Stream / Replay List 过期时间：1小时 */
+    /**
+     * Stream / Replay List 过期时间：1小时
+     */
     private static final Duration STREAM_TTL = Duration.ofHours(1);
-    /** Stream 最大长度 —— 只需保存最近一次合并到当前的增量 token */
+    /**
+     * Stream 最大长度 —— 只需保存最近一次合并到当前的增量 token
+     */
     private static final long STREAM_MAXLEN = 200;
-    /** XREAD BLOCK 超时时间。调低以减少实时 SSE 的感知延迟。 */
+    /**
+     * XREAD BLOCK 超时时间。调低以减少实时 SSE 的感知延迟。
+     */
     private static final Duration READ_BLOCK_TIMEOUT = Duration.ofMillis(50);
-    /** 每次 XREAD 读取的最大消息数。保持为 1 以尽量按单事件透传。 */
+    /**
+     * 每次 XREAD 读取的最大消息数。保持为 1 以尽量按单事件透传。
+     */
     private static final int READ_BATCH_SIZE = 1;
 
     public static boolean isMainAgentTerminalEvent(AiChatStreamRespVO event) {
@@ -65,8 +70,8 @@ public class AiStreamRedisService {
                 && StrUtil.isBlank(event.getParentToolCallId())
                 && StrUtil.isBlank(event.getAgentName())
                 && ("DONE".equals(event.getOutputType())
-                        || "ERROR".equals(event.getOutputType())
-                        || "CANCELLED".equals(event.getOutputType()));
+                || "ERROR".equals(event.getOutputType())
+                || "CANCELLED".equals(event.getOutputType()));
     }
 
     public static boolean isMainAgentErrorEvent(AiChatStreamRespVO event) {
@@ -105,13 +110,17 @@ public class AiStreamRedisService {
         }
     }
 
-    /** Publishes only a committed MySQL sequence as an outbox wake-up hint. */
+    /**
+     * Publishes only a committed MySQL sequence as an outbox wake-up hint.
+     */
     public Mono<Long> publishRunWakeup(String runId, long sequence) {
         return reactiveStringRedisTemplate.convertAndSend(
                 runWakeupChannel(runId), Long.toString(sequence));
     }
 
-    /** Returns a stream only after Redis confirms that the channel subscription is active. */
+    /**
+     * Returns a stream only after Redis confirms that the channel subscription is active.
+     */
     public Mono<Flux<String>> runWakeupPayloadsWhenSubscribed(String runId) {
         return reactiveStringRedisTemplate
                 .listenToChannelLater(runWakeupChannel(runId))
@@ -224,7 +233,7 @@ public class AiStreamRedisService {
      * @param lastStreamId 该合并事件对应的最后一条 Stream 记录 ID
      */
     public void appendReplayEvent(String conversationId, AiChatStreamRespVO event,
-            String lastStreamId) {
+                                  String lastStreamId) {
         String replayKey = REPLAY_KEY_PREFIX + conversationId;
         try {
             JSONObject wrapper = new JSONObject();
@@ -269,7 +278,9 @@ public class AiStreamRedisService {
         }
     }
 
-    /** Replay 读取结果 */
+    /**
+     * Replay 读取结果
+     */
     @Getter
     @RequiredArgsConstructor
     public static class ReplayResult {
@@ -296,28 +307,36 @@ public class AiStreamRedisService {
         }
     }
 
-    /** 标记会话为活跃 */
+    /**
+     * 标记会话为活跃
+     */
     public void markActive(String conversationId) {
         stringRedisTemplate.opsForValue()
                 .set(STATUS_KEY_PREFIX + conversationId, "ACTIVE", STATUS_TTL);
         log.info("标记会话为 ACTIVE: conversationId={}", conversationId);
     }
 
-    /** 标记会话为已完成 */
+    /**
+     * 标记会话为已完成
+     */
     public void markCompleted(String conversationId) {
         stringRedisTemplate.opsForValue()
                 .set(STATUS_KEY_PREFIX + conversationId, "COMPLETED", STATUS_TTL);
         log.info("标记会话为 COMPLETED: conversationId={}", conversationId);
     }
 
-    /** 标记会话为错误 */
+    /**
+     * 标记会话为错误
+     */
     public void markError(String conversationId) {
         stringRedisTemplate.opsForValue()
                 .set(STATUS_KEY_PREFIX + conversationId, "ERROR", STATUS_TTL);
         log.info("标记会话为 ERROR: conversationId={}", conversationId);
     }
 
-    /** 检查会话是否活跃 */
+    /**
+     * 检查会话是否活跃
+     */
     public boolean isActive(String conversationId) {
         return "ACTIVE".equals(
                 stringRedisTemplate.opsForValue().get(STATUS_KEY_PREFIX + conversationId));
@@ -334,7 +353,9 @@ public class AiStreamRedisService {
         return status != null ? status : "NONE";
     }
 
-    /** 安排清理：给 Stream、Replay List 和状态 Key 设置 TTL */
+    /**
+     * 安排清理：给 Stream、Replay List 和状态 Key 设置 TTL
+     */
     public void scheduleCleanup(String conversationId) {
         String streamKey = STREAM_KEY_PREFIX + conversationId;
         String replayKey = REPLAY_KEY_PREFIX + conversationId;
@@ -480,7 +501,7 @@ public class AiStreamRedisService {
         }
 
         private void startNewAccumulation(AiChatStreamRespVO event, String outputType,
-                String parentToolCallId, String streamId) {
+                                          String parentToolCallId, String streamId) {
             this.currentTemplate = event;
             this.currentOutputType = outputType;
             this.currentParentToolCallId = parentToolCallId;
@@ -524,7 +545,9 @@ public class AiStreamRedisService {
             return "REASONING".equals(outputType) || "CONTENT".equals(outputType);
         }
 
-        /** 合并后的事件 + 对应的 lastStreamId */
+        /**
+         * 合并后的事件 + 对应的 lastStreamId
+         */
         @Getter
         @RequiredArgsConstructor
         public static class AccumulatedEvent {

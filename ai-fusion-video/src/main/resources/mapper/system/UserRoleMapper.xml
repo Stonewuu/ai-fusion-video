@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.system.UserRoleMapper">
+    <select id="activeAdminRoles" resultType="Long">
+        SELECT ur.role_id FROM sys_user_role ur JOIN sys_role r ON r.id = ur.role_id WHERE ur.user_id = #{userId} AND ur.deleted = FALSE AND r.deleted = FALSE AND r.status = 1 AND UPPER(r.code) = 'ADMIN'
+        <if test="lock">FOR UPDATE</if>
+    </select>
+</mapper>

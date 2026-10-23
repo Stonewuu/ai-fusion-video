@@ -2,12 +2,11 @@ package com.stonewu.fusion.service.system;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.entity.system.Role;
 import com.stonewu.fusion.entity.system.User;
 import com.stonewu.fusion.entity.system.UserRole;
-import com.stonewu.fusion.enums.team.TeamMemberRoleEnum;
 import com.stonewu.fusion.mapper.system.RoleMapper;
 import com.stonewu.fusion.mapper.system.UserMapper;
 import com.stonewu.fusion.mapper.system.UserRoleMapper;
@@ -18,6 +17,7 @@ import org.springframework.cache.annotation.Cacheable;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Isolation;
 
 import java.util.List;
 
@@ -45,12 +45,16 @@ public class UserService {
         }
         User user = createUser(username, password, nickname);
         assignRoleIfPresent(user.getId(), USER_ROLE_CODE);
-        teamService.addUserToSingleTeam(user.getId(), TeamMemberRoleEnum.MEMBER.getRole());
+        teamService.addRegisteredUserToSingleTeam(user.getId());
         return user;
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public User initializeAdmin(String username, String password, String nickname) {
+        // 所有实例使用同一角色行串行化首次初始化，第二个请求必须看到已提交的管理员。
+        if (roleMapper.lockByCode(ADMIN_ROLE_CODE) == null) {
+            throw new BusinessException(500, "系统角色数据异常，请检查数据库初始化");
+        }
         if (isInitialized()) {
             throw new BusinessException(400, "系统已初始化，请勿重复操作");
         }
@@ -70,7 +74,7 @@ public class UserService {
         return userRoleMapper.exists(new LambdaQueryWrapper<UserRole>().eq(UserRole::getRoleId, adminRole.getId()));
     }
 
-    @Cacheable(value = "userByUsername", key = "#username")
+    // 登录和令牌认证必须读取当前账户状态，不能依赖可被并发请求重新填入的旧缓存。
     public User getByUsername(String username) {
         return userMapper.selectOne(new LambdaQueryWrapper<User>().eq(User::getUsername, username));
     }
@@ -89,21 +93,26 @@ public class UserService {
     }
 
     @Transactional
-    @CacheEvict(value = "userByUsername", allEntries = true)
     public void updateUser(Long id, String nickname, String avatar, String email, String phone, Integer status) {
         User user = userMapper.selectById(id);
-        if (user == null)
+        if (user == null) {
             throw new BusinessException(404, "用户不存在");
-        if (nickname != null)
+        }
+        if (nickname != null) {
             user.setNickname(nickname);
-        if (avatar != null)
+        }
+        if (avatar != null) {
             user.setAvatar(avatar);
-        if (email != null)
+        }
+        if (email != null) {
             user.setEmail(email);
-        if (phone != null)
+        }
+        if (phone != null) {
             user.setPhone(phone);
-        if (status != null)
+        }
+        if (status != null) {
             user.setStatus(status);
+        }
         userMapper.updateById(user);
     }
 
@@ -111,7 +120,6 @@ public class UserService {
      * 当前用户修改自己的个人资料
      */
     @Transactional
-    @CacheEvict(value = "userByUsername", allEntries = true)
     public void updateProfile(Long userId, String nickname, String email, String phone) {
         User user = userMapper.selectById(userId);
         if (user == null) {
@@ -133,7 +141,6 @@ public class UserService {
      * 修改密码（需验证旧密码）
      */
     @Transactional
-    @CacheEvict(value = "userByUsername", allEntries = true)
     public void changePassword(Long userId, String oldPassword, String newPassword) {
         User user = userMapper.selectById(userId);
         if (user == null) {
@@ -147,13 +154,17 @@ public class UserService {
     }
 
     @Transactional
-    @CacheEvict(value = "userByUsername", allEntries = true)
     public void deleteUser(Long id) {
         userMapper.deleteById(id);
     }
 
     @Cacheable(value = "userRoles", key = "#userId")
     public List<Role> getUserRoles(Long userId) {
+        return loadUserRoles(userId);
+    }
+
+    /** 认证专用的实时角色读取；展示用角色缓存不能参与授权决策。 */
+    public List<Role> loadUserRoles(Long userId) {
         List<UserRole> userRoles = userRoleMapper.selectList(
                 new LambdaQueryWrapper<UserRole>().eq(UserRole::getUserId, userId));
         List<Long> roleIds = userRoles.stream().map(UserRole::getRoleId).toList();
@@ -213,7 +224,6 @@ public class UserService {
     }
 
     @Transactional
-    @CacheEvict(value = "userByUsername", allEntries = true)
     public void resetPassword(Long userId, String newPassword) {
         User user = userMapper.selectById(userId);
         if (user == null) {

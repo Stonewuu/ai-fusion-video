@@ -14,17 +14,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { ASSET_TYPES, getAssetType } from "./asset-types";
 
 interface MasterAssetHeaderProps {
   asset: AssetWithItems;
   saving: boolean;
-  onSave: (payload: {
+  onSave: (base: AssetWithItems, payload: {
     name: string;
     type: string;
     description: string;
   }) => Promise<void>;
-  onDelete: () => void;
+  onDelete: (base: AssetWithItems) => void;
 }
 
 export function MasterAssetHeader({
@@ -33,6 +34,8 @@ export function MasterAssetHeader({
   onSave,
   onDelete,
 }: MasterAssetHeaderProps) {
+  const [error, setError] = React.useState("");
+  const [base, setBase] = React.useState(asset);
   const [editing, setEditing] = React.useState(false);
   const [name, setName] = React.useState(asset.name);
   const [type, setType] = React.useState(asset.type);
@@ -41,6 +44,7 @@ export function MasterAssetHeader({
   const TypeIcon = assetType.icon;
 
   const cancel = () => {
+    setBase(asset);
     setName(asset.name);
     setType(asset.type);
     setDescription(asset.description || "");
@@ -48,8 +52,11 @@ export function MasterAssetHeader({
   };
 
   const save = async () => {
-    await onSave({ name, type, description });
-    setEditing(false);
+    try {
+      setError("");
+      await onSave(base, { name, type, description });
+      setEditing(false);
+    } catch (failure) { setError(getApiErrorMessage(failure)); }
   };
 
   return (
@@ -78,7 +85,16 @@ export function MasterAssetHeader({
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setEditing((value) => !value)}
+            disabled={saving}
+            onClick={() => {
+              if (editing) { setEditing(false); return; }
+              setBase(asset);
+              setName(asset.name);
+              setType(asset.type);
+              setDescription(asset.description || "");
+              setError("");
+              setEditing(true);
+            }}
           >
             <Edit3 className="h-3.5 w-3.5" />
             {editing ? "收起" : "编辑"}
@@ -86,7 +102,8 @@ export function MasterAssetHeader({
           <Button
             variant="destructive-ghost"
             size="icon-sm"
-            onClick={onDelete}
+            disabled={saving}
+            onClick={() => onDelete(editing ? base : asset)}
             title="删除主资产"
             aria-label="删除主资产"
           >
@@ -95,16 +112,17 @@ export function MasterAssetHeader({
         </div>
       </div>
 
+      {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
       {editing ? (
         <div className="mt-4 rounded-2xl border border-border/50 bg-background/55 p-3.5">
           <div className="grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_140px]">
-            <Input
+            <Input disabled={saving}
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="资产名称"
               className="h-9 bg-background/80"
             />
-            <Select
+            <Select disabled={saving}
               value={type}
               onValueChange={(value) => setType(String(value))}
               items={ASSET_TYPES.map((item) => ({
@@ -126,7 +144,7 @@ export function MasterAssetHeader({
               </SelectContent>
             </Select>
           </div>
-          <Textarea
+          <Textarea disabled={saving}
             value={description}
             onChange={(event) => setDescription(event.target.value)}
             rows={3}
@@ -171,6 +189,7 @@ export function MasterAssetForm({
   onCancel,
   onSubmit,
 }: MasterAssetFormProps) {
+  const [error, setError] = React.useState("");
   const [name, setName] = React.useState("");
   const [type, setType] = React.useState("character");
   const [description, setDescription] = React.useState("");
@@ -188,16 +207,17 @@ export function MasterAssetForm({
           <X className="h-4 w-4" />
         </Button>
       </div>
+      {error && <p role="alert" className="mt-3 text-sm text-destructive">{error}</p>}
       <div className="mt-6 rounded-2xl border border-border/50 bg-background/55 p-4">
         <div className="grid gap-2.5 sm:grid-cols-[minmax(0,1fr)_140px]">
-          <Input
+          <Input disabled={saving}
             value={name}
             onChange={(event) => setName(event.target.value)}
             placeholder="资产名称"
             className="h-9 bg-background/80"
             autoFocus
           />
-          <Select
+          <Select disabled={saving}
             value={type}
             onValueChange={(value) => setType(String(value))}
             items={ASSET_TYPES.map((item) => ({
@@ -219,7 +239,7 @@ export function MasterAssetForm({
             </SelectContent>
           </Select>
         </div>
-        <Textarea
+        <Textarea disabled={saving}
           value={description}
           onChange={(event) => setDescription(event.target.value)}
           rows={4}
@@ -233,7 +253,7 @@ export function MasterAssetForm({
           <Button
             size="sm"
             disabled={saving || !name.trim()}
-            onClick={() => void onSubmit(name, type, description)}
+            onClick={() => { setError(""); void onSubmit(name, type, description).catch(failure => setError(getApiErrorMessage(failure))); }}
           >
             {saving ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />

@@ -12,6 +12,7 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.stonewu.fusion.service.media.MediaInputTransport;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
@@ -50,12 +51,14 @@ class ReferenceImageTransportServiceTests {
         service = new ReferenceImageTransportService(
                 storageConfigService,
                 systemConfigService,
-                presetArtStyleResourceResolver);
+                presetArtStyleResourceResolver, mock(MediaInputTransport.class));
     }
 
     @AfterEach
     void tearDown() {
-        if (server != null) server.stop(0);
+        if (server != null) {
+            server.stop(0);
+        }
     }
 
     @Test
@@ -67,7 +70,7 @@ class ReferenceImageTransportServiceTests {
                 model,
                 config("url", "data_uri"),
                 List.of("/media/reference.png"),
-                null);
+                null, null, null);
 
         assertThat(resolved).containsExactly("https://fusion.example.com/media/reference.png");
     }
@@ -84,7 +87,7 @@ class ReferenceImageTransportServiceTests {
                 model,
                 config("url", "data_uri"),
                 List.of("/media/reference.png"),
-                null);
+                null, null, null);
 
         assertThat(resolved).containsExactly(
                 "data:image/png;base64," + Base64.getEncoder().encodeToString(imageBytes));
@@ -106,10 +109,58 @@ class ReferenceImageTransportServiceTests {
                 model,
                 config("url", "data_uri"),
                 List.of("http://127.0.0.1:" + server.getAddress().getPort() + "/reference.png"),
-                null);
+                null, null, null);
 
         assertThat(resolved).containsExactly(
                 "data:image/png;base64," + Base64.getEncoder().encodeToString(imageBytes));
+    }
+
+    @Test
+    void readsOwnAbsoluteMediaUrlWithoutCallingTheDockerLoopbackGateway() throws IOException {
+        byte[] imageBytes = new byte[]{1, 4, 7};
+        Files.write(tempDir.resolve("scene one.png"), imageBytes);
+        when(storageConfigService.getDefaultConfig()).thenReturn(StorageConfig.builder()
+                .basePath(tempDir.toString()).build());
+        when(systemConfigService.getPublicResourceBaseUrl()).thenReturn("http://localhost:1/fusion");
+
+        assertThat(service.resolveInputs(model, config("url", "data_uri"),
+                List.of("http://localhost:1/fusion/media/scene%20one.png?version=2"), null, null, null))
+                .containsExactly("data:image/png;base64," + Base64.getEncoder().encodeToString(imageBytes));
+    }
+
+    @Test
+    void readsOwnAbsolutePresetStyleFromPackagedResources() throws IOException {
+        byte[] imageBytes = new byte[]{2, 5, 8};
+        when(systemConfigService.getPublicResourceBaseUrl()).thenReturn("http://localhost:1");
+        when(presetArtStyleResourceResolver.isPresetArtStylePath("/api/art-styles/realistic.jpg"))
+                .thenReturn(true);
+        when(presetArtStyleResourceResolver.load("/api/art-styles/realistic.jpg"))
+                .thenReturn(new PresetArtStyleResourceResolver.PresetArtStyleResource(
+                        "realistic.jpg", imageBytes, "image/jpeg"));
+
+        assertThat(service.resolveInputs(model, config("url", "data_uri"),
+                List.of("http://localhost:1/api/art-styles/realistic.jpg"), null, null, null))
+                .containsExactly("data:image/jpeg;base64," + Base64.getEncoder().encodeToString(imageBytes));
+    }
+
+    @Test
+    void doesNotReplaceAnotherOriginWithALocalFileAndReportsDownloadFailure() throws IOException {
+        Files.write(tempDir.resolve("reference.png"), new byte[]{1, 2, 3});
+        when(storageConfigService.getDefaultConfig()).thenReturn(StorageConfig.builder()
+                .basePath(tempDir.toString()).build());
+        when(systemConfigService.getPublicResourceBaseUrl()).thenReturn("http://localhost:1");
+        server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/media/reference.png", exchange -> {
+            exchange.sendResponseHeaders(404, -1);
+            exchange.close();
+        });
+        server.start();
+
+        assertThatThrownBy(() -> service.resolveInputs(model, config("data_uri"),
+                List.of("http://127.0.0.1:" + server.getAddress().getPort() + "/media/reference.png"),
+                null, null, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("HTTP 404");
     }
 
     @Test
@@ -161,7 +212,21 @@ class ReferenceImageTransportServiceTests {
                 model,
                 config("data_uri"),
                 List.of("/media/../secret.png"),
-                null))
+                null, null, null))
+                .isInstanceOf(BusinessException.class)
+                .hasMessageContaining("本地参考图不存在");
+    }
+
+    @Test
+    void absoluteResourceUrlsCannotEscapeTheLocalMediaDirectory() throws IOException {
+        Path mediaRoot = Files.createDirectory(tempDir.resolve("media"));
+        Files.write(tempDir.resolve("secret.png"), new byte[]{9, 8, 7});
+        when(storageConfigService.getDefaultConfig()).thenReturn(StorageConfig.builder()
+                .basePath(mediaRoot.toString()).build());
+        when(systemConfigService.getPublicResourceBaseUrl()).thenReturn("http://localhost:1");
+
+        assertThatThrownBy(() -> service.resolveInputs(model, config("data_uri"),
+                List.of("http://localhost:1/media/..%2Fsecret.png"), null, null, null))
                 .isInstanceOf(BusinessException.class)
                 .hasMessageContaining("本地参考图不存在");
     }

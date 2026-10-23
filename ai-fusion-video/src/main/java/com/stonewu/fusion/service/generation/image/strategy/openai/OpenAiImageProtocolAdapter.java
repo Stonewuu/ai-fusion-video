@@ -11,7 +11,9 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.function.UnaryOperator;
 
-/** Standard OpenAI Images API generations/edits adapter. */
+/**
+ * Standard OpenAI Images API generations/edits adapter.
+ */
 @Component
 public class OpenAiImageProtocolAdapter implements OpenAiCompatibleImageProtocolAdapter {
 

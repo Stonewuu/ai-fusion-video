@@ -40,10 +40,10 @@ public interface StorageStrategy {
     /**
      * 从本地文件保存到当前存储后端。
      *
-     * @param filePath   本地文件路径
-     * @param subDir     子目录
-     * @param extension  文件扩展名
-     * @param config     存储配置
+     * @param filePath  本地文件路径
+     * @param subDir    子目录
+     * @param extension 文件扩展名
+     * @param config    存储配置
      * @return 持久化后的可访问 URL
      */
     String storeFile(Path filePath, String subDir, String extension, StorageConfig config);

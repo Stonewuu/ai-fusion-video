@@ -1,12 +1,8 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
-import com.stonewu.fusion.service.script.ScriptService;
+import com.stonewu.fusion.service.canvas.model.CanvasValueType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,8 +15,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class UpdateScriptToolExecutor implements ToolExecutor {
 
-    private final ScriptService scriptService;
-    private final ToolResourceAccessGuard accessGuard;
+    private final ScriptToolCommands commands;
+
 
     @Override
     public String getToolName() {
@@ -43,36 +39,17 @@ public class UpdateScriptToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "expectedVersion": { "type": "integer", "minimum": 0, "description": "刚刚读取的对象版本；创建分集传剧本版本，更新分集传分集版本" },
                         "scriptId": { "type": "integer", "description": "剧本ID" },
                         "content": { "type": "string", "description": "剧本正文内容" }
                     },
-                    "required": ["scriptId", "content"]
+                    "required": ["expectedVersion", "scriptId", "content"]
                 }
                 """;
     }
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long scriptId = params.getLong("scriptId");
-            if (scriptId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 scriptId").toString();
-            }
-
-            if (!params.containsKey("content")) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 content").toString();
-            }
-
-            Script script = accessGuard.requireScript(scriptId, context.getUserId());
-            script.setContent(params.getStr("content"));
-            scriptService.update(script);
-            return JSONUtil.createObj()
-                    .set("scriptId", scriptId)
-                    .set("message", "剧本正文已更新").toString();
-        } catch (Exception e) {
-            log.error("更新剧本失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "更新失败: " + e.getMessage()).toString();
-        }
+        return commands.patch(CanvasValueType.SCRIPT, "scriptId", toolInput, context);
     }
 }

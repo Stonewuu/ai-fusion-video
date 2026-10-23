@@ -4,6 +4,7 @@ import type {
   AiMultimodalInputTransport,
 } from "@/lib/api/ai-assistant";
 import { resolveMediaUrl } from "@/lib/api/client";
+import { getMediaResource } from "@/lib/api/media";
 import { uploadAssistantInput } from "@/lib/api/storage";
 
 const MAX_INPUT_COUNT = 8;
@@ -88,16 +89,17 @@ export async function prepareAssistantAttachments(
     return { file, mimeType, inputType, transport };
   });
 
-  const results = await Promise.allSettled(plans.map(async ({ file, mimeType, inputType, transport }) => {
+  const results = await Promise.allSettled(plans.map(async ({ file, inputType, transport }) => {
     const id = createAttachmentId();
     if (transport === "base64") {
       const data = await readFileAsBase64(file);
       const resourceUrl = await uploadAssistantInput(file, model.id, transport);
+      const media = await getMediaResource(resourceUrl);
       return {
         id,
         name: file.name,
         inputType,
-        mimeType,
+        mimeType: media.content.mimeType,
         transport,
         data,
         resourceUrl,
@@ -107,11 +109,12 @@ export async function prepareAssistantAttachments(
     }
 
     const url = await uploadAssistantInput(file, model.id, transport);
+    const media = await getMediaResource(url);
     return {
       id,
       name: file.name,
       inputType,
-      mimeType,
+      mimeType: media.content.mimeType,
       transport,
       url,
       resourceUrl: url,

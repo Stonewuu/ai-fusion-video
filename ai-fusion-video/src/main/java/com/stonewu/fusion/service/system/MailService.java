@@ -37,7 +37,8 @@ public class MailService {
         String sslStr = systemConfigService.getValue("mail_ssl");
         String from = systemConfigService.getValue("mail_from");
 
-        if (StrUtil.isBlank(host) || StrUtil.isBlank(portStr) || StrUtil.isBlank(username) || StrUtil.isBlank(password)) {
+        if (StrUtil.isBlank(host) || StrUtil.isBlank(portStr) || StrUtil.isBlank(username) || StrUtil.isBlank(
+                password)) {
             throw new BusinessException(400, "邮件服务未配置或配置不完整，请联系管理员配置邮箱参数");
         }
 

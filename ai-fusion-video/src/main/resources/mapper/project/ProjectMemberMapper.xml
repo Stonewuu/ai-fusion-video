@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.project.ProjectMemberMapper">
+    <insert id="createOwner">
+        INSERT INTO afv_project_member(project_id, user_id, role, create_time, update_time)
+        VALUES (#{projectId}, #{userId}, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    </insert>
+    <select id="lockProjectMembers" resultType="java.util.LinkedHashMap">
+        SELECT id, user_id, role FROM afv_project_member WHERE project_id = #{projectId} AND deleted = FALSE ORDER BY id FOR UPDATE
+    </select>
+    <select id="members" resultType="com.stonewu.fusion.mapper.project.ProjectMemberMapper$PersonRow">
+        SELECT u.id, u.username, COALESCE(NULLIF(u.nickname,''),u.username) name, u.status, u.deleted,
+            CASE WHEN u.id = #{ownerId} AND #{ownerType} = 1 THEN 1 ELSE m.role END role
+        FROM sys_user u LEFT JOIN afv_project_member m ON m.user_id=u.id AND m.project_id=#{projectId} AND m.deleted=FALSE
+        WHERE m.id IS NOT NULL OR (u.id=#{ownerId} AND #{ownerType}=1)
+        ORDER BY role,u.id
+    </select>
+    <select id="findPerson" resultType="com.stonewu.fusion.mapper.project.ProjectMemberMapper$PersonRow">
+        SELECT u.id,u.username,COALESCE(NULLIF(u.nickname,''),u.username) name,u.status,u.deleted,
+            CASE WHEN u.id=#{ownerId} AND #{ownerType}=1 THEN 1 ELSE m.role END role
+        FROM sys_user u LEFT JOIN afv_project_member m ON m.user_id=u.id AND m.project_id=#{projectId} AND m.deleted=FALSE
+        WHERE u.username=#{username} AND u.status=1 AND u.deleted=FALSE
+    </select>
+    <update id="removeMember">
+        UPDATE afv_project_member SET deleted=TRUE,update_time=UTC_TIMESTAMP() WHERE project_id=#{projectId} AND user_id=#{userId} AND deleted=FALSE
+    </update>
+    <update id="removeProjectMembers">
+        UPDATE afv_project_member SET deleted = TRUE, update_time = CURRENT_TIMESTAMP
+        WHERE project_id = #{projectId} AND deleted = FALSE
+    </update>
+    <insert id="grantMember">
+        INSERT INTO afv_project_member(project_id,user_id,role,create_time,update_time) VALUES(#{projectId},#{userId},#{role},UTC_TIMESTAMP(),UTC_TIMESTAMP())
+        ON DUPLICATE KEY UPDATE role=VALUES(role),deleted=FALSE,update_time=UTC_TIMESTAMP()
+    </insert>
+</mapper>

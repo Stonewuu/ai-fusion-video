@@ -1,16 +1,11 @@
 package com.stonewu.fusion.service.ai.tool.storyboard;
 
-import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONUtil;
-import cn.hutool.json.JSONObject;
-import com.stonewu.fusion.entity.storyboard.StoryboardItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
-import com.stonewu.fusion.service.storyboard.StoryboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
+
 
 /**
  * 更新分镜条目首尾帧工具（update_storyboard_item_frame）。
@@ -21,9 +16,8 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 @Slf4j
 public class UpdateStoryboardItemFrameToolExecutor implements ToolExecutor {
+    private final StoryboardToolCommands tools;
 
-    private final StoryboardService storyboardService;
-    private final ToolResourceAccessGuard accessGuard;
 
     /**
      * 获取工具名称。
@@ -75,7 +69,10 @@ public class UpdateStoryboardItemFrameToolExecutor implements ToolExecutor {
                         },
                         "frameType": {
                             "type": "string",
-                            "enum": ["first", "last"],
+                            "enum": [
+                                "first",
+                                "last"
+                            ],
                             "description": "帧类型：first-首帧，last-尾帧"
                         },
                         "imageUrl": {
@@ -85,9 +82,20 @@ public class UpdateStoryboardItemFrameToolExecutor implements ToolExecutor {
                         "framePrompt": {
                             "type": "string",
                             "description": "生成首尾帧时使用的提示词"
+                        },
+                        "expectedVersion": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "调用方实际读取的对象版本；冲突时不得换用新版本强制覆盖"
                         }
                     },
-                    "required": ["storyboardItemId", "frameType", "imageUrl"]
+                    "required": [
+                        "storyboardItemId",
+                        "frameType",
+                        "imageUrl",
+                        "expectedVersion"
+                    ],
+                    "additionalProperties": false
                 }
                 """;
     }
@@ -111,51 +119,6 @@ public class UpdateStoryboardItemFrameToolExecutor implements ToolExecutor {
      */
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long itemId = params.getLong("storyboardItemId");
-            String frameType = params.getStr("frameType");
-            String imageUrl = params.getStr("imageUrl");
-            String framePrompt = params.getStr("framePrompt");
-
-            if (itemId == null) {
-                return errorResult("缺少 storyboardItemId");
-            }
-            if (StrUtil.isBlank(frameType)) {
-                return errorResult("缺少 frameType");
-            }
-            if (StrUtil.isBlank(imageUrl)) {
-                return errorResult("缺少 imageUrl");
-            }
-
-            accessGuard.requireStoryboardItem(itemId, context.getUserId());
-            StoryboardItem updated = storyboardService.updateItemFrame(itemId, frameType, imageUrl, framePrompt);
-
-            log.info("[update_storyboard_item_frame] 已更新分镜首尾帧: itemId={}, frameType={}, imageUrl={}",
-                    itemId, frameType, imageUrl);
-
-            return JSONUtil.createObj()
-                    .set("status", "success")
-                    .set("storyboardItemId", itemId)
-                    .set("frameType", storyboardService.normalizeFrameType(frameType))
-                    .set("imageUrl", imageUrl)
-                    .set("firstFrameImageUrl", updated.getFirstFrameImageUrl())
-                    .set("lastFrameImageUrl", updated.getLastFrameImageUrl())
-                    .set("message", "分镜首尾帧已保存")
-                    .toString();
-        } catch (Exception e) {
-            log.error("[update_storyboard_item_frame] 更新分镜首尾帧失败", e);
-            return errorResult("更新失败: " + e.getMessage());
-        }
-    }
-
-    /**
-     * 构建错误结果。
-     *
-     * @param message 错误消息
-     * @return 错误结果 JSON
-     */
-    private String errorResult(String message) {
-        return JSONUtil.createObj().set("status", "error").set("message", message).toString();
+        return tools.execute(getToolName(), toolInput, context);
     }
 }

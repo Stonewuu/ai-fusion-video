@@ -1,5 +1,213 @@
 [
   {
+    "code": "wan3.0-video",
+    "name": "万相 3.0",
+    "platform": "dashscope",
+    "modelProtocol": "dashscope_wan3",
+    "modelType": 3,
+    "description": "阿里云百炼官方统一视频模型，支持最长 30 秒、首尾帧与多模态参考；需使用所属业务空间的地域 API 地址。",
+    "capabilities": [
+      "文生视频",
+      "首尾帧",
+      "多模态参考",
+      "音画同生",
+      "30 秒视频"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url",
+        "data_uri"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": true,
+      "minImageInputs": 0,
+      "maxImageInputs": 10,
+      "maxReferenceImages": 10,
+      "maxReferenceVideos": 5,
+      "maxReferenceAudios": 5,
+      "exclusiveInputModes": true,
+      "referenceAudioRequiresVisualInput": false,
+      "supportedResolutions": [
+        "480P",
+        "720P",
+        "1080P"
+      ],
+      "defaultResolution": "1080P",
+      "supportedAspectRatios": [
+        "adaptive",
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "minDuration": 2,
+      "maxDuration": 30,
+      "defaultDuration": 5,
+      "frameRate": 30,
+      "supportGenerateAudio": true,
+      "supportWatermark": true,
+      "supportSeed": true,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "videoRules": {
+        "version": 1,
+        "profile": "wan_3_0",
+        "defaultGenerateAudio": true,
+        "lastFrameRequiresFirst": true,
+        "promptRequired": false,
+        "promptMaxLength": 20000,
+        "automaticDuration": true,
+        "defaultRatio": "adaptive",
+        "maxReferenceInputs": 20,
+        "maxInputOutputVideoSeconds": 30,
+        "referenceVideoLimits": {
+          "minSeconds": 1,
+          "maxSeconds": 15,
+          "maxTotalSeconds": 15,
+          "maxBytes": 104857600,
+          "minDimension": 240,
+          "maxDimension": 4096,
+          "minAspect": 0.125,
+          "maxAspect": 8,
+          "mimeTypes": [
+            "video/mp4",
+            "video/quicktime"
+          ]
+        },
+        "referenceAudioLimits": {
+          "minSeconds": 1,
+          "maxSeconds": 15,
+          "maxTotalSeconds": 15,
+          "maxBytes": 15728640
+        },
+        "supportPromptExtend": true,
+        "imageLimits": {
+          "maxBytes": 20971520,
+          "minDimension": 240,
+          "maxDimension": 8000,
+          "minAspect": 0.125,
+          "maxAspect": 8,
+          "mimeTypes": [
+            "image/jpeg",
+            "image/png",
+            "image/bmp",
+            "image/webp"
+          ]
+        }
+      },
+      "promptExtend": true
+    }
+  },
+  {
+    "code": "wan3.0-video-prime",
+    "name": "万相 3.0 Prime",
+    "platform": "dashscope",
+    "modelProtocol": "dashscope_wan3",
+    "modelType": 3,
+    "description": "万相 3.0 官方高速版，支持最长 30 秒、首尾帧与多模态参考；需使用所属业务空间的地域 API 地址。",
+    "capabilities": [
+      "文生视频",
+      "首尾帧",
+      "多模态参考",
+      "音画同生",
+      "高速生成"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url",
+        "data_uri"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": true,
+      "minImageInputs": 0,
+      "maxImageInputs": 10,
+      "maxReferenceImages": 10,
+      "maxReferenceVideos": 5,
+      "maxReferenceAudios": 5,
+      "exclusiveInputModes": true,
+      "referenceAudioRequiresVisualInput": false,
+      "supportedResolutions": [
+        "480P",
+        "720P",
+        "1080P"
+      ],
+      "defaultResolution": "1080P",
+      "supportedAspectRatios": [
+        "adaptive",
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "minDuration": 2,
+      "maxDuration": 30,
+      "defaultDuration": 5,
+      "frameRate": 30,
+      "supportGenerateAudio": true,
+      "supportWatermark": true,
+      "supportSeed": true,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "videoRules": {
+        "version": 1,
+        "profile": "wan_3_0",
+        "defaultGenerateAudio": true,
+        "lastFrameRequiresFirst": true,
+        "promptRequired": false,
+        "promptMaxLength": 20000,
+        "automaticDuration": true,
+        "defaultRatio": "adaptive",
+        "maxReferenceInputs": 20,
+        "maxInputOutputVideoSeconds": 30,
+        "referenceVideoLimits": {
+          "minSeconds": 1,
+          "maxSeconds": 15,
+          "maxTotalSeconds": 15,
+          "maxBytes": 104857600,
+          "minDimension": 240,
+          "maxDimension": 4096,
+          "minAspect": 0.125,
+          "maxAspect": 8,
+          "mimeTypes": [
+            "video/mp4",
+            "video/quicktime"
+          ]
+        },
+        "referenceAudioLimits": {
+          "minSeconds": 1,
+          "maxSeconds": 15,
+          "maxTotalSeconds": 15,
+          "maxBytes": 15728640
+        },
+        "supportPromptExtend": true,
+        "imageLimits": {
+          "maxBytes": 20971520,
+          "minDimension": 240,
+          "maxDimension": 8000,
+          "minAspect": 0.125,
+          "maxAspect": 8,
+          "mimeTypes": [
+            "image/jpeg",
+            "image/png",
+            "image/bmp",
+            "image/webp"
+          ]
+        }
+      },
+      "promptExtend": true
+    }
+  },
+  {
     "code": "wan2.7-t2v",
     "name": "Wan 2.7 T2V",
     "platform": "dashscope",

@@ -1,6 +1,8 @@
 package com.stonewu.fusion.entity.ai;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import com.stonewu.fusion.common.BaseEntity;
@@ -21,29 +23,57 @@ import lombok.*;
 @AllArgsConstructor
 public class ApiConfig extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 配置名称 */
+    /**
+     * 配置名称
+     */
     private String name;
 
-    /** 平台标识：deepseek / dashscope / openai_compatible / newapi / gemini / ollama / anthropic / vertex_ai / GoogleFlowReverseApi */
+    /** 内置提供商身份，与接入鉴权类型和模型协议分别维护。 */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String providerId;
+
+    /** 快速配置请求的用户隔离幂等标识，仅创建时写入。 */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
+    private String providerSetupKey;
+
+    /** 首次快速配置请求摘要，用于拒绝同一幂等标识下的不同请求。 */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
+    private String providerSetupHash;
+
+    /**
+     * 平台标识：deepseek / dashscope / openai_compatible / newapi / gemini / ollama / anthropic / vertex_ai / GoogleFlowReverseApi
+     */
     private String platform;
 
-    /** 文本模型默认请求协议；同一接入配置可按能力类型使用不同协议 */
+    /**
+     * 文本模型默认请求协议；同一接入配置可按能力类型使用不同协议
+     */
     private String textProtocol;
 
-    /** 图片模型默认请求协议 */
+    /**
+     * 图片模型默认请求协议
+     */
     private String imageProtocol;
 
-    /** 视频模型默认请求协议 */
+    /**
+     * 视频模型默认请求协议
+     */
     private String videoProtocol;
 
-    /** API 类型：1-文本对话 2-图片生成 3-视频生成 */
+    /**
+     * API 类型：1-文本对话 2-图片生成 3-视频生成
+     */
     private Integer apiType;
 
-    /** API 接口地址 */
+    /**
+     * API 接口地址
+     */
     private String apiUrl;
 
     /**
@@ -53,37 +83,59 @@ public class ApiConfig extends BaseEntity {
     @Builder.Default
     private Boolean autoAppendV1Path = true;
 
-    /** 出站代理类型：none / http / socks5 */
+    /**
+     * 出站代理类型：none / http / socks5
+     */
     private String proxyType;
 
-    /** 出站代理主机 */
+    /**
+     * 出站代理主机
+     */
     private String proxyHost;
 
-    /** 出站代理端口 */
+    /**
+     * 出站代理端口
+     */
     private Integer proxyPort;
 
-    /** 出站代理认证用户名 */
+    /**
+     * 出站代理认证用户名
+     */
     private String proxyUsername;
 
-    /** 出站代理认证密码 */
+    /**
+     * 出站代理认证密码
+     */
     private String proxyPassword;
 
-    /** API 密钥 */
+    /**
+     * API 密钥
+     */
     private String apiKey;
 
-    /** 应用ID（部分平台需要） */
+    /**
+     * 应用ID（部分平台需要）
+     */
     private String appId;
 
-    /** 应用密钥（部分平台需要） */
+    /**
+     * 应用密钥（部分平台需要）
+     */
     private String appSecret;
 
-    /** 关联模型ID */
+    /**
+     * 关联模型ID
+     */
     private Long modelId;
 
-    /** 状态：0-禁用 1-启用 */
+    /**
+     * 状态：0-禁用 1-启用
+     */
     @Builder.Default
     private Integer status = 1;
 
-    /** 备注说明 */
+    /**
+     * 备注说明
+     */
     private String remark;
 }

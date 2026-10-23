@@ -37,7 +37,8 @@ public final class AgentScopeKernelLifecycle implements SmartLifecycle {
 
     @Override
     public void stop() {
-        stop(() -> { });
+        stop(() -> {
+        });
     }
 
     @Override
@@ -54,7 +55,9 @@ public final class AgentScopeKernelLifecycle implements SmartLifecycle {
                     : shutdownSignal.get();
         }
         shutdown.doFinally(ignored -> invokeCallback(callback))
-                .subscribe(ignored -> { }, ignored -> { });
+                .subscribe(ignored -> {
+                }, ignored -> {
+                });
     }
 
     private Mono<Void> shutdownOperation() {

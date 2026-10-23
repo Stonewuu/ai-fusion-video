@@ -18,6 +18,7 @@ import type { AgentMessage } from "@/lib/api/ai-assistant";
 import type { TimelineItem } from "@/lib/store/pipeline-store";
 import { useAssistantStore, type AssistantConversationRuntime } from "@/lib/store/assistant-store";
 import { cn } from "@/lib/utils";
+import { userFacingError } from "@/lib/user-facing-error";
 import { AssistantBrandIcon } from "./assistant-brand-icon";
 import { ToolConfirmationBatchBar } from "./tool-confirmation-batch-bar";
 import { useAssistantMessageScroll } from "./use-assistant-message-scroll";
@@ -263,6 +264,7 @@ export function AssistantMessageList({
             reasoningDurationMs={running ? runtime.pipeline.reasoningDurationMs : undefined}
             streaming={running}
             toolConfirmation={pendingConfirmation ? {
+              reviews: Object.fromEntries(pendingConfirmation.toolCalls.map((call) => [call.toolCallId, call.review])),
               toolCallIds: pendingConfirmation.toolCalls.map(
                 (toolCall) => toolCall.toolCallId,
               ),
@@ -283,8 +285,8 @@ export function AssistantMessageList({
           ) : null}
 
           {error ? (
-            <div className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-              <span className="min-w-0 flex-1 break-words">{error}</span>
+            <div role="alert" className="flex items-start gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+              <span className="min-w-0 flex-1 break-words">{userFacingError(error)}</span>
               <Button
                 type="button"
                 variant="destructive-ghost"
@@ -295,7 +297,7 @@ export function AssistantMessageList({
                   ensureConnection();
                 }}
               >
-                <RefreshCw /> 重试
+                <RefreshCw /> 刷新状态
               </Button>
             </div>
           ) : null}

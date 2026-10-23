@@ -6,8 +6,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
 import org.reactivestreams.Subscription;
-import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
 import reactor.core.publisher.BaseSubscriber;
 import reactor.core.publisher.Flux;
@@ -27,7 +27,9 @@ import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-/** Coalesces identity-contiguous streaming deltas with a bounded output queue. */
+/**
+ * Coalesces identity-contiguous streaming deltas with a bounded output queue.
+ */
 @Component
 public final class AgentEventChunkCoalescer {
 

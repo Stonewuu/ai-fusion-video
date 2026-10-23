@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.ai.run;
 
-/** Projects AgentScope 2.0.0 tool-result blocks using their actual error contract. */
+/**
+ * Projects AgentScope 2.0.0 tool-result blocks using their actual error contract.
+ */
 final class AgentScopeToolResultStatus {
 
     private static final String ERROR_PREFIX = "Error: ";

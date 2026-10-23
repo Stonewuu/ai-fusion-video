@@ -3,13 +3,20 @@ package com.stonewu.fusion.controller.generation.vo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  * 提交生图任务请求 VO
  */
 @Schema(description = "提交生图任务请求")
 @Data
-public class ImageTaskSubmitReqVO {
+@EqualsAndHashCode(callSuper = true)
+public class ImageTaskSubmitReqVO extends GenerationScopeReqVO {
+
+    @NotBlank(message = "生成请求标识不能为空")
+    private String requestId;
+
+    private Long workflowVersionId;
 
     private Long projectId;
 

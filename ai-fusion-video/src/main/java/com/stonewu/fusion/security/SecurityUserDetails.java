@@ -25,11 +25,11 @@ public class SecurityUserDetails implements UserDetails {
     private final Collection<? extends GrantedAuthority> authorities;
 
     public SecurityUserDetails(Long userId,
-            String username,
-            String password,
-            Integer status,
-            Long currentTeamId,
-            Collection<? extends GrantedAuthority> authorities) {
+                               String username,
+                               String password,
+                               Integer status,
+                               Long currentTeamId,
+                               Collection<? extends GrantedAuthority> authorities) {
         this.userId = userId;
         this.username = username;
         this.password = password;
@@ -49,6 +49,7 @@ public class SecurityUserDetails implements UserDetails {
         this.status = user.getStatus();
         this.currentTeamId = currentTeamId;
         this.authorities = roles.stream()
+                .filter(role -> Integer.valueOf(1).equals(role.getStatus()))
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role.getCode().toUpperCase()))
                 .collect(Collectors.toList());
     }

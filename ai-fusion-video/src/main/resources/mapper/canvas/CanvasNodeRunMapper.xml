@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasNodeRunMapper">
+    <insert id="insertBatchItem">
+        INSERT INTO afv_canvas_node_run(id, run_id, node_id, parent_node_run_id, item_index, attempt,
+            ordinal_no, fingerprint, plan_json, input_json, output_json, checkpoint_json, status, next_run_at, created_at, updated_at)
+        SELECT #{id}, run_id, node_id, id, #{index}, #{attempt}, ordinal_no, #{fingerprint}, #{plan}, #{input}, #{output}, '{}', 'READY',
+            UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6) FROM afv_canvas_node_run WHERE id = #{parentId}
+    </insert>
+    <insert id="insertPlanned">
+        INSERT INTO afv_canvas_node_run(id, run_id, node_id, ordinal_no, fingerprint, plan_json, output_json, checkpoint_json,
+            next_run_at, created_at, updated_at)
+        VALUES (#{row.id}, #{row.runId}, #{row.nodeId}, #{row.ordinalNo}, #{row.fingerprint}, #{row.planJson}, #{row.outputJson}, '{}', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <select id="lock" resultType="com.stonewu.fusion.entity.canvas.CanvasNodeRunEntity">
+        SELECT * FROM afv_canvas_node_run WHERE id = #{id} FOR UPDATE
+    </select>
+    <select id="latestSucceeded" resultType="com.stonewu.fusion.entity.canvas.CanvasNodeRunEntity">
+        SELECT n.* FROM afv_canvas_node_run n JOIN afv_canvas_run r ON r.id = n.run_id
+        WHERE r.canvas_id = #{canvasId} AND n.node_id = #{nodeId} AND n.status = 'SUCCEEDED' AND n.item_index = -1
+        ORDER BY n.created_at DESC, n.id DESC LIMIT 1
+    </select>
+    <select id="latestNodes" resultType="com.stonewu.fusion.entity.canvas.CanvasNodeRunEntity">
+        SELECT n.* FROM afv_canvas_node_run n JOIN (
+            SELECT n.id, ROW_NUMBER() OVER (
+                PARTITION BY n.node_id ORDER BY n.created_at DESC, n.id DESC) AS position_no
+            FROM afv_canvas_node_run n JOIN afv_canvas_run r ON r.id = n.run_id
+            WHERE r.canvas_id = #{canvasId} AND n.parent_node_run_id IS NULL
+                AND JSON_UNQUOTE(JSON_EXTRACT(n.plan_json, '$.action')) &lt;&gt; 'REUSE'
+        ) latest ON latest.id = n.id AND latest.position_no = 1
+    </select>
+    <update id="updateState">
+        UPDATE afv_canvas_node_run SET status = #{status}, input_json = #{input}, output_json = #{output}, checkpoint_json = #{checkpoint},
+            external_kind = #{kind}, external_id = #{externalId}, error_msg = #{error}, owner_instance_id = NULL, lease_until = NULL,
+            next_run_at = TIMESTAMPADD(SECOND, #{delay}, UTC_TIMESTAMP(6)), revision = revision + 1, updated_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id}
+    </update>
+    <update id="defer">
+        UPDATE afv_canvas_node_run SET owner_instance_id = NULL, lease_until = NULL, next_run_at = TIMESTAMPADD(SECOND, #{seconds}, UTC_TIMESTAMP(6)) WHERE id = #{id}
+    </update>
+    <select id="runningCount" resultType="int">
+        SELECT COUNT(*) FROM afv_canvas_node_run WHERE run_id = #{runId} AND owner_instance_id IS NOT NULL AND lease_until &gt; UTC_TIMESTAMP(6)
+    </select>
+    <select id="claimCandidate" resultType="String">
+        SELECT current_node.id FROM afv_canvas_node_run current_node WHERE run_id = #{runId}
+            AND (status IN ('READY','RUNNING','CANCEL_REQUESTED','NEEDS_REVIEW','UNKNOWN_SUBMISSION')
+                OR (status='WAITING_CONFIRMATION' AND external_kind='AGENT'))
+            AND next_run_at &lt;= UTC_TIMESTAMP(6) AND (lease_until IS NULL OR lease_until &lt;= UTC_TIMESTAMP(6))
+            AND (status &lt;&gt; 'READY' OR #{externalCount} &lt; #{parallelism})
+            AND (status &lt;&gt; 'READY' OR parent_node_run_id IS NULL
+                OR JSON_UNQUOTE(JSON_EXTRACT(plan_json,'$.node.kind')) NOT IN
+                    ('agent','scriptParse','storyToScript','episodeParse','storyboardGenerate','assetExtract','assetImageGenerate','frameGenerate')
+                OR NOT EXISTS (SELECT 1 FROM afv_canvas_node_run earlier
+                    WHERE earlier.parent_node_run_id=current_node.parent_node_run_id AND earlier.item_index&lt;current_node.item_index
+                        AND earlier.status NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','BLOCKED','CANCELLED')))
+        ORDER BY next_run_at, ordinal_no, item_index, attempt LIMIT 1 FOR UPDATE SKIP LOCKED
+    </select>
+    <update id="claim">
+        UPDATE afv_canvas_node_run SET owner_instance_id = #{owner}, owner_epoch = owner_epoch + 1, lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6)) WHERE id = #{id}
+    </update>
+    <select id="leased" resultType="com.stonewu.fusion.entity.canvas.CanvasNodeRunEntity">
+        SELECT * FROM afv_canvas_node_run WHERE id = #{id} AND run_id = #{runId} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch}
+            AND lease_until &gt; UTC_TIMESTAMP(6) AND (status IN ('READY','RUNNING','CANCEL_REQUESTED','NEEDS_REVIEW','UNKNOWN_SUBMISSION')
+                OR (status='WAITING_CONFIRMATION' AND external_kind='AGENT')) FOR UPDATE
+    </select>
+    <update id="heartbeat">
+        UPDATE afv_canvas_node_run SET lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6))
+        WHERE id = #{id} AND run_id = #{runId} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND lease_until &gt; UTC_TIMESTAMP(6)
+            AND (status IN ('READY','RUNNING','CANCEL_REQUESTED','NEEDS_REVIEW','UNKNOWN_SUBMISSION')
+                OR (status='WAITING_CONFIRMATION' AND external_kind='AGENT'))
+    </update>
+    <select id="hasActiveNodes" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM afv_canvas_node_run n JOIN afv_canvas_run r ON r.id = n.run_id
+            WHERE r.canvas_id = #{canvasId} AND n.parent_node_run_id IS NULL
+            AND JSON_UNQUOTE(JSON_EXTRACT(n.plan_json, '$.action')) &lt;&gt; 'REUSE'
+            AND n.status NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','BLOCKED','CANCELLED')
+            AND n.node_id IN <foreach collection="nodeIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
+    </select>
+</mapper>

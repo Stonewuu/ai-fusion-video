@@ -3,7 +3,9 @@ package com.stonewu.fusion.service.ai.run.model;
 import java.time.Instant;
 import java.util.Objects;
 
-/** Immutable view of an event after its per-run sequence is committed. */
+/**
+ * Immutable view of an event after its per-run sequence is committed.
+ */
 public record CommittedAgentEvent(
         long eventId,
         String runId,

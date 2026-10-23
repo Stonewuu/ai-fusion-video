@@ -1,21 +1,11 @@
 package com.stonewu.fusion.service.ai.tool.asset;
 
-import cn.hutool.json.JSONArray;
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.asset.Asset;
-import com.stonewu.fusion.entity.asset.AssetItem;
-import com.stonewu.fusion.entity.project.Project;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.asset.AssetService;
-import com.stonewu.fusion.service.project.ProjectService;
-import com.stonewu.fusion.service.system.SystemConfigService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 
 /**
  * 项目资产列表工具（list_project_assets）
@@ -25,9 +15,8 @@ import java.util.List;
 @Slf4j
 public class ListProjectAssetsToolExecutor implements ToolExecutor {
 
-    private final AssetService assetService;
-    private final ProjectService projectService;
-    private final SystemConfigService systemConfigService;
+    private final AssetToolQueries queries;
+
 
     @Override
     public String getToolName() {
@@ -82,61 +71,6 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long projectId = params.getLong("projectId");
-            String type = params.getStr("type");
-            Long userId = context.getUserId();
-
-            List<Asset> assets;
-            if (projectId != null) {
-                if (!projectService.canAccessProject(projectId, userId)) {
-                    return JSONUtil.createObj().set("status", "error")
-                            .set("message", "无权访问该项目").toString();
-                }
-                assets = assetService.listByProject(projectId, type, null);
-            } else {
-                assets = assetService.listAccessibleByUser(userId, type);
-            }
-
-            JSONArray resultArray = new JSONArray();
-            for (Asset asset : assets) {
-                List<AssetItem> items = assetService.listItems(asset.getId());
-                JSONArray itemsArray = new JSONArray();
-                for (AssetItem item : items) {
-                    itemsArray.add(JSONUtil.createObj()
-                            .set("id", item.getId())
-                            .set("itemType", item.getItemType())
-                            .set("name", item.getName())
-                            .set("imageUrl", resolvePublicUrl(item.getImageUrl()))
-                            .set("thumbnailUrl", resolvePublicUrl(item.getThumbnailUrl())));
-                }
-
-                resultArray.add(JSONUtil.createObj()
-                        .set("id", asset.getId())
-                        .set("name", asset.getName())
-                        .set("type", asset.getType())
-                        .set("description", asset.getDescription())
-                        .set("coverUrl", resolvePublicUrl(asset.getCoverUrl()))
-                        .set("itemCount", items.size())
-                        .set("items", itemsArray));
-            }
-
-            return JSONUtil.createObj()
-                    .set("type", type != null ? type : "all")
-                    .set("total", assets.size())
-                    .set("assets", resultArray).toString();
-        } catch (Exception e) {
-            log.error("查询资产列表失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "查询失败: " + e.getMessage()).toString();
-        }
-    }
-
-    private String resolvePublicUrl(String resourceUrl) {
-        if (resourceUrl == null || resourceUrl.isBlank()) {
-            return null;
-        }
-        String publicUrl = systemConfigService.resolvePublicUrl(resourceUrl);
-        return publicUrl != null ? publicUrl : resourceUrl;
+        return queries.execute(getToolName(), toolInput, context);
     }
 }

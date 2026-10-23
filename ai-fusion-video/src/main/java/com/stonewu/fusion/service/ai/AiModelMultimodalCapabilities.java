@@ -4,17 +4,14 @@ import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.AiMultimodalInputVO;
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.service.media.MediaReference;
 
 import java.net.URI;
-import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-/** Canonical validation for model multimodal input capabilities and message inputs. */
+/**
+ * Canonical validation for model multimodal input capabilities and message inputs.
+ */
 public final class AiModelMultimodalCapabilities {
 
     public static final String TYPE_IMAGE = "image";
@@ -137,6 +134,24 @@ public final class AiModelMultimodalCapabilities {
         return type;
     }
 
+    /**
+     * 私有媒体优先按模型显式声明的 Base64 能力传输；仅支持 URL 的模型仍需要受控访问票据。
+     */
+    public static String managedTransport(AiModel model, String mimeType) {
+        return managedTypeTransport(model, inputTypeForMime(mimeType));
+    }
+
+    /**
+     * 上游尚未生成文件时，先按已声明的媒体类型检查模型，不猜测文件 MIME。
+     */
+    public static String managedTypeTransport(AiModel model, String type) {
+        requireConfiguredModel(model);
+        String transport = model.getMultimodalInputTransports().getOrDefault(type, List.of()).contains(TRANSPORT_BASE64)
+                ? TRANSPORT_BASE64 : TRANSPORT_URL;
+        requireSupported(model, type, transport);
+        return transport;
+    }
+
     public static String inputTypeForMime(String mimeType) {
         String value = normalizeMimeType(mimeType);
         if (value.startsWith("image/")) {
@@ -179,7 +194,9 @@ public final class AiModelMultimodalCapabilities {
         }
         try {
             URI uri = URI.create(url);
-            if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
+            if (MediaReference.managed(url)) {
+                MediaReference.id(url);
+            } else if (!("http".equalsIgnoreCase(uri.getScheme()) || "https".equalsIgnoreCase(uri.getScheme()))
                     || StrUtil.isBlank(uri.getHost())) {
                 throw new IllegalArgumentException("unsupported URL");
             }

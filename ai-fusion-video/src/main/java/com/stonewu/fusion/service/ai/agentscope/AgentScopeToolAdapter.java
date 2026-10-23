@@ -4,14 +4,22 @@ import cn.hutool.json.JSONUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.service.ai.AgentToolInvocationPolicy;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.ToolPermissionRisk;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
+import com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext;
+import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
 import com.stonewu.fusion.service.ai.agentscope.tool.AbstractPlatformAgentTool;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
-import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
+import com.stonewu.fusion.service.ai.run.AgentExecutionLimits;
 import com.stonewu.fusion.service.ai.run.RunLeaseGuard;
+import com.stonewu.fusion.service.canvas.agent.CanvasExternalTool;
+import com.stonewu.fusion.service.canvas.model.CanvasActor;
+import com.stonewu.fusion.service.resource.model.ResourceCommandContext;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.ToolResultBlock;
 import io.agentscope.core.tool.ToolBase;
@@ -19,30 +27,39 @@ import io.agentscope.core.tool.ToolCallParam;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Scheduler;
 
-import java.time.Duration;
-import java.time.Instant;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Adapts a platform tool to the strict AgentScope V2 {@link ToolBase} contract. */
+import static com.stonewu.fusion.service.ai.ToolExecutionContext.forInvocation;
+
+/**
+ * Adapts a platform tool to the strict AgentScope V2 {@link ToolBase} contract.
+ */
 public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
 
     private final ToolExecutor toolExecutor;
     private final Scheduler toolScheduler;
     private final RunLeaseGuard leaseGuard;
     private final ObjectMapper objectMapper;
+    private final AiModel model;
+    private final List<AgentToolInvocationPolicy> invocationPolicies;
 
     public AgentScopeToolAdapter(
             ToolExecutor toolExecutor,
             AgentScopeToolSchema.PreparedSchema schema,
             Scheduler toolScheduler,
             RunLeaseGuard leaseGuard,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AiModel model,
+            List<AgentToolInvocationPolicy> invocationPolicies) {
         super(builder(toolExecutor, schema));
         this.toolExecutor = Objects.requireNonNull(toolExecutor, "toolExecutor must not be null");
         this.toolScheduler = Objects.requireNonNull(toolScheduler, "toolScheduler must not be null");
         this.leaseGuard = Objects.requireNonNull(leaseGuard, "leaseGuard must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.model = Objects.requireNonNull(model, "model must not be null");
+        this.invocationPolicies = List.copyOf(invocationPolicies);
     }
 
     @Override
@@ -51,20 +68,26 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             RuntimeContext runtime = requireRuntimeContext(param);
             AgentRunContext run = requireContext(runtime, AgentRunContext.class);
             CancellationContext cancellation = requireContext(runtime, CancellationContext.class);
-            com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext toolContext =
-                    requireContext(
-                            runtime,
-                            com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext.class);
-            Duration remaining = remaining(run);
+            ToolExecutionContext toolContext = requireContext(runtime, ToolExecutionContext.class);
             Map<String, Object> input = Objects.requireNonNull(
                     param.getInput(), "AgentScope tool input must not be null");
-            Mono<String> invocation = Mono.fromCallable(() -> toolExecutor.execute(
-                            JSONUtil.toJsonStr(input),
-                            com.stonewu.fusion.service.ai.ToolExecutionContext.builder()
-                                    .userId(toolContext.userId())
-                                    .ownerType(toolContext.ownerType())
-                                    .ownerId(toolContext.ownerId())
-                                    .build()))
+            ResourceCommandContext mutation = new ResourceCommandContext(
+                    new CanvasActor(toolContext.userId(), toolContext.ownerType() == 2 ? toolContext.ownerId() : null),
+                    "agent", toolContext.canvasScope() == null ? null : toolContext.canvasScope().canvasId(),
+                    run.runId(), requireToolUse(param).getId(), run.ownerInstanceId(), run.ownerEpoch());
+            var invocationContext = forInvocation(toolContext.userId(), toolContext.ownerType(), toolContext.ownerId(),
+                    mutation);
+            invocationContext.setCanvasScope(toolContext.canvasScope());
+            invocationContext.setModel(model);
+            Mono<String> invocation = Mono.fromCallable(() -> {
+                        try {
+                            invocationPolicies.forEach(policy -> policy.before(getName(), input, invocationContext));
+                            return toolExecutor.execute(JSONUtil.toJsonStr(input), invocationContext);
+                        } catch (BusinessException rejected) {
+                            return JSONUtil.toJsonStr(
+                                    Map.of("status", "error", "code", rejected.getCode(), "message", rejected.getMessage()));
+                        }
+                    })
                     .subscribeOn(toolScheduler);
             return cancellation.checkpoint()
                     .then(assertLease(run))
@@ -72,7 +95,7 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
                     .flatMap(result -> cancellation.checkpoint()
                             .then(assertLease(run))
                             .thenReturn(projectResult(param, result)))
-                    .timeout(remaining);
+                    .transform(action -> AgentExecutionLimits.untilDeadline(action, run.deadline()));
         });
     }
 
@@ -99,12 +122,16 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
                 JsonNode status = payload.get("status");
                 if (status != null && status.isTextual()
                         && ("error".equalsIgnoreCase(status.textValue())
-                            || "failed".equalsIgnoreCase(status.textValue()))) {
+                        || "failed".equalsIgnoreCase(status.textValue()))) {
                     return errorResult(param, result);
                 }
             }
         } catch (JsonProcessingException plainTextResult) {
             // ToolExecutor permits text output; only JSON objects carry the platform status contract.
+        }
+        if (toolExecutor instanceof CanvasExternalTool rich) {
+            var use = requireToolUse(param);
+            return ToolResultBlock.of(use.getId(), use.getName(), rich.projectOutput(result));
         }
         return textResult(param, result);
     }
@@ -130,14 +157,6 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
                             + " for tool " + getName());
         }
         return value;
-    }
-
-    private Duration remaining(AgentRunContext run) {
-        Duration remaining = Duration.between(Instant.now(), run.deadline());
-        if (remaining.isZero() || remaining.isNegative()) {
-            throw new IllegalStateException("Agent run deadline expired before tool execution");
-        }
-        return remaining;
     }
 
     private static ToolBase.Builder builder(

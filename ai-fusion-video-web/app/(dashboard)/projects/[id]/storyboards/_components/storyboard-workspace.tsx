@@ -1,12 +1,13 @@
 "use client";
 
+import { useCommandRequestKey } from "@/hooks/use-command-request-key";
+
 import { Film, Loader2, Sparkles, Table2, LayoutGrid, Menu, Info } from "lucide-react";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
-import { toastApiError } from "@/lib/api/toast-api-error";
 import { storyboardApi } from "@/lib/api/storyboard";
 import { StoryboardSidebar } from "./storyboard-sidebar";
 import { StoryboardRefPanel } from "./storyboard-ref-panel";
@@ -17,6 +18,7 @@ import { StoryboardComposeActions } from "./storyboard-compose-actions";
 import { StoryboardSceneList } from "./storyboard-scene-list";
 
 export function StoryboardWorkspace({ workspace }: { workspace: ReturnType<typeof useStoryboardWorkspace> }) {
+  const requests = useCommandRequestKey();
 
   const {
     projectId,
@@ -112,6 +114,7 @@ export function StoryboardWorkspace({ workspace }: { workspace: ReturnType<typeo
         onRefresh={handleManualRefreshStoryboard}
         isRefreshing={isRefreshingStoryboard}
         storyboardId={storyboard.id}
+        storyboardVersion={storyboard.version}
         selection={sidebarSelection}
         activeSceneId={activeSceneId}
         collapsed={isSidebarCollapsed}
@@ -186,6 +189,7 @@ export function StoryboardWorkspace({ workspace }: { workspace: ReturnType<typeo
          onRefresh={handleManualRefreshStoryboard}
         isRefreshing={isRefreshingStoryboard}
         storyboardId={storyboard.id}
+        storyboardVersion={storyboard.version}
                   selection={sidebarSelection}
                   activeSceneId={activeSceneId}
                   onSelect={setSidebarSelection}
@@ -314,11 +318,14 @@ export function StoryboardWorkspace({ workspace }: { workspace: ReturnType<typeo
         onConfirm={async ({ characterIds, sceneAssetItemId, propIds }) => {
           if (!editingItem) return;
           try {
-            const updated = await storyboardApi.updateItemAssets(editingItem.id, {
+            const payload = {
+              version: editingItem.version,
               characterIds,
               sceneAssetItemId,
               propIds,
-            });
+            };
+            const updated = await storyboardApi.updateItemAssets(editingItem.id, payload, requests.forPayload({ itemId: editingItem.id, ...payload }));
+            requests.clear();
             // 局部更新场次数据状态
             setSceneGroups((prev) =>
               prev.map((g) => ({
@@ -330,7 +337,7 @@ export function StoryboardWorkspace({ workspace }: { workspace: ReturnType<typeo
             setEditingItem(null);
           } catch (err) {
             console.error("更新关联资产失败:", err);
-            toastApiError(err, "保存资产关联失败，请重试");
+            throw err;
           }
         }}
       />

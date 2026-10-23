@@ -2,7 +2,9 @@ package com.stonewu.fusion.service.ai.run.model;
 
 import java.nio.charset.StandardCharsets;
 
-/** Canonical durable SSE cursor. */
+/**
+ * Canonical durable SSE cursor.
+ */
 public record RunCursor(String runId, long afterSequence) {
 
     public RunCursor {

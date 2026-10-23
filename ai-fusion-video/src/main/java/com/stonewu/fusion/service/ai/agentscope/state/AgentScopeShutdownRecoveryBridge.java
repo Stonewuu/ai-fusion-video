@@ -14,12 +14,14 @@ import org.springframework.stereotype.Component;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.List;
 import java.util.function.Function;
 
-/** V2 middleware that makes a shutdown-interrupted state retry exactly once. */
+/**
+ * V2 middleware that makes a shutdown-interrupted state retry exactly once.
+ */
 @Component
 @Slf4j
 public final class AgentScopeShutdownRecoveryBridge implements MiddlewareBase {

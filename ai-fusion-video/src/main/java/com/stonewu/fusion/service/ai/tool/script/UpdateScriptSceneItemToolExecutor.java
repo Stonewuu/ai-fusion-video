@@ -1,12 +1,8 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
-import com.stonewu.fusion.service.script.ScriptService;
+import com.stonewu.fusion.service.canvas.model.CanvasValueType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,8 +15,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class UpdateScriptSceneItemToolExecutor implements ToolExecutor {
 
-    private final ScriptService scriptService;
-    private final ToolResourceAccessGuard accessGuard;
+    private final ScriptToolCommands commands;
+
 
     @Override
     public String getToolName() {
@@ -46,6 +42,7 @@ public class UpdateScriptSceneItemToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "expectedVersion": { "type": "integer", "minimum": 0, "description": "刚刚读取的对象版本；创建分集传剧本版本，更新分集传分集版本" },
                         "scriptSceneItemId": { "type": "integer", "description": "剧本场次ID" },
                         "sceneHeading": { "type": "string", "description": "场景标头" },
                         "location": { "type": "string", "description": "场景地点" },
@@ -69,50 +66,13 @@ public class UpdateScriptSceneItemToolExecutor implements ToolExecutor {
                             }
                         }
                     },
-                    "required": ["scriptSceneItemId"]
+                    "required": ["expectedVersion", "scriptSceneItemId"]
                 }
                 """;
     }
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long scriptSceneItemId = params.getLong("scriptSceneItemId");
-            if (scriptSceneItemId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 scriptSceneItemId").toString();
-            }
-
-            ScriptSceneItem item = accessGuard.requireScriptScene(scriptSceneItemId, context.getUserId());
-            if (params.containsKey("sceneHeading")) {
-                item.setSceneHeading(params.getStr("sceneHeading"));
-            }
-            if (params.containsKey("location")) {
-                item.setLocation(params.getStr("location"));
-            }
-            if (params.containsKey("timeOfDay")) {
-                item.setTimeOfDay(params.getStr("timeOfDay"));
-            }
-            if (params.containsKey("intExt")) {
-                item.setIntExt(params.getStr("intExt"));
-            }
-            if (params.containsKey("characters")) {
-                item.setCharacters(params.getJSONArray("characters").toString());
-            }
-            if (params.containsKey("sceneDescription")) {
-                item.setSceneDescription(params.getStr("sceneDescription"));
-            }
-            if (params.containsKey("dialogues")) {
-                item.setDialogues(params.getJSONArray("dialogues").toString());
-            }
-
-            scriptService.updateScene(item);
-            return JSONUtil.createObj()
-                    .set("scriptSceneItemId", scriptSceneItemId)
-                    .set("message", "场次更新成功").toString();
-        } catch (Exception e) {
-            log.error("更新场次失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "更新失败: " + e.getMessage()).toString();
-        }
+        return commands.patch(CanvasValueType.SCRIPT_SCENE, "scriptSceneItemId", toolInput, context);
     }
 }

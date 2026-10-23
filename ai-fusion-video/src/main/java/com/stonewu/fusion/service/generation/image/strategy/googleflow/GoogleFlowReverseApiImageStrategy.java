@@ -4,18 +4,20 @@ import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
-import com.stonewu.fusion.entity.generation.ImageItem;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.googleflow.GoogleFlowReverseApiClient;
 import com.stonewu.fusion.service.ai.googleflow.GoogleFlowReverseApiSupport;
 import com.stonewu.fusion.service.generation.image.ImageGenerationService;
 import com.stonewu.fusion.service.generation.image.strategy.ImageGenerationStrategy;
+import com.stonewu.fusion.service.generation.job.GenerationPreparedRequest;
+import com.stonewu.fusion.service.generation.job.GenerationProviderReceipt;
+import com.stonewu.fusion.service.generation.job.PreparedGenerationCall;
+import com.stonewu.fusion.service.generation.job.RemoteGenerationResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -35,79 +37,27 @@ public class GoogleFlowReverseApiImageStrategy implements ImageGenerationStrateg
         return "google_flow";
     }
 
-    @Override
-    public List<String> generate(String prompt, String modelCode, int width, int height, int count,
-                                 List<String> imageUrls, ApiConfig apiConfig) {
-        String aspectRatio = GoogleFlowReverseApiSupport.deriveImageAspectRatio(width, height);
-        String resolution = GoogleFlowReverseApiSupport.deriveImageResolution(width, height);
-        String actualModelCode = GoogleFlowReverseApiSupport.resolveImageModelCode(modelCode, aspectRatio, resolution);
 
-        List<String> urls = new ArrayList<>();
-        int actualCount = Math.max(count, 1);
-        for (int i = 0; i < actualCount; i++) {
-            GoogleFlowReverseApiClient.CompletionResult completion = client.generate(prompt, actualModelCode, imageUrls, apiConfig);
-            String imageUrl = GoogleFlowReverseApiSupport.extractImageUrl(completion.content());
-            if (StrUtil.isBlank(imageUrl)) {
-                throw new BusinessException("GoogleFlowReverseApi 未返回图片地址");
+    @Override
+    public PreparedGenerationCall prepare(ImageTask task, AiModel model, ApiConfig apiConfig) {
+        var request = GoogleFlowReverseApiSupport.resolveImageRequest(model, task);
+        var call = client.prepare(task.getPrompt(), request.actualModelCode(),
+                parseRefImageUrls(task.getRefImageUrls()), apiConfig);
+        return new PreparedGenerationCall(GenerationPreparedRequest.ordinary(), () -> {
+            var response = call.get();
+            String image = GoogleFlowReverseApiSupport.extractImageUrl(response.content());
+            if (StrUtil.isBlank(image)) {
+                throw new BusinessException("Google Flow 未返回图片地址");
             }
-            urls.add(imageUrl);
-        }
-        return urls;
+            return new GenerationProviderReceipt(response.requestId(),
+                    RemoteGenerationResult.success(List.of(RemoteGenerationResult.Output.image(image))));
+        });
     }
 
     @Override
-    public String submit(ImageTask task, ApiConfig apiConfig) {
-        AiModel model = resolveModel(task);
-        GoogleFlowReverseApiSupport.ResolvedImageRequest request = GoogleFlowReverseApiSupport.resolveImageRequest(model, task);
-        List<String> refImageUrls = parseRefImageUrls(task.getRefImageUrls());
-        List<ImageItem> items = imageGenerationService.listItems(task.getId());
-        String firstRequestId = null;
-        int successCount = 0;
-
-        for (ImageItem item : items) {
-            GoogleFlowReverseApiClient.CompletionResult completion = client.generate(
-                    task.getPrompt(),
-                    request.actualModelCode(),
-                    refImageUrls,
-                    apiConfig
-            );
-            String imageUrl = GoogleFlowReverseApiSupport.extractImageUrl(completion.content());
-            if (StrUtil.isBlank(imageUrl)) {
-                throw new BusinessException("GoogleFlowReverseApi 未返回图片地址");
-            }
-
-            if (firstRequestId == null && StrUtil.isNotBlank(completion.requestId())) {
-                firstRequestId = completion.requestId();
-            }
-
-            item.setPlatformTaskId(StrUtil.blankToDefault(completion.requestId(), task.getTaskId()));
-            item.setImageUrl(imageUrl);
-            item.setStatus(1);
-            imageGenerationService.updateItem(item);
-            successCount++;
-        }
-
-        task.setSuccessCount(successCount);
-        imageGenerationService.update(task);
-
-        log.info("[GoogleFlowReverseApi][Image] 任务完成: taskId={}, model={}, aspectRatio={}, resolution={}, count={}",
-                task.getTaskId(), request.actualModelCode(), request.aspectRatio(), request.resolution(), successCount);
-        return StrUtil.blankToDefault(firstRequestId, task.getTaskId());
+    public RemoteGenerationResult query(String platformTaskId, ImageTask task, AiModel model, ApiConfig apiConfig) {
+        throw new IllegalStateException("同步图片结果必须从已保存回执读取");
     }
 
-    @Override
-    public void poll(String platformTaskId, ImageTask task, ApiConfig apiConfig) {
-        // Flow2API 在 submit 阶段已同步返回最终结果
-    }
 
-    private AiModel resolveModel(ImageTask task) {
-        if (task.getModelId() == null) {
-            throw new BusinessException("GoogleFlowReverseApi 图片任务缺少 modelId");
-        }
-        AiModel model = aiModelService.getById(task.getModelId());
-        if (model == null || StrUtil.isBlank(model.getCode())) {
-            throw new BusinessException("GoogleFlowReverseApi 图片模型不存在或未配置 code");
-        }
-        return model;
-    }
 }

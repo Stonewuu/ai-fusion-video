@@ -49,6 +49,10 @@ public class AiToolConfigService {
             return Collections.emptyList();
         }
 
+        return getEnabledToolsByDefinition(agentDef);
+    }
+
+    public List<ToolExecutor> getEnabledToolsByDefinition(AiAgentDefinition agentDef) {
         List<String> toolNames = agentDef.getToolNames();
         // toolNames 为 null 表示该 Agent 可使用所有工具
         if (toolNames == null) {

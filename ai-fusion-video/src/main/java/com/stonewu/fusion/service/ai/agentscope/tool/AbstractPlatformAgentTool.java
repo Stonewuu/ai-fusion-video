@@ -7,7 +7,9 @@ import io.agentscope.core.tool.ToolBase;
 import io.agentscope.core.tool.ToolCallParam;
 import reactor.core.publisher.Mono;
 
-/** Forces every platform AgentScope tool to implement the V2 asynchronous contract. */
+/**
+ * Forces every platform AgentScope tool to implement the V2 asynchronous contract.
+ */
 public abstract class AbstractPlatformAgentTool extends ToolBase {
 
     protected AbstractPlatformAgentTool(Builder builder) {

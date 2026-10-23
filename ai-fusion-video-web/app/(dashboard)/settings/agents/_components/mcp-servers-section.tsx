@@ -2,6 +2,7 @@
 
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useState } from "react";
+import { useUnsavedDialog } from "@/components/settings/use-unsaved-dialog";
 import {
   Cable,
   CheckCircle2,
@@ -36,6 +37,8 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { agentConfigApi, type AgentMcpServer } from "@/lib/api/agent-config";
 import { settingsTypography } from "../../_shared";
+import { McpContractsDialog } from "@/components/mcp/contracts-dialog";
+import { mcpFormIssue, parseMcpLines, type ConfigIssue } from "@/lib/settings/form-validation";
 
 const TRANSPORT_ITEMS = [
   { value: "http", label: "Streamable HTTP" },
@@ -80,30 +83,23 @@ function mapToLines(values: Record<string, string>) {
   return Object.entries(values).map(([key, value]) => `${key}: ${value}`).join("\n");
 }
 
-function linesToMap(value: string) {
-  const result: Record<string, string> = {};
-  for (const rawLine of value.split("\n")) {
-    const line = rawLine.trim();
-    if (!line) continue;
-    const separator = line.indexOf(":");
-    if (separator <= 0) throw new Error(`格式错误：${line}`);
-    result[line.slice(0, separator).trim()] = line.slice(separator + 1).trim();
-  }
-  return result;
-}
-
 export function McpServersSection({ servers, onRefresh }: McpServersSectionProps) {
   const { confirm } = useConfirm();
   const [open, setOpen] = useState(false);
+  const [canvasOperations, setCanvasOperations] = useState(false);
   const [editing, setEditing] = useState<AgentMcpServer | null>(null);
   const [form, setForm] = useState<McpForm>(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
+  const [issue, setIssue] = useState<ConfigIssue | null>(null);
   const [testingId, setTestingId] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
+  const [original, setOriginal] = useState<McpForm>(EMPTY_FORM);
+  const changeOpen = useUnsavedDialog(open, JSON.stringify(form) !== JSON.stringify(original), saving, setOpen);
+
   const showEditor = (server?: AgentMcpServer) => {
     setEditing(server || null);
-    setForm(server ? {
+    const nextForm = server ? {
       name: server.name,
       transport: server.transport,
       url: server.url,
@@ -113,24 +109,22 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
       timeoutSeconds: String(server.timeoutSeconds),
       initializationTimeoutSeconds: String(server.initializationTimeoutSeconds),
       status: String(server.status),
-    } : EMPTY_FORM);
+    } : EMPTY_FORM;
+    setForm(nextForm); setOriginal(nextForm);
+    setIssue(null);
     setOpen(true);
   };
 
   const save = async () => {
-    if (!form.name.trim() || !form.url.trim()) {
-      toast.error("请填写 MCP 名称和服务地址");
+    const invalid = mcpFormIssue(form);
+    if (invalid) {
+      setIssue(invalid);
+      requestAnimationFrame(() => document.getElementById(invalid.field)?.focus());
       return;
     }
     const timeoutSeconds = Number(form.timeoutSeconds);
     const initializationTimeoutSeconds = Number(form.initializationTimeoutSeconds);
-    if (!Number.isInteger(timeoutSeconds) || timeoutSeconds < 1 || timeoutSeconds > 600
-      || !Number.isInteger(initializationTimeoutSeconds)
-      || initializationTimeoutSeconds < 1
-      || initializationTimeoutSeconds > 600) {
-      toast.error("超时时间需为 1 到 600 秒之间的整数");
-      return;
-    }
+    setIssue(null);
     setSaving(true);
     try {
       await agentConfigApi.saveMcpServer({
@@ -138,8 +132,8 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
         name: form.name,
         transport: form.transport,
         url: form.url,
-        headers: linesToMap(form.headers),
-        queryParams: linesToMap(form.queryParams),
+        headers: parseMcpLines(form.headers),
+        queryParams: parseMcpLines(form.queryParams),
         enabledTools: form.enabledTools.split(",").map((value) => value.trim()).filter(Boolean),
         protocolVersions: [],
         timeoutSeconds,
@@ -150,7 +144,7 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
       setOpen(false);
       await onRefresh();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "保存 MCP 服务失败");
+      setIssue({ field: "", message: error instanceof Error ? error.message : "保存 MCP 服务失败" });
     } finally {
       setSaving(false);
     }
@@ -199,9 +193,11 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
             <p className={settingsTypography.sectionDescription}>连接远程 HTTP/SSE 服务，发现的工具可通过 / 加入当前对话。</p>
           </div>
         </div>
-        <Button onClick={() => showEditor()}><Plus />添加 MCP</Button>
+        <div className="flex gap-2"><Button variant="outline" onClick={() => setCanvasOperations(true)}><Cable />画布操作</Button>
+          <Button onClick={() => showEditor()}><Plus />添加 MCP</Button></div>
       </div>
 
+      {canvasOperations ? <McpContractsDialog onClose={() => setCanvasOperations(false)} /> : null}
       <div className="mt-4 flex-1 overflow-hidden rounded-lg border border-border/20 bg-background/70">
         {servers.length === 0 ? (
           <div className="flex min-h-32 flex-col items-center justify-center p-6 text-center">
@@ -265,7 +261,7 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
         ))}
       </div>
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={changeOpen}>
         <DialogContent className="max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden rounded-2xl sm:max-w-2xl">
           <DialogHeader className="shrink-0 pr-8">
             <DialogTitle>{editing ? "编辑 MCP 服务" : "添加 MCP 服务"}</DialogTitle>
@@ -273,7 +269,7 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
           </DialogHeader>
 
           <div className="-mx-1 min-h-0 overflow-y-auto px-1 py-1">
-            <div className="space-y-6">
+            <fieldset disabled={saving} onChange={() => setIssue(null)} className="space-y-6">
               <section aria-labelledby="mcp-connection-heading" className="space-y-3">
                 <div>
                   <h3 id="mcp-connection-heading" className={settingsTypography.sectionTitle}>连接信息</h3>
@@ -282,7 +278,7 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="mcp-name" className={settingsTypography.fieldLabel}>名称</Label>
-                    <Input id="mcp-name" value={form.name} onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))} placeholder="notion-tools" />
+                    <Input id="mcp-name" aria-invalid={issue?.field === "mcp-name"} aria-describedby={issue?.field === "mcp-name" ? "mcp-form-error" : undefined} value={form.name} onChange={(event) => setForm((value) => ({ ...value, name: event.target.value }))} placeholder="notion-tools" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="mcp-transport" className={settingsTypography.fieldLabel}>传输方式</Label>
@@ -293,7 +289,7 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="mcp-url" className={settingsTypography.fieldLabel}>服务地址</Label>
-                    <Input id="mcp-url" value={form.url} onChange={(event) => setForm((value) => ({ ...value, url: event.target.value }))} placeholder="https://mcp.example.com/mcp" />
+                    <Input id="mcp-url" aria-invalid={issue?.field === "mcp-url"} aria-describedby={issue?.field === "mcp-url" ? "mcp-form-error" : undefined} value={form.url} onChange={(event) => setForm((value) => ({ ...value, url: event.target.value }))} placeholder="https://mcp.example.com/mcp" />
                   </div>
                 </div>
               </section>
@@ -306,11 +302,11 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
                 <div className="grid gap-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="mcp-headers" className={settingsTypography.fieldLabel}>请求头</Label>
-                    <Textarea id="mcp-headers" value={form.headers} onChange={(event) => setForm((value) => ({ ...value, headers: event.target.value }))} placeholder="Authorization: Bearer ..." className="min-h-24 font-mono text-sm" />
+                    <Textarea id="mcp-headers" aria-invalid={issue?.field === "mcp-headers"} aria-describedby={issue?.field === "mcp-headers" ? "mcp-form-error" : undefined} value={form.headers} onChange={(event) => setForm((value) => ({ ...value, headers: event.target.value }))} placeholder="Authorization: Bearer ..." className="min-h-24 font-mono text-sm" />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="mcp-query" className={settingsTypography.fieldLabel}>查询参数</Label>
-                    <Textarea id="mcp-query" value={form.queryParams} onChange={(event) => setForm((value) => ({ ...value, queryParams: event.target.value }))} placeholder="tenant: demo" className="min-h-24 font-mono text-sm" />
+                    <Textarea id="mcp-query" aria-invalid={issue?.field === "mcp-query"} aria-describedby={issue?.field === "mcp-query" ? "mcp-form-error" : undefined} value={form.queryParams} onChange={(event) => setForm((value) => ({ ...value, queryParams: event.target.value }))} placeholder="tenant: demo" className="min-h-24 font-mono text-sm" />
                   </div>
                 </div>
               </section>
@@ -327,11 +323,11 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="mcp-init-timeout" className={settingsTypography.fieldLabel}>初始化超时（秒）</Label>
-                    <Input id="mcp-init-timeout" type="number" min={1} max={600} value={form.initializationTimeoutSeconds} onChange={(event) => setForm((value) => ({ ...value, initializationTimeoutSeconds: event.target.value }))} />
+                    <Input id="mcp-init-timeout" aria-invalid={issue?.field === "mcp-init-timeout"} aria-describedby={issue?.field === "mcp-init-timeout" ? "mcp-form-error" : undefined} type="number" min={1} max={600} value={form.initializationTimeoutSeconds} onChange={(event) => setForm((value) => ({ ...value, initializationTimeoutSeconds: event.target.value }))} />
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="mcp-timeout" className={settingsTypography.fieldLabel}>调用超时（秒）</Label>
-                    <Input id="mcp-timeout" type="number" min={1} max={600} value={form.timeoutSeconds} onChange={(event) => setForm((value) => ({ ...value, timeoutSeconds: event.target.value }))} />
+                    <Input id="mcp-timeout" aria-invalid={issue?.field === "mcp-timeout"} aria-describedby={issue?.field === "mcp-timeout" ? "mcp-form-error" : undefined} type="number" min={1} max={600} value={form.timeoutSeconds} onChange={(event) => setForm((value) => ({ ...value, timeoutSeconds: event.target.value }))} />
                   </div>
                   <div className="space-y-1.5 sm:col-span-2">
                     <Label htmlFor="mcp-status" className={settingsTypography.fieldLabel}>状态</Label>
@@ -345,11 +341,12 @@ export function McpServersSection({ servers, onRefresh }: McpServersSectionProps
                   </div>
                 </div>
               </section>
-            </div>
+            </fieldset>
           </div>
 
+          {issue && <p id="mcp-form-error" role="alert" className="shrink-0 text-sm text-destructive">{issue.message}</p>}
           <DialogFooter className="shrink-0 border-t border-border/20 pt-4">
-            <Button variant="outline" onClick={() => setOpen(false)}>取消</Button>
+            <Button variant="outline" disabled={saving} onClick={() => void changeOpen(false)}>取消</Button>
             <Button onClick={save} disabled={saving}>
               {saving && <Loader2 className="animate-spin" />}
               保存

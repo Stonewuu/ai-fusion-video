@@ -1,25 +1,32 @@
 package com.stonewu.fusion.service.ai.tool.project;
 
-import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.project.Project;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.project.ProjectService;
+import com.stonewu.fusion.service.canvas.CanvasJson;
+import com.stonewu.fusion.service.canvas.model.CanvasValueType;
+import com.stonewu.fusion.service.resource.ResourceCommandService;
+import com.stonewu.fusion.service.resource.ResourceToolRequests;
+import com.stonewu.fusion.service.resource.model.ResourceCommand;
+import com.stonewu.fusion.service.resource.model.ResourceCreateCommand;
+import com.stonewu.fusion.service.resource.model.ResourcePatchCommand;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 
-/** 创建或更新项目工具。 */
+import java.util.Map;
+
+/**
+ * 创建或更新项目工具。
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class SaveProjectToolExecutor implements ToolExecutor {
 
-    private static final int OWNER_TYPE_PERSONAL = 1;
-
-    private final ProjectService projectService;
+    private final ResourceCommandService resourceCommands;
+    private final CanvasJson json;
 
     @Override
     public String getToolName() {
@@ -33,7 +40,7 @@ public class SaveProjectToolExecutor implements ToolExecutor {
 
     @Override
     public String getToolDescription() {
-        return "创建项目，或传入 projectId 更新当前用户可访问的项目。未传 projectId 时 name 必填。";
+        return "创建项目，或传入 projectId 和查询得到的 expectedVersion 更新项目。未传 projectId 时 name 必填。版本冲突后须重新读取并决定修改。";
     }
 
     @Override
@@ -43,6 +50,7 @@ public class SaveProjectToolExecutor implements ToolExecutor {
                     "type": "object",
                     "properties": {
                         "projectId": {"type": "integer", "description": "项目ID；不传表示创建"},
+                        "expectedVersion": {"type": "integer", "minimum": 0, "description": "更新必填，来自项目查询结果的 version；不得猜测"},
                         "name": {"type": "string", "description": "项目名称；创建时必填"},
                         "description": {"type": "string", "description": "项目描述"},
                         "coverUrl": {"type": "string", "description": "封面URL"},
@@ -61,65 +69,40 @@ public class SaveProjectToolExecutor implements ToolExecutor {
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
         try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long projectId = params.getLong("projectId");
-            Project project;
+            var mutation = context.requireMutationContext();
+            ObjectNode fields = json.read(toolInput, ObjectNode.class);
+            var project = fields.remove("projectId");
+            var version = fields.remove("expectedVersion");
+            if (fields.has("properties") && fields.get("properties").isTextual()) {
+                fields.set("properties", json.read(fields.get("properties").textValue(), ObjectNode.class));
+            }
+            String requestId = ResourceToolRequests.requestId(json, mutation);
+            ResourceCommand command;
             String operation;
-
-            if (projectId == null) {
-                String name = params.getStr("name");
-                if (!StringUtils.hasText(name)) {
-                    return error("创建项目时 name 必填");
+            if (project == null || project.isNull()) {
+                if (version != null) {
+                    return error("创建项目不接受 expectedVersion");
                 }
-                project = new Project();
-                project.setName(name);
-                project.setOwnerType(OWNER_TYPE_PERSONAL);
-                project.setOwnerId(context.getUserId());
-                applyFields(project, params);
-                project = projectService.create(project);
+                command = new ResourceCreateCommand(requestId, CanvasValueType.PROJECT, null, fields);
                 operation = "created";
             } else {
-                Project existing = projectService.getById(projectId);
-                if (!projectService.canAccessProject(existing, context.getUserId())) {
-                    return error("无权更新该项目");
+                if (!project.isIntegralNumber() || !project.canConvertToLong() || project.longValue() <= 0) {
+                    return error("projectId 无效");
                 }
-                Project patch = new Project();
-                patch.setId(projectId);
-                patch.setScope(null);
-                patch.setStatus(null);
-                applyFields(patch, params);
-                projectService.update(patch);
-                project = projectService.getById(projectId);
+                if (version == null || !version.isIntegralNumber() || !version.canConvertToInt() || version.intValue() < 0) {
+                    return error("更新项目必须提供查询得到的 expectedVersion");
+                }
+                command = new ResourcePatchCommand(requestId, CanvasValueType.PROJECT, project.longValue(),
+                        version.intValue(), fields);
                 operation = "updated";
             }
-
-            return JSONUtil.createObj()
-                    .set("status", "success")
-                    .set("operation", operation)
-                    .set("project", project)
-                    .toString();
-        } catch (Exception e) {
-            log.error("保存项目失败", e);
-            return error("保存项目失败: " + e.getMessage());
+            var receipt = resourceCommands.execute(command, mutation);
+            return json.write(Map.of("status", "success", "operation", operation, "project", receipt.result(),
+                    "commandId", receipt.commandId(), "changes", receipt.changes()));
+        } catch (Exception failure) {
+            log.error("保存项目失败", failure);
+            return error("保存项目失败: " + failure.getMessage());
         }
-    }
-
-    private void applyFields(Project project, JSONObject params) {
-        if (params.containsKey("name")) project.setName(params.getStr("name"));
-        if (params.containsKey("description")) project.setDescription(params.getStr("description"));
-        if (params.containsKey("coverUrl")) project.setCoverUrl(params.getStr("coverUrl"));
-        if (params.containsKey("properties")) project.setProperties(params.getStr("properties"));
-        if (params.containsKey("artStyle")) project.setArtStyle(params.getStr("artStyle"));
-        if (params.containsKey("artStyleDescription")) {
-            project.setArtStyleDescription(params.getStr("artStyleDescription"));
-        }
-        if (params.containsKey("artStyleImagePrompt")) {
-            project.setArtStyleImagePrompt(params.getStr("artStyleImagePrompt"));
-        }
-        if (params.containsKey("artStyleImageUrl")) {
-            project.setArtStyleImageUrl(params.getStr("artStyleImageUrl"));
-        }
-        if (params.containsKey("status")) project.setStatus(params.getInt("status"));
     }
 
     private String error(String message) {

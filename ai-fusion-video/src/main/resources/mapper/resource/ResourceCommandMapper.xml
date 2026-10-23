@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.resource.ResourceCommandMapper">
+    <insert id="admit">
+        INSERT INTO afv_resource_command(id, actor_user_id, request_id, request_hash, origin, canvas_id,
+            agent_run_id, tool_call_id, request_json, create_time)
+        VALUES (#{row.id}, #{row.actorUserId}, #{row.requestId}, #{row.requestHash}, #{row.origin}, #{row.canvasId},
+            #{row.agentRunId}, #{row.toolCallId}, #{row.requestJson}, UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE id = id
+    </insert>
+    <select id="lockRequest" resultType="com.stonewu.fusion.entity.resource.ResourceCommandEntity">
+        SELECT id, request_hash, result_json FROM afv_resource_command
+        WHERE actor_user_id = #{userId} AND request_id = #{requestId} FOR UPDATE
+    </select>
+    <update id="commit">
+        UPDATE afv_resource_command SET result_json = #{receipt}, undo_json = #{undo}, committed_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND result_json IS NULL
+    </update>
+    <insert id="appendEvent">
+        INSERT INTO afv_resource_event(event_id, command_id, resource_type, resource_id, project_id,
+            resource_version, deleted, changed_fields, create_time)
+        VALUES (#{row.eventId}, #{row.commandId}, #{row.resourceType}, #{row.resourceId}, #{row.projectId},
+            #{row.resourceVersion}, #{row.deleted}, #{row.changedFields}, UTC_TIMESTAMP(6))
+    </insert>
+    <select id="head" resultType="long">
+        SELECT last_sequence FROM afv_resource_feed_head WHERE id = 1
+        <if test="lock">FOR UPDATE</if>
+    </select>
+    <select id="nextEvent" resultType="com.stonewu.fusion.entity.resource.ResourceEventEntity">
+        SELECT * FROM afv_resource_event WHERE published = FALSE ORDER BY id LIMIT 1 FOR UPDATE SKIP LOCKED
+    </select>
+    <insert id="appendFeed">
+        INSERT INTO afv_resource_feed(sequence_no, event_id) SELECT #{sequence}, event_id FROM afv_resource_event WHERE id = #{eventId}
+    </insert>
+    <update id="advanceHead">
+        UPDATE afv_resource_feed_head SET last_sequence = #{sequence} WHERE id = 1
+    </update>
+    <update id="markPublished">
+        UPDATE afv_resource_event SET published = TRUE, published_at = UTC_TIMESTAMP(6) WHERE id = #{eventId} AND published = FALSE
+    </update>
+    <select id="targetCanvases" resultType="String">
+        SELECT DISTINCT c.id FROM afv_canvas c LEFT JOIN afv_canvas_node n ON n.canvas_id = c.id AND n.deleted = FALSE
+        WHERE c.project_id = #{projectId} OR (n.resource_type = #{type} AND n.resource_id = #{resourceId}) ORDER BY c.id
+    </select>
+    <insert id="projectEvent">
+        INSERT INTO afv_canvas_event(id, canvas_id, sequence_no, event_type, payload_json, create_time)
+        VALUES (UUID(), #{canvasId}, #{sequence}, 'resource.changed', #{payload}, UTC_TIMESTAMP(6))
+    </insert>
+    <insert id="recordProjection">
+        INSERT INTO afv_resource_event_canvas(event_id, canvas_id, sequence_no) VALUES (#{eventId}, #{canvasId}, #{sequence})
+    </insert>
+    <select id="feed" resultType="com.stonewu.fusion.entity.resource.ResourceEventEntity">
+        SELECT f.sequence_no, e.* FROM afv_resource_feed f JOIN afv_resource_event e ON e.event_id = f.event_id
+        WHERE f.sequence_no &gt; #{after} AND f.sequence_no &lt;= #{head} ORDER BY f.sequence_no LIMIT #{limit}
+    </select>
+    <select id="history" resultType="String">
+        SELECT c.id FROM afv_resource_command c WHERE c.committed_at IS NOT NULL AND
+        <choose>
+            <when test="projectId != null">
+                EXISTS (SELECT 1 FROM afv_resource_event e WHERE e.command_id = c.id AND e.project_id = #{projectId})
+            </when>
+            <otherwise>
+                (c.canvas_id = #{canvasId} OR EXISTS (
+                    SELECT 1 FROM afv_resource_event e JOIN afv_canvas_node n ON n.resource_type = e.resource_type
+                    AND n.resource_id = e.resource_id AND n.deleted = FALSE WHERE e.command_id = c.id AND n.canvas_id = #{canvasId}
+                ))
+            </otherwise>
+        </choose>
+        <if test="beforeTime != null">
+            AND (c.committed_at &lt; #{beforeTime} OR (c.committed_at = #{beforeTime} AND c.id &lt; #{beforeId}))
+        </if>
+        ORDER BY c.committed_at DESC, c.id DESC LIMIT #{limit}
+    </select>
+</mapper>

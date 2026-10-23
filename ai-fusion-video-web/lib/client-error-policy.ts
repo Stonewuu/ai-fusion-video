@@ -2,19 +2,24 @@ import {
   AUTH_REFRESH_FAILED_ERROR_CODE,
   AUTH_SESSION_EXPIRED_ERROR_CODE,
 } from "@/lib/auth-flow-error";
+import { userFacingError } from "@/lib/user-facing-error";
 
 export function getClientErrorMessage(error: unknown): string {
+  return userFacingError(rawClientErrorMessage(error));
+}
+
+function rawClientErrorMessage(error: unknown): string {
   if (error instanceof Error && error.message.trim()) {
     return error.message.trim();
   }
   if (typeof error === "string" && error.trim()) {
     return error.trim();
   }
-  return "发生未知客户端异常";
+  return "";
 }
 
 export function isIgnoredClientError(error: unknown): boolean {
-  const message = getClientErrorMessage(error);
+  const message = rawClientErrorMessage(error);
   const errorName = error instanceof Error ? error.name : undefined;
   const errorCode = getStringProperty(error, "code");
   const errorDigest = getStringProperty(error, "digest");

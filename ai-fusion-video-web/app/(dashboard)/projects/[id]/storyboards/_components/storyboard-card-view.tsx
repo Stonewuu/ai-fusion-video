@@ -1,4 +1,6 @@
 "use client";
+import { ManagedVideo } from "@/components/media/managed-video";
+
 
 import React, { memo, useState, useMemo } from "react";
 import { Film, Plus, Clock, Camera, Image as ImageIcon, GripHorizontal, Video, Play, Trash2 } from "lucide-react";
@@ -7,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import {
   DndContext,
   closestCenter,
@@ -111,7 +113,7 @@ const CardItemUI = memo(
             {/* 视频模式 */}
             {mediaMode === "video" && hasVideo ? (
               <>
-                <video
+                <ManagedVideo
                   src={videoSrc}
                   className="w-full h-full object-cover"
                   muted

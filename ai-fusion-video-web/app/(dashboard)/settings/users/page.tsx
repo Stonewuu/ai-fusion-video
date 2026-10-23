@@ -6,7 +6,8 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { userApi } from "@/lib/api/user";
-import { toastApiError } from "@/lib/api/toast-api-error";
+import { getApiErrorMessage } from "@/lib/api/api-error";
+import { Button } from "@/components/ui/button";
 import type { UserRespVO } from "@/lib/api/types";
 import { containerVariants, itemVariants, settingsTypography } from "../_shared";
 
@@ -27,11 +28,15 @@ export default function SettingsUsersPage() {
   const currentUser = useAuthStore((state) => state.user);
   const isAdmin = currentUser?.roles?.includes("admin") ?? false;
   const [keyword, setKeyword] = useState("");
+  const [page, setPage] = useState(1);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [retry, setRetry] = useState(0);
   const normalizedKeyword = keyword.trim();
-  const [loadedKeyword, setLoadedKeyword] = useState<string | null>(null);
+  const requestKey = `${normalizedKeyword}:${page}:${retry}`;
+  const [loadedKey, setLoadedKey] = useState<string | null>(null);
   const [users, setUsers] = useState<UserRespVO[]>([]);
   const [total, setTotal] = useState(0);
-  const loading = isAdmin && loadedKeyword !== normalizedKeyword;
+  const loading = isAdmin && loadedKey !== requestKey;
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -39,33 +44,33 @@ export default function SettingsUsersPage() {
     let cancelled = false;
 
     userApi.page({
-      pageNo: 1,
-      pageSize: 100,
+      pageNo: page,
+      pageSize: 20,
       username: normalizedKeyword || undefined,
     })
       .then((result) => {
         if (cancelled) return;
         setUsers(result.list);
         setTotal(result.total);
+        setLoadError(null);
       })
       .catch((err) => {
         if (!cancelled) {
-          console.error("加载用户列表失败:", err);
-          toastApiError(err, "加载用户列表失败");
+          setLoadError(getApiErrorMessage(err));
           setUsers([]);
           setTotal(0);
         }
       })
       .finally(() => {
         if (!cancelled) {
-          setLoadedKeyword(normalizedKeyword);
+          setLoadedKey(requestKey);
         }
       });
 
     return () => {
       cancelled = true;
     };
-  }, [isAdmin, normalizedKeyword]);
+  }, [isAdmin, normalizedKeyword, page, requestKey]);
 
   const adminCount = useMemo(
     () => users.filter((user) => user.roles.includes("admin")).length,
@@ -101,7 +106,7 @@ export default function SettingsUsersPage() {
         <div>
           <h1 className={settingsTypography.pageTitle}>用户列表</h1>
           <p className={settingsTypography.pageDescription}>
-            查看、搜索和管理系统中的全部用户。
+            查看和搜索系统中的用户、角色与启用状态。
           </p>
         </div>
 
@@ -110,7 +115,8 @@ export default function SettingsUsersPage() {
           <input
             type="text"
             value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
+            onChange={(e) => { setKeyword(e.target.value); setPage(1); }}
+            aria-label="按用户名搜索"
             placeholder="按用户名搜索"
             className="w-full rounded-xl border border-border/30 bg-card/40 py-2.5 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary/40"
           />
@@ -121,7 +127,7 @@ export default function SettingsUsersPage() {
         <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-5">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Users className="h-4 w-4 text-cyan-500" />
-            用户总数
+            {normalizedKeyword ? "匹配用户" : "用户总数"}
           </div>
           <p className="mt-3 text-3xl font-semibold tracking-tight">{total}</p>
         </div>
@@ -129,7 +135,7 @@ export default function SettingsUsersPage() {
         <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-5">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <ShieldCheck className="h-4 w-4 text-emerald-500" />
-            管理员
+            本页管理员
           </div>
           <p className="mt-3 text-3xl font-semibold tracking-tight">{adminCount}</p>
         </div>
@@ -137,9 +143,9 @@ export default function SettingsUsersPage() {
         <div className="rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm p-5">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Users className="h-4 w-4 text-blue-500" />
-            普通成员
+            本页普通成员
           </div>
-          <p className="mt-3 text-3xl font-semibold tracking-tight">{Math.max(total - adminCount, 0)}</p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight">{users.length - adminCount}</p>
         </div>
       </motion.div>
 
@@ -147,6 +153,11 @@ export default function SettingsUsersPage() {
         {loading ? (
           <div className="flex items-center justify-center py-16 text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin" />
+          </div>
+        ) : loadError ? (
+          <div className="flex flex-col items-center gap-3 p-6">
+            <p role="alert" className="text-sm text-destructive">用户列表加载失败：{loadError}</p>
+            <Button variant="outline" onClick={() => setRetry(value => value + 1)}>重试</Button>
           </div>
         ) : users.length === 0 ? (
           <div className="py-16 text-center text-sm text-muted-foreground">
@@ -204,6 +215,15 @@ export default function SettingsUsersPage() {
           </div>
         )}
       </motion.div>
+      {!loading && !loadError && total > 20 && (
+        <nav aria-label="用户列表分页" className="mt-4 flex items-center justify-between gap-4">
+          <p className="text-sm text-muted-foreground">第 {page} / {Math.ceil(total / 20)} 页 · 共 {total} 人</p>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={page === 1} onClick={() => setPage(value => value - 1)}>上一页</Button>
+            <Button variant="outline" disabled={page * 20 >= total} onClick={() => setPage(value => value + 1)}>下一页</Button>
+          </div>
+        </nav>
+      )}
     </motion.div>
   );
 }

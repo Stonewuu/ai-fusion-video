@@ -41,3 +41,15 @@ ai-fusion-video/data/
 .superpowers/
 .gemini/
 
+# Local verification artifacts are kept in the workspace but never committed.
+/.local/
+
+# Development docs contain prose only.
+/dev-docs/**/*
+!/dev-docs/**/
+!/dev-docs/**/*.md
+!/dev-docs/**/.gitkeep
+/dev-docs/**/evidence/
+/dev-docs/**/screenshots/
+/dev-docs/**/test-results/
+

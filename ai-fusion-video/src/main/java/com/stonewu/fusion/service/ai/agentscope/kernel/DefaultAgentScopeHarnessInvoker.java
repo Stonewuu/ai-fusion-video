@@ -1,7 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
-import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
+import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEvent;

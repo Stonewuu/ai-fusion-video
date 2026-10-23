@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.ai.AgentModelCallUsageMapper">
+    <select id="selectByRunAndCall" resultType="com.stonewu.fusion.entity.ai.AgentModelCallUsage">
+        SELECT *
+        FROM afv_agent_model_call_usage FORCE INDEX (uk_agent_usage_call)
+        WHERE run_id = #{runId}
+          AND model_call_id = #{modelCallId}
+        LIMIT 1
+    </select>
+    <select id="selectSettlementCandidatesForUpdate" resultType="com.stonewu.fusion.entity.ai.AgentModelCallUsage">
+        SELECT *
+        FROM afv_agent_model_call_usage FORCE INDEX (idx_agent_usage_settlement)
+        WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+          AND NOT EXISTS (SELECT 1 FROM afv_agent_model_request request
+                WHERE request.run_id = afv_agent_model_call_usage.run_id
+                  AND request.id = afv_agent_model_call_usage.model_call_id AND request.permit_held = TRUE)
+          AND (
+                (settlement_status = 'PENDING'
+                 AND (next_settlement_attempt_at IS NULL
+                      OR next_settlement_attempt_at &lt;= #{now}))
+             OR (settlement_status = 'CLAIMED'
+                 AND settlement_claim_until &lt;= #{now})
+          )
+        ORDER BY id
+        LIMIT #{limit}
+        FOR UPDATE
+    </select>
+    <update id="claimCandidate">
+        UPDATE afv_agent_model_call_usage
+        SET settlement_status = 'CLAIMED',
+            settlement_claim_owner = #{claimOwner},
+            settlement_claim_until = #{claimUntil},
+            settlement_attempts = settlement_attempts + 1,
+            next_settlement_attempt_at = NULL,
+            update_time = #{now}
+        WHERE id = #{usageId}
+          AND status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+          AND (
+                (settlement_status = 'PENDING'
+                 AND (next_settlement_attempt_at IS NULL
+                      OR next_settlement_attempt_at &lt;= #{now}))
+             OR (settlement_status = 'CLAIMED'
+                 AND settlement_claim_until &lt;= #{now})
+          )
+    </update>
+    <update id="markSettled">
+        UPDATE afv_agent_model_call_usage
+        SET settlement_status = 'SETTLED',
+            settlement_claim_owner = NULL,
+            settlement_claim_until = NULL,
+            next_settlement_attempt_at = NULL,
+            downstream_settlement_id = #{downstreamSettlementId},
+            last_settlement_error = NULL,
+            update_time = UTC_TIMESTAMP(3)
+        WHERE id = #{usageId}
+          AND settlement_status = 'CLAIMED'
+          AND settlement_claim_owner = #{claimOwner}
+          AND settlement_claim_until &gt; UTC_TIMESTAMP(3)
+    </update>
+    <update id="releaseSettlementForRetry">
+        UPDATE afv_agent_model_call_usage
+        SET settlement_status = 'PENDING',
+            settlement_claim_owner = NULL,
+            settlement_claim_until = NULL,
+            next_settlement_attempt_at = GREATEST(
+                    #{nextAttemptAt}, UTC_TIMESTAMP(3)),
+            last_settlement_error = #{lastSettlementError},
+            update_time = UTC_TIMESTAMP(3)
+        WHERE id = #{usageId}
+          AND settlement_status = 'CLAIMED'
+          AND settlement_claim_owner = #{claimOwner}
+          AND settlement_claim_until &gt; UTC_TIMESTAMP(3)
+    </update>
+    <update id="markRunUsageSettledIfNoUnsettledCall">
+        UPDATE afv_agent_run r
+        SET r.usage_settled = 1,
+            r.usage_settled_at = #{settledAt},
+            r.update_time = #{settledAt}
+        WHERE r.run_id = #{runId}
+          AND r.usage_settled = 0
+          AND r.status IN ('COMPLETED', 'FAILED', 'CANCELLED')
+          AND NOT EXISTS (
+                SELECT 1
+                FROM afv_agent_model_call_usage u
+                WHERE u.run_id = r.run_id
+                  AND u.settlement_status &lt;&gt; 'SETTLED'
+          )
+    </update>
+    <update id="completeObserved">
+        UPDATE afv_agent_model_call_usage SET status = 'COMPLETED', input_tokens = #{input}, output_tokens = #{output},
+            reasoning_tokens = NULL, cache_tokens = #{cache}, usage_json = #{usage}, finished_at = UTC_TIMESTAMP(3), update_time = UTC_TIMESTAMP(3)
+        WHERE run_id = #{runId} AND model_call_id = #{callId} AND settlement_status = 'PENDING'
+    </update>
+    <update id="adminCancel">
+        UPDATE afv_agent_model_call_usage u JOIN afv_agent_model_request m ON m.run_id = u.run_id AND m.id = u.model_call_id
+        SET u.status = 'CANCELLED', u.finished_at = UTC_TIMESTAMP(3), u.update_time = UTC_TIMESTAMP(3)
+        WHERE m.id = #{id} AND u.status = 'STARTED'
+    </update>
+</mapper>

@@ -1,6 +1,8 @@
 package com.stonewu.fusion.enums.ai;
 
-/** Durable lifecycle states for one provider model call. */
+/**
+ * Durable lifecycle states for one provider model call.
+ */
 public enum AgentModelCallStatus {
 
     STARTED(false),

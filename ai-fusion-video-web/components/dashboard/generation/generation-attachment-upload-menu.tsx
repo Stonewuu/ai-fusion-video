@@ -103,7 +103,7 @@ export function GenerationAttachmentUploadMenu({
                   >
                     <Icon className="size-4" />
                     <span>{option.label}</span>
-                    {option.remaining > 1 && (
+                    {option.remaining > 1 && Number.isFinite(option.remaining) && (
                       <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">
                         可传 {option.remaining}
                       </span>

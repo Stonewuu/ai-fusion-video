@@ -1,5 +1,7 @@
 package com.stonewu.fusion.service.storage;
 
+
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -7,14 +9,13 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.mapper.storage.StorageConfigMapper;
-import cn.hutool.core.util.StrUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.beans.factory.ObjectProvider;
 
 import java.util.List;
 
@@ -29,11 +30,14 @@ public class StorageConfigService {
     private final StorageConfigMapper storageConfigMapper;
     private final S3ClientFactory s3ClientFactory;
     private final ObjectProvider<StorageConfigReferenceGuard> referenceGuards;
+    private final ObjectProvider<StorageConfigUpdateGuard> updateGuards;
 
     @Cacheable(value = "storageConfig", key = "#id")
     public StorageConfig getById(Long id) {
         StorageConfig config = storageConfigMapper.selectById(id);
-        if (config == null) throw new BusinessException("存储配置不存在: " + id);
+        if (config == null) {
+            throw new BusinessException("存储配置不存在: " + id);
+        }
         return config;
     }
 
@@ -42,11 +46,10 @@ public class StorageConfigService {
      */
     @Cacheable(value = "storageConfig", key = "'default'", unless = "#result == null")
     public StorageConfig getDefaultConfig() {
-        return storageConfigMapper.selectOne(
+        return storageConfigMapper.selectPage(new Page<>(1, 1, false),
                 new LambdaQueryWrapper<StorageConfig>()
                         .eq(StorageConfig::getIsDefault, true)
-                        .eq(StorageConfig::getStatus, 1)
-                        .last("LIMIT 1"));
+                        .eq(StorageConfig::getStatus, 1)).getRecords().stream().findFirst().orElse(null);
     }
 
     public List<StorageConfig> getEnabledList() {
@@ -82,6 +85,11 @@ public class StorageConfigService {
     @Transactional
     public void update(StorageConfig config) {
         normalizeForSave(config);
+        StorageConfig current = storageConfigMapper.selectForUpdate(config.getId());
+        if (current == null) {
+            throw new BusinessException(404, "存储配置不存在");
+        }
+        updateGuards.orderedStream().forEach(guard -> guard.assertUpdatable(current, config));
         storageConfigMapper.updateById(config);
         s3ClientFactory.invalidate(config.getId());
         // 如果设为默认，清除其他默认
@@ -93,6 +101,9 @@ public class StorageConfigService {
     @CacheEvict(value = "storageConfig", allEntries = true)
     @Transactional
     public void delete(Long id) {
+        if (storageConfigMapper.selectForUpdate(id) == null) {
+            throw new BusinessException(404, "存储配置不存在");
+        }
         referenceGuards.orderedStream().forEach(guard -> guard.assertDeletable(id));
         s3ClientFactory.invalidate(id);
         storageConfigMapper.deleteById(id);
@@ -110,9 +121,11 @@ public class StorageConfigService {
                         .set(StorageConfig::getIsDefault, false)
                         .eq(StorageConfig::getIsDefault, true));
         // 设置指定配置为默认
-        StorageConfig config = getById(id);
-        config.setIsDefault(true);
-        storageConfigMapper.updateById(config);
+        if (storageConfigMapper.selectForUpdate(id) == null) {
+            throw new BusinessException(404, "存储配置不存在");
+        }
+        storageConfigMapper.update(null, new LambdaUpdateWrapper<StorageConfig>()
+                .eq(StorageConfig::getId, id).set(StorageConfig::getIsDefault, true));
     }
 
     /**

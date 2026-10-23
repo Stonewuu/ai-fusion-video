@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.ai;
 
-/** Default approval sensitivity for a platform tool invocation. */
+/**
+ * Default approval sensitivity for a platform tool invocation.
+ */
 public enum ToolPermissionRisk {
     READ_ONLY,
     EDIT,

@@ -6,6 +6,7 @@ import com.fasterxml.jackson.annotation.PropertyAccessor;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import com.stonewu.fusion.service.canvas.run.mcp.CanvasMcpData.Contract;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,11 +14,13 @@ import org.springframework.data.redis.cache.RedisCacheConfiguration;
 import org.springframework.data.redis.cache.RedisCacheManager;
 import org.springframework.data.redis.connection.RedisConnectionFactory;
 import org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;
+import org.springframework.data.redis.serializer.Jackson2JsonRedisSerializer;
 import org.springframework.data.redis.serializer.RedisSerializationContext;
 import org.springframework.data.redis.serializer.StringRedisSerializer;
 
 import java.math.BigDecimal;
 import java.time.Duration;
+import java.util.Map;
 
 /**
  * 缓存配置 —— 使用 Jackson JSON 序列化，避免实体需实现 Serializable
@@ -35,13 +38,26 @@ public class CacheConfig {
         RedisCacheConfiguration config = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofHours(1))
                 .prefixCacheNameWith(CACHE_SCHEMA_PREFIX)
-                .serializeKeysWith(RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
+                .serializeKeysWith(
+                        RedisSerializationContext.SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(RedisSerializationContext.SerializationPair.fromSerializer(jsonSerializer))
                 .disableCachingNullValues();
 
         return RedisCacheManager.builder(connectionFactory)
                 .cacheDefaults(config)
+                .withInitialCacheConfigurations(Map.of("canvasMcpContract", config
+                        .computePrefixWith(name -> CACHE_SCHEMA_PREFIX + name + ":typed-v1::")
+                        .serializeValuesWith(
+                                RedisSerializationContext.SerializationPair.fromSerializer(mcpContractSerializer()))))
                 .build();
+    }
+
+    /**
+     * 契约内含用户定义 JSON Schema，按明确类型读写，不能把其中的 @class 当 Java 类型。
+     */
+    static Jackson2JsonRedisSerializer<Contract> mcpContractSerializer() {
+        return new Jackson2JsonRedisSerializer<>(new ObjectMapper().registerModule(new JavaTimeModule()),
+                Contract.class);
     }
 
     static GenericJackson2JsonRedisSerializer valueSerializer() {

@@ -2,22 +2,49 @@ package com.stonewu.fusion.config.ai;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.ai.configuration.AgentToolCategories;
 import com.stonewu.fusion.service.ai.ToolPermissionRisk;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
+import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
+import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest
+@Testcontainers(disabledWithoutDocker = false)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AiAgentToolRegistrationTests {
+    @Container static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.6")
+            .withDatabaseName("ai_fusion_video").withUsername("afv").withPassword("afv-test");
+    @Container static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4.5-alpine").withExposedPorts(6379);
+    static final Path FILES = Path.of("target", "agent-tool-registration-" + UUID.randomUUID()).toAbsolutePath();
+
+    @DynamicPropertySource static void isolatedProperties(DynamicPropertyRegistry properties) {
+        properties.add("spring.datasource.url", MYSQL::getJdbcUrl);
+        properties.add("spring.datasource.username", MYSQL::getUsername);
+        properties.add("spring.datasource.password", MYSQL::getPassword);
+        properties.add("spring.data.redis.host", REDIS::getHost);
+        properties.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        properties.add("spring.data.redis.password", () -> "");
+        properties.add("app.storage.local-base-path", FILES::toString);
+        properties.add("app.agent-workspace.local-base-path", () -> FILES.resolve("workspace").toString());
+    }
 
     @Autowired
     private AiAgentRegistry agentRegistry;
@@ -41,6 +68,7 @@ class AiAgentToolRegistrationTests {
         }
 
         assertThat(executorNames).doesNotHaveDuplicates();
+        executorNames.forEach(name -> assertThat(AgentToolCategories.category(name)).as(name).isNotBlank());
         assertThat(assignedNames)
                 .containsExactlyInAnyOrderElementsOf(executorNames);
     }
@@ -118,7 +146,7 @@ class AiAgentToolRegistrationTests {
     }
 
     @Test
-    void resourceIdBasedScriptAndStoryboardToolsUseTheSharedAccessGuard() {
+    void resourceIdBasedScriptAndStoryboardToolsRejectUntrustedInvocationIdentity() throws Exception {
         Set<String> guardedToolNames = Set.of(
                 "get_script",
                 "get_script_structure",
@@ -138,11 +166,11 @@ class AiAgentToolRegistrationTests {
                 "update_storyboard_item_frame",
                 "update_storyboard_item_video");
 
-        toolExecutors.stream()
-                .filter(tool -> guardedToolNames.contains(tool.getToolName()))
-                .forEach(tool -> assertThat(tool.getClass().getDeclaredFields())
-                        .as(tool.getToolName())
-                        .anyMatch(field -> field.getType().equals(ToolResourceAccessGuard.class)));
+        for (ToolExecutor tool : toolExecutors) {
+            if (!guardedToolNames.contains(tool.getToolName())) continue;
+            String response = tool.execute("{}", ToolExecutionContext.builder().userId(42L).build());
+            assertThat(objectMapper.readTree(response).path("status").textValue()).as(tool.getToolName()).isEqualTo("error");
+        }
         assertThat(toolExecutors.stream()
                 .map(ToolExecutor::getToolName)
                 .filter(guardedToolNames::contains))

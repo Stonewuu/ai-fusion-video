@@ -1,14 +1,16 @@
 package com.stonewu.fusion.service.ai.tool.project;
 
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.config.ArtStylePresets;
 import com.stonewu.fusion.entity.project.Project;
+import com.stonewu.fusion.mapper.project.ProjectMapper;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.project.ProjectService;
+import com.stonewu.fusion.service.canvas.CanvasAccessPolicy;
+import com.stonewu.fusion.service.media.MediaReference;
 import com.stonewu.fusion.service.system.SystemConfigService;
-import cn.hutool.core.util.StrUtil;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,7 +23,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class ProjectQueryToolExecutor implements ToolExecutor {
 
-    private final ProjectService projectService;
+    private final ProjectMapper projectMapper;
+    private final CanvasAccessPolicy access;
     private final SystemConfigService systemConfigService;
 
     @Override
@@ -73,16 +76,15 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
                 return JSONUtil.createObj().set("status", "error").set("message", "缺少 projectId").toString();
             }
 
-            Long userId = context.getUserId();
-
-            Project project = projectService.getById(projectId);
-            if (!projectService.canAccessProject(project, userId)) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "无权访问该项目").toString();
+            access.requireProject(projectId, context.requireMutationContext().actor());
+            Project project = projectMapper.selectById(projectId);
+            if (project == null) {
+                return JSONUtil.createObj().set("status", "error").set("message", "项目已删除").toString();
             }
 
             JSONObject result = JSONUtil.createObj()
                     .set("projectId", project.getId())
+                    .set("version", project.getVersion())
                     .set("name", project.getName())
                     .set("description", project.getDescription())
                     .set("coverUrl", project.getCoverUrl())
@@ -145,18 +147,21 @@ public class ProjectQueryToolExecutor implements ToolExecutor {
             // 自定义画风
             info.set("name", "自定义画风");
             info.set("description", StrUtil.blankToDefault(project.getArtStyleDescription(), "高质量精细画面"));
-            info.set("imagePrompt", StrUtil.blankToDefault(project.getArtStyleImagePrompt(), "High quality, detailed illustration, professional artwork"));
+            info.set("imagePrompt", StrUtil.blankToDefault(project.getArtStyleImagePrompt(),
+                    "High quality, detailed illustration, professional artwork"));
             info.set("isPreset", false);
             refImagePath = project.getArtStyleImageUrl();
         }
 
         // 解析参考图为完整公网 URL
-        String publicUrl = systemConfigService.resolvePublicUrl(refImagePath);
+        String publicUrl = (MediaReference.managed(refImagePath) ? refImagePath : systemConfigService.resolvePublicUrl(
+                refImagePath));
         info.set("referenceImageUrl", publicUrl);
         info.set("referenceImageAvailable", publicUrl != null);
 
         if (publicUrl == null && StrUtil.isNotBlank(refImagePath)) {
-            info.set("referenceImageWarning", "参考图无法通过网络访问，请在系统设置中配置后端资源公网地址或启用对象存储");
+            info.set("referenceImageWarning",
+                    "参考图无法通过网络访问，请在系统设置中配置后端资源公网地址或启用对象存储");
         }
 
         return info;

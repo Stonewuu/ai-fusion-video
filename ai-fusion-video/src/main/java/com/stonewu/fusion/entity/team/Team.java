@@ -21,23 +21,35 @@ import lombok.*;
 @AllArgsConstructor
 public class Team extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 团队名称 */
+    /**
+     * 团队名称
+     */
     private String name;
 
-    /** 团队LOGO图片URL */
+    /**
+     * 团队LOGO图片URL
+     */
     private String logo;
 
-    /** 团队描述 */
+    /**
+     * 团队描述
+     */
     private String description;
 
-    /** 创建者用户ID */
+    /**
+     * 创建者用户ID
+     */
     private Long ownerUserId;
 
-    /** 状态：0-禁用 1-启用 */
+    /**
+     * 状态：0-禁用 1-启用
+     */
     @Builder.Default
     private Integer status = 1;
 }

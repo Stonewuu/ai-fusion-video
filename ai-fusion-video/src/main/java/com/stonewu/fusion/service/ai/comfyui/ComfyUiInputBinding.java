@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.ai.comfyui;
 
-/** One platform input mapped to a concrete ComfyUI node input. */
+/**
+ * One platform input mapped to a concrete ComfyUI node input.
+ */
 public record ComfyUiInputBinding(
         String businessField,
         String nodeId,

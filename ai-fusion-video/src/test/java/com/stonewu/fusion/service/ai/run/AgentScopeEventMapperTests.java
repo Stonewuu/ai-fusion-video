@@ -152,6 +152,7 @@ class AgentScopeEventMapperTests {
         assertThat(mapper.map(new ToolResultEndEvent(
                 "r", "c", "tool", ToolResultState.SUCCESS)).outputType())
                 .isEqualTo("TOOL_FINISHED");
+        assertThat(mapper.map(new ToolResultEndEvent("r", "c", "tool", ToolResultState.RUNNING)).outputType()).isNull();
         assertThat(mapper.map(new SubagentExposedEvent(
                 "sub", "researcher", "session", "Researcher")).outputType())
                 .isEqualTo("SUB_AGENT_STARTED");
@@ -160,7 +161,7 @@ class AgentScopeEventMapperTests {
         assertThat(mapper.map(new RequireUserConfirmEvent("r", List.of())).outputType())
                 .isNull();
         assertThat(mapper.map(new RequireExternalExecutionEvent("r", List.of())).outputType())
-                .isEqualTo("EXTERNAL_EXECUTION_REQUIRED");
+                .isNull();
         assertThat(mapper.map(new UserConfirmResultEvent("r", List.of())).outputType())
                 .isNull();
         assertThat(mapper.map(new ExternalExecutionResultEvent("r", List.of())).outputType())

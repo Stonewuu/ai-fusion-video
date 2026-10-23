@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.generation.RemoteGenerationJobMapper">
+    <insert id="insertQueued">
+        INSERT INTO afv_remote_generation_job(id, submission_id, item_id, item_index, model_id, actor_user_id,
+            project_id, state, phase, input_json, next_poll_at, deadline_at, created_at, updated_at)
+        VALUES (#{row.id}, #{row.submissionId}, #{row.itemId}, #{row.itemIndex}, #{row.modelId}, #{row.actorUserId},
+            #{row.projectId}, 'QUEUED', 'NEW', #{row.inputJson}, UTC_TIMESTAMP(6),
+            TIMESTAMPADD(HOUR, 2, UTC_TIMESTAMP(6)), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <select id="selectClaimCandidates" resultType="com.stonewu.fusion.entity.generation.RemoteGenerationJobEntity">
+        SELECT id, model_id, actor_user_id, project_id, phase, permit_held, cancel_requested
+        FROM afv_remote_generation_job
+        WHERE ((state IN ('READY', 'WAITING') AND next_poll_at &lt;= UTC_TIMESTAMP(6))
+            OR (state = 'RUNNING' AND lease_until &lt;= UTC_TIMESTAMP(6)))
+        ORDER BY next_poll_at, id LIMIT 128 FOR UPDATE SKIP LOCKED
+    </select>
+    <update id="deferForCapacity">
+        UPDATE afv_remote_generation_job SET next_poll_at = TIMESTAMPADD(SECOND, 2, UTC_TIMESTAMP(6)) WHERE id = #{id}
+    </update>
+    <update id="claim">
+        UPDATE afv_remote_generation_job SET state = 'RUNNING', owner_instance_id = #{owner},
+            owner_epoch = owner_epoch + 1, lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6)),
+            permit_held = #{permitHeld}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="heartbeat">
+        UPDATE afv_remote_generation_job SET lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6))
+        WHERE id = #{id} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND state = 'RUNNING'
+            AND lease_until &gt; UTC_TIMESTAMP(6)
+    </update>
+    <select id="selectLeasedForUpdate" resultType="com.stonewu.fusion.entity.generation.RemoteGenerationJobEntity">
+        SELECT * FROM afv_remote_generation_job WHERE id = #{id} AND owner_instance_id = #{owner}
+            AND owner_epoch = #{epoch} AND state = 'RUNNING' AND lease_until &gt; UTC_TIMESTAMP(6) FOR UPDATE
+    </select>
+    <update id="schedulePoll">
+        UPDATE afv_remote_generation_job SET state = 'WAITING', phase = #{phase}, lease_until = NULL,
+            next_poll_at = TIMESTAMPADD(SECOND, #{seconds}, UTC_TIMESTAMP(6)), poll_attempts = poll_attempts + 1,
+            consecutive_errors = #{errors}, error_code = #{errorCode}, error_message = #{errorMessage},
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="receiveResult">
+        UPDATE afv_remote_generation_job SET result_json = #{result}, phase = 'INGESTING', permit_held = FALSE,
+            consecutive_errors = 0, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="prepareAttempt">
+        UPDATE afv_remote_generation_job SET active_attempt_id = #{attemptId}, phase = 'PREPARING',
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="beginSubmission">
+        UPDATE afv_remote_generation_job SET provider_task_id = #{providerTaskId}, phase = 'SUBMITTING',
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="applyReceipt">
+        UPDATE afv_remote_generation_job SET provider_task_id = #{providerTaskId}, result_json = #{result}, phase = #{phase},
+            permit_held = #{permitHeld}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="markReview">
+        UPDATE afv_remote_generation_job SET state = #{state}, lease_until = NULL, error_code = #{code}, error_message = #{message},
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="finish">
+        UPDATE afv_remote_generation_job SET state = #{state}, phase = 'FINISHED', permit_held = FALSE, lease_until = NULL,
+            error_code = #{code}, error_message = #{message}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="requestCancellation">
+        UPDATE afv_remote_generation_job SET cancel_requested = TRUE, next_poll_at = UTC_TIMESTAMP(6),
+            revision = revision + 1 WHERE submission_id = #{submissionId} AND state NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','CANCELLED')
+    </update>
+    <update id="cancelQueued">
+        UPDATE afv_remote_generation_job SET state = 'CANCELLED', phase = 'FINISHED', permit_held = FALSE,
+            error_code = 'CANCELLED_BEFORE_SUBMISSION', error_message = '已取消排队，尚未提交供应商',
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <select id="lock" resultType="String">
+        SELECT id FROM afv_remote_generation_job WHERE id = #{id} FOR UPDATE
+    </select>
+    <update id="restoreReceipt">
+        UPDATE afv_remote_generation_job j JOIN afv_generation_attempt a ON a.id = #{attemptId}
+        SET j.state = 'WAITING', j.phase = CASE WHEN a.result_json IS NULL THEN 'POLLING' ELSE 'INGESTING' END, j.active_attempt_id = a.id,
+            j.provider_task_id = a.provider_task_id, j.result_json = a.result_json,
+            j.permit_held = (a.result_json IS NULL), j.next_poll_at = UTC_TIMESTAMP(6),
+            j.deadline_at = TIMESTAMPADD(HOUR, 2, UTC_TIMESTAMP(6)), j.consecutive_errors = 0,
+            j.error_code = NULL, j.error_message = NULL, j.revision = j.revision + 1 WHERE j.id = #{id}
+    </update>
+    <update id="recheck">
+        UPDATE afv_remote_generation_job SET state = 'WAITING', phase = 'SUBMITTING',
+            next_poll_at = UTC_TIMESTAMP(6), deadline_at = TIMESTAMPADD(HOUR, 2, UTC_TIMESTAMP(6)),
+            consecutive_errors = 0, error_code = NULL, error_message = NULL, revision = revision + 1 WHERE id = #{id}
+    </update>
+    <update id="retryIngest">
+        UPDATE afv_remote_generation_job SET state = 'WAITING', phase = 'INGESTING', permit_held = FALSE,
+            next_poll_at = UTC_TIMESTAMP(6), consecutive_errors = 0, error_code = NULL, error_message = NULL,
+            revision = revision + 1 WHERE id = #{id}
+    </update>
+    <update id="retrySubmission">
+        UPDATE afv_remote_generation_job SET state = 'READY', phase = 'NEW', active_attempt_id = NULL,
+            provider_task_id = NULL, result_json = NULL, cancel_sent = FALSE, permit_held = FALSE,
+            next_poll_at = UTC_TIMESTAMP(6), deadline_at = TIMESTAMPADD(HOUR, 2, UTC_TIMESTAMP(6)),
+            consecutive_errors = 0, error_code = NULL, error_message = NULL, revision = revision + 1 WHERE id = #{id}
+    </update>
+    <update id="confirmFinished">
+        UPDATE afv_remote_generation_job SET state = #{state}, phase = 'FINISHED', permit_held = FALSE,
+            error_code = 'PROVIDER_FINISHED_CONFIRMED', error_message = #{message},
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="adminCancel">
+        UPDATE afv_remote_generation_job SET state = 'CANCELLED', phase = 'FINISHED', cancel_requested = TRUE, permit_held = FALSE,
+            owner_instance_id = NULL, lease_until = NULL, owner_epoch = owner_epoch + 1,
+            error_code = 'ADMIN_CONFIRMED_FINISHED', error_message = #{message}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+</mapper>

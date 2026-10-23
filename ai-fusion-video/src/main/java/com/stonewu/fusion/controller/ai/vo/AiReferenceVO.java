@@ -12,15 +12,23 @@ import lombok.experimental.Accessors;
 @Accessors(chain = true)
 public class AiReferenceVO {
 
-    /** 引用类型（如 script、storyboard、asset、episode 等） */
+    /**
+     * 引用类型（如 script、storyboard、asset、episode 等）
+     */
     private String type;
 
-    /** 引用 ID */
+    /**
+     * 引用 ID
+     */
     private Long id;
 
-    /** 引用标题（用于展示和构建 context key） */
+    /**
+     * 引用标题（用于展示和构建 context key）
+     */
     private String title;
 
-    /** 扩展元数据 JSON（如 fullText、startLine、endLine 等） */
+    /**
+     * 扩展元数据 JSON（如 fullText、startLine、endLine 等）
+     */
     private String metadata;
 }

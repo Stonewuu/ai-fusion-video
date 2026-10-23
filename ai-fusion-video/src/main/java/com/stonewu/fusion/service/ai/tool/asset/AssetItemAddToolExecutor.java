@@ -1,18 +1,11 @@
 package com.stonewu.fusion.service.ai.tool.asset;
 
-import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.asset.Asset;
-import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.asset.AssetService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 
 /**
  * 添加资产图片工具（add_asset_item）
@@ -22,12 +15,13 @@ import java.util.List;
 @Slf4j
 public class AssetItemAddToolExecutor implements ToolExecutor {
 
+    private final AssetToolCommands commands;
+
     /**
      * 来源类型：AI生成
      */
     private static final int SOURCE_AI_GENERATED = 2;
 
-    private final AssetService assetService;
 
     @Override
     public String getToolName() {
@@ -61,6 +55,7 @@ public class AssetItemAddToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "parentVersion": { "type": "integer", "minimum": 0, "description": "读取到的目标主资产版本" },
                         "assetId": {
                             "type": "integer",
                             "description": "目标资产ID（必填），将图片添加到哪个资产下"
@@ -82,68 +77,13 @@ public class AssetItemAddToolExecutor implements ToolExecutor {
                             "description": "AI生成时使用的提示词（可选），便于后续追溯和重新生成"
                         }
                     },
-                    "required": ["assetId", "imageUrl"]
+                    "required": ["parentVersion", "assetId", "imageUrl"]
                 }
                 """;
     }
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long assetId = params.getLong("assetId");
-            String imageUrl = params.getStr("imageUrl");
-
-            // 参数验证
-            if (assetId == null) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "缺少必要参数: assetId").toString();
-            }
-            if (StrUtil.isBlank(imageUrl)) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "缺少必要参数: imageUrl").toString();
-            }
-
-            Long userId = context.getUserId();
-
-            Asset asset = assetService.getById(assetId);
-            if (!assetService.canAccessAsset(asset, userId)) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "未找到ID为 " + assetId + " 的资产或无权访问").toString();
-            }
-
-            String itemType = params.getStr("itemType", "initial");
-            String name = params.getStr("name");
-            String aiPrompt = params.getStr("aiPrompt");
-
-            List<AssetItem> existing = assetService.listItems(assetId);
-            int nextOrder = existing.isEmpty() ? 0 : existing.get(existing.size() - 1).getSortOrder() + 1;
-
-            // 构建子资产对象
-            AssetItem item = AssetItem.builder()
-                    .assetId(assetId)
-                    .imageUrl(imageUrl)
-                    .itemType(itemType)
-                    .name(StrUtil.isNotBlank(name) ? name : "AI生成图")
-                    .aiPrompt(aiPrompt)
-                    .sourceType(SOURCE_AI_GENERATED)
-                    .sortOrder(nextOrder)
-                    .build();
-
-            AssetItem saved = assetService.createItem(item);
-
-            log.info("[add_asset_item] 图片已保存到资产 - assetId={}, itemId={}, itemType={}, userId={}",
-                    assetId, saved.getId(), itemType, userId);
-
-            return JSONUtil.createObj()
-                    .set("assetItemId", saved.getId())
-                    .set("assetId", assetId)
-                    .set("assetName", asset.getName())
-                    .set("itemType", itemType)
-                    .set("message", String.format("图片已成功保存到资产「%s」中", asset.getName())).toString();
-        } catch (Exception e) {
-            log.error("[add_asset_item] 保存图片失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "保存失败: " + e.getMessage()).toString();
-        }
+        return commands.execute(getToolName(), toolInput, context);
     }
 }

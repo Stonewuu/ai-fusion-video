@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasMemberMapper">
+    <select id="people" resultType="com.stonewu.fusion.service.canvas.collaboration.CanvasCollaborationData$Person">
+        SELECT u.id AS user_id, u.username, COALESCE(NULLIF(u.nickname,''),u.username) AS name
+        FROM sys_user u JOIN (
+            SELECT user_id FROM afv_canvas_member WHERE canvas_id = #{canvasId}
+            UNION SELECT created_by FROM afv_canvas WHERE id = #{canvasId}
+            UNION SELECT owner_id FROM afv_canvas WHERE id = #{canvasId} AND owner_type = 1
+            UNION SELECT user_id FROM afv_project_member WHERE project_id = #{projectId} AND deleted = FALSE
+            UNION SELECT tm.user_id FROM afv_team_member tm JOIN afv_project p ON p.owner_id = tm.team_id
+                AND p.owner_type = 2 WHERE p.id = #{projectId} AND tm.deleted = FALSE AND tm.status = 1
+        ) visible ON visible.user_id = u.id
+        WHERE u.deleted = FALSE ORDER BY u.id
+    </select>
+    <select id="findPerson" resultType="com.stonewu.fusion.service.canvas.collaboration.CanvasCollaborationData$Person">
+        SELECT id, username, COALESCE(NULLIF(nickname,''),username) AS display_name FROM sys_user
+        WHERE username = #{username} AND deleted = FALSE AND status = 1
+    </select>
+    <select id="person" resultType="com.stonewu.fusion.service.canvas.collaboration.CanvasCollaborationData$Person">
+        SELECT id,username,COALESCE(NULLIF(nickname,''),username) AS display_name FROM sys_user WHERE id=#{userId}
+    </select>
+    <insert id="grant">
+        INSERT INTO afv_canvas_member(canvas_id,user_id,can_edit,can_execute,can_manage,granted_by)
+        VALUES (#{canvasId},#{userId},#{canEdit},#{canExecute},#{canManage},#{actor}) ON DUPLICATE KEY UPDATE can_edit=VALUES(can_edit),can_execute=VALUES(can_execute),
+            can_manage=VALUES(can_manage),granted_by=VALUES(granted_by),update_time=UTC_TIMESTAMP(6)
+    </insert>
+    <select id="projectGrants" resultType="map">
+        SELECT m.canvas_id,m.can_edit,m.can_execute,m.can_manage,m.granted_by FROM afv_canvas_member m
+        JOIN afv_canvas c ON c.id=m.canvas_id WHERE c.project_id=#{projectId} AND m.user_id=#{userId}
+    </select>
+    <delete id="removeProjectGrants">
+        DELETE m FROM afv_canvas_member m JOIN afv_canvas c ON c.id=m.canvas_id WHERE c.project_id=#{projectId} AND m.user_id=#{userId}
+    </delete>
+</mapper>

@@ -24,15 +24,11 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.HexFormat;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
-/** Rebuilds conversation messages deterministically from the committed event journal. */
+/**
+ * Rebuilds conversation messages deterministically from the committed event journal.
+ */
 @Service
 @RequiredArgsConstructor
 public class AgentMessageProjectionService {
@@ -166,7 +162,7 @@ public class AgentMessageProjectionService {
             projectRejectedTools(run, event);
         } else if ("CANCELLED".equals(outputType)
                 && AgentConfirmationExpiryCoordinator.REASON.equals(
-                        payload(event).path("cancellationReason").asText())) {
+                payload(event).path("cancellationReason").asText())) {
             projectExpiredConfirmation(run, event);
         }
     }
@@ -357,8 +353,8 @@ public class AgentMessageProjectionService {
     private AgentMessage toolResultProjection(AgentRun run, AgentEvent event) {
         JsonNode payload = payload(event);
         String toolName = firstText(payload, "toolCallName", "toolName", "name");
-        String result = collectToolDeltas(
-                run.getRunId(), event.getToolCallId(), event.getSequenceNo(), false);
+        String result = "PLATFORM_TOOL_RESULT".equals(event.getRawEventType()) ? firstText(payload, "result")
+                : collectToolDeltas(run.getRunId(), event.getToolCallId(), event.getSequenceNo(), false);
         if (result == null) {
             result = firstText(payload, "result", "output", "delta");
         }
@@ -445,11 +441,11 @@ public class AgentMessageProjectionService {
                 || !Objects.equals(existing.getToolStatus(), candidate.getToolStatus())
                 || !Objects.equals(existing.getToolCallId(), candidate.getToolCallId())
                 || !Objects.equals(existing.getParentToolCallId(),
-                        candidate.getParentToolCallId())
+                candidate.getParentToolCallId())
                 || !Objects.equals(existing.getReasoningContent(),
-                        candidate.getReasoningContent())
+                candidate.getReasoningContent())
                 || !Objects.equals(existing.getReasoningDurationMs(),
-                        candidate.getReasoningDurationMs())) {
+                candidate.getReasoningDurationMs())) {
             throw new IllegalStateException(
                     "Projection key resolves to a different Agent message: "
                             + candidate.getProjectionKey());
@@ -511,7 +507,7 @@ public class AgentMessageProjectionService {
             case "ERROR" -> "error";
             case "CANCELLED" -> "cancelled";
             default -> throw new IllegalStateException(
-                            "Unsupported Agent terminal output type: "
+                    "Unsupported Agent terminal output type: "
                             + run.getTerminalOutputType());
         };
         if (conversationMapper.update(null,

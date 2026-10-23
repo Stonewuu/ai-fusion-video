@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useUnsavedDialog } from "@/components/settings/use-unsaved-dialog";
 import { Check, ChevronRight, Loader2, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
@@ -35,10 +36,14 @@ import {
   SelectItem,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
+import type { ProviderDefinition } from "@/lib/api/provider-catalog";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { CapabilityPresetSelect } from "./capability-preset-select";
 import { ModelConfigForm } from "./model-config-form";
+import { SponsorModelOptions } from "./sponsor-model-options";
+import type { ProviderModelCandidate } from "@/lib/api/provider-catalog";
 import { MultimodalCapabilityEditor } from "./multimodal-capability-editor";
 import { ReasoningEffortLevelsEditor } from "./reasoning-effort-levels-editor";
 import { ComfyUiModelWorkflowField } from "./comfyui-model-workflow-field";
@@ -67,14 +72,19 @@ export interface AiModelDialogProps {
   onOpenChange: (open: boolean) => void;
   editingModel: AiModel | null;
   apiConfigs: ApiConfig[];
+  providers: ProviderDefinition[];
   defaultApiConfigId?: number;
+  initialCandidate?: ProviderModelCandidate | null;
   onSaved: () => void;
 }
 
 type AiModelFormState = AiModelCreateReq & { id?: number; status?: number };
 
-export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, defaultApiConfigId, onSaved }: AiModelDialogProps) {
+export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, providers, defaultApiConfigId, initialCandidate, onSaved }: AiModelDialogProps) {
+  const initialProviderId = apiConfigs.find((config) => config.id === defaultApiConfigId)?.providerId;
+  const initialModelType = providers.find((provider) => provider.id === initialProviderId)?.supportedModelTypes[0] ?? 1;
   const [saving, setSaving] = useState(false);
+  const [comfyUiCapabilityValid, setComfyUiCapabilityValid] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [form, setForm] = useState<AiModelFormState>({
     name: "",
@@ -92,14 +102,18 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
   });
   const [presets, setPresets] = useState<ModelPreset[]>([]);
 
+  const [original, setOriginal] = useState<AiModelFormState | null>(null);
+  const changeOpen = useUnsavedDialog(open, !!original && JSON.stringify(form) !== JSON.stringify(original), saving, onOpenChange);
+
   useEffect(() => {
     if (open) {
+      const initializeForm = (value: AiModelFormState) => { setForm(value); setOriginal(value); };
       aiModelApi.presets().then(setPresets).catch((error) => {
         console.error("加载模型预设失败:", error);
         toastApiError(error, "加载模型预设失败");
       });
       if (editingModel) {
-        setForm({
+        initializeForm({
           id: editingModel.id,
           name: editingModel.name,
           code: editingModel.code,
@@ -121,12 +135,13 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           status: editingModel.status,
         });
       } else {
-        setForm({
-          name: "",
-          code: "",
-          capabilityPresetCode: "",
-          modelProtocol: "",
-          modelType: 1,
+        initializeForm({
+          name: initialCandidate?.name ?? "",
+          code: initialCandidate?.id ?? "",
+          capabilityPresetCode: initialCandidate?.capabilityPresetCode ?? "",
+          modelProtocol: initialCandidate?.modelProtocol ?? "",
+          modelType: initialCandidate?.modelType ?? initialModelType,
+          config: initialCandidate?.config,
           maxConcurrency: 5,
           defaultModel: false,
           supportVision: false,
@@ -139,9 +154,9 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           comfyuiWorkflowId: undefined,
         });
       }
-      setShowAdvanced(false);
+      setShowAdvanced(!!initialCandidate?.configurationHint);
     }
-  }, [open, editingModel, defaultApiConfigId]);
+  }, [open, editingModel, defaultApiConfigId, initialModelType, initialCandidate]);
 
   const updateField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));
@@ -157,13 +172,19 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
   };
 
   const selectedApiConfig = apiConfigs.find(c => c.id === form.apiConfigId);
+  const selectedProvider = providers.find((provider) => provider.id === selectedApiConfig?.providerId);
+  const modelTypeOptions = MODEL_TYPE_OPTIONS.filter((option) =>
+    !selectedProvider || selectedProvider.supportedModelTypes.includes(option.value));
   const selectedPlatform = selectedApiConfig?.platform;
   const requiresComfyUiWorkflow = selectedPlatform === "comfyui" && (form.modelType === 2 || form.modelType === 3);
 
   const selectedCapabilityPreset = form.capabilityPresetCode
     ? presets.find(p => p.code === form.capabilityPresetCode) || null
     : null;
-  const visiblePresets = presets.filter(preset => preset.modelType === form.modelType);
+  const visiblePresets = presets.filter((preset) => preset.modelType === form.modelType &&
+    (selectedProvider?.quickSetup
+      ? preset.providerId === selectedProvider.id || form.modelType === 1 && !preset.providerId
+      : !preset.providerId));
   const selectedPresetConfig = selectedCapabilityPreset?.config as Record<string, unknown> | undefined;
   const effectiveModelConfig = mergeConfigObjects(selectedPresetConfig || {}, parseConfigJson(form.config));
   const showOpenAiResponsesMode = form.modelType === 1 && supportsOpenAiResponsesMode(selectedPlatform);
@@ -183,8 +204,8 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
     ...protocolOptions,
   ];
   const protocolConfigured = !hasRequestProtocol || Boolean(effectiveModelProtocol);
-  const comfyUiWorkflowConfigured = !requiresComfyUiWorkflow || Boolean(form.comfyuiWorkflowId);
-  const compatibleCapabilityPresets = presets.filter(preset => isCapabilityPresetCompatible({
+  const comfyUiWorkflowConfigured = !requiresComfyUiWorkflow || (Boolean(form.comfyuiWorkflowId) && comfyUiCapabilityValid);
+  const compatibleCapabilityPresets = visiblePresets.filter(preset => isCapabilityPresetCompatible({
     preset,
     modelType: form.modelType,
     platform: selectedPlatform,
@@ -209,7 +230,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
     if (!preset) return next;
     const nextProtocol = next.modelProtocol?.trim()
       || getApiConfigDefaultProtocol(nextApiConfig, next.modelType);
-    if (isCapabilityPresetCompatible({
+    if ((!preset.providerId || preset.providerId === nextApiConfig?.providerId) && isCapabilityPresetCompatible({
       preset,
       modelType: next.modelType,
       platform: nextApiConfig?.platform,
@@ -272,10 +293,12 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.code.trim() || !form.apiConfigId || !protocolConfigured || !comfyUiWorkflowConfigured) return;
+    if (!form.name.trim() || !form.code.trim() || !form.apiConfigId || !protocolConfigured || !comfyUiWorkflowConfigured) {
+      return;
+    }
     setSaving(true);
     try {
-      const normalizedConfig = sanitizeModelConfigJson({
+      const normalizedConfig = requiresComfyUiWorkflow ? form.config : sanitizeModelConfigJson({
         configJson: form.config,
         modelType: form.modelType,
         platform: selectedPlatform,
@@ -332,14 +355,14 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[calc(100vh-2rem)] sm:max-h-[88vh] flex flex-col overflow-hidden">
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-4xl max-h-[calc(100vh-2rem)] sm:max-h-[88vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
           <DialogTitle>{editingModel ? "编辑 AI 模型" : "新建 AI 模型"}</DialogTitle>
           <DialogDescription>填写模型标识并关联 API 配置；通常继承对应能力的默认协议，特殊模型可单独覆盖。</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 overflow-y-auto min-h-0 px-2 -mx-2">
+        <DialogScrollBody className="space-y-4">
           {/* 预设快速选择 */}
           {!editingModel && visiblePresets.length > 0 && (
             <div className="space-y-2">
@@ -389,8 +412,8 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           <div className="grid gap-3 sm:grid-cols-2">
           {/* 模型名称 */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">模型名称 <span className="text-destructive">*</span></Label>
-            <Input
+            <Label htmlFor="model-name" className="text-xs text-muted-foreground">模型名称 <span className="text-destructive">*</span></Label>
+            <Input id="model-name"
               placeholder="例如：claude-sonnet-4.5"
               value={form.name}
               onChange={e => updateField("name", e.target.value)}
@@ -400,8 +423,8 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
 
           {/* 模型标识 */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">模型标识 (code) <span className="text-destructive">*</span></Label>
-            <Input
+            <Label htmlFor="model-code" className="text-xs text-muted-foreground">模型标识 (code) <span className="text-destructive">*</span></Label>
+            <Input id="model-code"
               placeholder="例如：claude-sonnet-4.5"
               value={form.code}
               onChange={e => updateField("code", e.target.value)}
@@ -413,7 +436,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           <div className="grid gap-3 sm:grid-cols-2">
           {/* 模型类型 */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">模型类型</Label>
+            <Label htmlFor="model-type" className="text-xs text-muted-foreground">模型类型</Label>
             <Select
               value={form.modelType}
               onValueChange={v => {
@@ -442,14 +465,14 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                   return next;
                 });
               }}
-              items={MODEL_TYPE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+              items={modelTypeOptions.map(o => ({ value: o.value, label: o.label }))}
             >
-              <SelectTrigger className="w-full text-sm">
+              <SelectTrigger id="model-type" className="w-full text-sm">
                 <SelectValue placeholder="选择类型" />
               </SelectTrigger>
               <SelectContent className="text-sm">
                 <SelectGroup>
-                  {MODEL_TYPE_OPTIONS.map(opt => (
+                  {modelTypeOptions.map(opt => (
                     <SelectItem key={opt.value} value={opt.value} className="text-sm">
                       {opt.label}
                     </SelectItem>
@@ -461,17 +484,21 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
 
           {/* API 配置 */}
           <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">API 配置 <span className="text-destructive">*</span></Label>
+            <Label htmlFor="model-api" className="text-xs text-muted-foreground">API 配置 <span className="text-destructive">*</span></Label>
             <Select
               value={form.apiConfigId}
               onValueChange={v => {
                 const nextApiConfigId = v as number;
                 const nextApiConfig = apiConfigs.find(c => c.id === nextApiConfigId);
                 const nextPlatform = nextApiConfig?.platform;
+                const nextProvider = providers.find((provider) => provider.id === nextApiConfig?.providerId);
                 setForm(prev => {
-                  const nextModelType = nextPlatform === "comfyui" && prev.modelType !== 2 && prev.modelType !== 3
+                  let nextModelType = nextPlatform === "comfyui" && prev.modelType !== 2 && prev.modelType !== 3
                     ? 2
                     : prev.modelType;
+                  if (nextProvider && !nextProvider.supportedModelTypes.includes(nextModelType)) {
+                    nextModelType = nextProvider.supportedModelTypes[0];
+                  }
                   let next: AiModelFormState = {
                     ...prev,
                     apiConfigId: nextApiConfigId,
@@ -498,7 +525,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
               }}
               items={apiConfigs.map(c => ({ value: c.id, label: `${c.name}${c.platform ? ` (${PLATFORM_LABELS[c.platform] || c.platform})` : ""}` }))}
             >
-              <SelectTrigger className="w-full text-sm">
+              <SelectTrigger id="model-api" className="w-full text-sm">
                 <SelectValue placeholder="选择 API 配置" />
               </SelectTrigger>
               <SelectContent className="text-sm">
@@ -521,10 +548,12 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
               modelType={form.modelType as 2 | 3}
               value={form.comfyuiWorkflowId}
               configJson={form.config}
+              capabilityPresetCode={form.capabilityPresetCode}
+              configuredLimits={effectiveModelConfig}
+              onValidityChange={setComfyUiCapabilityValid}
               onChange={(workflowId, config) => setForm(previous => ({
                 ...previous,
                 comfyuiWorkflowId: workflowId,
-                capabilityPresetCode: "",
                 config,
               }))}
             />
@@ -545,7 +574,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
               </div>
 
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">协议覆盖（可选）</Label>
+                <Label htmlFor="model-protocol" className="text-xs text-muted-foreground">协议覆盖（可选）</Label>
                 <Select
                   value={form.modelProtocol || INHERIT_PROVIDER_PROTOCOL_VALUE}
                   onValueChange={value => {
@@ -558,7 +587,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
                   }}
                   items={modelProtocolSelectOptions.map(option => ({ value: option.value, label: option.label }))}
                 >
-                  <SelectTrigger className="w-full text-sm">
+                  <SelectTrigger id="model-protocol" className="w-full text-sm">
                     <SelectValue placeholder={modelProtocolSelectOptions[0]?.label || "继承 API 配置默认"} />
                   </SelectTrigger>
                   <SelectContent className="text-sm">
@@ -607,13 +636,13 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
             </div>
           )}
 
-          <CapabilityPresetSelect
+          {!requiresComfyUiWorkflow && <CapabilityPresetSelect
             selectedCode={form.capabilityPresetCode}
             presets={compatibleCapabilityPresets}
             hasCustomConfig={hasCustomCapabilityConfig}
             onSelectCustom={selectCustomCapabilities}
             onApplyPreset={applyCapabilityPreset}
-          />
+          />}
 
           {/* 默认模型 */}
           <div className="flex items-center gap-3">
@@ -765,6 +794,13 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
           </div>}
 
           {/* 模型配置 */}
+          {effectiveModelProtocol === "metaso_video" && <SponsorModelOptions
+            config={effectiveModelConfig}
+            onChange={(key, enabled) => setForm((previous) => ({
+              ...previous,
+              config: JSON.stringify({ ...parseConfigJson(previous.config), [key]: enabled }),
+            }))}
+          />}
           {showAdvanced && <ModelConfigForm
             modelType={form.modelType}
             platform={selectedPlatform}
@@ -772,7 +808,7 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, de
             configJson={stringifyConfigObject(effectiveModelConfig)}
             onChange={updateCustomCapabilityConfig}
           />}
-        </div>
+        </DialogScrollBody>
 
         <DialogFooter className="shrink-0">
           <DialogClose render={<Button variant="outline" size="sm" />}>

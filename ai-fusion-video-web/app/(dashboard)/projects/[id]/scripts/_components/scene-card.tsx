@@ -33,10 +33,10 @@ import {
 } from "@/components/ui/select";
 import { parseDialogues, parseCharacters } from "./utils";
 import { InlineEdit } from "./inline-edit";
-import { ContentEditable } from "./content-editable";
 import { EditableDialogueItem } from "./dialogue-item";
 import { InsertButton } from "./insert-button";
 import { toast } from "sonner";
+import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 
 export function SceneCard({
   scene,
@@ -59,6 +59,7 @@ export function SceneCard({
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [openPickerIdx, setOpenPickerIdx] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const requests = useCommandRequestKey();
   const cardRef = useRef<HTMLDivElement>(null);
 
   // 使用 ref 保存最新值，避免 handleSave 闭包取到旧值
@@ -67,13 +68,14 @@ export function SceneCard({
 
   // 外部数据变化时同步（如首次加载）
   useEffect(() => {
+    if (dirty) return;
     setLocalScene(scene);
     localSceneRef.current = scene;
     const dlgs = parseDialogues(scene);
     setLocalDialogues(dlgs);
     localDialoguesRef.current = dlgs;
     setDirty(false);
-  }, [scene]);
+  }, [scene, dirty]);
 
   const sceneChars = parseCharacters(localScene);
 
@@ -152,29 +154,37 @@ export function SceneCard({
           type: d.type,
           content: d.content,
           character_name: needsChar ? d.character_name : undefined,
+          character_asset_id: needsChar ? d.character_asset_id : undefined,
           parenthetical: d.type === 1 || d.type === 3 ? d.parenthetical : undefined,
           sortOrder: i,
         };
       });
 
-      const updated = await scriptApi.updateScene({
+      const payload = {
         id: currentScene.id,
         sceneNumber: currentScene.sceneNumber,
         sceneHeading: currentScene.sceneHeading,
-        location: currentScene.location || undefined,
-        timeOfDay: currentScene.timeOfDay || undefined,
-        intExt: currentScene.intExt || undefined,
-        sceneDescription: currentScene.sceneDescription || undefined,
-        dialogues: JSON.stringify(dialoguesWithOrder),
-        characters: JSON.stringify(currentChars),
+        location: currentScene.location,
+        timeOfDay: currentScene.timeOfDay,
+        intExt: currentScene.intExt,
+        sceneDescription: currentScene.sceneDescription,
+        dialogues: dialoguesWithOrder,
+        characters: currentChars,
         version: currentScene.version,
-      });
-
-      setLocalScene(updated);
-      localSceneRef.current = updated;
-      setLocalDialogues(parseDialogues(updated));
-      localDialoguesRef.current = parseDialogues(updated);
-      setDirty(false);
+      };
+      const updated = await scriptApi.updateScene(payload, requests.forPayload(payload));
+      requests.clear();
+      if (localSceneRef.current !== currentScene || localDialoguesRef.current !== currentDialogues) {
+        const continuedDraft = { ...localSceneRef.current, version: updated.version };
+        setLocalScene(continuedDraft);
+        localSceneRef.current = continuedDraft;
+      } else {
+        setLocalScene(updated);
+        localSceneRef.current = updated;
+        setLocalDialogues(parseDialogues(updated));
+        localDialoguesRef.current = parseDialogues(updated);
+        setDirty(false);
+      }
       onSceneUpdated(updated);
       toast.success("场次保存成功");
       } catch (err: unknown) {

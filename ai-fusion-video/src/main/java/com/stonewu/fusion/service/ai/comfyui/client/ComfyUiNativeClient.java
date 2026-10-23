@@ -8,14 +8,9 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import com.stonewu.fusion.service.generation.transport.GenerationHttpClients;
 import lombok.RequiredArgsConstructor;
-import okhttp3.MediaType;
-import okhttp3.MultipartBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
+import okhttp3.*;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayOutputStream;
@@ -30,7 +25,9 @@ import java.util.Locale;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
-/** Typed HTTP client for the ComfyUI v0.30.0 Native API contract. */
+/**
+ * Typed HTTP client for the ComfyUI v0.30.0 Native API contract.
+ */
 @Component
 @RequiredArgsConstructor
 public class ComfyUiNativeClient {
@@ -42,7 +39,7 @@ public class ComfyUiNativeClient {
 
     private final ObjectMapper objectMapper;
 
-    private final OkHttpClient baseClient = new OkHttpClient.Builder()
+    private final OkHttpClient baseClient = GenerationHttpClients.providerRequestBuilder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(10, TimeUnit.MINUTES)
             .writeTimeout(2, TimeUnit.MINUTES)
@@ -129,8 +126,8 @@ public class ComfyUiNativeClient {
     }
 
     public ComfyUiPromptResponse submitPrompt(ApiConfig apiConfig,
-                                               ObjectNode prompt,
-                                               String promptId) {
+                                              ObjectNode prompt,
+                                              String promptId) {
         if (prompt == null || prompt.isEmpty()) {
             throw new BusinessException(400, "ComfyUI prompt 不能为空");
         }
@@ -194,9 +191,9 @@ public class ComfyUiNativeClient {
     }
 
     public ComfyUiDownloadedFile downloadOutput(ApiConfig apiConfig,
-                                                 String filename,
-                                                 String subfolder,
-                                                 String type) {
+                                                String filename,
+                                                String subfolder,
+                                                String type) {
         if (StrUtil.isBlank(filename)) {
             throw new BusinessException(400, "ComfyUI 输出缺少 filename");
         }
@@ -308,7 +305,9 @@ public class ComfyUiNativeClient {
 
     private String readJsonBody(Response response) throws IOException {
         ResponseBody body = response.body();
-        if (body == null) return "";
+        if (body == null) {
+            return "";
+        }
         long length = body.contentLength();
         if (length > MAX_JSON_RESPONSE_BYTES) {
             throw new BusinessException(502, "ComfyUI JSON 响应超过 16MB 限制");

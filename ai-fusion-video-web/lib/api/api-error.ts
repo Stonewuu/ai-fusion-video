@@ -1,4 +1,12 @@
 import axios from "axios";
+import { userFacingError } from "@/lib/user-facing-error";
+
+export class ApiResultError extends Error {
+  constructor(readonly code: number, message: string) {
+    super(userFacingError(message));
+    this.name = "ApiResultError";
+  }
+}
 
 export function getApiPayloadMessage(payload: unknown): string | null {
   if (!isRecord(payload)) return null;
@@ -7,6 +15,10 @@ export function getApiPayloadMessage(payload: unknown): string | null {
 }
 
 export function getApiErrorMessage(error: unknown): string {
+  return userFacingError(rawApiErrorMessage(error));
+}
+
+function rawApiErrorMessage(error: unknown): string {
   if (axios.isAxiosError(error)) {
     if (error.response) {
       const responseMessage = getApiPayloadMessage(error.response.data);
@@ -29,13 +41,26 @@ export function toApiError(error: unknown): Error {
   return new Error(message, { cause: error });
 }
 
+/** 保留包装错误中的 HTTP 状态，用于撤权后清除已失效的数据投影。 */
+export function getApiErrorStatus(error: unknown): number | null {
+  const seen = new Set<unknown>();
+  let current = error;
+  while (current != null && !seen.has(current)) {
+    seen.add(current);
+    if (current instanceof ApiResultError && current.code >= 400 && current.code <= 599) return current.code;
+    if (axios.isAxiosError(current) && current.response) return current.response.status;
+    current = current instanceof Error ? current.cause : null;
+  }
+  return null;
+}
+
 export async function readApiResponseError(response: Response): Promise<string> {
   try {
     const body = await response.text();
     if (body.trim()) {
       try {
         const message = getApiPayloadMessage(JSON.parse(body));
-        if (message) return message;
+        if (message) return userFacingError(message);
       } catch {
         // Error responses must use the CommonResult structure.
       }
@@ -43,7 +68,7 @@ export async function readApiResponseError(response: Response): Promise<string> 
   } catch {
     // The contract error below also covers unreadable response bodies.
   }
-  return "请求失败";
+  return "暂时无法完成请求，请稍后重试。";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

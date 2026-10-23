@@ -3,6 +3,7 @@ package com.stonewu.fusion.repository.ai;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.entity.ai.AgentRun;
+import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.mapper.ai.AgentConversationMapper;
 import com.stonewu.fusion.mapper.ai.AgentMessageMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
@@ -15,8 +16,6 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-
-import com.stonewu.fusion.enums.ai.AgentRunStatus;
 
 /**
  * Synchronous persistence boundary used only inside short journal transactions.
@@ -52,6 +51,10 @@ public class AgentRunRepository {
 
     public AgentRun findRun(String runId) {
         return runMapper.selectByRunId(runId);
+    }
+
+    public boolean hasPendingCanvasNode(String runId) {
+        return runMapper.hasPendingCanvasNode(runId);
     }
 
     public AgentRun findLatestRoot(String conversationId) {

@@ -64,9 +64,10 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
+  --destructive: oklch(0.54 0.22 27.325);
   --border: oklch(0.8 0 0);
   --input: oklch(0.8 0 0);
+  --field-background: var(--background);
   --ring: oklch(0.708 0 0);
   --chart-1: oklch(0.828 0.111 230.318);
   --chart-2: oklch(0.685 0.169 237.323);
@@ -101,7 +102,8 @@
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 14%);
-  --input: oklch(1 0 0 / 18%);
+  --input: oklch(0.54 0.01 250);
+  --field-background: oklch(0.245 0.008 250);
   --ring: oklch(0.556 0 0);
   --chart-1: oklch(0.828 0.111 230.318);
   --chart-2: oklch(0.685 0.169 237.323);
@@ -116,6 +118,34 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 14%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Product-wide field surfaces and resting borders. Keep upstream Shadcn
+   sources intact; focus, validation and disabled states stay with each control. */
+:where(
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"],
+  [data-slot="input-group"],
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
+  textarea,
+  select
+) {
+  background-color: var(--field-background);
+}
+:where(
+  [data-slot="input"],
+  [data-slot="textarea"],
+  [data-slot="select-trigger"],
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
+  textarea,
+  select
+):not(:focus-visible):not([aria-invalid="true"]):not([data-invalid]):not(:disabled) {
+  border-color: var(--input);
+}
+:where(input, textarea)::placeholder {
+  color: var(--muted-foreground);
+  opacity: 1;
 }
 
 @layer base {
@@ -331,15 +361,18 @@ body[data-assistant-layer="true"] > [data-base-ui-portal] {
   display: flex;
   width: min(320px, 86%);
   flex-direction: column;
+  visibility: hidden;
   transform: translateX(-102%);
   border-right: 1px solid color-mix(in oklab, var(--border) 30%, transparent);
   background: color-mix(in oklab, var(--card) 95%, transparent);
   box-shadow: 0 20px 60px -30px color-mix(in oklab, var(--foreground) 40%, transparent);
-  transition: transform 220ms ease-out;
+  transition: transform 220ms ease-out, visibility 0s linear 220ms;
 }
 
 .assistant-navigation-open {
+  visibility: visible;
   transform: translateX(0);
+  transition-delay: 0s;
 }
 
 @container (min-width: 650px) {
@@ -357,6 +390,7 @@ body[data-assistant-layer="true"] > [data-base-ui-portal] {
     z-index: auto !important;
     width: 260px !important;
     transform: none !important;
+    visibility: visible;
     border-right: 1px solid color-mix(in oklab, var(--border) 20%, transparent) !important;
     background: color-mix(in oklab, var(--card) 20%, transparent) !important;
     box-shadow: none !important;
@@ -387,6 +421,7 @@ body[data-assistant-layer="true"] > [data-base-ui-portal] {
 
   .assistant-navigation {
     transition-duration: 0.01ms;
+    transition-delay: 0s;
   }
 }
 

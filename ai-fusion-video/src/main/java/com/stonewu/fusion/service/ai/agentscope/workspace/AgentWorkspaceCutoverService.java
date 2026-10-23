@@ -108,7 +108,7 @@ public class AgentWorkspaceCutoverService {
     private boolean sameLocation(AgentWorkspaceConfig config, AgentWorkspaceMigration migration) {
         return migration.getTargetBackendType().equals(config.getBackendType())
                 && Objects.equals(
-                        migration.getTargetStorageConfigId(), config.getStorageConfigId())
+                migration.getTargetStorageConfigId(), config.getStorageConfigId())
                 && Objects.equals(migration.getTargetLocalPath(), config.getLocalPath());
     }
 

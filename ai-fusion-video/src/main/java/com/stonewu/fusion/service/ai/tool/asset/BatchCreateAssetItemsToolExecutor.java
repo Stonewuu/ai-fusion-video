@@ -1,20 +1,11 @@
 package com.stonewu.fusion.service.ai.tool.asset;
 
-import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONArray;
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.asset.Asset;
-import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.asset.AssetService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * 批量创建子资产工具执行器
@@ -27,6 +18,8 @@ import java.util.List;
 @Slf4j
 public class BatchCreateAssetItemsToolExecutor implements ToolExecutor {
 
+    private final AssetToolCommands commands;
+
     /**
      * 单次批量创建子资产的最大数量
      */
@@ -37,7 +30,6 @@ public class BatchCreateAssetItemsToolExecutor implements ToolExecutor {
      */
     private static final int SOURCE_AI_GENERATED = 2;
 
-    private final AssetService assetService;
 
     @Override
     public String getToolName() {
@@ -116,6 +108,8 @@ public class BatchCreateAssetItemsToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "expectedParentVersion": { "type": "integer", "minimum": 0, "description": "主资产版本 assetVersion，图片回填使用生成前版本；删除主资产不传" },
+                        "reuseExisting": { "type": "boolean", "description": "true：按名称复用唯一已有对象并返回其实际内容，创建字段不会覆盖已有内容；false：创建独立副本" },
                         "assetId": {
                             "type": "integer",
                             "description": "主资产ID（必填）"
@@ -149,104 +143,13 @@ public class BatchCreateAssetItemsToolExecutor implements ToolExecutor {
                             }
                         }
                     },
-                    "required": ["assetId", "items"]
+                    "required": ["expectedParentVersion", "reuseExisting", "assetId", "items"]
                 }
                 """, MAX_BATCH_SIZE, MAX_BATCH_SIZE);
     }
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long assetId = params.getLong("assetId");
-            JSONArray itemsArray = params.getJSONArray("items");
-
-            // 参数校验
-            if (assetId == null) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "缺少必要参数: assetId").toString();
-            }
-            if (itemsArray == null || itemsArray.isEmpty()) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "缺少必要参数: items 不能为空").toString();
-            }
-            if (itemsArray.size() > MAX_BATCH_SIZE) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", String.format("单次最多创建 %d 个子资产，当前传入 %d 个。请分多次调用。",
-                                MAX_BATCH_SIZE, itemsArray.size())).toString();
-            }
-
-            Long userId = context.getUserId();
-
-            Asset asset = assetService.getById(assetId);
-            if (!assetService.canAccessAsset(asset, userId)) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "未找到ID为 " + assetId + " 的资产或无权访问").toString();
-            }
-
-            // 查询已有子资产（用于去重）
-            List<AssetItem> existingItems = assetService.listItems(assetId);
-
-            List<JSONObject> created = new ArrayList<>();
-            List<JSONObject> existing = new ArrayList<>();
-
-            for (int i = 0; i < itemsArray.size(); i++) {
-                JSONObject itemData = itemsArray.getJSONObject(i);
-                String name = itemData.getStr("name");
-                if (StrUtil.isBlank(name)) {
-                    continue;
-                }
-
-                // 去重检查
-                AssetItem found = existingItems.stream()
-                        .filter(e -> name.equals(e.getName()))
-                        .findFirst().orElse(null);
-
-                if (found != null) {
-                    existing.add(JSONUtil.createObj()
-                            .set("assetItemId", found.getId())
-                            .set("name", found.getName())
-                            .set("itemType", found.getItemType()));
-                    log.info("子资产已存在，复用: assetId={}, name={}, itemId={}", assetId, name, found.getId());
-                    continue;
-                }
-
-                // 创建新子资产
-                AssetItem newItem = AssetItem.builder()
-                        .assetId(assetId)
-                        .name(name)
-                        .itemType(itemData.getStr("itemType", "variant"))
-                        .sourceType(SOURCE_AI_GENERATED)
-                        .sortOrder(existingItems.size() + i)
-                        .properties(itemData.containsKey("properties") ? itemData.getJSONObject("properties").toString() : null)
-                        .build();
-
-                AssetItem saved = assetService.createItem(newItem);
-
-                created.add(JSONUtil.createObj()
-                        .set("assetItemId", saved.getId())
-                        .set("name", name)
-                        .set("itemType", newItem.getItemType()));
-            }
-
-            // 合并结果
-            List<JSONObject> allItems = new ArrayList<>(created);
-            allItems.addAll(existing);
-
-            return JSONUtil.createObj()
-                    .set("assetId", assetId)
-                    .set("assetName", asset.getName())
-                    .set("created", created)
-                    .set("existing", existing)
-                    .set("allItems", allItems)
-                    .set("createdCount", created.size())
-                    .set("existingCount", existing.size())
-                    .set("message", String.format("新建 %d 个子资产，复用 %d 个已有子资产",
-                            created.size(), existing.size()))
-                    .toString();
-        } catch (Exception e) {
-            log.error("批量创建子资产失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "创建失败: " + e.getMessage()).toString();
-        }
+        return commands.execute(getToolName(), toolInput, context);
     }
 }

@@ -1,4 +1,7 @@
 "use client";
+import { SafeImage } from "@/components/media/managed-image";
+import { ManagedVideo } from "@/components/media/managed-video";
+
 
 import { useState } from "react";
 import { createPortal } from "react-dom";
@@ -22,8 +25,7 @@ function ImageLightbox({ src, alt, onClose }: { src: string; alt: string; onClos
       >
         <X className="h-5 w-5" />
       </button>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
+      <SafeImage
         src={src}
         alt={alt}
         className="max-h-[88vh] max-w-[92vw] rounded-xl object-contain shadow-2xl"
@@ -65,8 +67,7 @@ export function ThumbImage({
           aria-label={`查看${label}`}
         >
           <div className={`flex items-center justify-center overflow-hidden rounded-lg bg-background/80 ${previewClassName}`}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
+            <SafeImage
               src={src}
               alt={label}
               className="h-full w-full object-contain"
@@ -131,7 +132,7 @@ export function VideoGenerateResult({ data }: { data: unknown }) {
             <Play className="h-3 w-3" />
             <span>视频预览</span>
           </div>
-          <video
+          <ManagedVideo
             src={videoUrl}
             controls
             className="w-[206px] max-w-full rounded-xl border border-border/50 bg-muted/20 sm:w-[232px]"

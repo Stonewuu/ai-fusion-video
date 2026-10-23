@@ -2,7 +2,7 @@
 
 import { FileText, Headphones, Video, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import type { AssistantAttachment } from "./assistant-multimodal";
 
 interface AssistantAttachmentStripProps {

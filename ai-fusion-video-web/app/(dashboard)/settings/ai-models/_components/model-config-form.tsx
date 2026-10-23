@@ -296,7 +296,7 @@ export function ModelConfigForm({
                   </div>
                 ))}
 
-              {modelType === 2 && (
+              {modelType === 2 && normalizedPlatform !== "comfyui" && (
                 <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-3">
                   <div>
                     <Label className="text-[11px] text-muted-foreground">参考图能力</Label>
@@ -380,7 +380,7 @@ export function ModelConfigForm({
                 </div>
               )}
 
-              {modelType === 3 && (
+              {modelType === 3 && normalizedPlatform !== "comfyui" && (
                 <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-3">
                   <div>
                     <Label className="text-[11px] text-muted-foreground">多模态输入能力</Label>

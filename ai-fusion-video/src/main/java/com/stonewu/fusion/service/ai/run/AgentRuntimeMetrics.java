@@ -15,7 +15,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Low-cardinality Micrometer facade owned by the durable Agent runtime. */
+/**
+ * Low-cardinality Micrometer facade owned by the durable Agent runtime.
+ */
 public final class AgentRuntimeMetrics {
 
     public static final String PREFIX = "fusion.agentscope.runtime";

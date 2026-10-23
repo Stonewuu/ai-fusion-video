@@ -1,10 +1,10 @@
 package com.stonewu.fusion.service.generation.video.strategy.agnes;
+
+import com.fasterxml.jackson.databind.JsonNode;
 import com.stonewu.fusion.service.generation.video.strategy.support.OpenAiCompatibleVideoProtocolAdapter;
 import com.stonewu.fusion.service.generation.video.strategy.support.OpenAiCompatibleVideoProtocolContext;
 import com.stonewu.fusion.service.generation.video.strategy.support.OpenAiCompatibleVideoProtocolSupport;
 import com.stonewu.fusion.service.generation.video.strategy.support.OpenAiCompatibleVideoTaskResult;
-
-import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import okhttp3.RequestBody;
 import org.springframework.stereotype.Component;

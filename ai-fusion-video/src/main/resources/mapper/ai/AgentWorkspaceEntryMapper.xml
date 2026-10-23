@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.ai.AgentWorkspaceEntryMapper">
+    <select id="selectForUpdate" resultType="com.stonewu.fusion.entity.ai.AgentWorkspaceEntry">
+        SELECT * FROM afv_agent_workspace_entry
+        WHERE namespace_hash = #{namespaceHash} AND item_hash = #{itemHash} AND deleted = 0
+        LIMIT 1 FOR UPDATE
+    </select>
+    <delete id="physicalDeleteById">
+        DELETE FROM afv_agent_workspace_entry WHERE id = #{id}
+    </delete>
+    <select id="sumContentSize" resultType="long">
+        SELECT COALESCE(SUM(content_size), 0) FROM afv_agent_workspace_entry WHERE deleted = 0
+    </select>
+    <update id="indexMediaReferences">
+        UPDATE afv_agent_workspace_entry SET media_references_json=#{references},update_time=update_time WHERE id=#{id} AND deleted=FALSE AND version=#{version} AND content_sha256=#{hash} AND media_references_json IS NULL
+    </update>
+    <select id="window" resultType="com.stonewu.fusion.entity.ai.AgentWorkspaceEntry">
+        SELECT * FROM afv_agent_workspace_entry WHERE namespace_hash = #{namespaceHash} AND deleted = FALSE ORDER BY item_key LIMIT #{limit} OFFSET #{offset}
+    </select>
+</mapper>

@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.ai.agentscope.context;
 
-public record ToolExecutionContext(Long userId, Integer ownerType, Long ownerId) {
+import com.stonewu.fusion.service.canvas.agent.CanvasAgentScope;
+
+public record ToolExecutionContext(Long userId, Integer ownerType, Long ownerId, CanvasAgentScope canvasScope) {
 
     public ToolExecutionContext {
         userId = ContextValues.requirePositive(userId, "userId");

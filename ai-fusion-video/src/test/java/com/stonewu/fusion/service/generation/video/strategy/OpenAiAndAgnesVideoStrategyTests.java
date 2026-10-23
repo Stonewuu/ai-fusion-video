@@ -1,5 +1,9 @@
 package com.stonewu.fusion.service.generation.video.strategy;
 
+import com.stonewu.fusion.service.generation.job.RemoteGenerationResult;
+
+import com.stonewu.fusion.service.generation.job.GenerationPreparedRequest;
+
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.VideoItem;
@@ -157,21 +161,22 @@ class OpenAiAndAgnesVideoStrategyTests {
         VideoTask task = VideoTask.builder().id(5L).taskId("task-1").modelId(10L).prompt("a cat playing piano")
                 .duration(4).resolution("1280x720").build();
 
-        String platformTaskId = strategy.submit(task);
+        String platformTaskId = strategy.prepare(task, model, apiConfig).submit().providerTaskId();
         assertThat(platformTaskId).isEqualTo("video_123");
-        assertThat(item.getPlatformTaskId()).isEqualTo("video_123");
+        assertThat(item.getPlatformTaskId()).isNull();
         assertThat(submitPath.get()).isEqualTo("/v1/videos");
         assertThat(submitBody.get()).contains("sora-2");
         assertThat(submitBody.get()).contains("a cat playing piano");
         assertThat(submitBody.get()).contains("1280x720");
 
-        strategy.poll(platformTaskId, task);
+        var result = strategy.query(platformTaskId, task, model, apiConfig);
+        var output = result.outputs().getFirst();
 
-        assertThat(item.getVideoUrl()).isEqualTo("/media/videos/result.mp4");
-        assertThat(item.getCoverUrl()).isEqualTo("/media/images/cover.jpg");
-        assertThat(item.getStatus()).isEqualTo(1);
-        assertThat(item.getDuration()).isEqualTo(4);
-        verify(mediaStorageService).storeBytes(videoBytes, "videos", "mp4");
+        assertThat(output.media()).isEqualTo(apiConfig.getApiUrl() + "/v1/videos/video_123/content");
+        assertThat(output.cover()).isEqualTo(apiConfig.getApiUrl() + "/v1/videos/video_123/content?variant=thumbnail");
+        assertThat(result.state()).isEqualTo(RemoteGenerationResult.State.SUCCEEDED);
+        assertThat(output.durationSeconds()).isEqualTo(4);
+        // 内容接收、凭据转发与托管存储在统一接收器的真实 HTTP / 数据库测试中验证。
     }
 
         @Test
@@ -242,9 +247,9 @@ class OpenAiAndAgnesVideoStrategyTests {
             .lastFrameImageUrl("https://example.com/last.png")
             .build();
 
-        String trackingId = strategy.submit(task);
+        String trackingId = strategy.prepare(task, model, apiConfig).submit().providerTaskId();
         assertThat(trackingId).isEqualTo("video_abc");
-        assertThat(item.getPlatformTaskId()).isEqualTo("video_abc");
+        assertThat(item.getPlatformTaskId()).isNull();
         assertThat(submitBody.get()).contains("\"model\":\"agnes-video-v2.0\"");
         assertThat(submitBody.get()).contains("\"prompt\":\"a cinematic ocean wave\"");
         assertThat(submitBody.get()).contains("\"frame_rate\":24");
@@ -253,14 +258,15 @@ class OpenAiAndAgnesVideoStrategyTests {
         assertThat(submitBody.get()).contains("https://example.com/first.png");
         assertThat(submitBody.get()).contains("https://example.com/last.png");
 
-        strategy.poll(trackingId, task);
+        var result = strategy.query(trackingId, task, model, apiConfig);
+        var output = result.outputs().getFirst();
 
         assertThat(queryPath.get()).isEqualTo("/agnesapi");
         assertThat(queryString.get()).contains("video_id=video_abc");
         assertThat(queryString.get()).contains("model_name=agnes-video-v2.0");
-        assertThat(item.getVideoUrl()).isEqualTo("https://cdn.example.com/result.mp4");
-        assertThat(item.getStatus()).isEqualTo(1);
-        assertThat(item.getDuration()).isEqualTo(5);
+        assertThat(output.media()).isEqualTo("https://cdn.example.com/result.mp4");
+        assertThat(result.state()).isEqualTo(RemoteGenerationResult.State.SUCCEEDED);
+        assertThat(output.durationSeconds()).isEqualTo(5);
         }
 
     private OpenAiVideoStrategy newOpenAiStrategy(AiModelService aiModelService,
@@ -277,7 +283,6 @@ class OpenAiAndAgnesVideoStrategyTests {
                 apiConfigService,
                 videoGenerationService,
                 modelPresetService,
-                mediaStorageService,
                 new AiModelMetadataResolver(apiConfigService),
                 support,
                 new OpenAiVideoProtocolAdapter(support)
@@ -298,7 +303,6 @@ class OpenAiAndAgnesVideoStrategyTests {
                 apiConfigService,
                 videoGenerationService,
                 modelPresetService,
-                mediaStorageService,
                 new AiModelMetadataResolver(apiConfigService),
                 support,
                 new AgnesVideoProtocolAdapter(support)

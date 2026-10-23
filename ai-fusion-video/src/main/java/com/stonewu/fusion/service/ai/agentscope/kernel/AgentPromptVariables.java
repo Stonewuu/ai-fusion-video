@@ -4,15 +4,13 @@ import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.controller.ai.vo.AiReferenceVO;
 import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import java.util.Objects;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-/** Immutable prompt variables that remain part of a durable Harness kernel definition. */
+/**
+ * Immutable prompt variables that remain part of a durable Harness kernel definition.
+ */
 public final class AgentPromptVariables {
 
     private static final Pattern VARIABLE_NAME = Pattern.compile("[A-Za-z][A-Za-z0-9]*");

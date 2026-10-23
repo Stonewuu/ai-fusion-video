@@ -103,14 +103,14 @@ class SoniloAudioClientTests {
     }
 
     @Test
-    void submitTaskTranslatesInsufficientCredits() throws IOException {
+    void submitTaskPreservesInsufficientCreditsResponse() throws IOException {
         server.createContext("/v1/video-to-sfx", exchange ->
                 respond(exchange, 402, "{\"detail\":\"credit balance too low\"}"));
         Path video = Files.write(tempDir.resolve("composed.mp4"), new byte[]{1});
 
         assertThatThrownBy(() -> client.submitSfxTask(apiConfig, video, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("余额不足");
+                .hasMessageContaining("HTTP 402").hasMessageContaining("credit balance too low");
     }
 
     @Test
@@ -196,14 +196,15 @@ class SoniloAudioClientTests {
     }
 
     @Test
-    void submitTaskTranslatesInvalidApiKeyToApiConfigHint() throws IOException {
+    void submitTaskPreservesProviderAuthenticationErrorWithoutExpiringPlatformLogin() throws IOException {
         server.createContext("/v1/video-to-music", exchange ->
                 respond(exchange, 401, "{\"detail\":\"invalid api key\"}"));
         Path video = Files.write(tempDir.resolve("composed.mp4"), new byte[]{1});
 
         assertThatThrownBy(() -> client.submitMusicTask(apiConfig, video, null))
                 .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("API 配置");
+                .hasMessageContaining("HTTP 401").hasMessageContaining("invalid api key")
+                .satisfies(failure -> assertThat(((BusinessException) failure).getCode()).isEqualTo(502));
     }
 
     @Test

@@ -24,16 +24,12 @@ import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
 
-/** Read-only authorization and projection boundary for durable pipeline APIs. */
+/**
+ * Read-only authorization and projection boundary for durable pipeline APIs.
+ */
 @Service
 public final class AgentRunQueryService {
 
@@ -80,18 +76,18 @@ public final class AgentRunQueryService {
         String safeConversationId = requireIdentifier(
                 conversationId, "conversationId");
         return journal(() -> {
-                    AgentConversation conversation = conversationMapper.selectOne(
-                            new LambdaQueryWrapper<AgentConversation>()
-                                    .eq(AgentConversation::getConversationId,
-                                            safeConversationId)
-                                    .eq(AgentConversation::getDeleted, false));
-                    if (conversation != null
-                            && !Objects.equals(
-                                    conversation.getUserId(), currentUserId)) {
-                        throw notFound();
-                    }
-                    return Boolean.TRUE;
-                })
+            AgentConversation conversation = conversationMapper.selectOne(
+                    new LambdaQueryWrapper<AgentConversation>()
+                            .eq(AgentConversation::getConversationId,
+                                    safeConversationId)
+                            .eq(AgentConversation::getDeleted, false));
+            if (conversation != null
+                    && !Objects.equals(
+                    conversation.getUserId(), currentUserId)) {
+                throw notFound();
+            }
+            return Boolean.TRUE;
+        })
                 .then();
     }
 
@@ -341,8 +337,8 @@ public final class AgentRunQueryService {
                 event.envelope().toolCallId(), "toolCallId");
         String toolName = requireText(firstText(
                 payload, "toolCallName", "toolName", "name"), "toolName");
-        String result = collectToolDeltas(
-                event.runId(), toolCallId, event.sequence(), false);
+        String result = "PLATFORM_TOOL_RESULT".equals(event.envelope().rawEventType()) ? firstValue(payload, "result")
+                : collectToolDeltas(event.runId(), toolCallId, event.sequence(), false);
         if (result == null) {
             result = firstValue(payload, "result", "output", "delta");
         }

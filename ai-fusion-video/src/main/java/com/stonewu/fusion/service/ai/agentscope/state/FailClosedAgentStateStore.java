@@ -1,8 +1,8 @@
 package com.stonewu.fusion.service.ai.agentscope.state;
 
+import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.state.State;
-import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
 
 import java.time.Duration;
 import java.util.List;

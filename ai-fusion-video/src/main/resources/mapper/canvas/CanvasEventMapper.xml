@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasEventMapper">
+    <insert id="append">
+        INSERT INTO afv_canvas_event(id, canvas_id, sequence_no, operation_id, event_type, payload_json, create_time)
+        VALUES (#{row.id}, #{row.canvasId}, #{row.sequenceNo}, #{row.operationId}, #{row.eventType}, #{row.payloadJson}, UTC_TIMESTAMP(6))
+    </insert>
+    <select id="firstSequence" resultType="Long">
+        SELECT MIN(sequence_no) FROM afv_canvas_event WHERE canvas_id = #{canvasId}
+    </select>
+    <insert id="membershipChanged">
+        INSERT INTO afv_canvas_event(id,canvas_id,sequence_no,event_type,payload_json,create_time)
+        VALUES(UUID(),#{id},#{sequence},'project.members.changed',#{payload},UTC_TIMESTAMP(6))
+    </insert>
+</mapper>

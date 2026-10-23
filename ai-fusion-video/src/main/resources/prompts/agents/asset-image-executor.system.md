@@ -6,11 +6,11 @@
 2. **查询画风**：调用 `get_project(projectId)`，从 `artStyleInfo` 字段获取：
    - `description`（画风描述）、`imagePrompt`（画风提示词，空则默认：`高质量精细画面，专业级插画，细节丰富`）、`referenceImageUrl`（风格参考图URL）。若 `hasArtStyle` 为 false，使用默认通用写实风。
 3. **查询子资产**：调用 `query_asset_items`。**必须且仅能使用 `assetId` 数字参数**，⚠️ **禁止使用 assetName 查询**。
-4. **定位目标**：匹配 `itemId` 确定 `itemType`（initial, three_view, variant）及资产信息（assetName, assetType, assetDescription 等）。
+4. **定位目标并固定版本**：从返回的 `assets` 数组中定位主资产，再在 `items` 中读取目标的 `version` 与 `assetVersion`，分别保存为后续更新的 `expectedVersion` 和 `expectedParentVersion`。匹配 `itemId` 确定 `itemType`（initial, three_view, variant）及资产信息（assetName, assetType, assetDescription 等）。
 5. **获取初始图（衍生图）**：若 itemType 不是 `initial`，在 items 中定位 `itemType` 为 `initial` 的子资产并提取其 `imageUrl`。
 6. **查询模型能力**：调用 `get_generation_model_capabilities` 查询图片模型是否支持参考图（`supportsReferenceImages`）。
 7. **生图**：结合画风、参考图及资产描述编排中文 Prompt，调用 `generate_image` 生成**一张**图片。
-8. **更新**：调用 `update_asset_image` 保存图片，用一句简洁的中文总结。
+8. **更新**：调用 `update_asset_image(assetId, itemId, expectedVersion, expectedParentVersion, imageUrl)`，使用第 4 步固定的版本保存图片。发生 VERSION_CONFLICT 时保留生成结果并报告目标已变化；禁止重新读取最新版本后强制覆盖。仅在收到成功回执后报告图片已绑定，否则明确说明候选已生成但尚未绑定。
 
 ## 2. 参考图编排与降级规则
 

@@ -2,21 +2,24 @@ package com.stonewu.fusion.service.generation;
 
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
+import cn.hutool.json.JSONException;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
-import com.stonewu.fusion.service.ai.model.AiModelMetadata;
-import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.service.ai.ModelPresetService;
+import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowCapabilities;
+import com.stonewu.fusion.service.ai.model.AiModelMetadata;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * 生成模型能力解析与输入校验。
@@ -29,17 +32,28 @@ public class GenerationModelCapabilityService {
     private final AiModelMetadataResolver aiModelMetadataResolver;
     private final ModelPresetService modelPresetService;
     private final ReferenceImageTransportService referenceImageTransportService;
+    private final ComfyUiWorkflowCapabilities comfyUiCapabilities;
 
     @Autowired
     public GenerationModelCapabilityService(AiModelMetadataResolver aiModelMetadataResolver,
                                             ModelPresetService modelPresetService,
-                                            ReferenceImageTransportService referenceImageTransportService) {
+                                            ReferenceImageTransportService referenceImageTransportService,
+                                            ComfyUiWorkflowCapabilities comfyUiCapabilities) {
         this.aiModelMetadataResolver = aiModelMetadataResolver;
         this.modelPresetService = modelPresetService;
         this.referenceImageTransportService = referenceImageTransportService;
+        this.comfyUiCapabilities = comfyUiCapabilities;
     }
 
-    /** Compatibility constructor for focused unit tests. */
+    public GenerationModelCapabilityService(AiModelMetadataResolver aiModelMetadataResolver,
+                                            ModelPresetService modelPresetService,
+                                            ReferenceImageTransportService referenceImageTransportService) {
+        this(aiModelMetadataResolver, modelPresetService, referenceImageTransportService, null);
+    }
+
+    /**
+     * Compatibility constructor for focused unit tests.
+     */
     public GenerationModelCapabilityService(AiModelMetadataResolver aiModelMetadataResolver,
                                             ModelPresetService modelPresetService) {
         this(aiModelMetadataResolver, modelPresetService, null);
@@ -50,7 +64,10 @@ public class GenerationModelCapabilityService {
     }
 
     public ImageModelCapability resolveImageCapability(AiModel model, String platform) {
-        JSONObject config = getMergedModelConfig(model);
+        return imageCapability(getMergedModelConfig(model));
+    }
+
+    private ImageModelCapability imageCapability(JSONObject config) {
 
         Boolean supportsReferenceImages = getBoolean(config,
                 "supportReferenceImages", "supportsReferenceImages", "supportRefImages", "supportImageReferences");
@@ -81,7 +98,10 @@ public class GenerationModelCapabilityService {
     }
 
     public VideoModelCapability resolveVideoCapability(AiModel model, String platform) {
-        JSONObject config = getMergedModelConfig(model);
+        return videoCapability(getMergedModelConfig(model));
+    }
+
+    private VideoModelCapability videoCapability(JSONObject config) {
 
         Boolean supportsFirstFrame = getBoolean(config,
                 "supportFirstFrame", "supportsFirstFrame", "allowFirstFrame", "supportStartImage");
@@ -156,7 +176,8 @@ public class GenerationModelCapabilityService {
         if (model == null || task == null) {
             return;
         }
-        ImageModelCapability capability = resolveImageCapability(model, platform);
+        JSONObject config = getMergedModelConfig(model);
+        ImageModelCapability capability = imageCapability(config);
         List<String> referenceImages = parseJsonUrls(task.getRefImageUrls(), "refImageUrls");
 
         if (!referenceImages.isEmpty() && !capability.supportsReferenceImages()) {
@@ -176,7 +197,7 @@ public class GenerationModelCapabilityService {
         }
 
         if (referenceImageTransportService != null) {
-            referenceImageTransportService.validateInputs(model, getMergedModelConfig(model), referenceImages);
+            referenceImageTransportService.validateInputs(model, config, referenceImages);
         }
     }
 
@@ -189,7 +210,8 @@ public class GenerationModelCapabilityService {
             return;
         }
         JSONObject config = getMergedModelConfig(model);
-        VideoModelCapability capability = resolveVideoCapability(model, platform);
+        VideoModelRules.normalizeTask(config, task);
+        VideoModelCapability capability = videoCapability(config);
         List<String> referenceImages = parseJsonUrls(task.getReferenceImageUrls(), "referenceImageUrls");
         List<String> referenceVideos = parseJsonUrls(task.getReferenceVideoUrls(), "referenceVideoUrls");
         List<String> referenceAudios = parseJsonUrls(task.getReferenceAudioUrls(), "referenceAudioUrls");
@@ -257,10 +279,17 @@ public class GenerationModelCapabilityService {
                     + " 最多支持 " + capability.maxReferenceAudios() + " 个 referenceAudioUrls，当前传入了 " + referenceAudios.size() + " 个。");
         }
 
+        validateWorkflowInputCounts(config, Map.of("referenceImages", referenceImages.size(),
+                "referenceVideos", referenceVideos.size(), "referenceAudios", referenceAudios.size()));
+
         if (referenceImageTransportService != null && totalImageInputs > 0) {
             List<String> imageInputs = new ArrayList<>();
-            if (hasFirstFrame) imageInputs.add(task.getFirstFrameImageUrl());
-            if (hasLastFrame) imageInputs.add(task.getLastFrameImageUrl());
+            if (hasFirstFrame) {
+                imageInputs.add(task.getFirstFrameImageUrl());
+            }
+            if (hasLastFrame) {
+                imageInputs.add(task.getLastFrameImageUrl());
+            }
             imageInputs.addAll(referenceImages);
             referenceImageTransportService.validateInputs(model, config, imageInputs);
         }
@@ -270,7 +299,25 @@ public class GenerationModelCapabilityService {
         if (model == null) {
             return "当前未配置默认图片模型。";
         }
-        ImageModelCapability capability = resolveImageCapability(model);
+        return describeImageCapability(model, resolveImageCapability(model));
+    }
+
+    private void validateWorkflowInputCounts(JSONObject config, Map<String, Integer> counts) {
+        JSONObject inputs = config.getJSONObject(ComfyUiWorkflowCapabilities.INPUTS_KEY);
+        if (inputs == null) {
+            return;
+        }
+        for (var entry : counts.entrySet()) {
+            JSONObject input = inputs.getJSONObject(entry.getKey());
+            if (input != null && entry.getValue() > 0
+                    && entry.getValue() < input.getInt("minimumWhenProvided", 0)) {
+                throw new BusinessException(400, "工作流输入 " + ComfyUiWorkflowCapabilities.inputLabel(entry.getKey()) + " 需传入至少 "
+                        + input.getInt("minimumWhenProvided") + " 项，请补齐输入");
+            }
+        }
+    }
+
+    private String describeImageCapability(AiModel model, ImageModelCapability capability) {
         if (!capability.supportsReferenceImages()) {
             return "当前默认图片模型：" + modelLabel(model) + "；不支持参考图，仅支持文生图。";
         }
@@ -290,7 +337,7 @@ public class GenerationModelCapabilityService {
         AiModelMetadata metadata = aiModelMetadataResolver.resolve(model);
         String platform = metadata.platform();
         JSONObject config = getMergedModelConfig(model);
-        ImageModelCapability capability = resolveImageCapability(model, platform);
+        ImageModelCapability capability = imageCapability(config);
 
         return JSONUtil.createObj()
                 .set("configured", true)
@@ -308,12 +355,14 @@ public class GenerationModelCapabilityService {
                 .set("supportsReferenceImageUrlInput", capability.supportsReferenceImageUrlInput())
                 .set("supportsReferenceImageBase64Input", capability.supportsReferenceImageBase64Input())
                 .set("asyncMode", Boolean.TRUE.equals(getBoolean(config,
-                    "asyncMode", "useAsyncMode", "asyncTaskMode", "enableAsyncTask", "asyncEnabled")))
+                        "asyncMode", "useAsyncMode", "asyncTaskMode", "enableAsyncTask", "asyncEnabled")))
                 .set("supportedAspectRatios", getStringList(config, "supportedAspectRatios"))
                 .set("supportedSizes", copyJsonObject(config, "supportedSizes"))
                 .set("defaultWidth", getInteger(config, "defaultWidth"))
                 .set("defaultHeight", getInteger(config, "defaultHeight"))
-                .set("summary", describeImageCapability(model));
+                .set(ComfyUiWorkflowCapabilities.VERSION_KEY, config.get(ComfyUiWorkflowCapabilities.VERSION_KEY))
+                .set(ComfyUiWorkflowCapabilities.INPUTS_KEY, config.get(ComfyUiWorkflowCapabilities.INPUTS_KEY))
+                .set("summary", describeImageCapability(model, capability));
     }
 
     public String describeVideoCapability(AiModel model) {
@@ -321,18 +370,25 @@ public class GenerationModelCapabilityService {
             return "当前未配置默认视频模型。";
         }
 
-        VideoModelCapability capability = resolveVideoCapability(model);
+        return describeVideoCapability(model, resolveVideoCapability(model));
+    }
+
+    private String describeVideoCapability(AiModel model, VideoModelCapability capability) {
         List<String> parts = new ArrayList<>();
         parts.add("当前默认视频模型：" + modelLabel(model));
         parts.add("首帧图：" + yesNo(capability.supportsFirstFrame()));
         parts.add("尾帧图：" + yesNo(capability.supportsLastFrame()));
-        parts.add("参考图：" + referenceSupportText(capability.supportsReferenceImages(), capability.maxReferenceImages(), "张"));
+        parts.add(
+                "参考图：" + referenceSupportText(capability.supportsReferenceImages(), capability.maxReferenceImages(),
+                        "张"));
         if (capability.supportsFirstFrame() || capability.supportsLastFrame()
                 || capability.supportsReferenceImages()) {
             parts.add("图片传递模式：" + referenceImageTransportText(capability.referenceImageInputFormats()));
         }
-        parts.add("参考视频：" + referenceSupportText(capability.supportsReferenceVideos(), capability.maxReferenceVideos(), "个"));
-        parts.add("参考音频：" + referenceSupportText(capability.supportsReferenceAudios(), capability.maxReferenceAudios(), "个"));
+        parts.add("参考视频：" + referenceSupportText(capability.supportsReferenceVideos(),
+                capability.maxReferenceVideos(), "个"));
+        parts.add("参考音频：" + referenceSupportText(capability.supportsReferenceAudios(),
+                capability.maxReferenceAudios(), "个"));
         if (capability.minImageInputs() > 0) {
             parts.add("至少需要 " + capability.minImageInputs() + " 张图片输入");
         }
@@ -349,7 +405,7 @@ public class GenerationModelCapabilityService {
         AiModelMetadata metadata = aiModelMetadataResolver.resolve(model);
         String platform = metadata.platform();
         JSONObject config = getMergedModelConfig(model);
-        VideoModelCapability capability = resolveVideoCapability(model, platform);
+        VideoModelCapability capability = videoCapability(config);
 
         return JSONUtil.createObj()
                 .set("configured", true)
@@ -376,19 +432,44 @@ public class GenerationModelCapabilityService {
                 .set("supportedAspectRatios", getStringList(config, "supportedAspectRatios"))
                 .set("supportedResolutions", getStringList(config, "supportedResolutions"))
                 .set("minDuration", getInteger(config, "minDuration"))
+                .set("defaultResolution", config.getStr("defaultResolution"))
                 .set("maxDuration", getInteger(config, "maxDuration"))
+                .set("maxDurationByResolution", config.getJSONObject("maxDurationByResolution"))
+                .set("framesWithReferenceVideos", config.getBool("framesWithReferenceVideos"))
                 .set("defaultDuration", getInteger(config, "defaultDuration"))
                 .set("supportCameraFixed", getBoolean(config, "supportCameraFixed"))
-                .set("summary", describeVideoCapability(model));
+                .set("supportGenerateAudio", getBoolean(config, "supportGenerateAudio"))
+                .set("supportWatermark", getBoolean(config, "supportWatermark"))
+                .set("supportSeed", getBoolean(config, "supportSeed"))
+                .set("exclusiveInputModes", getBoolean(config, "exclusiveInputModes"))
+                .set("referenceAudioRequiresVisualInput", getBoolean(config, "referenceAudioRequiresVisualInput"))
+                .set("videoRules", config.getJSONObject("videoRules"))
+                .set("promptExpansionMode", config.getStr("promptExpansionMode"))
+                .set("referenceTaskType", config.getStr("referenceTaskType"))
+                .set("outputFormat", config.getStr("outputFormat"))
+                .set("promptExtend", config.getBool("promptExtend"))
+                .set(ComfyUiWorkflowCapabilities.VERSION_KEY, config.get(ComfyUiWorkflowCapabilities.VERSION_KEY))
+                .set(ComfyUiWorkflowCapabilities.INPUTS_KEY, config.get(ComfyUiWorkflowCapabilities.INPUTS_KEY))
+                .set("summary", describeVideoCapability(model, capability));
     }
 
     public JSONObject getMergedModelConfig(AiModel model) {
+        return getMergedModelConfig(model, null);
+    }
+
+    public JSONObject getMergedModelConfig(AiModel model, Long workflowVersionId) {
+        if (model != null && Boolean.TRUE.equals(model.getGenerationConfigSnapshot())) {
+            return parseConfig(model.getConfig());
+        }
         JSONObject merged = new JSONObject();
         if (model != null && modelPresetService != null && StrUtil.isNotBlank(model.getCapabilityPresetCode())) {
             mergeConfig(merged, parseConfig(modelPresetService.getPresetConfig(model.getCapabilityPresetCode())));
         }
         if (model != null) {
             mergeConfig(merged, parseConfig(model.getConfig()));
+            if (model.getComfyuiWorkflowId() != null) {
+                return comfyUiCapabilities.resolve(model, merged, workflowVersionId);
+            }
         }
         return merged;
     }
@@ -403,8 +484,8 @@ public class GenerationModelCapabilityService {
         }
         try {
             return JSONUtil.parseObj(configJson);
-        } catch (Exception ignored) {
-            return new JSONObject();
+        } catch (JSONException | IllegalArgumentException failure) {
+            throw new BusinessException(400, "模型配置必须是有效的 JSON 对象");
         }
     }
 
@@ -569,7 +650,9 @@ public class GenerationModelCapabilityService {
     }
 
     private String referenceImageTransportText(List<String> formats) {
-        if (formats == null || formats.isEmpty()) return "未配置";
+        if (formats == null || formats.isEmpty()) {
+            return "未配置";
+        }
         List<String> labels = formats.stream()
                 .map(format -> "url".equalsIgnoreCase(format) ? "URL"
                         : "data_uri".equalsIgnoreCase(format) || "base64".equalsIgnoreCase(format)

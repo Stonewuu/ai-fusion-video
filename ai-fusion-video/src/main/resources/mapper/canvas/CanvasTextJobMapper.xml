@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasTextJobMapper">
+    <select id="lock" resultType="com.stonewu.fusion.entity.canvas.CanvasTextJobEntity">
+        SELECT * FROM afv_canvas_text_job WHERE id = #{id} FOR UPDATE
+    </select>
+    <insert id="insertJob">
+        INSERT INTO afv_canvas_text_job(id, node_run_id, run_id, project_id, model_id, model_limit,
+            input_json, deadline_at, next_run_at, created_at, updated_at)
+        VALUES (#{id}, #{nodeRunId}, #{runId}, #{projectId}, #{modelId}, #{modelLimit}, #{input}, LEAST(#{deadline}, TIMESTAMPADD(HOUR, 1, UTC_TIMESTAMP(6))),
+            UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <select id="next" resultType="String">
+        SELECT j.id FROM afv_canvas_text_job j LEFT JOIN afv_ai_model m ON m.id = j.model_id
+        WHERE ((j.status = 'READY' AND j.next_run_at &lt;= UTC_TIMESTAMP(6))
+            OR (j.status = 'RUNNING' AND j.lease_until &lt;= UTC_TIMESTAMP(6)))
+            AND (j.permit_held = TRUE OR j.cancel_requested = TRUE OR j.request_started_at IS NOT NULL
+                OR m.id IS NULL OR m.deleted = TRUE OR m.status &lt;&gt; 1 OR m.max_concurrency &lt; 1
+                OR (SELECT COUNT(*) FROM afv_canvas_text_job busy WHERE busy.model_id = j.model_id AND busy.permit_held = TRUE)
+                    + (SELECT COUNT(*) FROM afv_agent_model_request busy WHERE busy.model_id = j.model_id AND busy.permit_held = TRUE)
+                    &lt; LEAST(j.model_limit, m.max_concurrency))
+        ORDER BY j.next_run_at, j.id LIMIT 1 FOR UPDATE SKIP LOCKED
+    </select>
+    <update id="claim">
+        UPDATE afv_canvas_text_job SET status = 'RUNNING', owner_instance_id = #{owner}, owner_epoch = owner_epoch + 1,
+            lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6)), permit_held = TRUE WHERE id = #{id}
+    </update>
+    <select id="leased" resultType="com.stonewu.fusion.entity.canvas.CanvasTextJobEntity">
+        SELECT * FROM afv_canvas_text_job WHERE id = #{id} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch}
+            AND status = 'RUNNING' AND lease_until &gt; UTC_TIMESTAMP(6) FOR UPDATE
+    </select>
+    <update id="heartbeat">
+        UPDATE afv_canvas_text_job SET lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6))
+        WHERE id = #{id} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND status = 'RUNNING' AND lease_until &gt; UTC_TIMESTAMP(6)
+    </update>
+    <update id="begin">
+        UPDATE afv_canvas_text_job SET request_started_at = UTC_TIMESTAMP(6), request_owner_instance_id = #{owner}, request_owner_epoch = #{epoch},
+            phase = '模型正在生成文本', revision = revision + 1, updated_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND request_started_at IS NULL
+    </update>
+    <update id="received">
+        UPDATE afv_canvas_text_job SET result_json = #{result}, result_hash = #{hash}, received_at = UTC_TIMESTAMP(6),
+            permit_held = FALSE, revision = revision + 1, updated_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND request_started_at IS NOT NULL AND request_owner_instance_id = #{owner} AND request_owner_epoch = #{epoch}
+    </update>
+    <update id="finish">
+        UPDATE afv_canvas_text_job SET status = #{status}, phase = #{phase}, error_msg = #{error}, permit_held = #{permit},
+            owner_instance_id = NULL, lease_until = NULL, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="cancel">
+        UPDATE afv_canvas_text_job SET cancel_requested = TRUE, next_run_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="resume">
+        UPDATE afv_canvas_text_job SET status = 'READY', next_run_at = UTC_TIMESTAMP(6), error_msg = NULL, result_accepted = TRUE,
+            phase = '恢复已接收的结果', revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+</mapper>

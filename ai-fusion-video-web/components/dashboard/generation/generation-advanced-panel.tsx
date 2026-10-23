@@ -1,5 +1,7 @@
 "use client";
 
+import { videoInputState, videoPromptReady } from "@/lib/video-model-rules";
+
 import {
   ArrowLeft,
   Cpu,
@@ -30,6 +32,7 @@ interface GenerationAdvancedPanelProps {
   capabilities: GenerationCapabilities | null;
   form: GenerationFormState;
   submitting: boolean;
+  submitDisabled?: boolean;
   onModelChange: (modelId: number) => void;
   onFormChange: (patch: Partial<GenerationFormState>) => void;
   onSubmit: () => void;
@@ -45,6 +48,7 @@ export function GenerationAdvancedPanel({
   capabilities,
   form,
   submitting,
+  submitDisabled = false,
   onModelChange,
   onFormChange,
   onSubmit,
@@ -63,8 +67,21 @@ export function GenerationAdvancedPanel({
           form.referenceImages.length > 0 &&
           form.referenceImages.length < capabilities.minReferenceImages)),
   );
+  const promptLimit = capabilities?.videoRules
+    ? capabilities.videoRules.promptMaxLength
+    : 5000;
   const canSubmit = Boolean(
-    modelId && form.prompt.trim() && !submitting && !missingRequiredInput,
+    modelId &&
+      (mode === "video"
+        ? videoPromptReady(
+            form.prompt,
+            capabilities?.videoRules,
+            videoInputState(form),
+          )
+        : form.prompt.trim()) &&
+      !submitting &&
+      !submitDisabled &&
+      !missingRequiredInput,
   );
   const promptSections =
     mode === "image"
@@ -82,14 +99,16 @@ export function GenerationAdvancedPanel({
 
   const appendPromptSection = (section: string) => {
     const token = `${section}：`;
-    if (form.prompt.includes(token)) return;
+    if (form.prompt.includes(token)) {
+      return;
+    }
     onFormChange({
       prompt: form.prompt.trim() ? `${form.prompt.trim()}\n${token}` : token,
     });
   };
 
   return (
-    <section className="flex h-full min-h-[520px] max-h-[72vh] flex-col overflow-hidden rounded-[26px] border border-border/55 bg-card/97 shadow-[0_8px_16px_-12px_rgba(15,23,42,.48)] backdrop-blur-xl xl:min-h-0 xl:max-h-none">
+    <section className="flex h-full min-h-0 flex-col overflow-hidden rounded-[26px] border border-border/55 bg-card/97 shadow-[0_8px_16px_-12px_rgba(15,23,42,.48)] backdrop-blur-xl">
       <header className="flex shrink-0 items-center justify-between gap-3 border-b border-border/35 bg-card/94 px-4 py-3 backdrop-blur-xl">
         <div className="flex items-center gap-3">
           <span className="grid h-9 w-9 place-items-center rounded-xl border border-primary/10 bg-primary/[0.065] text-primary shadow-sm">
@@ -104,7 +123,12 @@ export function GenerationAdvancedPanel({
             </p>
           </div>
         </div>
-        <Button variant="ghost" size="xs" onClick={onSimple} className="rounded-xl">
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={onSimple}
+          className="rounded-xl"
+        >
           <ArrowLeft className="h-3.5 w-3.5" />
           快捷模式
         </Button>
@@ -140,7 +164,7 @@ export function GenerationAdvancedPanel({
               <div className="mt-2.5 flex flex-wrap gap-1.5">
                 {capabilities.supportsReferenceImages && (
                   <span className="rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">
-                    参考图 {parseLimit(capabilities.maxReferenceImages, 1)} 张
+                    {Number.isFinite(capabilities.maxReferenceImages) ? `参考图 ${parseLimit(capabilities.maxReferenceImages, 1)} 张` : "支持参考图列表"}
                   </span>
                 )}
                 {mode === "video" && (
@@ -164,19 +188,24 @@ export function GenerationAdvancedPanel({
                 </p>
               </div>
               <span className="text-[10px] tabular-nums text-muted-foreground">
-                {form.prompt.length}/5000
+                {[...form.prompt].length}
+                {promptLimit ? `/${promptLimit}` : " 字"}
               </span>
             </div>
             <Textarea
               value={form.prompt}
               onChange={(event) => onFormChange({ prompt: event.target.value })}
               onKeyDown={(event) => {
-                if ((event.metaKey || event.ctrlKey) && event.key === "Enter" && canSubmit) {
+                if (
+                  (event.metaKey || event.ctrlKey) &&
+                  event.key === "Enter" &&
+                  canSubmit
+                ) {
                   event.preventDefault();
                   onSubmit();
                 }
               }}
-              maxLength={5000}
+              maxLength={capabilities?.videoRules ? undefined : 5000}
               rows={6}
               aria-label={mode === "image" ? "图片提示词" : "视频提示词"}
               placeholder={
@@ -187,7 +216,9 @@ export function GenerationAdvancedPanel({
               className="mt-1 min-h-36 resize-none rounded-none border-0 bg-transparent px-3.5 py-3 text-[14px] leading-6 shadow-none focus-visible:ring-0"
             />
             <div className="flex flex-wrap items-center gap-1.5 border-t border-border/30 bg-muted/18 px-3 py-2.5">
-              <span className="mr-0.5 text-[10px] text-muted-foreground">快速补充</span>
+              <span className="mr-0.5 text-[10px] text-muted-foreground">
+                快速补充
+              </span>
               {promptSections.map((section) => (
                 <button
                   key={section}
@@ -338,11 +369,7 @@ export function GenerationAdvancedPanel({
           ) : (
             <Sparkles className="h-4 w-4" />
           )}
-          {submitting
-            ? "提交中…"
-            : mode === "image"
-              ? "生成图片"
-              : "生成视频"}
+          {submitting ? "提交中…" : mode === "image" ? "生成图片" : "生成视频"}
         </Button>
       </footer>
     </section>

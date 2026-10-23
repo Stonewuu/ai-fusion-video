@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.execution.ExecutionRecoveryMapper">
+    <select id="candidates" resultType="com.stonewu.fusion.service.execution.recovery.ExecutionRecoveryData$Ref">
+        SELECT kind, id FROM (
+            SELECT 'GENERATION' kind, id, created_at FROM afv_remote_generation_job WHERE state IN ('NEEDS_REVIEW','UNKNOWN_SUBMISSION')
+            UNION ALL SELECT 'TEXT' kind, id, created_at FROM afv_canvas_text_job WHERE status IN ('NEEDS_REVIEW','UNKNOWN_SUBMISSION')
+            UNION ALL SELECT 'MCP' kind, id, created_at FROM afv_canvas_mcp_job WHERE status IN ('NEEDS_REVIEW','UNKNOWN_SUBMISSION')
+            UNION ALL SELECT 'AGENT_MODEL' kind, id, created_at FROM afv_agent_model_request WHERE status = 'UNKNOWN_SUBMISSION'
+            UNION ALL SELECT 'CANVAS_MEDIA' kind, j.id, j.created_at FROM afv_media_job j JOIN afv_canvas_media_job m ON m.job_id = j.id WHERE j.status IN ('NEEDS_REVIEW','UNKNOWN_SUBMISSION')
+            UNION ALL SELECT 'COMFY_TEST' kind, j.id, j.created_at FROM afv_media_job j JOIN afv_comfyui_test_run m ON m.job_id = j.id WHERE j.status IN ('NEEDS_REVIEW','UNKNOWN_SUBMISSION')
+            UNION ALL SELECT 'EPISODE_AUDIO' kind, j.id, j.created_at FROM afv_media_job j JOIN afv_episode_audio_job m ON m.job_id = j.id WHERE j.status IN ('NEEDS_REVIEW','UNKNOWN_SUBMISSION')
+        ) pending ORDER BY created_at, kind, id LIMIT 51 OFFSET #{offset}
+    </select>
+    <select id="agentModel" resultType="com.stonewu.fusion.mapper.execution.ExecutionRecoveryMapper$Observation">
+        SELECT m.id,m.status,m.revision,r.user_id actor_user_id,r.actor_team_id,r.project_id,
+        JSON_UNQUOTE(JSON_EXTRACT(r.canvas_scope_json,'$.canvasId')) canvas_id,NULL run_id,m.permit_held,
+        r.cancel_requested_at IS NOT NULL cancelled,TRUE started,m.response_received_at IS NOT NULL received
+        FROM afv_agent_model_request m JOIN afv_agent_run r ON r.run_id=m.run_id WHERE m.id = #{id}
+    </select>
+    <select id="mcp" resultType="com.stonewu.fusion.mapper.execution.ExecutionRecoveryMapper$Observation">
+        SELECT t.id,t.status,t.revision,r.actor_user_id,r.actor_team_id,c.project_id,r.canvas_id,t.run_id,t.permit_held,
+        t.cancel_requested cancelled,t.request_started_at IS NOT NULL started,t.received_at IS NOT NULL received
+        FROM afv_canvas_mcp_job t JOIN afv_canvas_run r ON r.id=t.run_id JOIN afv_canvas c ON c.id=r.canvas_id WHERE t.id = #{id}
+    </select>
+    <select id="text" resultType="com.stonewu.fusion.mapper.execution.ExecutionRecoveryMapper$Observation">
+        SELECT t.id,t.status,t.revision,r.actor_user_id,r.actor_team_id,t.project_id,r.canvas_id,r.id run_id,t.permit_held,
+        t.cancel_requested cancelled,t.request_started_at IS NOT NULL started,t.received_at IS NOT NULL received
+        FROM afv_canvas_text_job t JOIN afv_canvas_run r ON r.id=t.run_id WHERE t.id = #{id}
+    </select>
+    <select id="lockCanvas" resultType="String">
+        SELECT id FROM afv_canvas WHERE id = #{id} FOR UPDATE
+    </select>
+    <select id="lockRun" resultType="String">
+        SELECT id FROM afv_canvas_run WHERE id = #{id} FOR UPDATE
+    </select>
+    <select id="lockProject" resultType="Long">
+        SELECT id FROM afv_project WHERE id = #{id} FOR UPDATE
+    </select>
+    <select id="lockWorkflow" resultType="Long">
+        SELECT id FROM afv_comfyui_workflow WHERE id = #{id} FOR UPDATE
+    </select>
+    <select id="lockExecution" resultType="String">
+        SELECT id FROM
+        <choose>
+            <when test="kind.name() == 'GENERATION'">afv_remote_generation_job</when>
+            <when test="kind.name() == 'TEXT'">afv_canvas_text_job</when>
+            <when test="kind.name() == 'MCP'">afv_canvas_mcp_job</when>
+            <when test="kind.name() == 'AGENT_MODEL'">afv_agent_model_request</when>
+            <otherwise>afv_media_job</otherwise>
+        </choose>
+        WHERE id = #{id} FOR UPDATE
+    </select>
+    <select id="lockGenerationTask" resultType="Long">
+        SELECT id FROM
+        <choose><when test="kind.name() == 'IMAGE'">afv_image_task</when><otherwise>afv_video_task</otherwise></choose>
+        WHERE id = #{id} FOR UPDATE
+    </select>
+</mapper>

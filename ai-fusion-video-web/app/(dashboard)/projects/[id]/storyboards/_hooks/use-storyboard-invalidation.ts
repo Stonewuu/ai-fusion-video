@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { usePipelineStore } from "@/lib/store/pipeline-store";
+import { useResourceChangeStore } from "@/lib/store/resource-change-store";
 import { createStoryboardRefreshCoordinator } from "@/lib/storyboard-refresh";
 
 export function useStoryboardInvalidation(projectId: number, refresh: () => Promise<void>) {
@@ -12,10 +12,10 @@ export function useStoryboardInvalidation(projectId: number, refresh: () => Prom
 
   useEffect(() => {
     const coordinator = createStoryboardRefreshCoordinator(() => refreshRef.current());
-    const unsubscribe = usePipelineStore.subscribe((state, previous) => {
+    const unsubscribe = useResourceChangeStore.subscribe((state, previous) => {
       coordinator.update(
-        state.invalidation.storyboards !== previous.invalidation.storyboards,
-        state.tasks.some((task) => task.projectId === projectId && task.status === "running"),
+        state.revisions.storyboards !== previous.revisions.storyboards,
+        false,
       );
     });
     return () => {

@@ -1,4 +1,6 @@
 "use client";
+import { ManagedVideo } from "@/components/media/managed-video";
+
 
 import { Film, GripVertical, Plus, Trash2, Video, Play, ZoomIn, X } from "lucide-react";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
@@ -8,24 +10,14 @@ import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
 import { EditableCell } from "./editable-cell";
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 
 const TOOLTIP_CONTENT_CLASS = "flex flex-col gap-0.5 items-start text-left max-w-[220px] px-2.5 py-1.5 rounded-lg text-[11px] bg-white/85 dark:bg-zinc-900/85 backdrop-blur-md border border-zinc-200/50 dark:border-zinc-800/50 text-zinc-900 dark:text-zinc-50 shadow-lg [&_.bg-foreground]:bg-white/85 [&_.fill-foreground]:fill-white/85 dark:[&_.bg-foreground]:bg-zinc-900/85 dark:[&_.fill-foreground]:fill-zinc-900/85";
 
 
 /** 安全解析 ID 数组 */
-function parseIds(raw: number[] | string | null | undefined): number[] {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
+function parseIds(raw: number[] | null | undefined): number[] {
+  return raw ?? [];
 }
 
 /** 格式化资产显示名称：子变体名 (主资产名) */
@@ -136,7 +128,7 @@ export function StoryboardTableView({
   items: StoryboardItem[];
   selectedItemId: number | null;
   onSelectItem: (id: number | null) => void;
-  onUpdateItemField: (itemId: number, field: string, value: string | number | null) => void;
+  onUpdateItemField: (item: StoryboardItem, field: string, value: string | number | null) => Promise<void>;
   onAddItem: () => void;
   onDeleteItem: (id: number) => void;
   onReorderItems?: (reorderedItems: StoryboardItem[]) => void;
@@ -508,7 +500,7 @@ export function StoryboardTableView({
                       <div className="flex items-center justify-center h-11 w-16 rounded-md bg-muted/20 border border-border/10 overflow-hidden shrink-0 relative group/video">
                         {(item.generatedVideoUrl || item.videoUrl) ? (
                           <>
-                            <video
+                            <ManagedVideo
                               src={resolveMediaUrl(item.generatedVideoUrl || item.videoUrl) || ""}
                               className="w-full h-full object-cover"
                               muted
@@ -725,7 +717,7 @@ export function StoryboardTableView({
                           col.field === "shotNumber" ? String(idx + 1) : ""
                         }
                         onSave={(val) =>
-                          onUpdateItemField(item.id, col.field, val)
+                          onUpdateItemField(item, col.field, val)
                         }
                         onCellClick={() => onSelectItem(item.id)}
                         className={cn(

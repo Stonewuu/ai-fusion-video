@@ -2,107 +2,70 @@ package com.stonewu.fusion.controller.storage;
 
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
-import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.ai.AiModelService;
-import com.stonewu.fusion.service.storage.MediaStorageService;
-import com.stonewu.fusion.service.storage.StorageConfigService;
-import com.stonewu.fusion.service.storage.StorageTypes;
+import com.stonewu.fusion.service.canvas.CanvasActorResolver;
+import com.stonewu.fusion.service.canvas.model.CanvasActor;
+import com.stonewu.fusion.service.media.MediaIntakeService;
+import com.stonewu.fusion.service.media.model.MediaResource;
 import com.stonewu.fusion.service.system.SystemConfigService;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockMultipartFile;
-
 import java.util.List;
 import java.util.Map;
-
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
 
 class FileUploadControllerTests {
+    private final MediaIntakeService intake = mock(MediaIntakeService.class);
+    private final CanvasActorResolver actors = mock(CanvasActorResolver.class);
+    private final SystemConfigService system = mock(SystemConfigService.class);
+    private final AiModelService models = mock(AiModelService.class);
+    private final FileUploadController controller = new FileUploadController(intake, actors, system, models);
+    private final MockMultipartFile file = new MockMultipartFile("file", "sample.png", "image/png", new byte[]{1});
+    private static final String ID = "63c234b0-e0fd-4f65-8270-b26e282de689";
 
-    private final MediaStorageService mediaStorageService = mock(MediaStorageService.class);
-    private final StorageConfigService storageConfigService = mock(StorageConfigService.class);
-    private final SystemConfigService systemConfigService = mock(SystemConfigService.class);
-    private final AiModelService aiModelService = mock(AiModelService.class);
-    private final FileUploadController controller = new FileUploadController(
-            mediaStorageService, storageConfigService, systemConfigService, aiModelService);
-
-    @Test
-    void uploadsSupportedUrlInputAndReturnsPublicUrl() throws Exception {
-        AiModel model = enabledModel(List.of("image"), Map.of("image", List.of("url")));
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "sample.png", "image/png", "image".getBytes());
-        when(aiModelService.getById(7L)).thenReturn(model);
-        when(storageConfigService.getDefaultConfig()).thenReturn(
-                StorageConfig.builder().type(StorageTypes.S3).build());
-        when(mediaStorageService.storeBytes(file.getBytes(), "assistant/image", "png"))
-                .thenReturn("stored/sample.png");
-        when(systemConfigService.resolvePublicUrl("stored/sample.png"))
-                .thenReturn("https://cdn.example.com/sample.png");
-
-        var result = controller.uploadAssistantInput(file, 7L, "url");
-
-        assertThat(result.getData()).isEqualTo("https://cdn.example.com/sample.png");
-        verify(mediaStorageService).storeBytes(file.getBytes(), "assistant/image", "png");
+    @Test void uploadsIntoRegistryWithAuthenticatedIdentityAndStableReference() throws Exception {
+        when(actors.current()).thenReturn(new CanvasActor(4L, 8L));
+        when(intake.uploadChecked(any(), eq("sample.png"), eq("image/png"), eq("request-a"), isNull(), any(), anySet()))
+                .thenAnswer(call -> {
+                    assertThat(call.getArgument(5).toString()).contains("userId=4", "teamId=8");
+                    return new MediaResource(ID, null, 2, 8, 4, "sample.png", null, "READY", 1, null, null, null);
+                });
+        assertThat(controller.upload(file, "request-a").getData()).isEqualTo("media://" + ID);
+        verifyNoInteractions(system, models);
     }
-
-    @Test
-    void rejectsUrlUploadWhenModelOnlySupportsBase64() {
-        AiModel model = enabledModel(List.of("image"), Map.of("image", List.of("base64")));
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "sample.png", "image/png", "image".getBytes());
-        when(aiModelService.getById(8L)).thenReturn(model);
-
-        assertThatThrownBy(() -> controller.uploadAssistantInput(file, 8L, "url"))
-                .isInstanceOf(BusinessException.class)
-                .hasMessageContaining("不支持 image 的 url 输入");
-        verifyNoInteractions(mediaStorageService);
+    @Test void urlInputReturnsPrivateReferenceAfterModelValidation() throws Exception {
+        when(models.getById(7L)).thenReturn(model(List.of("url")));
+        when(system.getPublicResourceBaseUrl()).thenReturn("https://media.example.test");
+        when(actors.current()).thenReturn(new CanvasActor(4L, null));
+        when(intake.uploadChecked(any(), anyString(), anyString(), anyString(), isNull(), any(), anySet()))
+                .thenReturn(new MediaResource(ID, null, 1, 4, 4, "sample.png", null, "READY", 1, null, null, null));
+        assertThat(controller.uploadAssistantInput(file, 7L, "request-b", "url").getData()).isEqualTo("media://" + ID);
     }
-
-    @Test
-    void persistsBase64InputForMessagePreviewWithoutPublicSiteUrl() throws Exception {
-        AiModel model = enabledModel(List.of("image"), Map.of("image", List.of("base64")));
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "sample.png", "image/png", "image".getBytes());
-        when(aiModelService.getById(9L)).thenReturn(model);
-        when(storageConfigService.getDefaultConfig()).thenReturn(
-                StorageConfig.builder().type(StorageTypes.LOCAL).build());
-        when(mediaStorageService.storeBytes(file.getBytes(), "assistant/image", "png"))
-                .thenReturn("/media/assistant/image/sample.png");
-
-        var result = controller.uploadAssistantInput(file, 9L, "base64");
-
-        assertThat(result.getData()).isEqualTo("/media/assistant/image/sample.png");
-        verify(mediaStorageService).storeBytes(file.getBytes(), "assistant/image", "png");
-        verifyNoInteractions(systemConfigService);
+    @Test void rejectsUnsupportedTransportBeforeStoring() {
+        when(models.getById(7L)).thenReturn(model(List.of("base64")));
+        assertThatThrownBy(() -> controller.uploadAssistantInput(file, 7L, "request-b", "url"))
+                .isInstanceOf(BusinessException.class).hasMessageContaining("不支持 image 的 url 输入");
+        verifyNoInteractions(intake);
     }
-
-    @Test
-    void rejectsLocalUrlUploadWithoutExplicitPublicResourceUrl() {
-        AiModel model = enabledModel(List.of("image"), Map.of("image", List.of("url")));
-        MockMultipartFile file = new MockMultipartFile(
-                "file", "sample.png", "image/png", "image".getBytes());
-        when(aiModelService.getById(10L)).thenReturn(model);
-        when(storageConfigService.getDefaultConfig()).thenReturn(
-                StorageConfig.builder().type(StorageTypes.LOCAL).build());
-        when(systemConfigService.getPublicResourceBaseUrl()).thenReturn(null);
-
-        assertThatThrownBy(() -> controller.uploadAssistantInput(file, 10L, "url"))
-                .isInstanceOf(BusinessException.class)
+    @Test void base64PreviewDoesNotRequirePublicAddress() throws Exception {
+        when(models.getById(7L)).thenReturn(model(List.of("base64")));
+        when(actors.current()).thenReturn(new CanvasActor(4L, null));
+        when(intake.uploadChecked(any(), anyString(), anyString(), anyString(), isNull(), any(), anySet()))
+                .thenReturn(new MediaResource(ID, null, 1, 4, 4, "sample.png", null, "READY", 1, null, null, null));
+        assertThat(controller.uploadAssistantInput(file, 7L, "request-b", "base64").getData()).isEqualTo("media://" + ID);
+        verifyNoInteractions(system);
+    }
+    @Test void rejectsUrlUploadWithoutPublicGatewayEvenWithObjectStorage() {
+        when(models.getById(7L)).thenReturn(model(List.of("url")));
+        assertThatThrownBy(() -> controller.uploadAssistantInput(file, 7L, "request-b", "url"))
                 .hasMessageContaining("后端资源公网地址");
-
-        verifyNoInteractions(mediaStorageService);
+        verifyNoInteractions(intake);
     }
-
-    private AiModel enabledModel(List<String> types, Map<String, List<String>> transports) {
-        return AiModel.builder()
-                .modelType(1)
-                .status(1)
-                .multimodalInputTypes(types)
-                .multimodalInputTransports(transports)
-                .build();
+    private AiModel model(List<String> transports) {
+        return AiModel.builder().modelType(1).status(1).multimodalInputTypes(List.of("image"))
+                .multimodalInputTransports(Map.of("image", transports)).build();
     }
 }

@@ -5,8 +5,9 @@
  * Transport completion is never treated as business completion.
  */
 
-import { API_BASE_URL, http } from "./client";
-import { readApiResponseError } from "./api-error";
+import { getApiBaseUrl, http } from "./client";
+import { ApiResultError, readApiResponseError } from "./api-error";
+import { SseEventDecoder } from "./sse-event-decoder";
 import {
   authenticatedFetch,
   type AiChatReq,
@@ -40,6 +41,7 @@ export interface PendingToolCallInfo {
   toolCallId: string;
   toolName: string;
   argumentsPreview: string;
+  review?: import("@/lib/ai/tool-approval-review").ToolApprovalReview;
 }
 
 /** A strictly identified event from the durable Pipeline journal. */
@@ -223,28 +225,20 @@ function parseSseEventBlock(
   }
 }
 
-function consumeSseBuffer(
-  buffer: string,
-  callbacks: StreamCallbacks,
-  cursor: StreamCursor
-) {
-  const normalizedBuffer = buffer.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  const eventBlocks = normalizedBuffer.split("\n\n");
-  const remaining = eventBlocks.pop() || "";
-
-  for (const eventBlock of eventBlocks) {
-    parseSseEventBlock(eventBlock, callbacks, cursor);
-  }
-  return remaining;
-}
-
 async function consumePipelineResponse(
   response: Response,
   callbacks: StreamCallbacks,
   cursor: StreamCursor
 ) {
   if (!response.ok) {
-    throw new Error(await readApiResponseError(response));
+    throw new ApiResultError(response.status, await readApiResponseError(response));
+  }
+  // 平台业务错误可使用 HTTP 200 + CommonResult，必须与已受理后连接中断区分。
+  if (response.headers.get("content-type")?.includes("application/json")) {
+    const payload: unknown = await response.clone().json().catch(() => null);
+    const rejected = isRecord(payload) && typeof payload.code === "number" && payload.code !== 0;
+    const error = new ApiResultError(rejected ? payload.code as number : 502, await readApiResponseError(response));
+    throw Object.assign(error, { requestRejected: rejected });
   }
   const reader = response.body?.getReader();
   if (!reader) {
@@ -252,16 +246,22 @@ async function consumePipelineResponse(
   }
 
   const decoder = new TextDecoder();
-  let buffer = "";
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    buffer = consumeSseBuffer(buffer, callbacks, cursor);
-  }
-  buffer += decoder.decode();
-  if (buffer.trim()) {
-    parseSseEventBlock(buffer.replace(/\r\n/g, "\n"), callbacks, cursor);
+  const events = new SseEventDecoder((block) => {
+    if (!cursor.terminalSeen) parseSseEventBlock(block, callbacks, cursor);
+  });
+  try {
+    while (!cursor.terminalSeen) {
+      const { done, value } = await reader.read();
+      if (done) {
+        events.push(decoder.decode());
+        events.finish();
+        break;
+      }
+      events.push(decoder.decode(value, { stream: true }));
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+    reader.releaseLock();
   }
   if (!cursor.terminalSeen) {
     throw new Error("Pipeline SSE ended before a terminal journal event");
@@ -297,7 +297,7 @@ export function pipelineStream(
   const cursor: StreamCursor = { lastSequence: 0, terminalSeen: false };
   runStreamRequest(
     () =>
-      authenticatedFetch(`${API_BASE_URL}/api/ai/pipeline/run`, {
+      authenticatedFetch(`${getApiBaseUrl()}/api/ai/pipeline/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(req),
@@ -323,7 +323,7 @@ export function continuePipelineStream(
   const query = new URLSearchParams({ conversationId: normalizedConversationId });
   runStreamRequest(
     () => authenticatedFetch(
-      `${API_BASE_URL}/api/ai/pipeline/continue?${query.toString()}`,
+      `${getApiBaseUrl()}/api/ai/pipeline/continue?${query.toString()}`,
       { method: "POST", signal: controller.signal }
     ),
     callbacks,
@@ -359,7 +359,7 @@ export function reconnectPipelineStream(
   runStreamRequest(
     () =>
       authenticatedFetch(
-        `${API_BASE_URL}/api/ai/pipeline/reconnect?${query.toString()}`,
+        `${getApiBaseUrl()}/api/ai/pipeline/reconnect?${query.toString()}`,
         {
           headers: { "Last-Event-ID": eventId },
           signal: controller.signal,

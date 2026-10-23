@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard,
-  BarChart3,
   FolderKanban,
   BookOpen,
   Film,
@@ -16,8 +15,10 @@ import {
   HardDrive,
   ImagePlus,
   Video,
+  Workflow,
   PanelLeftClose,
   PanelLeftOpen,
+  ClipboardCheck,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
@@ -37,7 +38,6 @@ interface SidebarItem {
 
 const dashboardItems: SidebarItem[] = [
   { key: "overview", label: "总览", icon: LayoutDashboard, href: "/dashboard", iconColor: "text-blue-400" },
-  { key: "analytics", label: "数据分析", icon: BarChart3, href: "/dashboard/analytics", iconColor: "text-purple-400" },
 ];
 
 const projectListItems: SidebarItem[] = [
@@ -45,6 +45,7 @@ const projectListItems: SidebarItem[] = [
 ];
 
 const projectDetailItems: SidebarItem[] = [
+  { key: "canvases", label: "画布", icon: Workflow, href: "/canvases", iconColor: "text-primary" },
   { key: "", label: "概览", icon: LayoutDashboard, href: "", iconColor: "text-blue-400" },
   { key: "scripts", label: "剧本", icon: BookOpen, href: "/scripts", iconColor: "text-purple-400" },
   { key: "storyboards", label: "分镜", icon: Film, href: "/storyboards", iconColor: "text-cyan-400" },
@@ -99,6 +100,7 @@ export function SidebarNav({
       { key: "users", label: "用户列表", icon: Users, href: "/settings/users", iconColor: "text-cyan-400" },
       { key: "profile", label: "个人设置", icon: Users, href: "/settings/profile", iconColor: "text-blue-400" },
       { key: "ai-models", label: "AI 配置", icon: Bot, href: "/settings/ai-models", iconColor: "text-purple-400" },
+      { key: "execution-recovery", label: "执行核实", icon: ClipboardCheck, href: "/settings/execution-recovery", iconColor: "text-primary" },
       { key: "agents", label: "智能体配置", icon: Bot, href: "/settings/agents", iconColor: "text-violet-400" },
       { key: "storage", label: "存储配置", icon: HardDrive, href: "/settings/storage", iconColor: "text-orange-400" },
     ]
@@ -149,6 +151,9 @@ export function SidebarNav({
       router.push("/projects");
       onNavigate?.();
     };
+  } else if (pathname.startsWith("/canvases")) {
+    sectionTitle = "画布";
+    items = [{ key: "canvases", label: "全部画布", icon: Workflow, href: "/canvases", iconColor: "text-primary" }];
   } else if (pathname.startsWith("/dashboard")) {
     sectionTitle = "仪表盘";
     items = dashboardItems;

@@ -1,18 +1,16 @@
 "use client";
 
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState } from "react";
 import {
-  Film,
   Clapperboard,
   Loader2,
   Plus,
   Layers,
-  Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ScriptEpisode, SceneItem } from "@/lib/api/script";
 import { SceneCard } from "./scene-card";
-import { toast } from "sonner";
+import { EpisodeDetailsEditor } from "./episode-details-editor";
 
 /** 场次间插入按钮 – absolute 定位在卡片上方间隙居中 */
 function SceneInsertIndicator({
@@ -41,164 +39,6 @@ function SceneInsertIndicator({
         新增场次
       </button>
     </div>
-  );
-}
-
-/** 可编辑的分集标题 */
-function EditableTitle({
-  value,
-  episodeNumber,
-  scenesCount,
-  onSave,
-}: {
-  value: string;
-  episodeNumber: number;
-  scenesCount: number;
-  onSave: (newTitle: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (editing && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [editing]);
-
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-
-  const handleSave = () => {
-    const trimmed = draft.trim();
-    if (trimmed && trimmed !== value) {
-      onSave(trimmed);
-    } else {
-      setDraft(value);
-    }
-    setEditing(false);
-  };
-
-  if (editing) {
-    return (
-      <div className="mb-5">
-        <div className="flex items-center gap-2">
-          <Film className="h-4 w-4 text-primary shrink-0" />
-          <span className="text-base font-bold shrink-0">分集：</span>
-          <input
-            ref={inputRef}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSave();
-              if (e.key === "Escape") { setDraft(value); setEditing(false); }
-            }}
-            className="flex-1 text-base font-bold bg-transparent border-b-2 border-primary/40 focus:border-primary outline-none py-0.5 min-w-0"
-          />
-          <span className="text-xs font-normal text-muted-foreground ml-2 shrink-0">
-            共 {scenesCount} 场
-          </span>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="mb-5 group/title">
-      <h2
-        className="text-base font-bold flex items-center gap-2 cursor-pointer"
-        onClick={() => setEditing(true)}
-        title="点击编辑标题"
-      >
-        <Film className="h-4 w-4 text-primary" />
-        分集：{value || "未命名"}
-        <Pencil className="h-3 w-3 text-muted-foreground/0 group-hover/title:text-muted-foreground/50 transition-colors" />
-        <span className="text-xs font-normal text-muted-foreground ml-2">
-          共 {scenesCount} 场
-        </span>
-      </h2>
-    </div>
-  );
-}
-
-/** 可编辑的分集概览 */
-function EditableSynopsis({
-  value,
-  onSave,
-}: {
-  value: string;
-  onSave: (newSynopsis: string) => void;
-}) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  useEffect(() => {
-    if (editing && textareaRef.current) {
-      textareaRef.current.focus();
-      // 自适应高度
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = textareaRef.current.scrollHeight + "px";
-    }
-  }, [editing]);
-
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-
-  const handleSave = () => {
-    const trimmed = draft.trim();
-    if (trimmed !== value) {
-      onSave(trimmed);
-    }
-    setEditing(false);
-  };
-
-  const handleInput = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    setDraft(e.target.value);
-    // 自适应高度
-    e.target.style.height = "auto";
-    e.target.style.height = e.target.scrollHeight + "px";
-  };
-
-  if (editing) {
-    return (
-      <textarea
-        ref={textareaRef}
-        value={draft}
-        onChange={handleInput}
-        onBlur={handleSave}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") { setDraft(value); setEditing(false); }
-        }}
-        className="w-full text-xs text-muted-foreground leading-relaxed bg-transparent border border-primary/20 focus:border-primary/40 rounded-md px-2 py-1.5 outline-none resize-none -mt-0.5 mb-4"
-        rows={2}
-      />
-    );
-  }
-
-  if (!value) {
-    return (
-      <p
-        className="text-xs text-muted-foreground/40 mt-1 mb-4 leading-relaxed cursor-pointer hover:text-muted-foreground/60 italic transition-colors"
-        onClick={() => { setDraft(""); setEditing(true); }}
-      >
-        点击添加分集概览...
-      </p>
-    );
-  }
-
-  return (
-    <p
-      className="text-xs text-muted-foreground mt-1 mb-4 leading-relaxed cursor-pointer hover:bg-muted/30 rounded-md px-1 -mx-1 py-0.5 transition-colors"
-      onClick={() => setEditing(true)}
-      title="点击编辑概览"
-    >
-      {value}
-    </p>
   );
 }
 
@@ -238,35 +78,7 @@ export function SceneList({
 
   return (
     <div className="max-w-4xl mx-auto px-6 py-5">
-      {/* 分集标题 - 可编辑 */}
-      <EditableTitle
-        value={activeEpisode.title || ""}
-        episodeNumber={activeEpisode.episodeNumber}
-        scenesCount={activeScenes.length}
-        onSave={async (newTitle) => {
-          try {
-            const { scriptApi } = await import("@/lib/api/script");
-            const updated = await scriptApi.updateEpisode({ id: activeEpisode.id, title: newTitle, version: activeEpisode.version });
-            onEpisodeUpdated?.(updated);
-          } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : "更新分集标题失败");
-          }
-        }}
-      />
-
-      {/* 分集概览 - 可编辑 */}
-      <EditableSynopsis
-        value={activeEpisode.synopsis || ""}
-        onSave={async (newSynopsis) => {
-          try {
-            const { scriptApi } = await import("@/lib/api/script");
-            const updated = await scriptApi.updateEpisode({ id: activeEpisode.id, synopsis: newSynopsis, version: activeEpisode.version });
-            onEpisodeUpdated?.(updated);
-          } catch (err: unknown) {
-            toast.error(err instanceof Error ? err.message : "更新分集概览失败");
-          }
-        }}
-      />
+      {activeEpisode && <EpisodeDetailsEditor episode={activeEpisode} scenesCount={activeScenes.length} onSaved={onEpisodeUpdated} />}
 
       {/* 场次卡片列表 */}
       {isLoading ? (

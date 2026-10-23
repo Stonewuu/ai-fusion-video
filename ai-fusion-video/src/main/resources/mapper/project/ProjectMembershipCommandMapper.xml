@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.project.ProjectMembershipCommandMapper">
+    <select id="history" resultType="com.stonewu.fusion.entity.project.ProjectMembershipCommandEntity">
+SELECT c.*,a.username actor_username,COALESCE(NULLIF(a.nickname,''),a.username) actor_name,
+    u.username member_username,COALESCE(NULLIF(u.nickname,''),u.username) member_name
+FROM afv_project_membership_command c JOIN sys_user a ON a.id=c.actor_user_id JOIN sys_user u ON u.id=c.user_id
+WHERE c.project_id=#{projectId} ORDER BY c.revision DESC
+
+    </select>
+    <insert id="create">
+        INSERT INTO afv_project_membership_command(id,project_id,revision,actor_user_id,actor_team_id,request_id,request_hash,user_id,
+            previous_role,current_role,removed_canvas_grants,create_time) VALUES(#{row.id},#{row.projectId},#{row.revision},#{row.actorUserId},#{row.actorTeamId},#{row.requestId},#{row.requestHash},#{row.userId},#{row.previousRole},#{row.currentRole},#{row.removedCanvasGrants},UTC_TIMESTAMP(6))
+    </insert>
+    <select id="nextUnpublished" resultType="com.stonewu.fusion.entity.project.ProjectMembershipCommandEntity">
+        SELECT id,project_id,revision FROM afv_project_membership_command WHERE published=FALSE
+        ORDER BY create_time,id LIMIT 1 FOR UPDATE SKIP LOCKED
+    </select>
+</mapper>

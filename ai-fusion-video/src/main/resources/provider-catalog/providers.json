@@ -1,0 +1,95 @@
+[
+  {
+    "id": "metaso",
+    "platform": "openai_compatible",
+    "label": "秘塔 AI",
+    "url": "https://metaso.cn/api/minimax",
+    "textProtocol": "",
+    "imageProtocol": "",
+    "videoProtocol": "metaso_video",
+    "appendV1": false,
+    "vendor": "metaso",
+    "hint": "MiniMax H3、Seedance 视频生成",
+    "sponsored": true,
+    "quickSetup": true,
+    "credentialUrl": "https://metaso.cn/minimax-h3/?s=fusiov",
+    "documentationUrl": "https://metaso.cn/minimax-h3",
+    "supportedModelTypes": [3],
+    "discovery": "metaso",
+    "modelPresetCodes": ["metaso:MiniMax-H3", "metaso:seedance-2.0-mini", "metaso:seedance-2.0"]
+  },
+  {
+    "id": "infistar",
+    "platform": "openai_compatible",
+    "label": "无限星河 AI",
+    "url": "https://infistar.cc",
+    "textProtocol": "openai_compatible",
+    "imageProtocol": "openai",
+    "videoProtocol": "infistar_video",
+    "appendV1": true,
+    "vendor": "infistar",
+    "hint": "根据当前密钥获取可用模型",
+    "sponsored": true,
+    "quickSetup": true,
+    "credentialUrl": "https://www.infistar.cc/register?aff=KRJVKLFP&ref_source=link",
+    "documentationUrl": "https://doc.infistar.cc/api-overview",
+    "supportedModelTypes": [1, 2, 3],
+    "discovery": "infistar",
+    "modelPresetCodes": []
+  },
+  {
+    "id": "volcengine", "platform": "volcengine", "label": "火山方舟",
+    "url": "https://ark.cn-beijing.volces.com", "textProtocol": "volcengine",
+    "imageProtocol": "volcengine", "videoProtocol": "volcengine", "appendV1": false,
+    "vendor": "volcengine", "sponsored": false, "supportedModelTypes": [1, 2, 3],
+    "discovery": "manual", "modelPresetCodes": []
+  },
+  {
+    "id": "minimax-cn", "platform": "openai_compatible", "label": "MiniMax 视频（国内）",
+    "url": "https://api.minimaxi.com", "textProtocol": "", "imageProtocol": "",
+    "videoProtocol": "minimax_h3", "appendV1": false, "vendor": "minimax", "sponsored": false,
+    "supportedModelTypes": [3], "discovery": "preset", "modelPresetCodes": ["MiniMax-H3", "MiniMax-H3-Max"]
+  },
+  {
+    "id": "minimax-global", "platform": "openai_compatible", "label": "MiniMax 视频（国际）",
+    "url": "https://api.minimax.io", "textProtocol": "", "imageProtocol": "",
+    "videoProtocol": "minimax_h3", "appendV1": false, "vendor": "minimax", "sponsored": false,
+    "supportedModelTypes": [3], "discovery": "preset", "modelPresetCodes": ["MiniMax-H3", "MiniMax-H3-Max"]
+  },
+  {
+    "id": "wan3", "platform": "dashscope", "label": "万相 3.0（官方）",
+    "url": "", "textProtocol": "", "imageProtocol": "", "videoProtocol": "dashscope_wan3",
+    "appendV1": false, "hint": "填写所属业务空间的地域地址", "sponsored": false,
+    "supportedModelTypes": [3], "discovery": "manual", "modelPresetCodes": []
+  },
+  {
+    "id": "deepseek", "platform": "openai_compatible", "label": "DeepSeek",
+    "url": "https://api.deepseek.com", "textProtocol": "openai_compatible", "imageProtocol": "",
+    "videoProtocol": "", "appendV1": true, "sponsored": false, "supportedModelTypes": [1],
+    "discovery": "remote", "modelPresetCodes": []
+  },
+  {
+    "id": "dashscope", "platform": "dashscope", "label": "通义千问",
+    "url": "https://dashscope.aliyuncs.com", "textProtocol": "dashscope", "imageProtocol": "dashscope",
+    "videoProtocol": "dashscope", "appendV1": false, "sponsored": false,
+    "supportedModelTypes": [1, 2, 3], "discovery": "remote", "modelPresetCodes": []
+  },
+  {
+    "id": "openai", "platform": "openai_compatible", "label": "OpenAI",
+    "url": "https://api.openai.com", "textProtocol": "openai_compatible", "imageProtocol": "openai",
+    "videoProtocol": "openai", "appendV1": true, "sponsored": false,
+    "supportedModelTypes": [1, 2, 3], "discovery": "remote", "modelPresetCodes": []
+  },
+  {
+    "id": "agnes", "platform": "openai_compatible", "label": "Agnes AI",
+    "url": "https://apihub.agnes-ai.com", "textProtocol": "openai_compatible", "imageProtocol": "agnes",
+    "videoProtocol": "agnes_25", "appendV1": true, "sponsored": false,
+    "supportedModelTypes": [1, 2, 3], "discovery": "remote", "modelPresetCodes": []
+  },
+  {
+    "id": "comfyui", "platform": "comfyui", "label": "ComfyUI",
+    "url": "http://localhost:8188", "textProtocol": "", "imageProtocol": "comfyui",
+    "videoProtocol": "comfyui", "appendV1": false, "sponsored": false,
+    "supportedModelTypes": [2, 3], "discovery": "workflow", "modelPresetCodes": []
+  }
+]

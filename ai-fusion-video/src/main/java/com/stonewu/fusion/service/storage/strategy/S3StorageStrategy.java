@@ -3,11 +3,7 @@ package com.stonewu.fusion.service.storage.strategy;
 import cn.hutool.core.util.IdUtil;
 import cn.hutool.core.util.StrUtil;
 import com.stonewu.fusion.entity.storage.StorageConfig;
-import com.stonewu.fusion.service.storage.ResolvedS3StorageConfig;
-import com.stonewu.fusion.service.storage.S3ClientFactory;
-import com.stonewu.fusion.service.storage.S3StorageConfigResolver;
-import com.stonewu.fusion.service.storage.StorageStrategy;
-import com.stonewu.fusion.service.storage.StorageUrlResolver;
+import com.stonewu.fusion.service.storage.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.OkHttpClient;
@@ -207,21 +203,39 @@ public class S3StorageStrategy implements StorageStrategy {
     private String guessExtension(String url, String contentType) {
         if (StrUtil.isNotBlank(contentType)) {
             String lower = contentType.toLowerCase(Locale.ROOT);
-            if (lower.contains("png")) return "png";
-            if (lower.contains("jpeg") || lower.contains("jpg")) return "jpg";
-            if (lower.contains("gif")) return "gif";
-            if (lower.contains("webp")) return "webp";
-            if (lower.contains("svg")) return "svg";
-            if (lower.contains("mp4")) return "mp4";
-            if (lower.contains("webm")) return "webm";
-            if (lower.contains("mov") || lower.contains("quicktime")) return "mov";
+            if (lower.contains("png")) {
+                return "png";
+            }
+            if (lower.contains("jpeg") || lower.contains("jpg")) {
+                return "jpg";
+            }
+            if (lower.contains("gif")) {
+                return "gif";
+            }
+            if (lower.contains("webp")) {
+                return "webp";
+            }
+            if (lower.contains("svg")) {
+                return "svg";
+            }
+            if (lower.contains("mp4")) {
+                return "mp4";
+            }
+            if (lower.contains("webm")) {
+                return "webm";
+            }
+            if (lower.contains("mov") || lower.contains("quicktime")) {
+                return "mov";
+            }
         }
         try {
             String path = url.split("\\?")[0];
             int dotIdx = path.lastIndexOf('.');
             if (dotIdx > 0) {
                 String ext = path.substring(dotIdx + 1).toLowerCase(Locale.ROOT);
-                if (ext.length() <= 10) return sanitizeExtension(ext);
+                if (ext.length() <= 10) {
+                    return sanitizeExtension(ext);
+                }
             }
         } catch (Exception ignored) {
         }

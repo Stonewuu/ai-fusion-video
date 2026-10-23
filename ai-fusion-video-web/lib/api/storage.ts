@@ -203,6 +203,7 @@ export async function uploadFile(
   const formData = new FormData();
   formData.append("file", file);
   formData.append("subDir", subDir);
+  formData.append("requestId", crypto.randomUUID());
 
   return http.post("/api/storage/upload", formData, { timeout: 0 });
 }
@@ -216,6 +217,7 @@ export async function uploadAssistantInput(
   formData.append("file", file);
   formData.append("modelId", String(modelId));
   formData.append("transport", transport);
+  formData.append("requestId", crypto.randomUUID());
 
   return http.post("/api/storage/assistant-upload", formData, { timeout: 0 });
 }

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.storyboard.StoryboardItemMapper">
+    <select id="totalDurationSeconds" resultType="long">
+        SELECT CEILING(COALESCE(SUM(duration), 0)) FROM afv_storyboard_item
+        WHERE storyboard_id = #{storyboardId} AND deleted = FALSE
+    </select>
+    <select id="composeClipIds" resultType="Long">
+        SELECT i.id FROM afv_storyboard_item i
+        LEFT JOIN afv_storyboard_scene s ON s.id = i.storyboard_scene_id AND s.deleted = FALSE
+        WHERE i.deleted = FALSE AND (s.episode_id = #{episodeId} OR (i.storyboard_scene_id IS NULL AND i.storyboard_episode_id = #{episodeId}))
+        ORDER BY COALESCE(s.sort_order, 0), s.id, i.sort_order, i.id LIMIT 501
+    </select>
+</mapper>

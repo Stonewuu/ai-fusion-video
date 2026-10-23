@@ -8,8 +8,8 @@ import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.mapper.ai.AgentConversationMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
-import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStateCleanupPolicyService;
+import com.stonewu.fusion.service.ai.agentscope.state.AgentStatePreflight;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -119,7 +119,7 @@ public class AgentConversationService {
 
     /**
      * Resolves a conversation only when it belongs to the supplied user.
-     *
+     * <p>
      * Conversation ids are exposed to the browser, so callers that return
      * message/history data must never use the unscoped lookup above.
      */
@@ -154,8 +154,8 @@ public class AgentConversationService {
     public List<AgentConversation> listByProject(Long projectId) {
         return annotateStateStatus(conversationMapper.selectList(
                 new LambdaQueryWrapper<AgentConversation>()
-                .eq(AgentConversation::getProjectId, projectId)
-                .eq(AgentConversation::getDeleted, false)
+                        .eq(AgentConversation::getProjectId, projectId)
+                        .eq(AgentConversation::getDeleted, false)
                         .orderByDesc(AgentConversation::getUpdateTime)));
     }
 

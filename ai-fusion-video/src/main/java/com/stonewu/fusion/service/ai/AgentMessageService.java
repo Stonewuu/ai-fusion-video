@@ -1,7 +1,7 @@
 package com.stonewu.fusion.service.ai;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.mapper.ai.AgentMessageMapper;
 import com.stonewu.fusion.service.ai.run.AgentMessageAllocator;
@@ -27,6 +27,13 @@ public class AgentMessageService {
         return messageMapper.selectList(new LambdaQueryWrapper<AgentMessage>()
                 .eq(AgentMessage::getConversationId, conversationId)
                 .orderByAsc(AgentMessage::getMessageOrder));
+    }
+
+    /**
+     * Recovery reads committed root messages; child prompts are never promoted to user instructions.
+     */
+    public List<AgentMessage> listRootHistory(String conversationId) {
+        return messageMapper.selectRootHistory(conversationId);
     }
 
     public AgentMessage saveUserMessage(String conversationId, String content, String referencesJson) {
@@ -79,7 +86,9 @@ public class AgentMessageService {
         return message;
     }
 
-    /** Persists an already validated event projection through the shared order allocator. */
+    /**
+     * Persists an already validated event projection through the shared order allocator.
+     */
     public AgentMessage saveProjectedMessage(
             String conversationId, AgentMessage projection) {
         AgentMessage message = Objects.requireNonNull(

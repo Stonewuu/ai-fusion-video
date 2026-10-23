@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.team.TeamMemberMapper">
+    <update id="restoreRemoved">
+        UPDATE afv_team_member
+        SET deleted = FALSE, role = #{role}, status = 1, join_time = #{joinTime}, update_time = #{joinTime}
+        WHERE team_id = #{teamId} AND user_id = #{userId} AND deleted = TRUE
+    </update>
+</mapper>

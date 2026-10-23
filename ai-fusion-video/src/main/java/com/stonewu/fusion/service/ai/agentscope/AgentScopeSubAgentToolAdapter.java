@@ -10,11 +10,8 @@ import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.context.ToolPermissionContext;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
-import com.stonewu.fusion.service.ai.agentscope.tool.AbstractPlatformAgentTool;
-import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
-import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentCommand;
-import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRun;
-import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRunPort;
+import com.stonewu.fusion.service.ai.agentscope.tool.*;
+import com.stonewu.fusion.service.ai.run.AgentExecutionLimits;
 import com.stonewu.fusion.service.ai.run.RunLeaseGuard;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.message.ToolResultBlock;
@@ -22,17 +19,18 @@ import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.message.UserMessage;
 import io.agentscope.core.tool.ToolBase;
 import io.agentscope.core.tool.ToolCallParam;
+import io.agentscope.core.tool.ToolSuspendException;
 import reactor.core.publisher.Mono;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Supplier;
 
-/** Executes a durable platform-managed child Harness run as an AgentScope V2 tool call. */
+/**
+ * Executes a durable platform-managed child Harness run as an AgentScope V2 tool call.
+ */
 public final class AgentScopeSubAgentToolAdapter extends AbstractPlatformAgentTool {
 
     private final AiAgentDefinition.SubAgentToolDef definition;
@@ -93,13 +91,18 @@ public final class AgentScopeSubAgentToolAdapter extends AbstractPlatformAgentTo
                             return Mono.error(new IllegalStateException(
                                     "Platform sub-agent run service is unavailable"));
                         }
-                        return childRunPort.start(command)
-                                .flatMap(childRunPort::awaitCompletion);
+                        return childRunPort.start(command).flatMap(child -> {
+                            if ("true".equals(parentSpec.promptVariables().get("canvasNodeExecution"))) {
+                                return Mono.error(new ToolSuspendException(
+                                        "专业子任务已受理；通过持久化等待接收该任务的真实结果。"));
+                            }
+                            return childRunPort.awaitCompletion(child);
+                        });
                     }))
                     .flatMap(child -> cancellation.checkpoint()
                             .then(assertLease(run))
                             .thenReturn(projectResult(param, child)))
-                    .timeout(remaining(run));
+                    .transform(action -> AgentExecutionLimits.untilDeadline(action, run.deadline()));
         });
     }
 
@@ -148,15 +151,6 @@ public final class AgentScopeSubAgentToolAdapter extends AbstractPlatformAgentTo
 
     private Mono<Void> assertLease(AgentRunContext run) {
         return leaseGuard.assertLease(run.runId(), run.ownerInstanceId(), run.ownerEpoch());
-    }
-
-    private Duration remaining(AgentRunContext run) {
-        Duration remaining = Duration.between(Instant.now(), run.deadline());
-        if (remaining.isZero() || remaining.isNegative()) {
-            throw new IllegalStateException(
-                    "Agent run deadline expired before child Agent completion");
-        }
-        return remaining;
     }
 
     private RuntimeContext requireRuntimeContext(ToolCallParam param) {

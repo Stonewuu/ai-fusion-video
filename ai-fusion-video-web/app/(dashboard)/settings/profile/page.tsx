@@ -15,141 +15,11 @@ import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/lib/store/auth-store";
 import * as authApi from "@/lib/api/auth";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
+import { ProfileDialog } from "./_components/profile-dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { containerVariants, itemVariants, settingsTypography } from "../_shared";
-
-// ============================================================
-// 个人信息编辑 Dialog
-// ============================================================
-
-interface ProfileDialogProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  user: { nickname: string; email: string; phone: string };
-  onSaved: () => void;
-}
-
-function ProfileDialog({ open, onOpenChange, user, onSaved }: ProfileDialogProps) {
-  const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({ nickname: "", email: "", phone: "" });
-  const [successMsg, setSuccessMsg] = useState("");
-  const [errorMsg, setErrorMsg] = useState("");
-
-  // 打开时同步当前用户信息
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (nextOpen) {
-      setForm({
-        nickname: user.nickname || "",
-        email: user.email || "",
-        phone: user.phone || "",
-      });
-      setSuccessMsg("");
-      setErrorMsg("");
-    }
-    onOpenChange(nextOpen);
-  };
-
-  const handleSave = async () => {
-    setSaving(true);
-    setSuccessMsg("");
-    setErrorMsg("");
-    try {
-      await authApi.updateProfile({
-        nickname: form.nickname || undefined,
-        email: form.email || undefined,
-        phone: form.phone || undefined,
-      });
-      setSuccessMsg("保存成功");
-      onSaved();
-      // 延迟关闭，让用户看到成功提示
-      setTimeout(() => onOpenChange(false), 600);
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "保存失败");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md max-h-[calc(100vh-2rem)] flex flex-col overflow-hidden">
-        <DialogHeader className="shrink-0">
-          <DialogTitle>编辑个人信息</DialogTitle>
-          <DialogDescription>
-            修改你的昵称、邮箱和手机号
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="space-y-4 overflow-y-auto min-h-0 px-1 -mx-1">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">昵称</Label>
-            <Input
-              placeholder="请输入昵称"
-              value={form.nickname}
-              onChange={e => setForm(prev => ({ ...prev, nickname: e.target.value }))}
-              className="text-sm"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">邮箱地址</Label>
-            <Input
-              type="email"
-              placeholder="请输入邮箱"
-              value={form.email}
-              onChange={e => setForm(prev => ({ ...prev, email: e.target.value }))}
-              className="text-sm"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">手机号码</Label>
-            <Input
-              type="tel"
-              placeholder="请输入手机号"
-              value={form.phone}
-              onChange={e => setForm(prev => ({ ...prev, phone: e.target.value }))}
-              className="text-sm"
-            />
-          </div>
-          {/* 反馈消息 */}
-          {successMsg && (
-            <div className="flex items-center gap-1.5 text-xs text-green-500">
-              <Check className="h-3.5 w-3.5" />
-              {successMsg}
-            </div>
-          )}
-          {errorMsg && (
-            <p className="text-xs text-destructive">{errorMsg}</p>
-          )}
-        </div>
-
-        <DialogFooter className="shrink-0">
-          <DialogClose render={<Button variant="outline" size="sm" />}>
-            取消
-          </DialogClose>
-          <Button size="sm" onClick={handleSave} disabled={saving}>
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-            保存
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-// ============================================================
-// 个人设置页面
-// ============================================================
 
 export default function ProfileSettingsPage() {
   const user = useAuthStore((s) => s.user);
@@ -242,17 +112,7 @@ export default function ProfileSettingsPage() {
                 @{user?.username || "unknown"}
               </p>
             </div>
-            <button
-              onClick={() => setProfileDialogOpen(true)}
-              className={cn(
-                "px-4 py-2 rounded-xl text-sm font-medium",
-                "border border-border/30 bg-white/5",
-                "text-muted-foreground hover:text-foreground hover:bg-white/10",
-                "transition-all duration-200"
-              )}
-            >
-              编辑资料
-            </button>
+            <Button variant="outline" onClick={() => setProfileDialogOpen(true)} disabled={!user}>编辑资料</Button>
           </div>
 
           {/* 详细信息条目 */}
@@ -320,57 +180,60 @@ export default function ProfileSettingsPage() {
             <div className="space-y-3 max-w-md">
               {/* 旧密码 */}
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">
+                <Label htmlFor="oldPassword" className="text-xs text-muted-foreground">
                   旧密码 <span className="text-destructive">*</span>
                 </Label>
                 <div className="relative">
                   <Input
+                    id="oldPassword" autoComplete="current-password"
                     type={showOldPw ? "text" : "password"}
                     placeholder="请输入当前密码"
                     value={pwForm.oldPassword}
                     onChange={e => setPwForm(prev => ({ ...prev, oldPassword: e.target.value }))}
                     className="text-sm pr-9"
                   />
-                  <button
-                    type="button"
+                  <Button variant="ghost" size="icon-sm"
+                    type="button" aria-label={showOldPw ? "隐藏旧密码" : "显示旧密码"} aria-pressed={showOldPw}
                     onClick={() => setShowOldPw(!showOldPw)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute right-1 top-1/2 -translate-y-1/2"
                   >
                     {showOldPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
               {/* 新密码 */}
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">
+                <Label htmlFor="newPassword" className="text-xs text-muted-foreground">
                   新密码 <span className="text-destructive">*</span>
                 </Label>
                 <div className="relative">
                   <Input
+                    id="newPassword" autoComplete="new-password"
                     type={showNewPw ? "text" : "password"}
                     placeholder="至少 6 个字符"
                     value={pwForm.newPassword}
                     onChange={e => setPwForm(prev => ({ ...prev, newPassword: e.target.value }))}
                     className="text-sm pr-9"
                   />
-                  <button
-                    type="button"
+                  <Button variant="ghost" size="icon-sm"
+                    type="button" aria-label={showNewPw ? "隐藏新密码" : "显示新密码"} aria-pressed={showNewPw}
                     onClick={() => setShowNewPw(!showNewPw)}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute right-1 top-1/2 -translate-y-1/2"
                   >
                     {showNewPw ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
-                  </button>
+                  </Button>
                 </div>
               </div>
 
               {/* 确认新密码 */}
               <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">
+                <Label htmlFor="confirmPassword" className="text-xs text-muted-foreground">
                   确认新密码 <span className="text-destructive">*</span>
                 </Label>
                 <Input
-                  type="password"
+                  id="confirmPassword" autoComplete="new-password"
+                    type="password"
                   placeholder="再次输入新密码"
                   value={pwForm.confirmPassword}
                   onChange={e => setPwForm(prev => ({ ...prev, confirmPassword: e.target.value }))}
@@ -386,7 +249,7 @@ export default function ProfileSettingsPage() {
                 </div>
               )}
               {pwError && (
-                <p className="text-xs text-destructive pt-1">{pwError}</p>
+                <p role="alert" className="text-xs text-destructive pt-1">{pwError}</p>
               )}
 
               {/* 提交按钮 */}
@@ -455,16 +318,15 @@ export default function ProfileSettingsPage() {
       </motion.div>
 
       {/* ========== 个人信息编辑 Dialog ========== */}
-      <ProfileDialog
-        open={profileDialogOpen}
-        onOpenChange={setProfileDialogOpen}
+      {profileDialogOpen && <ProfileDialog
+        onClose={() => setProfileDialogOpen(false)}
         user={{
           nickname: user?.nickname || "",
           email: user?.email || "",
           phone: user?.phone || "",
         }}
         onSaved={() => fetchUserInfo()}
-      />
+      />}
     </motion.div>
   );
 }

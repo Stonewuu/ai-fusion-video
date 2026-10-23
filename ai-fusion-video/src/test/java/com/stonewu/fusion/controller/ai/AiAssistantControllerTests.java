@@ -102,14 +102,45 @@ class AiAssistantControllerTests {
                         "测试技能",
                         "测试技能",
                         "bundled")));
-        when(mcpRegistry.catalogForAgent("ai_assistant_agent")).thenReturn(List.of(
+        when(mcpRegistry.catalogForAgent("ai_assistant_agent", 42L)).thenReturn(List.of(
                 new AgentScopeMcpRegistry.McpToolReference(
                         "assets", "search_assets", "搜索素材", true)));
 
-        CommonResult<?> result = controller.referenceOptions();
+        var result = controller.referenceOptions("ai_assistant_agent");
 
         assertThat(result.getCode()).isZero();
-        assertThat(result.getData()).isNotNull();
+        assertThat(result.getData().skills()).extracting("id").containsExactly("test-skill_bundled");
+        assertThat(result.getData().mcpTools()).extracting("toolName").containsExactly("search_assets");
+        verify(mcpRegistry).catalogForAgent("ai_assistant_agent", 42L);
+    }
+
+    @Test
+    void canvasReferencesUseTheCanvasCatalogAndRejectOtherAgentTypes() {
+        SecurityUserDetails user = new SecurityUserDetails(42L, "owner", "secret", 1, null, List.of());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+        when(mcpRegistry.catalogForAgent("canvas_assistant", 42L)).thenReturn(List.of(
+                new AgentScopeMcpRegistry.McpToolReference("canvas", "canvas_assets", "画布素材", true)));
+
+        var result = controller.referenceOptions("canvas_assistant");
+
+        assertThat(result.getData().mcpTools()).extracting("toolName").containsExactly("canvas_assets");
+        verify(mcpRegistry).catalogForAgent("canvas_assistant", 42L);
+        assertThatThrownBy(() -> controller.referenceOptions("internal_executor"))
+                .isInstanceOfSatisfying(BusinessException.class, error -> assertThat(error.getCode()).isEqualTo(400));
+    }
+
+    @Test
+    void selectedConversationMetadataUsesTheAuthenticatedOwnerAndHidesForeignIds() {
+        SecurityUserDetails user = new SecurityUserDetails(42L, "owner", "secret", 1, null, List.of());
+        SecurityContextHolder.getContext().setAuthentication(
+                new UsernamePasswordAuthenticationToken(user, null, user.getAuthorities()));
+        AgentConversation selected = AgentConversation.builder().conversationId("older-selected").userId(42L).build();
+        when(conversationService.getOwnedByConversationId("older-selected", 42L)).thenReturn(selected);
+        assertThat(controller.getConversation("older-selected").getData()).isSameAs(selected);
+        assertThatThrownBy(() -> controller.getConversation("foreign-or-missing"))
+                .isInstanceOfSatisfying(BusinessException.class, error -> assertThat(error.getCode()).isEqualTo(404));
+        verifyNoInteractions(messageService);
     }
 
     @Test

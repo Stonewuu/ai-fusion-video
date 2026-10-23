@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.ai.ComfyUiTestRunMapper">
+    <update id="begin">
+        UPDATE afv_comfyui_test_run SET prompt_id = #{promptId}, request_json = #{request}, submitted_at = UTC_TIMESTAMP(6)
+        WHERE job_id = #{id} AND submitted_at IS NULL
+    </update>
+    <select id="lockUnacknowledged" resultType="String">
+        SELECT job_id FROM afv_comfyui_test_run WHERE job_id = #{id} AND prompt_id = #{promptId}
+            AND submitted_at IS NOT NULL AND acknowledged_at IS NULL FOR UPDATE
+    </select>
+    <update id="acknowledge">
+        UPDATE afv_comfyui_test_run SET acknowledged_at = UTC_TIMESTAMP(6) WHERE job_id = #{id}
+    </update>
+    <update id="polled">
+        UPDATE afv_comfyui_test_run SET poll_attempts = poll_attempts + 1,
+            consecutive_errors = CASE WHEN #{error} IS NULL THEN 0 ELSE consecutive_errors + 1 END WHERE job_id = #{id}
+    </update>
+    <select id="history" resultType="String">
+        SELECT j.id FROM afv_media_job j JOIN afv_comfyui_test_run t ON t.job_id = j.id
+        WHERE t.version_id = #{versionId} AND j.actor_user_id = #{actor} AND t.actor_team_id &lt;=&gt; #{team}
+        ORDER BY j.created_at DESC, j.id DESC LIMIT 30
+    </select>
+    <select id="lock" resultType="com.stonewu.fusion.entity.ai.ComfyUiTestRunEntity">
+        SELECT * FROM afv_comfyui_test_run WHERE job_id = #{id} FOR UPDATE
+    </select>
+</mapper>

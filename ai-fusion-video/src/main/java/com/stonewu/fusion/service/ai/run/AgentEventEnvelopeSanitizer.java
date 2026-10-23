@@ -11,12 +11,7 @@ import org.springframework.stereotype.Component;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.Base64;
-import java.util.Iterator;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.regex.Pattern;
 
 @Component
@@ -164,9 +159,9 @@ public final class AgentEventEnvelopeSanitizer {
                 || SHA256_HEX.matcher(value).matches()
                 || !BASE64.matcher(value).matches()
                 || !(value.endsWith("=")
-                    || value.indexOf('+') >= 0
-                    || value.indexOf('/') >= 0
-                    || value.length() >= 64)) {
+                || value.indexOf('+') >= 0
+                || value.indexOf('/') >= 0
+                || value.length() >= 64)) {
             return false;
         }
         try {

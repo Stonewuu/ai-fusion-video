@@ -1,4 +1,5 @@
 "use client";
+import { SafeImage } from "@/components/media/managed-image";
 
 import React, { useRef, useState } from "react";
 import { toast } from "sonner";
@@ -140,8 +141,7 @@ export default function ImageInput({
           onClick={onPreviewClick}
           onKeyDown={handlePreviewKeyDown}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
+          <SafeImage
             src={resolveMediaUrl(value) || ""}
             alt="preview"
             className={cn("w-full h-full", previewImageClassName || "object-cover")}

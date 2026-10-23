@@ -10,7 +10,9 @@ import java.util.HexFormat;
 import java.util.Objects;
 import java.util.regex.Pattern;
 
-/** Default no-billing adapter backed by the already durable audit ledger. */
+/**
+ * Default no-billing adapter backed by the already durable audit ledger.
+ */
 public final class AuditLedgerModelUsageSettlementAdapter
         implements ModelUsageSettlementPort {
 

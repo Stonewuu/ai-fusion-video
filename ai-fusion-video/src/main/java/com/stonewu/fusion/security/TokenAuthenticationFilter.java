@@ -7,14 +7,17 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.authentication.AccountStatusUserDetailsChecker;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * Token 认证过滤器
@@ -31,8 +34,8 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected void doFilterInternal(HttpServletRequest request,
-            HttpServletResponse response,
-            FilterChain filterChain) throws ServletException, IOException {
+                                    HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
         try {
             String token = getTokenFromRequest(request);
             if (StringUtils.hasText(token)) {
@@ -40,7 +43,12 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
                 if (session != null) {
                     String username = session.getUsername();
                     if (username != null) {
-                        UserDetails userDetails = userDetailsService.loadUserByUsername(username, session.getCurrentTeamId());
+                        SecurityUserDetails userDetails = userDetailsService.loadUserByUsername(username,
+                                session.getCurrentTeamId());
+                        new AccountStatusUserDetailsChecker().check(userDetails);
+                        if (!Objects.equals(userDetails.getUserId(), session.getUserId())) {
+                            throw new BadCredentialsException("令牌所属用户已变化");
+                        }
 
                         UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
                                 userDetails, null, userDetails.getAuthorities());
@@ -51,8 +59,9 @@ public class TokenAuthenticationFilter extends OncePerRequestFilter {
                     }
                 }
             }
-        } catch (Throwable e) {
-            log.error("Token authentication failed: {}", e.getMessage(), e);
+        } catch (AuthenticationException e) {
+            SecurityContextHolder.clearContext();
+            log.debug("Token authentication rejected: {}", e.getClass().getSimpleName());
         }
         filterChain.doFilter(request, response);
     }

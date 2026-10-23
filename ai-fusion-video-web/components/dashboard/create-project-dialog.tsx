@@ -1,5 +1,13 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { SafeImage } from "@/components/media/managed-image";
+
+import { useCommandRequestKey } from "@/hooks/use-command-request-key";
+
 import { useState, useEffect, useCallback } from "react";
 import {
   X,
@@ -12,14 +20,13 @@ import {
   Type,
   Monitor,
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-import { getApiErrorMessage, readApiResponseError } from "@/lib/api/api-error";
-import { projectApi, type ProjectCreateReq } from "@/lib/api/project";
+import { getApiErrorMessage } from "@/lib/api/api-error";
+import { projectApi, type Project, type ProjectCreateReq } from "@/lib/api/project";
 import { artStyleApi } from "@/lib/api/art-style";
 import type { ArtStylePreset } from "@/lib/api/art-style";
-import { storageConfigApi, uploadFile } from "@/lib/api/storage";
+import { storageConfigApi } from "@/lib/api/storage";
 import { resolveMediaUrl, http } from "@/lib/api/client";
 
 // 项目类型选项
@@ -36,7 +43,7 @@ const aspectRatios = [
 interface CreateProjectDialogProps {
   open: boolean;
   onClose: () => void;
-  onCreated: () => void;
+  onCreated: (project: Project) => void;
 }
 
 export function CreateProjectDialog({
@@ -58,6 +65,7 @@ export function CreateProjectDialog({
   const [artStyle, setArtStyle] = useState<string>("");
   const [presetsLoading, setPresetsLoading] = useState(false);
   const [uploadingPreset, setUploadingPreset] = useState<string | null>(null);
+  const presetRequests = useCommandRequestKey();
 
   // 存储 & 外网访问状态
   const [hasStorage, setHasStorage] = useState(false);
@@ -85,18 +93,13 @@ export function CreateProjectDialog({
     storageConfigApi
       .list()
       .then((configs) => {
-        setHasStorage(configs.length > 0);
-        const hasPublicStorage = configs.some((c) => c.type !== "local");
+        setHasStorage(configs.filter((config) => config.isDefault && config.status === 1).length === 1);
         http
-          .get<never, { configKey: string; configValue: string }[]>(
-            "/api/system/config"
+          .get<never, string | null>(
+            "/api/system/config/resource_base_url"
           )
-          .then((list) => {
-            const map: Record<string, string> = {};
-            list.forEach((c) => { map[c.configKey] = c.configValue || ""; });
-            setHasExternalAccess(
-              hasPublicStorage || !!map.resource_base_url,
-            );
+          .then((resourceBaseUrl) => {
+            setHasExternalAccess(!!resourceBaseUrl);
           })
           .catch((error) => {
             console.error("加载系统配置失败:", error);
@@ -107,10 +110,13 @@ export function CreateProjectDialog({
         console.error("加载存储配置失败:", error);
         toast.error(getApiErrorMessage(error));
       });
-  }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [open]);
 
   // 关闭时重置表单
+  const createRequest = useCommandRequestKey();
   const handleClose = useCallback(() => {
+    if (loading) return;
+    createRequest.clear();
     setName("");
     setDescription("");
     setError("");
@@ -119,7 +125,7 @@ export function CreateProjectDialog({
     setArtStyle("");
     setPresets([]);
     onClose();
-  }, [onClose]);
+  }, [onClose, createRequest, loading]);
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -131,21 +137,21 @@ export function CreateProjectDialog({
     try {
       const data: ProjectCreateReq = {
         name: name.trim(),
-        properties: JSON.stringify({ type: projectType, aspectRatio }),
+        properties: { type: projectType, aspectRatio },
+        artStyle: artStyle || undefined,
       };
       if (description.trim()) data.description = description.trim();
 
-      const created = await projectApi.create(data);
+      const project = await projectApi.create(data, createRequest.forPayload(data));
+      createRequest.clear();
 
-      // 若选择了画风则单独更新（创建接口不含画风字段）
-      if (artStyle) {
-        await projectApi.update({ id: created.id, artStyle });
-      }
-
-      onCreated();
-      handleClose();
+      onCreated(project);
+      setName("");
+      setDescription("");
+      setError("");
+      onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "创建失败");
+      setError(getApiErrorMessage(err));
     } finally {
       setLoading(false);
     }
@@ -157,18 +163,7 @@ export function CreateProjectDialog({
       if (!preset.referenceImagePath || !hasStorage) return;
       setUploadingPreset(preset.key);
       try {
-        const imgUrl = resolveMediaUrl(preset.referenceImagePath);
-        if (!imgUrl) return;
-        const resp = await fetch(imgUrl);
-        if (!resp.ok) throw new Error(await readApiResponseError(resp));
-        const blob = await resp.blob();
-        const file = new File([blob], `${preset.key}.png`, {
-          type: blob.type || "image/png",
-        });
-        const url = await uploadFile(file, "art-styles");
-        await http.put("/api/system/config", {
-          [`art_preset_url:${preset.key}`]: url,
-        });
+        await artStyleApi.publish(preset.key, presetRequests.forPayload({ preset: preset.key }));
         const updatedPresets = await artStyleApi.getPresets();
         setPresets(updatedPresets);
       } catch (err) {
@@ -178,7 +173,7 @@ export function CreateProjectDialog({
         setUploadingPreset(null);
       }
     },
-    [hasStorage]
+    [hasStorage, presetRequests]
   );
 
   const selectedPreset = presets.find((p) => p.key === artStyle);
@@ -186,80 +181,47 @@ export function CreateProjectDialog({
     (selectedPreset?.referenceImagePublicUrl?.length ?? 0) > 0;
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          {/* 遮罩 */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="modal-overlay fixed inset-0 z-50"
-            onClick={handleClose}
-          />
-          {/* 弹窗 */}
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.2 }}
-            className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-2xl"
-          >
-            <div
-              className={cn(
-                "modal-surface rounded-2xl border border-border/40",
-                "flex flex-col overflow-hidden max-h-[90vh]"
-              )}
-            >
+    <Dialog open={open} onOpenChange={(nextOpen) => { if (!nextOpen) handleClose(); }}>
+      <DialogContent showCloseButton={false} className="max-h-[calc(100vh-2rem)] sm:max-w-2xl flex flex-col overflow-hidden">
               {/* 标题栏 */}
-              <div className="flex items-center justify-between px-6 pt-6 pb-4 shrink-0">
-                <h2 className="text-lg font-semibold">新建项目</h2>
-                <button
-                  onClick={handleClose}
-                  className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                >
-                  <X className="h-4 w-4 text-muted-foreground" />
-                </button>
-              </div>
+              <DialogHeader className="shrink-0 pr-8">
+                <DialogTitle>新建项目</DialogTitle>
+                <DialogDescription>设置作品名称与画面风格，稍后也可以在项目设置中调整。</DialogDescription>
+              </DialogHeader>
+              <Button variant="ghost" size="icon-sm" className="absolute top-4 right-4" aria-label="关闭对话框" disabled={loading} onClick={handleClose}><X /></Button>
 
               {/* 可滚动内容区 */}
-              <div className="overflow-y-auto flex-1 px-6 space-y-5 pb-2">
+              <div className="min-h-0 overflow-y-auto space-y-6 p-1">
                 {/* 基本信息 */}
-                <div className="space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2">
+                    <label htmlFor="new-project-name" className="text-sm font-medium">
                       项目名称 <span className="text-destructive">*</span>
                     </label>
-                    <input
+                    <Input
+                      id="new-project-name"
                       type="text"
+                      maxLength={200}
+                      disabled={loading}
                       value={name}
                       onChange={(e) => setName(e.target.value)}
                       placeholder="例如：品牌宣传片"
-                      className={cn(
-                        "w-full px-3.5 py-2.5 rounded-xl text-sm",
-                        "bg-muted/50 border border-border/40",
-                        "focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
-                        "placeholder:text-muted-foreground/50 transition-all"
-                      )}
                       autoFocus
-                      onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
+                      onKeyDown={(e) => { if (e.key === "Enter" && !e.nativeEvent.isComposing && !loading) void handleSubmit(); }}
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1.5">
+                  <div className="flex flex-col gap-2">
+                    <label htmlFor="new-project-description" className="text-sm font-medium">
                       项目描述
                     </label>
-                    <textarea
+                    <Textarea
+                      id="new-project-description"
+                      disabled={loading}
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder="简要描述项目内容和目标..."
+                      placeholder="简要描述故事内容和创作目标"
                       rows={2}
-                      className={cn(
-                        "w-full px-3.5 py-2.5 rounded-xl text-sm resize-none",
-                        "bg-muted/50 border border-border/40",
-                        "focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
-                        "placeholder:text-muted-foreground/50 transition-all"
-                      )}
+                      className="resize-none"
                     />
                   </div>
                 </div>
@@ -278,9 +240,11 @@ export function CreateProjectDialog({
                       <button
                         key={t}
                         type="button"
+                        aria-pressed={projectType === t}
+                        disabled={loading}
                         onClick={() => setProjectType(t)}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-all",
+                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
                           projectType === t
                             ? "bg-primary text-primary-foreground shadow-sm"
                             : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-border/30 hover:border-primary/40"
@@ -306,9 +270,11 @@ export function CreateProjectDialog({
                       <button
                         key={ar.label}
                         type="button"
+                        aria-pressed={aspectRatio === ar.label}
+                        disabled={loading}
                         onClick={() => setAspectRatio(ar.label)}
                         className={cn(
-                          "flex flex-col items-center gap-0.5 px-5 py-2 rounded-xl text-sm font-medium transition-all",
+                          "flex flex-col items-center gap-0.5 px-5 py-2 rounded-xl text-sm font-medium transition-colors",
                           aspectRatio === ar.label
                             ? "bg-primary text-primary-foreground shadow-sm"
                             : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-border/30 hover:border-primary/40"
@@ -344,13 +310,15 @@ export function CreateProjectDialog({
                           <button
                             key={preset.key}
                             type="button"
+                            aria-pressed={artStyle === preset.key}
+                            disabled={loading}
                             onClick={() =>
                               setArtStyle(
                                 artStyle === preset.key ? "" : preset.key
                               )
                             }
                             className={cn(
-                              "relative flex flex-col items-center gap-1.5 p-2 rounded-xl transition-all",
+                              "relative flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors",
                               artStyle === preset.key
                                 ? "bg-primary/10 border-2 border-primary shadow-sm"
                                 : "bg-muted/30 border border-border/30 hover:border-primary/40 hover:bg-muted/50"
@@ -358,7 +326,7 @@ export function CreateProjectDialog({
                           >
                             <div className="w-full aspect-square rounded-lg overflow-hidden bg-muted/50 relative">
                               {preset.referenceImagePath ? (
-                                <img
+                                <SafeImage
                                   src={
                                     resolveMediaUrl(preset.referenceImagePath) ||
                                     ""
@@ -412,43 +380,16 @@ export function CreateProjectDialog({
                             ) : (
                               <span className="flex items-center gap-1 text-[10px] text-amber-500 font-medium">
                                 <AlertTriangle className="h-3 w-3" />
-                                未上传且未配置外网访问
+                                部分模型暂时无法读取参考图
                               </span>
                             )}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                handleUploadPresetImage(selectedPreset)
-                              }
-                              disabled={
-                                uploadingPreset === selectedPreset.key ||
-                                !hasStorage
-                              }
-                              title={
-                                !hasStorage
-                                  ? "请先在系统设置中配置存储"
-                                  : undefined
-                              }
-                              className={cn(
-                                "flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-all shrink-0",
-                                !hasStorage
-                                  ? "opacity-50 cursor-not-allowed bg-muted/30 text-muted-foreground border border-border/30"
-                                  : isPresetRefAvailable
-                                  ? "bg-muted/30 text-muted-foreground hover:bg-muted/50 border border-border/30 hover:text-foreground"
-                                  : "bg-primary/10 text-primary hover:bg-primary/20 border border-primary/20"
-                              )}
-                            >
-                              {uploadingPreset === selectedPreset.key ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
-                              ) : (
-                                <Upload className="h-3 w-3" />
-                              )}
-                              {uploadingPreset === selectedPreset.key
-                                ? "上传中…"
-                                : isPresetRefAvailable
-                                ? "重新上传"
-                                : "上传到存储"}
-                            </button>
+                            <Button type="button" variant="outline" size="xs"
+                              onClick={() => handleUploadPresetImage(selectedPreset)}
+                              disabled={uploadingPreset === selectedPreset.key || !hasStorage}
+                              title={!hasStorage ? "请先配置默认媒体存储" : "登记内置参考图，供所有已登录用户使用"}>
+                              {uploadingPreset === selectedPreset.key ? <Loader2 className="animate-spin" /> : <Upload />}
+                              {uploadingPreset === selectedPreset.key ? "上传中…" : isPresetRefAvailable ? "重新上传" : "上传到存储"}
+                            </Button>
                           </div>
 
                           {/* 警告：未配置存储 */}
@@ -468,7 +409,7 @@ export function CreateProjectDialog({
                             <div className="flex items-start gap-1.5 p-2 rounded-lg bg-amber-500/5 border border-amber-500/20">
                               <AlertTriangle className="h-3 w-3 text-amber-500 shrink-0 mt-0.5" />
                               <p className="text-[10px] text-muted-foreground leading-relaxed">
-                                参考图未上传到存储桶且未配置外网访问地址，AI API 将无法访问参考图。
+                                支持直接读取图片的模型仍可使用。其他模型需要先上传参考图，或在系统设置中配置公网访问地址。
                               </p>
                             </div>
                           )}
@@ -478,37 +419,22 @@ export function CreateProjectDialog({
                   )}
                 </div>
 
-                {error && <p className="text-sm text-destructive">{error}</p>}
+                {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
               </div>
 
               {/* 底部按钮 */}
-              <div className="flex justify-end gap-3 px-6 py-4 shrink-0 border-t border-border/20 mt-2">
-                <button
-                  onClick={handleClose}
-                  className={cn(
-                    "px-4 py-2 rounded-xl text-sm font-medium",
-                    "hover:bg-muted transition-colors"
-                  )}
-                >
+              <DialogFooter className="shrink-0">
+                <Button variant="outline" disabled={loading} onClick={handleClose}>
                   取消
-                </button>
-                <button
+                </Button>
+                <Button
                   onClick={handleSubmit}
-                  disabled={loading}
-                  className={cn(
-                    "px-5 py-2 rounded-xl text-sm font-medium",
-                    "bg-primary text-primary-foreground",
-                    "hover:opacity-90 active:scale-[0.98] transition-all",
-                    "disabled:opacity-50 disabled:cursor-not-allowed"
-                  )}
+                  disabled={loading || !name.trim()}
                 >
-                  {loading ? "创建中..." : "创建项目"}
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+                  {loading ? "正在创建…" : "创建项目"}
+                </Button>
+              </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

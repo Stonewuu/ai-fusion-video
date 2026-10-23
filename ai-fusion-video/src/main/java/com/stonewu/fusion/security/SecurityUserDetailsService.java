@@ -25,12 +25,12 @@ public class SecurityUserDetailsService implements UserDetailsService {
         return loadUserByUsername(username, null);
     }
 
-    public UserDetails loadUserByUsername(String username, Long currentTeamId) throws UsernameNotFoundException {
+    public SecurityUserDetails loadUserByUsername(String username, Long currentTeamId) throws UsernameNotFoundException {
         User user = userService.getByUsername(username);
         if (user == null) {
             throw new UsernameNotFoundException("用户不存在: " + username);
         }
-        List<Role> roles = userService.getUserRoles(user.getId());
+        List<Role> roles = userService.loadUserRoles(user.getId());
         return new SecurityUserDetails(user, roles, currentTeamId);
     }
 }

@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.media.GenerationMediaSourceMapper">
+    <sql id="itemTable">
+        <choose><when test="type.name() == 'IMAGE_ITEM'">afv_image_item</when><otherwise>afv_video_item</otherwise></choose>
+    </sql>
+    <sql id="taskTable">
+        <choose><when test="type.name() == 'IMAGE_ITEM'">afv_image_task</when><otherwise>afv_video_task</otherwise></choose>
+    </sql>
+    <select id="item" resultType="com.stonewu.fusion.mapper.media.GenerationMediaSourceMapper$Item">
+        SELECT i.task_id, i.version, i.status, t.status AS task_status, t.project_id, t.owner_type, t.owner_id
+        FROM <include refid="itemTable"/> i JOIN <include refid="taskTable"/> t ON t.id = i.task_id
+        WHERE i.id = #{id} AND i.deleted = FALSE AND t.deleted = FALSE
+        <if test="lock">FOR UPDATE</if>
+    </select>
+    <select id="value" resultType="String">
+        SELECT ${column} FROM <include refid="itemTable"/>
+        WHERE id = #{id} AND version = #{version} AND deleted = FALSE
+    </select>
+</mapper>

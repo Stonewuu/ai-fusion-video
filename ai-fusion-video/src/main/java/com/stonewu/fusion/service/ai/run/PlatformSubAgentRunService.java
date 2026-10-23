@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.run;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.service.ai.agentscope.context.ParentAgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentCommand;
@@ -8,17 +9,11 @@ import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRun;
 import com.stonewu.fusion.service.ai.agentscope.tool.PlatformSubAgentRunPort;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
-import com.stonewu.fusion.service.ai.run.model.ChildRunAdmission;
-import com.stonewu.fusion.service.ai.run.model.CommittedAgentEvent;
-import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
-import com.stonewu.fusion.service.ai.run.model.StartChildAgentRunCommand;
-import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
-import com.stonewu.fusion.config.AgentScopeV2Properties;
+import com.stonewu.fusion.service.ai.run.model.*;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
@@ -101,22 +96,22 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
             PlatformSubAgentRun child = Objects.requireNonNull(
                     childRun, "childRun must not be null");
             return replay.replayThenLive(child.childRunId(), 0)
+                    .filter(event -> !event.envelope().payload().path("_platformMirroredChildEvent").asBoolean(false))
                     .takeUntil(event -> TERMINAL_OUTPUT_TYPES.contains(
                             event.outputType()))
-                    .collectList()
-                    .map(events -> completed(child, events));
+                    .collect(ChildOutput::new, ChildOutput::accept)
+                    .map(output -> completed(child, output));
         });
     }
 
     private PlatformSubAgentRun completed(
             PlatformSubAgentRun child,
-            List<CommittedAgentEvent> events) {
-        CommittedAgentEvent terminal = events.stream()
-                .filter(event -> TERMINAL_OUTPUT_TYPES.contains(event.outputType()))
-                .reduce((ignored, latest) -> latest)
-                .orElseThrow(() -> new IllegalStateException(
-                        "Child Agent replay completed without a terminal event: "
-                                + child.childRunId()));
+            ChildOutput output) {
+        CommittedAgentEvent terminal = output.terminal;
+        if (terminal == null) {
+            throw new IllegalStateException(
+                    "Child Agent replay completed without a terminal event: " + child.childRunId());
+        }
         AgentRunStatus status = switch (terminal.outputType()) {
             case "DONE" -> AgentRunStatus.COMPLETED;
             case "ERROR" -> AgentRunStatus.FAILED;
@@ -125,16 +120,6 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
                     "Unsupported child Agent terminal output: "
                             + terminal.outputType());
         };
-        StringBuilder content = new StringBuilder();
-        for (CommittedAgentEvent event : events) {
-            if (!"CONTENT".equals(event.outputType())) {
-                continue;
-            }
-            String delta = firstText(event.projection(), "delta", "content");
-            if (delta != null) {
-                content.append(delta);
-            }
-        }
         String error = status == AgentRunStatus.COMPLETED
                 ? null
                 : firstText(terminal.projection(), "error", "message");
@@ -149,8 +134,28 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
                 child.parentToolCallId(),
                 child.agentName(),
                 status,
-                content.isEmpty() ? null : content.toString(),
+                output.content.isEmpty() ? null : output.content.toString(),
                 error);
+    }
+
+    /**
+     * 长任务只累计返回正文，不在父工具中复制全部思考、工具和事件历史。
+     */
+    private static final class ChildOutput {
+        private final StringBuilder content = new StringBuilder();
+        private CommittedAgentEvent terminal;
+
+        private void accept(CommittedAgentEvent event) {
+            if (TERMINAL_OUTPUT_TYPES.contains(event.outputType())) {
+                terminal = event;
+            } else if ("CONTENT".equals(event.outputType())) {
+                JsonNode payload = event.projection();
+                JsonNode value = payload.has("delta") ? payload.get("delta") : payload.get("content");
+                if (value != null && value.isTextual()) {
+                    content.append(value.textValue());
+                }
+            }
+        }
     }
 
     private String firstText(JsonNode payload, String... fields) {
@@ -189,7 +194,8 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
                                 command.parentOwnerInstanceId(),
                                 command.parentOwnerEpoch(),
                                 command.parentToolCallId(),
-                                command.agentName()),
+                                command.agentName(),
+                                "true".equals(command.kernelSpec().promptVariables().get("canvasNodeExecution"))),
                         command.toolExecutionMode())
                 .flatMap(runtime -> supervisor.start(new StartAgentExecutionCommand(
                         started,
@@ -197,6 +203,8 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
                         snapshot,
                         command.kernelSpec(),
                         runtime)))
+                .onErrorResume(OwnedExecutionRegistry.ExecutionAlreadyOwnedException.class,
+                        alreadyStarted -> Mono.empty())
                 .thenReturn(response);
     }
 

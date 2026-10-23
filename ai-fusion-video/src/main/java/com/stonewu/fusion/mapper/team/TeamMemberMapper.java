@@ -6,4 +6,5 @@ import org.apache.ibatis.annotations.Mapper;
 
 @Mapper
 public interface TeamMemberMapper extends BaseMapper<TeamMember> {
+    int restoreRemoved(TeamMember member);
 }

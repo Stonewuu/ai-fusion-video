@@ -2,11 +2,7 @@ package com.stonewu.fusion.service.ai.run.kernel;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.MapperFeature;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -18,15 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-import java.util.TreeMap;
+import java.util.*;
 import java.util.regex.Pattern;
 
 @Component
@@ -264,9 +252,9 @@ public final class CanonicalAgentKernelSnapshotBuilder implements AgentKernelSna
                 || SHA256_HEX.matcher(value).matches()
                 || !BASE64.matcher(value).matches()
                 || !(value.endsWith("=")
-                    || value.indexOf('+') >= 0
-                    || value.indexOf('/') >= 0
-                    || value.length() >= 64)) {
+                || value.indexOf('+') >= 0
+                || value.indexOf('/') >= 0
+                || value.length() >= 64)) {
             return false;
         }
         try {

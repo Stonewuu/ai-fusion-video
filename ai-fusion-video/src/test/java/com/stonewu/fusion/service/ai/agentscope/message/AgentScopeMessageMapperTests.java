@@ -136,6 +136,21 @@ class AgentScopeMessageMapperTests {
         assertThat(recovered.getLast().getTextContent()).isEqualTo("继续");
     }
 
+    @Test
+    void recoveredHistoryKeepsCurrentMultimodalInputAndDoesNotReplayToolCalls() {
+        AgentScopeMessageMapper mapper = new AgentScopeMessageMapper();
+        UserMessage current = mapper.toUserMessage("继续检查这张图", List.of(
+                input("image", "frame.png", "image", "image/png", "base64", null, "aGVsbG8=")));
+        List<Msg> result = mapper.toRecoveredMessages(List.of(
+                AgentMessage.builder().role("user").content("此前请求").build(),
+                AgentMessage.builder().role("tool").toolName("generate_image").toolCallId("old-call")
+                        .toolStatus("cancelled").content("用户已取消").build()), List.of(current));
+        assertThat(result).hasSize(3);
+        assertThat(result.get(1).getTextContent()).contains("generate_image", "cancelled");
+        assertThat(result.getLast()).isSameAs(current);
+        assertThat(current.getContent().get(1)).isInstanceOf(ImageBlock.class);
+    }
+
     private AiMultimodalInputVO input(String id, String name, String inputType, String mimeType,
                                       String transport, String url, String data) {
         AiMultimodalInputVO input = new AiMultimodalInputVO();

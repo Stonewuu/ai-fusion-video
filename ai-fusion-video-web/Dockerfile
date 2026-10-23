@@ -3,7 +3,7 @@
 # ============================================
 
 # ---------- 阶段 1: 安装依赖 ----------
-FROM node:20-bookworm-slim AS deps
+FROM node:22-bookworm-slim AS deps
 
 WORKDIR /build
 
@@ -12,7 +12,7 @@ RUN corepack enable pnpm
 RUN --mount=type=cache,target=/root/.local/share/pnpm/store pnpm install --frozen-lockfile
 
 # ---------- 阶段 2: 构建 ----------
-FROM node:20-bookworm-slim AS builder
+FROM node:22-bookworm-slim AS builder
 
 WORKDIR /build
 
@@ -25,7 +25,7 @@ RUN corepack enable pnpm
 RUN --mount=type=cache,target=/build/.next/cache pnpm build
 
 # ---------- 阶段 3: 运行 ----------
-FROM node:20-bookworm-slim
+FROM node:22-bookworm-slim
 
 LABEL maintainer="Stonewu <https://github.com/Stonewuu>"
 

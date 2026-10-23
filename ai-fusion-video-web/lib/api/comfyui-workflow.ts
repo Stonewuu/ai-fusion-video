@@ -1,5 +1,6 @@
 import { http } from "./client";
 import type { PageResult } from "./types";
+import type { GenerationScope } from "./generation-execution";
 
 export type ComfyUiWorkflowModelType = 2 | 3;
 export type ComfyUiBindingValueType =
@@ -57,6 +58,7 @@ export interface ComfyUiWorkflowVersion {
   testStatus: number;
   testMessage: string | null;
   lastTestTime: string | null;
+  lastTestRunId: string | null;
   published: boolean;
   createTime: string;
   updateTime: string;
@@ -96,12 +98,39 @@ export interface ComfyUiStoredOutput {
   size: number;
 }
 
-export interface ComfyUiWorkflowTestResult {
-  passed: boolean;
+export interface ComfyUiTestRequest {
+  requestId: string;
+  scope: GenerationScope;
+  versionId: number;
+  workflowHash: string;
+  inputs: Record<string, unknown>;
+}
+
+export type ComfyUiTestAction = "RECHECK" | "RETRY_INGEST" | "CONFIRM_FINISHED";
+export interface ComfyUiTestRun {
+  id: string;
+  versionId: number;
+  workflowHash: string;
+  status:
+    | "QUEUED"
+    | "WAITING"
+    | "RUNNING"
+    | "SUCCEEDED"
+    | "FAILED"
+    | "CANCELLED"
+    | "NEEDS_REVIEW";
+  phase: "PREPARING" | "SUBMITTING" | "POLLING" | "INGESTING";
+  error: string | null;
   promptId: string | null;
-  durationMillis: number;
+  acknowledged: boolean;
+  cancelRequested: boolean;
+  permitHeld: boolean;
+  revision: number;
+  createdAt: string;
+  deadlineAt: string;
   outputs: ComfyUiStoredOutput[];
-  message: string;
+  inputSummary: Record<string, string>;
+  availableActions: ComfyUiTestAction[];
 }
 
 export interface ComfyUiConnectionResult {
@@ -118,17 +147,21 @@ export const comfyUiWorkflowApi = {
       pageNo: String(pageNo),
       pageSize: String(pageSize),
     });
-    if (apiConfigId !== undefined) query.set("apiConfigId", String(apiConfigId));
+    if (apiConfigId !== undefined)
+      query.set("apiConfigId", String(apiConfigId));
     return http.get<never, PageResult<ComfyUiWorkflow>>(
       `/api/ai/comfyui/workflow/page?${query.toString()}`,
     );
   },
   list: (apiConfigId?: number, modelType?: number) => {
     const query = new URLSearchParams();
-    if (apiConfigId !== undefined) query.set("apiConfigId", String(apiConfigId));
+    if (apiConfigId !== undefined)
+      query.set("apiConfigId", String(apiConfigId));
     if (modelType !== undefined) query.set("modelType", String(modelType));
     const suffix = query.size > 0 ? `?${query.toString()}` : "";
-    return http.get<never, ComfyUiWorkflow[]>(`/api/ai/comfyui/workflow/list${suffix}`);
+    return http.get<never, ComfyUiWorkflow[]>(
+      `/api/ai/comfyui/workflow/list${suffix}`,
+    );
   },
   get: (id: number) =>
     http.get<never, ComfyUiWorkflow>(`/api/ai/comfyui/workflow/get?id=${id}`),
@@ -143,22 +176,52 @@ export const comfyUiWorkflowApi = {
       `/api/ai/comfyui/workflow/versions?workflowId=${workflowId}`,
     ),
   getVersion: (id: number) =>
-    http.get<never, ComfyUiWorkflowVersion>(`/api/ai/comfyui/workflow/version/get?id=${id}`),
+    http.get<never, ComfyUiWorkflowVersion>(
+      `/api/ai/comfyui/workflow/version/get?id=${id}`,
+    ),
   createVersion: (data: ComfyUiWorkflowVersionSaveReq) =>
     http.post<never, number>("/api/ai/comfyui/workflow/version/create", data),
   updateVersion: (data: ComfyUiWorkflowVersionSaveReq) =>
     http.put<never, boolean>("/api/ai/comfyui/workflow/version/update", data),
   deleteVersion: (id: number) =>
-    http.delete<never, boolean>(`/api/ai/comfyui/workflow/version/delete?id=${id}`),
+    http.delete<never, boolean>(
+      `/api/ai/comfyui/workflow/version/delete?id=${id}`,
+    ),
   validateVersion: (versionId: number) =>
     http.post<never, ComfyUiWorkflowValidationResult>(
       `/api/ai/comfyui/workflow/version/validate?versionId=${versionId}`,
     ),
-  testVersion: (versionId: number, inputs: Record<string, unknown>) =>
-    http.post<never, ComfyUiWorkflowTestResult>("/api/ai/comfyui/workflow/version/test", {
-      versionId,
-      inputs,
-    }),
+  testVersion: (request: ComfyUiTestRequest) =>
+    http.post<never, ComfyUiTestRun>(
+      "/api/ai/comfyui/workflow/version/test",
+      request,
+    ),
+  testHistory: (versionId: number) =>
+    http.get<never, ComfyUiTestRun[]>(
+      `/api/ai/comfyui/workflow/version/tests?versionId=${versionId}`,
+    ),
+  testRun: (id: string) =>
+    http.get<never, ComfyUiTestRun>(`/api/ai/comfyui/workflow/tests/${id}`),
+  cancelTest: (run: ComfyUiTestRun, scope: GenerationScope) =>
+    http.post<never, ComfyUiTestRun>(
+      `/api/ai/comfyui/workflow/tests/${run.id}/cancel`,
+      { scope },
+    ),
+  reviewTest: (
+    run: ComfyUiTestRun,
+    scope: GenerationScope,
+    action: ComfyUiTestAction,
+    note: string,
+  ) =>
+    http.post<never, ComfyUiTestRun>(
+      `/api/ai/comfyui/workflow/tests/${run.id}/review`,
+      { expectedRevision: run.revision, scope, action, note },
+    ),
+  withdrawTestRequest: (requestId: string, scope: GenerationScope) =>
+    http.post<never, boolean>(
+      `/api/ai/comfyui/workflow/test-requests/${encodeURIComponent(requestId)}/withdraw`,
+      { scope },
+    ),
   publish: (workflowId: number, versionId: number) =>
     http.post<never, boolean>(
       `/api/ai/comfyui/workflow/publish?workflowId=${workflowId}&versionId=${versionId}`,

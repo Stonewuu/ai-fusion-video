@@ -10,7 +10,9 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 
-/** A cold execution stream plus explicit interruption and one-shot resource cleanup. */
+/**
+ * A cold execution stream plus explicit interruption and one-shot resource cleanup.
+ */
 public final class AgentExecution implements AutoCloseable {
 
     private final String runId;

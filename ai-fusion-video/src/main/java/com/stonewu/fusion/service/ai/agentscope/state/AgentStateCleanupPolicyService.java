@@ -147,7 +147,7 @@ public class AgentStateCleanupPolicyService {
         LocalDateTime lastActive = safeConversation.getAgentStateLastActiveAt();
         return lastActive != null
                 && !lastActive.plusDays(retentionDays)
-                        .isAfter(safeNow);
+                .isAfter(safeNow);
     }
 
     public void requireAvailable(

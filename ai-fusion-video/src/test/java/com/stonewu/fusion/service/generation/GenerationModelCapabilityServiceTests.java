@@ -12,6 +12,7 @@ import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import com.stonewu.fusion.service.system.SystemConfigService;
 import org.junit.jupiter.api.Test;
+import com.stonewu.fusion.service.media.MediaInputTransport;
 
 import java.util.List;
 
@@ -177,7 +178,7 @@ class GenerationModelCapabilityServiceTests {
         ReferenceImageTransportService transportService = new ReferenceImageTransportService(
                 mock(StorageConfigService.class),
                 systemConfigService,
-                mock(PresetArtStyleResourceResolver.class));
+                mock(PresetArtStyleResourceResolver.class), mock(MediaInputTransport.class));
         GenerationModelCapabilityService strictService = new GenerationModelCapabilityService(
                 metadataResolver, urlOnlyPresetService, transportService);
         AiModel model = AiModel.builder()

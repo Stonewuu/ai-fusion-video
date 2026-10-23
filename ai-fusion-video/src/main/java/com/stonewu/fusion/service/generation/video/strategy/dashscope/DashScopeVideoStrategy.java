@@ -1,21 +1,22 @@
 package com.stonewu.fusion.service.generation.video.strategy.dashscope;
 
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeVideoApi;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.VideoGenerationRequest;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.VideoGenerationResponse;
-import com.alibaba.dashscope.aigc.videosynthesis.VideoSynthesis;
 import com.alibaba.dashscope.aigc.videosynthesis.VideoSynthesisParam;
 import com.alibaba.dashscope.aigc.videosynthesis.VideoSynthesisResult;
-import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONObject;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
-import com.stonewu.fusion.entity.generation.VideoItem;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.dashscope.DashScopeGenerationSupport;
+import com.stonewu.fusion.service.ai.dashscope.DashScopeSingleRequestClient;
+import com.stonewu.fusion.service.generation.job.*;
+import com.stonewu.fusion.service.generation.transport.GenerationHttpClients;
 import com.stonewu.fusion.service.generation.video.VideoGenerationService;
 import com.stonewu.fusion.service.generation.video.strategy.VideoGenerationStrategy;
 import lombok.RequiredArgsConstructor;
@@ -50,108 +51,58 @@ public class DashScopeVideoStrategy implements VideoGenerationStrategy {
     }
 
     @Override
-    public String submit(VideoTask task) {
-        AiModel model = resolveModel(task);
-        ApiConfig apiConfig = resolveApiConfig(model);
+    public PreparedGenerationCall prepare(VideoTask task, AiModel model, ApiConfig apiConfig) {
         DashScopeGenerationSupport.requireApiKey(apiConfig);
-        String modelCode = model != null && StrUtil.isNotBlank(model.getCode()) ? model.getCode() : "wan2.7-t2v";
-        JSONObject config = DashScopeGenerationSupport.parseModelConfig(model);
-
-        List<VideoItem> items = videoGenerationService.listItems(task.getId());
-        if (items.isEmpty()) {
-            throw new BusinessException("视频任务缺少生成条目");
+        var config = DashScopeGenerationSupport.parseModelConfig(model);
+        if (shouldUseSpringAiVideoSdk(model.getCode(), task)) {
+            var client = buildSdkVideoApi(apiConfig);
+            var request = buildSdkVideoRequest(model.getCode(), task, config);
+            return new PreparedGenerationCall(GenerationPreparedRequest.ordinary(), () ->
+                    GenerationProviderReceipt.accepted(submitWithSdk(client, request)));
         }
-
-        boolean useSdk = shouldUseSpringAiVideoSdk(modelCode, task);
-        DashScopeVideoApi videoApi = useSdk ? buildSdkVideoApi(apiConfig) : null;
-        String firstPlatformTaskId = null;
-        for (VideoItem item : items) {
-            if (StrUtil.isNotBlank(item.getPlatformTaskId())) {
-                firstPlatformTaskId = StrUtil.blankToDefault(firstPlatformTaskId, item.getPlatformTaskId());
-                continue;
-            }
-            String taskId;
-            if (useSdk) {
-                taskId = submitWithSdk(videoApi, buildSdkVideoRequest(modelCode, task, config));
-            } else {
-                // Spring AI Alibaba 1.1.2.0 的 Video SDK 还不能表达 Wan2.7 media 数组、ratio/watermark 等新协议参数；
-                // DashScope Java SDK 2.22.x 已提供 VideoSynthesis 高层 API，可兼容这些模型且无需手写 HTTP。
-                taskId = submitWithDashScopeJavaSdk(apiConfig, buildOfficialVideoParam(apiConfig, modelCode, task, config));
-            }
+        var call = buildOfficialVideoSynthesis(apiConfig).prepareVideo(
+                buildOfficialVideoParam(apiConfig, model.getCode(), task, config));
+        return new PreparedGenerationCall(GenerationPreparedRequest.ordinary(), () -> {
+            var response = call.get();
+            String taskId = extractTaskId(response);
             if (StrUtil.isBlank(taskId)) {
-                throw new BusinessException("DashScope 视频任务未返回 task_id");
+                throw new BusinessException("DashScope Java SDK 视频任务未返回 task_id: " + response);
             }
-            item.setPlatformTaskId(taskId);
-            videoGenerationService.updateItem(item);
-            if (firstPlatformTaskId == null) {
-                firstPlatformTaskId = taskId;
-            }
-            log.info("[DashScope Video] 任务已创建: taskId={}, platformTaskId={}, model={}",
-                    task.getTaskId(), taskId, modelCode);
-        }
-        return firstPlatformTaskId;
+            return GenerationProviderReceipt.accepted(taskId);
+        });
     }
 
     @Override
-    public void poll(String platformTaskId, VideoTask task) {
-        AiModel model = resolveModel(task);
-        ApiConfig apiConfig = resolveApiConfig(model);
+    public RemoteGenerationResult query(String platformTaskId, VideoTask task, AiModel model, ApiConfig apiConfig) {
         DashScopeGenerationSupport.requireApiKey(apiConfig);
-        String modelCode = model != null && StrUtil.isNotBlank(model.getCode()) ? model.getCode() : "wan2.7-t2v";
-        boolean useSdk = shouldUseSpringAiVideoSdk(modelCode, task);
-        DashScopeVideoApi videoApi = useSdk ? buildSdkVideoApi(apiConfig) : null;
-
-        List<VideoItem> items = videoGenerationService.listItems(task.getId());
-        int successCount = 0;
-        if (items.isEmpty()) {
-            DashScopeVideoResult result = useSdk
-                    ? waitForSdkVideoTask(videoApi, platformTaskId)
-                    : waitForOfficialVideoTask(apiConfig, platformTaskId);
-            if (StrUtil.isBlank(result.videoUrl())) {
-                throw new BusinessException("DashScope 视频任务成功但未返回视频地址: " + platformTaskId);
-            }
-            task.setSuccessCount(1);
-            videoGenerationService.update(task);
-            return;
+        if (shouldUseSpringAiVideoSdk(model.getCode(), task)) {
+            var result = buildSdkVideoApi(apiConfig).queryVideoGenTask(platformTaskId).getBody();
+            return ProviderJobStates.result(extractTaskStatus(result), extractErrorMessage(result), 15,
+                    () -> List.of(output(extractVideoResult(result), task)));
         }
-
-        for (VideoItem item : items) {
-            String currentPlatformTaskId = StrUtil.blankToDefault(item.getPlatformTaskId(), platformTaskId);
-            if (StrUtil.isBlank(currentPlatformTaskId)) {
-                item.setStatus(2);
-                item.setErrorMsg("DashScope 平台任务 ID 为空");
-                videoGenerationService.updateItem(item);
-                continue;
-            }
-            DashScopeVideoResult result = useSdk
-                    ? waitForSdkVideoTask(videoApi, currentPlatformTaskId)
-                    : waitForOfficialVideoTask(apiConfig, currentPlatformTaskId);
-            if (StrUtil.isBlank(result.videoUrl())) {
-                item.setStatus(2);
-                item.setErrorMsg("DashScope 返回成功但无视频 URL");
-                videoGenerationService.updateItem(item);
-                throw new BusinessException("DashScope 返回成功但无视频 URL: " + currentPlatformTaskId);
-            }
-            item.setPlatformTaskId(currentPlatformTaskId);
-            item.setVideoUrl(result.videoUrl());
-            item.setCoverUrl(result.coverUrl());
-            item.setFirstFrameUrl(result.firstFrameUrl());
-            item.setLastFrameUrl(result.lastFrameUrl());
-            item.setDuration(result.duration() != null ? result.duration() : task.getDuration());
-            item.setStatus(1);
-            videoGenerationService.updateItem(item);
-            successCount++;
+        try {
+            var result = VideoSynthesisResult.fromDashScopeResult(
+                    buildOfficialVideoSynthesis(apiConfig).fetch(platformTaskId, apiConfig.getApiKey()));
+            return ProviderJobStates.result(extractTaskStatus(result), extractErrorMessage(result), 15,
+                    () -> List.of(output(extractVideoResult(result), task)));
+        } catch (BusinessException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new BusinessException("DashScope 视频查询请求异常: " + failure.getMessage());
         }
+    }
 
-        task.setSuccessCount(successCount);
-        videoGenerationService.update(task);
-        log.info("[DashScope Video] 视频生成完成: taskId={}, successCount={}", task.getTaskId(), successCount);
+    private RemoteGenerationResult.Output output(DashScopeVideoResult result, VideoTask task) {
+        return new RemoteGenerationResult.Output(result.videoUrl(), result.coverUrl(), result.firstFrameUrl(),
+                result.lastFrameUrl(),
+                result.duration() == null ? task.getDuration() : result.duration());
     }
 
     private DashScopeVideoApi buildSdkVideoApi(ApiConfig apiConfig) {
         return DashScopeVideoApi.builder()
                 .baseUrl(DashScopeGenerationSupport.resolveRootBaseUrl(apiConfig.getApiUrl()))
                 .apiKey(apiConfig.getApiKey())
+                .restClientBuilder(GenerationHttpClients.restClientBuilder(apiConfig))
                 .build();
     }
 
@@ -227,37 +178,6 @@ public class DashScopeVideoStrategy implements VideoGenerationStrategy {
                 .build();
     }
 
-    private DashScopeVideoResult waitForSdkVideoTask(DashScopeVideoApi videoApi, String taskId) {
-        for (int i = 0; i < MAX_POLL_COUNT; i++) {
-            VideoGenerationResponse response = videoApi.queryVideoGenTask(taskId).getBody();
-            String status = extractTaskStatus(response);
-            if ("SUCCEEDED".equalsIgnoreCase(status)) {
-                return extractVideoResult(response);
-            }
-            if ("FAILED".equalsIgnoreCase(status) || "CANCELED".equalsIgnoreCase(status)
-                    || "UNKNOWN".equalsIgnoreCase(status)) {
-                throw new BusinessException("DashScope 视频 SDK 任务失败: status=" + status + ", message="
-                        + extractErrorMessage(response));
-            }
-            sleepQuietly(POLL_INTERVAL_MILLIS);
-        }
-        throw new BusinessException("DashScope 视频 SDK 任务轮询超时: " + taskId);
-    }
-
-    private String submitWithDashScopeJavaSdk(ApiConfig apiConfig, VideoSynthesisParam param) {
-        try {
-            VideoSynthesisResult response = buildOfficialVideoSynthesis(apiConfig).asyncCall(param);
-            String taskId = extractTaskId(response);
-            if (StrUtil.isBlank(taskId)) {
-                throw new BusinessException("DashScope Java SDK 视频任务未返回 task_id: " + response);
-            }
-            return taskId;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BusinessException("DashScope Java SDK 视频接口调用异常: " + e.getMessage());
-        }
-    }
 
     private VideoSynthesisParam buildOfficialVideoParam(ApiConfig apiConfig, String modelCode, VideoTask task,
                                                         JSONObject config) {
@@ -304,14 +224,17 @@ public class DashScopeVideoStrategy implements VideoGenerationStrategy {
 
     private List<VideoSynthesisParam.Media> buildWan27Media(String modelCode, VideoTask task) {
         List<VideoSynthesisParam.Media> media = new ArrayList<>();
-        List<String> referenceAudios = prepareMediaUrls(DashScopeGenerationSupport.parseJsonUrls(task.getReferenceAudioUrls()));
+        List<String> referenceAudios = prepareMediaUrls(
+                DashScopeGenerationSupport.parseJsonUrls(task.getReferenceAudioUrls()));
         int audioIndex = 0;
 
         addMediaIfPresent(media, "first_frame", task.getFirstFrameImageUrl(), null);
         addMediaIfPresent(media, "last_frame", task.getLastFrameImageUrl(), null);
 
-        List<String> referenceImages = prepareMediaUrls(DashScopeGenerationSupport.parseJsonUrls(task.getReferenceImageUrls()));
-        List<String> referenceVideos = prepareMediaUrls(DashScopeGenerationSupport.parseJsonUrls(task.getReferenceVideoUrls()));
+        List<String> referenceImages = prepareMediaUrls(
+                DashScopeGenerationSupport.parseJsonUrls(task.getReferenceImageUrls()));
+        List<String> referenceVideos = prepareMediaUrls(
+                DashScopeGenerationSupport.parseJsonUrls(task.getReferenceVideoUrls()));
 
         boolean isReferenceVideoModel = modelCode.contains("r2v");
         boolean isVideoEditModel = modelCode.contains("videoedit");
@@ -395,33 +318,10 @@ public class DashScopeVideoStrategy implements VideoGenerationStrategy {
         }
     }
 
-    private VideoSynthesis buildOfficialVideoSynthesis(ApiConfig apiConfig) {
-        return new VideoSynthesis(DashScopeGenerationSupport.resolveGenerationBaseUrl(apiConfig));
+    private DashScopeSingleRequestClient buildOfficialVideoSynthesis(ApiConfig apiConfig) {
+        return new DashScopeSingleRequestClient(apiConfig);
     }
 
-    private DashScopeVideoResult waitForOfficialVideoTask(ApiConfig apiConfig, String taskId) {
-        try {
-            VideoSynthesis videoSynthesis = buildOfficialVideoSynthesis(apiConfig);
-            for (int i = 0; i < MAX_POLL_COUNT; i++) {
-                VideoSynthesisResult response = videoSynthesis.fetch(taskId, apiConfig.getApiKey());
-                String status = extractTaskStatus(response);
-                if ("SUCCEEDED".equalsIgnoreCase(status)) {
-                    return extractVideoResult(response);
-                }
-                if ("FAILED".equalsIgnoreCase(status) || "CANCELED".equalsIgnoreCase(status)
-                        || "UNKNOWN".equalsIgnoreCase(status)) {
-                    throw new BusinessException("DashScope Java SDK 视频任务失败: status=" + status + ", message="
-                            + extractErrorMessage(response));
-                }
-                sleepQuietly(POLL_INTERVAL_MILLIS);
-            }
-            throw new BusinessException("DashScope Java SDK 视频任务轮询超时: " + taskId);
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BusinessException("DashScope Java SDK 视频任务查询异常: " + e.getMessage());
-        }
-    }
 
     private DashScopeVideoResult extractVideoResult(VideoGenerationResponse response) {
         if (response == null || response.getOutput() == null) {
@@ -504,7 +404,8 @@ public class DashScopeVideoStrategy implements VideoGenerationStrategy {
         return seed.intValue();
     }
 
-    private void addMediaIfPresent(List<VideoSynthesisParam.Media> media, String type, String url, String referenceVoice) {
+    private void addMediaIfPresent(List<VideoSynthesisParam.Media> media, String type, String url,
+                                   String referenceVoice) {
         if (StrUtil.isBlank(url)) {
             return;
         }
@@ -564,7 +465,7 @@ public class DashScopeVideoStrategy implements VideoGenerationStrategy {
             return false;
         }
         if (StrUtil.isNotBlank(task.getRatio()) || Boolean.TRUE.equals(task.getWatermark())
-            || Boolean.TRUE.equals(task.getGenerateAudio()) || Boolean.TRUE.equals(task.getCameraFixed())) {
+                || Boolean.TRUE.equals(task.getGenerateAudio()) || Boolean.TRUE.equals(task.getCameraFixed())) {
             return false;
         }
         if (!DashScopeGenerationSupport.parseJsonUrls(task.getReferenceVideoUrls()).isEmpty()
@@ -580,26 +481,6 @@ public class DashScopeVideoStrategy implements VideoGenerationStrategy {
                 && (code.contains("i2v") || code.contains("kf2v"));
     }
 
-    private AiModel resolveModel(VideoTask task) {
-        if (task != null && task.getModelId() != null) {
-            try {
-                return aiModelService.getById(task.getModelId());
-            } catch (Exception e) {
-                log.warn("[DashScope Video] 获取模型失败: modelId={}", task.getModelId(), e);
-            }
-        }
-        return null;
-    }
-
-    private ApiConfig resolveApiConfig(AiModel model) {
-        if (model != null && model.getApiConfigId() != null) {
-            ApiConfig config = apiConfigService.getById(model.getApiConfigId());
-            if (config != null) {
-                return config;
-            }
-        }
-        throw new BusinessException("未找到 DashScope 视频生成 API 配置，请在系统设置中配置 dashscope 平台 API Key");
-    }
 
     private String firstNonBlank(String... values) {
         if (values == null) {
@@ -613,14 +494,6 @@ public class DashScopeVideoStrategy implements VideoGenerationStrategy {
         return null;
     }
 
-    private void sleepQuietly(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException("DashScope 视频任务轮询被中断");
-        }
-    }
 
     private record DashScopeVideoResult(String videoUrl, String coverUrl, String firstFrameUrl,
                                         String lastFrameUrl, Integer duration) {

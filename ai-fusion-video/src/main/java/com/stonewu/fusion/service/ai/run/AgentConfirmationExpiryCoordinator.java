@@ -28,7 +28,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** Ends an expired confirmation when application code observes its deadline. */
+/**
+ * Ends an expired confirmation when application code observes its deadline.
+ */
 @Component
 public final class AgentConfirmationExpiryCoordinator {
 
@@ -73,17 +75,17 @@ public final class AgentConfirmationExpiryCoordinator {
                     "currentUserId must be positive"));
         }
         return journal(() -> {
-                    AgentRun run = runMapper.selectAuthorizedByRunId(
-                            safeRunId, currentUserId);
-                    if (run == null) {
-                        throw new BusinessException(404, "Agent 运行不存在");
-                    }
-                    if (AgentRunStatus.WAITING_CONFIRMATION.name().equals(run.getStatus())
-                            && !safeReplyId.equals(run.getWaitingReplyId())) {
-                        throw new BusinessException(409, "该审批已处理或已失效");
-                    }
-                    return run;
-                })
+            AgentRun run = runMapper.selectAuthorizedByRunId(
+                    safeRunId, currentUserId);
+            if (run == null) {
+                throw new BusinessException(404, "Agent 运行不存在");
+            }
+            if (AgentRunStatus.WAITING_CONFIRMATION.name().equals(run.getStatus())
+                    && !safeReplyId.equals(run.getWaitingReplyId())) {
+                throw new BusinessException(409, "该审批已处理或已失效");
+            }
+            return run;
+        })
                 .flatMap(this::expireIfNeeded);
     }
 

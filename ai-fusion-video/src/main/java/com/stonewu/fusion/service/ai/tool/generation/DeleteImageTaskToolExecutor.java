@@ -9,7 +9,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/** 删除图片生成任务工具。 */
+/**
+ * 删除图片生成任务工具。
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -54,7 +56,7 @@ public class DeleteImageTaskToolExecutor implements ToolExecutor {
             if (recordId == null) {
                 return error("缺少 recordId");
             }
-            imageGenerationService.delete(recordId, context.getUserId());
+            imageGenerationService.delete(recordId, context.requireMutationContext().actor());
             return JSONUtil.createObj()
                     .set("status", "success")
                     .set("deletedRecordId", recordId)

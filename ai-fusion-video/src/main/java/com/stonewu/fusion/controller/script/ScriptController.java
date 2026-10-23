@@ -1,18 +1,16 @@
 package com.stonewu.fusion.controller.script;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.CommonResult;
-import com.stonewu.fusion.controller.script.vo.EpisodeCreateReqVO;
-import com.stonewu.fusion.controller.script.vo.EpisodeUpdateReqVO;
-import com.stonewu.fusion.controller.script.vo.SceneCreateReqVO;
-import com.stonewu.fusion.controller.script.vo.SceneUpdateReqVO;
+import com.stonewu.fusion.controller.script.vo.ScriptChildCreateReqVO;
 import com.stonewu.fusion.controller.script.vo.ScriptSourceReplaceReqVO;
 import com.stonewu.fusion.controller.script.vo.ScriptUpdateReqVO;
-import com.stonewu.fusion.convert.script.ScriptConvert;
-import com.stonewu.fusion.entity.script.ScriptSceneItem;
-import com.stonewu.fusion.entity.script.Script;
-import com.stonewu.fusion.entity.script.ScriptEpisode;
-import com.stonewu.fusion.service.script.ScriptService;
-import io.swagger.v3.oas.annotations.Operation;
+import com.stonewu.fusion.service.canvas.CanvasActorResolver;
+import com.stonewu.fusion.service.canvas.model.CanvasValueType;
+import com.stonewu.fusion.service.resource.ResourceCommandService;
+import com.stonewu.fusion.service.resource.ResourceQueryService;
+import com.stonewu.fusion.service.resource.ScriptFields;
+import com.stonewu.fusion.service.resource.model.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -20,113 +18,127 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-/**
- * 剧本 Controller（含分集、分场次）
- */
+import static com.stonewu.fusion.service.canvas.model.CanvasValueType.*;
+
 @Tag(name = "剧本管理")
 @RestController
 @RequestMapping("/api/script")
 @RequiredArgsConstructor
 public class ScriptController {
+    private final ResourceCommandService commands;
+    private final ResourceQueryService queries;
+    private final CanvasActorResolver actors;
 
-    private final ScriptService scriptService;
-
-    // ========== 剧本 ==========
-
-    @Operation(summary = "获取剧本详情")
     @GetMapping("/{id}")
-    public CommonResult<Script> get(@PathVariable Long id) {
-        return CommonResult.success(scriptService.getById(id));
+    public CommonResult<ObjectNode> get(@PathVariable long id) {
+        return get(SCRIPT, id);
     }
 
-    @Operation(summary = "按项目获取唯一剧本")
     @GetMapping("/project/{projectId}")
-    public CommonResult<Script> getByProject(@PathVariable Long projectId) {
-        return CommonResult.success(scriptService.getByProjectId(projectId));
+    public CommonResult<ObjectNode> getByProject(@PathVariable long projectId) {
+        return CommonResult.success(queries.script(projectId, actors.current()));
     }
 
-    @Operation(summary = "更新剧本")
     @PutMapping
-    public CommonResult<Script> update(@Valid @RequestBody ScriptUpdateReqVO reqVO) {
-        Script script = ScriptConvert.INSTANCE.convert(reqVO);
-        return CommonResult.success(scriptService.update(script));
+    public CommonResult<ObjectNode> update(@Valid @RequestBody ScriptUpdateReqVO request) {
+        return patch(SCRIPT, request);
     }
 
-    @Operation(summary = "替换剧本原文并重置分集与场次")
     @PutMapping("/{id}/source")
-    public CommonResult<Script> replaceSource(
-            @PathVariable Long id,
-            @Valid @RequestBody ScriptSourceReplaceReqVO reqVO) {
-        return CommonResult.success(scriptService.replaceSourceAndReset(id, reqVO.getRawContent()));
+    public CommonResult<ObjectNode> replaceSource(@PathVariable long id,
+                                                  @Valid @RequestBody ScriptSourceReplaceReqVO request) {
+        return CommonResult.success(commands.execute(
+                        new ScriptSourceCommand(request.requestId(), id, request.version(), request.rawContent()), context())
+                .result());
     }
 
-    // ========== 分集 ==========
-
-    @Operation(summary = "获取分集列表")
     @GetMapping("/{scriptId}/episodes")
-    public CommonResult<List<ScriptEpisode>> listEpisodes(@PathVariable Long scriptId) {
-        return CommonResult.success(scriptService.listEpisodes(scriptId));
+    public CommonResult<List<ObjectNode>> listEpisodes(@PathVariable long scriptId) {
+        return CommonResult.success(queries.scriptChildren(SCRIPT_EPISODE, scriptId, actors.current()));
     }
 
-    @Operation(summary = "获取分集详情")
     @GetMapping("/episode/{id}")
-    public CommonResult<ScriptEpisode> getEpisode(@PathVariable Long id) {
-        return CommonResult.success(scriptService.getEpisodeById(id));
+    public CommonResult<ObjectNode> getEpisode(@PathVariable long id) {
+        return get(SCRIPT_EPISODE, id);
     }
 
-    @Operation(summary = "创建分集")
     @PostMapping("/episode")
-    public CommonResult<ScriptEpisode> createEpisode(@Valid @RequestBody EpisodeCreateReqVO reqVO) {
-        ScriptEpisode episode = ScriptConvert.INSTANCE.convert(reqVO);
-        return CommonResult.success(scriptService.createEpisode(episode));
+    public CommonResult<ObjectNode> createEpisode(@Valid @RequestBody ScriptChildCreateReqVO request) {
+        return create(SCRIPT_EPISODE, request);
     }
 
-    @Operation(summary = "更新分集")
     @PutMapping("/episode")
-    public CommonResult<ScriptEpisode> updateEpisode(@Valid @RequestBody EpisodeUpdateReqVO reqVO) {
-        ScriptEpisode episode = ScriptConvert.INSTANCE.convert(reqVO);
-        return CommonResult.success(scriptService.updateEpisode(episode));
+    public CommonResult<ObjectNode> updateEpisode(@Valid @RequestBody ScriptUpdateReqVO request) {
+        return patch(SCRIPT_EPISODE, request);
     }
 
-    @Operation(summary = "删除分集")
     @DeleteMapping("/episode/{id}")
-    public CommonResult<Boolean> deleteEpisode(@PathVariable Long id) {
-        scriptService.deleteEpisode(id);
-        return CommonResult.success(true);
+    public CommonResult<Boolean> deleteEpisode(@PathVariable long id, @RequestParam int version,
+                                               @RequestParam String requestId) {
+        return delete(SCRIPT_EPISODE, id, version, requestId);
     }
 
-    // ========== 分场次 ==========
-
-    @Operation(summary = "获取分场次列表（按分集）")
     @GetMapping("/episode/{episodeId}/scenes")
-    public CommonResult<List<ScriptSceneItem>> listScenes(@PathVariable Long episodeId) {
-        return CommonResult.success(scriptService.listScenesByEpisode(episodeId));
+    public CommonResult<List<ObjectNode>> listScenes(@PathVariable long episodeId) {
+        return CommonResult.success(queries.scriptChildren(SCRIPT_SCENE, episodeId, actors.current()));
     }
 
-    @Operation(summary = "获取分场次详情")
     @GetMapping("/scene/{id}")
-    public CommonResult<ScriptSceneItem> getScene(@PathVariable Long id) {
-        return CommonResult.success(scriptService.getSceneById(id));
+    public CommonResult<ObjectNode> getScene(@PathVariable long id) {
+        return get(SCRIPT_SCENE, id);
     }
 
-    @Operation(summary = "创建分场次")
     @PostMapping("/scene")
-    public CommonResult<ScriptSceneItem> createScene(@Valid @RequestBody SceneCreateReqVO reqVO) {
-        ScriptSceneItem scene = ScriptConvert.INSTANCE.convert(reqVO);
-        return CommonResult.success(scriptService.createScene(scene));
+    public CommonResult<ObjectNode> createScene(@Valid @RequestBody ScriptChildCreateReqVO request) {
+        return create(SCRIPT_SCENE, request);
     }
 
-    @Operation(summary = "更新分场次")
     @PutMapping("/scene")
-    public CommonResult<ScriptSceneItem> updateScene(@Valid @RequestBody SceneUpdateReqVO reqVO) {
-        ScriptSceneItem scene = ScriptConvert.INSTANCE.convert(reqVO);
-        return CommonResult.success(scriptService.updateScene(scene));
+    public CommonResult<ObjectNode> updateScene(@Valid @RequestBody ScriptUpdateReqVO request) {
+        return patch(SCRIPT_SCENE, request);
     }
 
-    @Operation(summary = "删除分场次")
     @DeleteMapping("/scene/{id}")
-    public CommonResult<Boolean> deleteScene(@PathVariable Long id) {
-        scriptService.deleteScene(id);
+    public CommonResult<Boolean> deleteScene(@PathVariable long id, @RequestParam int version,
+                                             @RequestParam String requestId) {
+        return delete(SCRIPT_SCENE, id, version, requestId);
+    }
+
+    @PostMapping("/scenes/commands")
+    public CommonResult<ObjectNode> scenes(@Valid @RequestBody ScriptScenesCommand command) {
+        return CommonResult.success(commands.execute(command, context()).result());
+    }
+
+    private ResourceCommandContext context() {
+        return ResourceCommandContext.user(actors.current(), null);
+    }
+
+    private CommonResult<ObjectNode> get(CanvasValueType type, long id) {
+        return CommonResult.success(queries.get(type, id, actors.current()).data());
+    }
+
+    private CommonResult<ObjectNode> patch(CanvasValueType type, ScriptUpdateReqVO request) {
+        return CommonResult.success(commands.patch(
+                new ResourcePatchCommand(request.requestId(), type, request.id(), request.version(), request.patch()),
+                context()).result());
+    }
+
+    private CommonResult<ObjectNode> create(CanvasValueType type, ScriptChildCreateReqVO request) {
+        ObjectNode fields = request.fields().deepCopy();
+        for (String key : List.of("scriptId", "episodeId", "parentVersion")) {
+            if (fields.has(key)) {
+                throw ScriptFields.invalid("父对象字段必须在请求顶层指定");
+            }
+        }
+        fields.put(type == SCRIPT_EPISODE ? "scriptId" : "episodeId", request.parentId())
+                .put("parentVersion", request.parentVersion());
+        return CommonResult.success(
+                commands.execute(new ResourceCreateCommand(request.requestId(), type, null, fields), context())
+                        .result());
+    }
+
+    private CommonResult<Boolean> delete(CanvasValueType type, long id, int version, String requestId) {
+        commands.execute(new ResourceDeleteCommand(requestId, type, id, version), context());
         return CommonResult.success(true);
     }
 }

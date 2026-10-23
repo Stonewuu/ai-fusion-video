@@ -9,6 +9,7 @@ import type {
 import type { AiChatReq, AiChatStreamEvent } from "@/lib/api/ai-pipeline";
 import type { AgentPipelineState } from "@/components/dashboard/agent-pipeline/types";
 import type { AssistantPoint, AssistantRect } from "@/components/dashboard/assistant/geometry";
+import type { CanvasAssistantCapture } from "@/lib/canvas/assistant-session";
 
 export const ASSISTANT_CATEGORY = "assistant";
 export const NEW_ASSISTANT_DRAFT_KEY = "__new__";
@@ -27,6 +28,7 @@ export interface AssistantMessageReferences {
   skills: AssistantSkillReferenceOption[];
   mcpTools: AssistantMcpToolReferenceOption[];
   multimodalInputs?: AiMultimodalInput[];
+  canvas?: CanvasAssistantCapture;
 }
 
 export interface AssistantConnection {
@@ -79,6 +81,8 @@ export interface PersistedAssistantState {
 export interface AssistantStoreState {
   hydratedUserId: number | null;
   initialized: boolean;
+  /** Persisted selection is still awaiting the initial server conversation list. */
+  restorationPending: boolean;
   mode: AssistantMode;
   lastOpenMode: Exclude<AssistantMode, "collapsed">;
   restoreMode: Exclude<AssistantMode, "collapsed" | "maximized">;

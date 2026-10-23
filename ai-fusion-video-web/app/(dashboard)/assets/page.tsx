@@ -1,4 +1,5 @@
 "use client";
+import { useResourceInvalidation } from "@/hooks/use-resource-invalidation";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -19,8 +20,7 @@ import { assetApi, type Asset } from "@/lib/api/asset";
 import { projectApi, type Project } from "@/lib/api/project";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { toastApiError } from "@/lib/api/toast-api-error";
-import AssetTypePlaceholder from "@/components/dashboard/asset-type-placeholder";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import {
   Select,
   SelectContent,
@@ -120,10 +120,11 @@ export default function AssetsPage() {
     });
   }, []);
 
+  useResourceInvalidation("projects", () => projectApi.list().then(setProjects));
+
   // 加载第一页（筛选改变时重置）
-  const loadFirstPage = useCallback(async () => {
-    setLoading(true);
-    setAssets([]);
+  const loadFirstPage = useCallback(async (background = false) => {
+    if (!background) setLoading(true);
     setCurrentPage(1);
     try {
       const params: { projectId?: number; type?: string; keyword?: string; page: number; size: number } = {
@@ -151,6 +152,7 @@ export default function AssetsPage() {
   useEffect(() => {
     loadFirstPage();
   }, [loadFirstPage]);
+  useResourceInvalidation("assets", () => loadFirstPage(true));
 
   // 加载更多
   const loadMore = useCallback(async () => {
@@ -420,7 +422,7 @@ export default function AssetsPage() {
                     <p className="text-sm font-medium truncate mb-1">{asset.name}</p>
                     <div className="flex items-center justify-between gap-2">
                       <span className="text-[10px] text-muted-foreground truncate">
-                        {projectMap[asset.projectId] || `项目 ${asset.projectId}`}
+                        {asset.projectId === null ? "独立素材" : projectMap[asset.projectId] || `项目 ${asset.projectId}`}
                       </span>
                       <span className="text-[10px] text-muted-foreground/60 whitespace-nowrap">
                         {formatDate(asset.updateTime)}
@@ -436,7 +438,6 @@ export default function AssetsPage() {
           <div className="flex flex-col gap-2">
             {assets.map((asset) => {
               const typeInfo = typeMap[asset.type];
-              const TypeIcon = typeInfo?.icon || Package;
               const coverSrc = resolveMediaUrl(asset.coverUrl);
 
               return (
@@ -481,7 +482,7 @@ export default function AssetsPage() {
                         {typeInfo?.label || asset.type}
                       </span>
                       <span className="text-xs text-muted-foreground truncate">
-                        {projectMap[asset.projectId] || `项目 ${asset.projectId}`}
+                        {asset.projectId === null ? "独立素材" : projectMap[asset.projectId] || `项目 ${asset.projectId}`}
                       </span>
                     </div>
                   </div>

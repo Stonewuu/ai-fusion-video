@@ -122,13 +122,18 @@ export function defaultPersistedState(userId: number): PersistedAssistantState {
 export function writeAssistantPersisted(state: AssistantStoreState) {
   if (typeof window === "undefined" || !state.hydratedUserId) return;
 
-  const drafts: Record<string, string> = { __new__: state.newDraft };
-  const runIds: Record<string, string> = {};
-  const lastSequences: Record<string, number> = {};
-  const toolExecutionModes: Record<string, ToolExecutionMode> = {};
+  // Unloaded pages and an interrupted first render must not erase saved conversations.
+  const previous = defaultPersistedState(state.hydratedUserId);
+  const drafts: Record<string, string> = { ...previous.drafts, __new__: state.newDraft };
+  const runIds: Record<string, string> = { ...previous.runIds };
+  const lastSequences: Record<string, number> = { ...previous.lastSequences };
+  const toolExecutionModes: Record<string, ToolExecutionMode> = { ...previous.toolExecutionModes };
 
   for (const [conversationId, runtime] of Object.entries(state.conversationStates)) {
     toolExecutionModes[conversationId] = runtime.toolExecutionMode;
+    delete drafts[conversationId];
+    delete runIds[conversationId];
+    delete lastSequences[conversationId];
     if (runtime.draft) drafts[conversationId] = runtime.draft;
 
     const advertisedRunId = runtime.knownRunId || runtime.pipeline.runId;
@@ -153,7 +158,7 @@ export function writeAssistantPersisted(state: AssistantStoreState) {
     launcherPosition: state.launcherPosition,
     normalRect: state.normalRect,
     dockWidth: state.dockWidth,
-    selectedConversationId: state.selectedConversationId,
+    selectedConversationId: state.restorationPending ? previous.selectedConversationId : state.selectedConversationId,
     selectedModelId: state.selectedModelId,
     drafts,
     runIds,
@@ -162,8 +167,22 @@ export function writeAssistantPersisted(state: AssistantStoreState) {
     newToolExecutionMode: state.newToolExecutionMode,
   };
 
+  savePersisted(state.hydratedUserId, value);
+}
+
+export function forgetAssistantConversation(userId: number, conversationId: string) {
+  const value = defaultPersistedState(userId);
+  delete value.drafts[conversationId];
+  delete value.runIds[conversationId];
+  delete value.lastSequences[conversationId];
+  delete value.toolExecutionModes[conversationId];
+  if (value.selectedConversationId === conversationId) value.selectedConversationId = null;
+  savePersisted(userId, value);
+}
+
+function savePersisted(userId: number, value: PersistedAssistantState) {
   try {
-    localStorage.setItem(storageKey(state.hydratedUserId), JSON.stringify(value));
+    localStorage.setItem(storageKey(userId), JSON.stringify(value));
   } catch {
     // A full/private storage must never break the assistant UI.
   }

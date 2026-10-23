@@ -410,7 +410,8 @@ class AgentDurableRuntimeMultiInstanceIT {
                     Duration.ofSeconds(30),
                     deadline,
                     "run",
-                    null)));
+                    null,
+                    null, null)));
         }
 
         private CommittedAgentEvent append(

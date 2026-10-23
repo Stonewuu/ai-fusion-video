@@ -13,7 +13,9 @@ import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Polls the durable policy and runs one distributed AgentState cleanup job when due. */
+/**
+ * Polls the durable policy and runs one distributed AgentState cleanup job when due.
+ */
 @Component
 @Slf4j
 public final class AgentStateRetentionScheduler {
@@ -52,7 +54,8 @@ public final class AgentStateRetentionScheduler {
         maintainOnce()
                 .doFinally(ignored -> running.set(false))
                 .subscribe(
-                        ignored -> { },
+                        ignored -> {
+                        },
                         failure -> log.error(
                                 "AgentState retention cleanup failed: type={}",
                                 failure.getClass().getSimpleName()));
@@ -62,7 +65,7 @@ public final class AgentStateRetentionScheduler {
         String owner = instanceIdentity.value() + ':'
                 + UUID.randomUUID().toString().replace("-", "");
         return journal(() -> policies.tryClaim(
-                        owner, CLAIM_LEASE_MINUTES))
+                owner, CLAIM_LEASE_MINUTES))
                 .flatMap(claim -> claim
                         .map(value -> runClaim(value, owner))
                         .orElseGet(Mono::empty));
@@ -73,17 +76,17 @@ public final class AgentStateRetentionScheduler {
             String owner) {
         return cleaner.cleanExpired(claim.retentionDays(), BATCH_SIZE)
                 .flatMap(cleaned -> journal(() -> {
-                            policies.complete(owner);
-                            return cleaned;
-                        })
+                    policies.complete(owner);
+                    return cleaned;
+                })
                         .doOnNext(count -> log.info(
                                 "AgentState retention cleanup completed: conversations={}",
                                 count)))
                 .then()
                 .onErrorResume(failure -> journal(() -> {
-                            policies.release(owner);
-                            return Optional.empty();
-                        })
+                    policies.release(owner);
+                    return Optional.empty();
+                })
                         .onErrorResume(releaseFailure -> Mono.empty())
                         .then(Mono.error(failure)));
     }

@@ -52,7 +52,8 @@ public class AiModelMetadataResolver {
                 normalizeProtocol(model != null ? model.getModelProtocol() : null));
     }
 
-    public RemoteModelMetadata resolveRemoteModel(String providerPlatform, String modelId, String ownedBy, Integer modelType) {
+    public RemoteModelMetadata resolveRemoteModel(String providerPlatform, String modelId, String ownedBy,
+                                                  Integer modelType) {
         String normalizedPlatform = normalizePlatform(providerPlatform);
         Integer inferredModelType = inferRemoteModelType(normalizedPlatform, modelId, ownedBy, modelType);
         String displayName = StrUtil.blankToDefault(ownedBy, modelId);

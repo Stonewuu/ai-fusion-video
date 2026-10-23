@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasMcpContractMapper">
+    <select id="lock" resultType="com.stonewu.fusion.entity.canvas.CanvasMcpContractEntity">
+        SELECT * FROM afv_canvas_mcp_contract WHERE id = #{id} AND user_id = #{userId} AND deleted = FALSE FOR UPDATE
+    </select>
+    <insert id="create">
+        INSERT INTO afv_canvas_mcp_contract(id,user_id,name,tool_name,server_name,definition_json,definition_hash,enabled,created_at,updated_at) VALUES(#{id},#{userId},#{name},#{toolName},#{serverName},#{definition},#{hash},#{enabled},UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))
+    </insert>
+    <update id="revise">
+        UPDATE afv_canvas_mcp_contract SET name=#{name},tool_name=#{toolName},server_name=#{serverName},definition_json=#{definition},definition_hash=#{hash},enabled=#{enabled},version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=#{id}
+    </update>
+    <update id="remove">
+        UPDATE afv_canvas_mcp_contract SET deleted=TRUE,enabled=FALSE,version=version+1,updated_at=UTC_TIMESTAMP(6) WHERE id=#{id}
+    </update>
+</mapper>

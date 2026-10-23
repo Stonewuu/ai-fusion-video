@@ -14,11 +14,7 @@ import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Scheduler;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Objects;
-import java.util.Queue;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Semaphore;
@@ -413,7 +409,8 @@ public final class HarnessLeaseCache {
     private Mono<Void> cleanupAfterDrainTimeout(BusinessException timeoutFailure) {
         return Mono.defer(() -> {
             closeAllIdleEntries().subscribe(
-                    ignored -> { },
+                    ignored -> {
+                    },
                     failure -> log.error("Harness idle cleanup failed after drain timeout", failure));
             return Mono.error(timeoutFailure);
         });

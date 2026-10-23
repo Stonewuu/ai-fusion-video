@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.ai.run.model;
 
-/** Raised when an idempotency identity points at a materially different child run. */
+/**
+ * Raised when an idempotency identity points at a materially different child run.
+ */
 public final class ChildRunIdentityConflictException extends IllegalStateException {
 
     private final String parentRunId;

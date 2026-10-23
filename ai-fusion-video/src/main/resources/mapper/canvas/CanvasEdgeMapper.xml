@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasEdgeMapper">
+    <select id="ordered" resultType="com.stonewu.fusion.entity.canvas.CanvasEdgeEntity">
+        SELECT * FROM afv_canvas_edge FORCE INDEX (idx_canvas_edge_read_order) WHERE canvas_id = #{canvasId} AND deleted = FALSE ORDER BY create_time, id
+    </select>
+    <select id="deleted" resultType="com.stonewu.fusion.entity.canvas.CanvasEdgeEntity">
+        SELECT * FROM afv_canvas_edge WHERE canvas_id = #{canvasId} AND deleted = TRUE
+        AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+    <update id="deleteGraphEdge">
+        UPDATE afv_canvas_edge SET version = version + 1, update_time = UTC_TIMESTAMP(6) WHERE id = #{id} AND canvas_id = #{canvasId} AND version = #{version} AND deleted = TRUE
+    </update>
+    <insert id="insertGraph">
+        INSERT INTO afv_canvas_edge(id, canvas_id, kind, source_node_id, source_port, target_node_id, target_port,
+            input_index, output_json, version, create_time, update_time)
+        VALUES (#{row.id}, #{row.canvasId}, #{row.kind}, #{row.sourceNodeId}, #{row.sourcePort}, #{row.targetNodeId}, #{row.targetPort}, #{row.inputIndex}, #{row.outputJson}, #{row.version}, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <update id="updateGraph">
+        UPDATE afv_canvas_edge SET kind = #{row.kind}, source_node_id = #{row.sourceNodeId}, source_port = #{row.sourcePort}, target_node_id = #{row.targetNodeId}, target_port = #{row.targetPort},
+            input_index = #{row.inputIndex}, output_json = #{row.outputJson}, version = #{row.version}, deleted = FALSE, update_time = UTC_TIMESTAMP(6)
+        WHERE id = #{row.id} AND canvas_id = #{row.canvasId} AND version = #{previousVersion} AND deleted = TRUE
+    </update>
+</mapper>

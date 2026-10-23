@@ -1,11 +1,7 @@
 package com.stonewu.fusion.service.ai.tool.asset;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.asset.Asset;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.asset.AssetService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,7 +14,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class AssetQueryToolExecutor implements ToolExecutor {
 
-    private final AssetService assetService;
+    private final AssetToolQueries queries;
+
 
     @Override
     public String getToolName() {
@@ -63,37 +60,6 @@ public class AssetQueryToolExecutor implements ToolExecutor {
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long assetId = params.getLong("assetId");
-            if (assetId == null) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "缺少必要参数: assetId").toString();
-            }
-
-            Long userId = context.getUserId();
-
-            Asset asset = assetService.getById(assetId);
-            if (!assetService.canAccessAsset(asset, userId)) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "未找到ID为 " + assetId + " 的资产或无权访问").toString();
-            }
-
-            return JSONUtil.createObj()
-                    .set("assetId", asset.getId())
-                    .set("projectId", asset.getProjectId())
-                    .set("type", asset.getType())
-                    .set("name", asset.getName())
-                    .set("description", asset.getDescription())
-                    .set("coverUrl", asset.getCoverUrl())
-                    .set("properties", asset.getProperties() != null ? JSONUtil.parseObj(asset.getProperties()) : null)
-                    .set("tags", asset.getTags())
-                    .set("sourceType", asset.getSourceType())
-                    .set("status", asset.getStatus())
-                    .toString();
-        } catch (Exception e) {
-            log.error("查询资产失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "查询失败: " + e.getMessage()).toString();
-        }
+        return queries.execute(getToolName(), toolInput, context);
     }
 }

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.entity.ai.AgentWorkspaceEntry;
 import com.stonewu.fusion.mapper.ai.AgentWorkspaceEntryMapper;
+import com.stonewu.fusion.service.media.lifecycle.MediaReferenceIndex;
 import io.agentscope.harness.agent.filesystem.remote.store.BaseStore;
 import io.agentscope.harness.agent.filesystem.remote.store.StoreItem;
 import lombok.RequiredArgsConstructor;
@@ -61,10 +62,7 @@ public class AgentWorkspaceBaseStore implements BaseStore {
         }
         String namespaceKey = namespaceKey(namespace);
         String namespaceHash = AgentWorkspacePayloadService.sha256(namespaceKey);
-        return entryMapper.selectList(new LambdaQueryWrapper<AgentWorkspaceEntry>()
-                        .eq(AgentWorkspaceEntry::getNamespaceHash, namespaceHash)
-                        .orderByAsc(AgentWorkspaceEntry::getItemKey)
-                        .last("LIMIT " + safeLimit + " OFFSET " + safeOffset))
+        return entryMapper.window(namespaceHash, safeLimit, safeOffset)
                 .stream()
                 .filter(entry -> namespaceKey.equals(entry.getNamespaceKey()))
                 .map(this::toStoreItem)
@@ -90,12 +88,12 @@ public class AgentWorkspaceBaseStore implements BaseStore {
     public AgentWorkspaceEntry find(List<String> namespace, String key) {
         String namespaceKey = namespaceKey(namespace);
         String safeKey = requireKey(key);
-        AgentWorkspaceEntry entry = entryMapper.selectOne(new LambdaQueryWrapper<AgentWorkspaceEntry>()
-                .eq(AgentWorkspaceEntry::getNamespaceHash,
-                        AgentWorkspacePayloadService.sha256(namespaceKey))
-                .eq(AgentWorkspaceEntry::getItemHash,
-                        AgentWorkspacePayloadService.sha256(safeKey))
-                .last("LIMIT 1"));
+        AgentWorkspaceEntry entry = entryMapper.selectOne(
+                new LambdaQueryWrapper<AgentWorkspaceEntry>()
+                        .eq(AgentWorkspaceEntry::getNamespaceHash,
+                                AgentWorkspacePayloadService.sha256(namespaceKey))
+                        .eq(AgentWorkspaceEntry::getItemHash,
+                                AgentWorkspacePayloadService.sha256(safeKey)));
         if (entry == null
                 || !namespaceKey.equals(entry.getNamespaceKey())
                 || !safeKey.equals(entry.getItemKey())) {
@@ -136,6 +134,7 @@ public class AgentWorkspaceBaseStore implements BaseStore {
         } catch (Exception failure) {
             throw new IllegalArgumentException("Cannot serialize AgentScope workspace value", failure);
         }
+        String mediaReferences = MediaReferenceIndex.extract(payload, objectMapper);
         AgentWorkspaceStoredPayload stored = payloadService.write(
                 payload, configService.lockWritableLocation());
         if (current == null) {
@@ -147,6 +146,7 @@ public class AgentWorkspaceBaseStore implements BaseStore {
                     .version(1L)
                     .build();
             applyStored(created, stored);
+            created.setMediaReferencesJson(mediaReferences);
             try {
                 entryMapper.insert(created);
                 deleteOnRollback(stored);
@@ -162,6 +162,7 @@ public class AgentWorkspaceBaseStore implements BaseStore {
         AgentWorkspaceStoredPayload previous = stored(current);
         current.setVersion(current.getVersion() + 1);
         applyStored(current, stored);
+        current.setMediaReferencesJson(mediaReferences);
         try {
             entryMapper.updateById(current);
         } catch (RuntimeException failure) {

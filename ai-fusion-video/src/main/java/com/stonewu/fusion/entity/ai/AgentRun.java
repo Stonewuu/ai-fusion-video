@@ -1,16 +1,7 @@
 package com.stonewu.fusion.entity.ai;
 
-import com.baomidou.mybatisplus.annotation.FieldFill;
-import com.baomidou.mybatisplus.annotation.FieldStrategy;
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableField;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.NonNull;
+import com.baomidou.mybatisplus.annotation.*;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
@@ -27,6 +18,12 @@ public class AgentRun {
     private String runId;
     private String conversationId;
     private Long userId;
+    private Long actorTeamId;
+    private String canvasScopeJson;
+    private LocalDateTime externalCheckAfter;
+    private String externalResumeJson;
+    private Long externalResumeSequence;
+    private LocalDateTime externalResumeAt;
     private Long projectId;
     private String agentType;
     private String parentRunId;

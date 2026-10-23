@@ -1,150 +1,133 @@
 package com.stonewu.fusion.controller.asset;
 
-import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.asset.vo.AssetCreateReqVO;
 import com.stonewu.fusion.controller.asset.vo.AssetItemCreateReqVO;
 import com.stonewu.fusion.controller.asset.vo.AssetItemUpdateReqVO;
 import com.stonewu.fusion.controller.asset.vo.AssetUpdateReqVO;
-import com.stonewu.fusion.convert.asset.AssetConvert;
-import com.stonewu.fusion.entity.asset.Asset;
-import com.stonewu.fusion.entity.asset.AssetItem;
-import com.stonewu.fusion.service.asset.AssetService;
-import com.stonewu.fusion.security.SecurityUtils;
-import io.swagger.v3.oas.annotations.Operation;
+import com.stonewu.fusion.service.canvas.CanvasActorResolver;
+import com.stonewu.fusion.service.resource.AssetFields;
+import com.stonewu.fusion.service.resource.AssetResourceQueryService;
+import com.stonewu.fusion.service.resource.ResourceCommandService;
+import com.stonewu.fusion.service.resource.ResourceQueryService;
+import com.stonewu.fusion.service.resource.model.*;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 
-import com.stonewu.fusion.service.asset.AssetMetadataRegistry;
-import com.stonewu.fusion.service.asset.AssetMetadataRegistry.FieldDef;
-
 import java.util.List;
 import java.util.Map;
 
-/**
- * 资产管理 Controller
- */
+import static com.stonewu.fusion.service.canvas.model.CanvasValueType.ASSET;
+import static com.stonewu.fusion.service.canvas.model.CanvasValueType.ASSET_ITEM;
+
 @Tag(name = "资产管理")
 @RestController
 @RequestMapping("/api/asset")
 @RequiredArgsConstructor
 public class AssetController {
+    private final ResourceCommandService commands;
+    private final ResourceQueryService resources;
+    private final AssetResourceQueryService assets;
+    private final CanvasActorResolver actors;
 
-    private final AssetService assetService;
-
-    // ========== 元数据 ==========
-
-    @Operation(summary = "查询资产属性字段定义")
     @GetMapping("/metadata/{assetType}")
     public CommonResult<Map<String, Object>> getMetadata(@PathVariable String assetType) {
-        List<FieldDef> fields = AssetMetadataRegistry.getFields(assetType);
-        if (fields == null) {
-            return CommonResult.error(400, "不支持的资产类型: " + assetType);
-        }
-        return CommonResult.success(Map.of(
-                "assetType", assetType,
-                "fields", fields
-        ));
+        var fields = AssetFields.definitions(assetType);
+        return CommonResult.success(Map.of("assetType", assetType, "fields", fields));
     }
 
-    // ========== 资产 ==========
-
-    @Operation(summary = "获取资产详情")
     @GetMapping("/{id}")
-    public CommonResult<Asset> get(@PathVariable Long id) {
-        return CommonResult.success(assetService.getById(id));
+    public CommonResult<ObjectNode> get(@PathVariable long id) {
+        return CommonResult.success(resources.get(ASSET, id, actors.current()).data());
     }
 
-    @Operation(summary = "按项目+类型查询资产列表")
     @GetMapping("/list")
-    public CommonResult<List<Asset>> list(@RequestParam Long projectId,
-                                          @RequestParam(required = false) String type,
-                                          @RequestParam(required = false) String keyword) {
-        return CommonResult.success(assetService.listByProject(projectId, type, keyword));
+    public CommonResult<List<ObjectNode>> list(@RequestParam long projectId,
+                                               @RequestParam(required = false) String type,
+                                               @RequestParam(required = false) String keyword) {
+        return CommonResult.success(assets.list(projectId, type, keyword, false, actors.current()));
     }
 
-    @Operation(summary = "按项目查询资产及其所有子资产")
     @GetMapping("/list-with-items")
-    public CommonResult<List<Map<String, Object>>> listWithItems(@RequestParam Long projectId) {
-        return CommonResult.success(assetService.listWithItemsByProject(projectId));
+    public CommonResult<List<ObjectNode>> listWithItems(@RequestParam(required = false) Long projectId) {
+        return CommonResult.success(assets.list(projectId, null, null, true, actors.current()));
     }
 
-    @Operation(summary = "分页查询当前用户的资产（跨项目），含类型统计")
     @GetMapping("/all")
-    public CommonResult<Map<String, Object>> listAll(@RequestParam(required = false) Long projectId,
-                                                      @RequestParam(required = false) String type,
-                                                      @RequestParam(required = false) String keyword,
-                                                      @RequestParam(defaultValue = "1") int page,
-                                                      @RequestParam(defaultValue = "20") int size) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        IPage<Asset> pageResult = assetService.pageAccessibleByUser(userId, projectId, type, keyword, page, size);
-        Map<String, Long> typeCounts = assetService.countAccessibleByUserGroupByType(userId, null, null);
-        return CommonResult.success(Map.of(
-                "records", pageResult.getRecords(),
-                "total", pageResult.getTotal(),
-                "page", pageResult.getCurrent(),
-                "size", pageResult.getSize(),
-                "typeCounts", typeCounts
-        ));
+    public CommonResult<ObjectNode> listAll(@RequestParam(required = false) Long projectId,
+                                            @RequestParam(required = false) String type,
+                                            @RequestParam(required = false) String keyword,
+                                            @RequestParam(defaultValue = "1") int page,
+                                            @RequestParam(defaultValue = "20") int size) {
+        return CommonResult.success(assets.page(projectId, type, keyword, page, size, actors.current()));
     }
 
-    @Operation(summary = "创建资产")
     @PostMapping
-    public CommonResult<Asset> create(@Valid @RequestBody AssetCreateReqVO reqVO) {
-        Asset asset = AssetConvert.INSTANCE.convert(reqVO);
-        // userId 由后端决定，owner 归属由 service 按当前团队绑定
-        asset.setUserId(SecurityUtils.getCurrentUserId());
-        return CommonResult.success(assetService.create(asset));
+    public CommonResult<ObjectNode> create(@Valid @RequestBody AssetCreateReqVO request) {
+        return CommonResult.success(commands.execute(
+                        new ResourceCreateCommand(request.requestId(), ASSET, request.projectId(), request.fields()), actor())
+                .result());
     }
 
-    @Operation(summary = "更新资产")
     @PutMapping
-    public CommonResult<Asset> update(@Valid @RequestBody AssetUpdateReqVO reqVO) {
-        Asset asset = AssetConvert.INSTANCE.convert(reqVO);
-        return CommonResult.success(assetService.update(asset));
+    public CommonResult<ObjectNode> update(@Valid @RequestBody AssetUpdateReqVO request) {
+        return CommonResult.success(commands.patch(
+                new ResourcePatchCommand(request.requestId(), ASSET, request.id(), request.version(), request.patch()),
+                actor()).result());
     }
 
-    @Operation(summary = "删除资产")
     @DeleteMapping("/{id}")
-    public CommonResult<Boolean> delete(@PathVariable Long id) {
-        assetService.delete(id);
+    public CommonResult<Boolean> delete(@PathVariable long id, @RequestParam int version,
+                                        @RequestParam String requestId) {
+        commands.execute(new ResourceDeleteCommand(requestId, ASSET, id, version), actor());
         return CommonResult.success(true);
     }
 
-    // ========== 子资产 ==========
-
-    @Operation(summary = "获取子资产详情")
     @GetMapping("/item/{id}")
-    public CommonResult<AssetItem> getItem(@PathVariable Long id) {
-        return CommonResult.success(assetService.getItemById(id));
+    public CommonResult<ObjectNode> getItem(@PathVariable long id) {
+        return CommonResult.success(resources.get(ASSET_ITEM, id, actors.current()).data());
     }
 
-    @Operation(summary = "获取子资产列表")
     @GetMapping("/{assetId}/items")
-    public CommonResult<List<AssetItem>> listItems(@PathVariable Long assetId) {
-        return CommonResult.success(assetService.listItems(assetId));
+    public CommonResult<List<ObjectNode>> listItems(@PathVariable long assetId) {
+        return CommonResult.success(assets.items(assetId, actors.current()));
     }
 
-    @Operation(summary = "创建子资产")
     @PostMapping("/item")
-    public CommonResult<AssetItem> createItem(@Valid @RequestBody AssetItemCreateReqVO reqVO) {
-        AssetItem item = AssetConvert.INSTANCE.convert(reqVO);
-        return CommonResult.success(assetService.createItem(item));
+    public CommonResult<ObjectNode> createItem(@Valid @RequestBody AssetItemCreateReqVO request) {
+        var fields = request.fields().deepCopy();
+        if (fields.has("assetId") || fields.has("parentVersion")) {
+            throw AssetFields.invalid("父资产必须在请求顶层指定");
+        }
+        fields.put("assetId", request.assetId()).put("parentVersion", request.parentVersion());
+        return CommonResult.success(
+                commands.execute(new ResourceCreateCommand(request.requestId(), ASSET_ITEM, null, fields), actor())
+                        .result());
     }
 
-    @Operation(summary = "更新子资产")
     @PutMapping("/item")
-    public CommonResult<AssetItem> updateItem(@Valid @RequestBody AssetItemUpdateReqVO reqVO) {
-        AssetItem item = AssetConvert.INSTANCE.convert(reqVO);
-        return CommonResult.success(assetService.updateItem(item));
+    public CommonResult<ObjectNode> updateItem(@Valid @RequestBody AssetItemUpdateReqVO request) {
+        return CommonResult.success(commands.patch(
+                new ResourcePatchCommand(request.requestId(), ASSET_ITEM, request.id(), request.version(),
+                        request.patch(), request.assetVersion()), actor()).result());
     }
 
-    @Operation(summary = "删除子资产")
     @DeleteMapping("/item/{id}")
-    public CommonResult<Boolean> deleteItem(@PathVariable Long id) {
-        assetService.deleteItem(id);
+    public CommonResult<Boolean> deleteItem(@PathVariable long id, @RequestParam int version,
+                                            @RequestParam int parentVersion, @RequestParam String requestId) {
+        commands.execute(new ResourceDeleteCommand(requestId, ASSET_ITEM, id, version, parentVersion), actor());
         return CommonResult.success(true);
+    }
+
+    @PostMapping("/batch")
+    public CommonResult<ObjectNode> batch(@Valid @RequestBody AssetBatchCreateCommand command) {
+        return CommonResult.success(commands.execute(command, actor()).result());
+    }
+
+    private ResourceCommandContext actor() {
+        return ResourceCommandContext.user(actors.current(), null);
     }
 }

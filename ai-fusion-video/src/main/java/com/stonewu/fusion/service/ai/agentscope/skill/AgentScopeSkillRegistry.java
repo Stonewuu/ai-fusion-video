@@ -11,14 +11,11 @@ import org.springframework.beans.factory.DisposableBean;
 import org.springframework.stereotype.Component;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 
-/** Builds the explicitly configured, application-owned AgentScope skill repositories. */
+/**
+ * Builds the explicitly configured, application-owned AgentScope skill repositories.
+ */
 @Component
 public final class AgentScopeSkillRegistry implements DisposableBean {
 
@@ -47,7 +44,9 @@ public final class AgentScopeSkillRegistry implements DisposableBean {
         return repositories;
     }
 
-    /** Returns the effective low-to-high precedence catalog exposed by AgentScope. */
+    /**
+     * Returns the effective low-to-high precedence catalog exposed by AgentScope.
+     */
     public List<SkillReference> catalog() {
         return skills().stream()
                 .map(skill -> {
@@ -65,7 +64,9 @@ public final class AgentScopeSkillRegistry implements DisposableBean {
                 .toList();
     }
 
-    /** Returns the effective Skill documents using the same precedence as the Harness runtime. */
+    /**
+     * Returns the effective Skill documents using the same precedence as the Harness runtime.
+     */
     public List<AgentSkill> skills() {
         Map<String, AgentSkill> merged = new LinkedHashMap<>();
         for (AgentSkillRepository repository : repositories) {

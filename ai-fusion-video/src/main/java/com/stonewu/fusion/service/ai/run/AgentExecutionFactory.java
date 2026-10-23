@@ -1,8 +1,8 @@
 package com.stonewu.fusion.service.ai.run;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -20,12 +20,7 @@ import com.stonewu.fusion.service.ai.agentscope.kernel.AgentScopeHarnessInvoker;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.ai.model.AiModelRequestOptions;
-import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
-import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
-import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
-import com.stonewu.fusion.service.ai.run.kernel.PersistedAgentKernelSnapshotResolver;
-import com.stonewu.fusion.service.ai.run.kernel.RunConfigUnavailableException;
-import com.stonewu.fusion.service.ai.run.kernel.ToolManifestSnapshot;
+import com.stonewu.fusion.service.ai.run.kernel.*;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
 import com.stonewu.fusion.service.ai.run.model.PendingConfirmation;
 import io.agentscope.core.agent.RuntimeContext;
@@ -36,10 +31,10 @@ import io.agentscope.core.message.ToolUseBlock;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-import java.time.Instant;
 import java.time.Duration;
-import java.util.List;
+import java.time.Instant;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -57,6 +52,7 @@ public final class AgentExecutionFactory {
     private final ObjectMapper objectMapper;
     private final AgentKernelSpecFactory specFactory;
     private final Duration confirmationTimeout;
+    private final List<AgentConfirmationPreviewProvider> confirmationPreviews;
 
     public AgentExecutionFactory(
             AgentScopeHarnessInvoker harnessInvoker,
@@ -68,7 +64,8 @@ public final class AgentExecutionFactory {
             AiModelMetadataResolver modelMetadataResolver,
             ObjectMapper objectMapper,
             AgentKernelSpecFactory specFactory,
-            AgentScopeV2Properties properties) {
+            AgentScopeV2Properties properties,
+            List<AgentConfirmationPreviewProvider> confirmationPreviews) {
         this.harnessInvoker = Objects.requireNonNull(harnessInvoker, "harnessInvoker must not be null");
         this.runtimeContextFactory = Objects.requireNonNull(
                 runtimeContextFactory, "runtimeContextFactory must not be null");
@@ -80,8 +77,9 @@ public final class AgentExecutionFactory {
                 modelMetadataResolver, "modelMetadataResolver must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.specFactory = Objects.requireNonNull(specFactory, "specFactory must not be null");
+        this.confirmationPreviews = List.copyOf(confirmationPreviews);
         this.confirmationTimeout = Objects.requireNonNull(
-                properties, "properties must not be null")
+                        properties, "properties must not be null")
                 .getExecution()
                 .getConfirmationTimeout();
         this.snapshotResolver = new PersistedAgentKernelSnapshotResolver(this.objectMapper);
@@ -110,22 +108,22 @@ public final class AgentExecutionFactory {
                     stateSessionId,
                     runtimeRequest.parentRun(),
                     harnessInvoker.streamEvents(spec, List.copyOf(messages), runtimeContext)
-                            .map(event -> mapConfirmationCandidate(
-                                    event, run.deadline()))
+                            .map(event -> mapConfirmationCandidate(event, runtimeRequest))
                             .map(event -> childIdentity(event, run)),
                     ignored -> Mono.empty(),
-                    () -> { });
+                    () -> {
+                    });
         });
     }
 
     private AgentEventEnvelope mapConfirmationCandidate(
-            AgentEvent event, Instant deadline) {
+            AgentEvent event, AgentScopeRuntimeContextRequest runtime) {
         AgentEventEnvelope mapped = eventMapper.map(event);
         if (!(event instanceof RequireUserConfirmEvent confirmation)) {
             return mapped;
         }
         PendingConfirmation candidate = confirmationCandidate(
-                confirmation, mapped.payload());
+                confirmation, mapped.payload(), runtime);
         ObjectNode payload = mapped.payload().deepCopy();
         ObjectNode candidatePayload = JsonNodeFactory.instance.objectNode()
                 .put("replyId", candidate.replyId())
@@ -151,7 +149,7 @@ public final class AgentExecutionFactory {
     }
 
     private PendingConfirmation confirmationCandidate(
-            RequireUserConfirmEvent event, JsonNode sanitizedPayload) {
+            RequireUserConfirmEvent event, JsonNode sanitizedPayload, AgentScopeRuntimeContextRequest runtime) {
         if (event.getReplyId() == null || event.getReplyId().isBlank()
                 || event.getToolCalls().isEmpty()) {
             throw new IllegalStateException(
@@ -186,6 +184,12 @@ public final class AgentExecutionFactory {
                     .put("toolCallId", toolCall.getId())
                     .put("toolName", toolCall.getName())
                     .put("argumentsPreview", argumentsPreview);
+            for (var provider : confirmationPreviews) {
+                if (provider.supports(toolCall.getName())) {
+                    preview.set("review", provider.preview(toolCall.getName(), sanitizedInput, runtime));
+                    break;
+                }
+            }
             previews.add(preview);
         }
         return new PendingConfirmation(
@@ -241,7 +245,9 @@ public final class AgentExecutionFactory {
                 event.createdAt());
     }
 
-    /** Rehydrates only an exact, currently available no-tool kernel; other states fail closed. */
+    /**
+     * Rehydrates only an exact, currently available no-tool kernel; other states fail closed.
+     */
     public Mono<AgentKernelSpec> resolve(AgentKernelSnapshot snapshot) {
         AgentKernelSnapshot safeSnapshot = Objects.requireNonNull(
                 snapshot, "snapshot must not be null");
@@ -319,8 +325,8 @@ public final class AgentExecutionFactory {
                 || !Objects.equals(ownerInstanceId, run.ownerInstanceId())
                 || ownerEpoch != run.ownerEpoch()
                 || !Objects.equals(
-                        stateSessionId,
-                        request.conversation().agentStateSessionId())
+                stateSessionId,
+                request.conversation().agentStateSessionId())
                 || !Objects.equals(deadline, run.deadline())) {
             throw new IllegalArgumentException(
                     "RuntimeContext run identity does not match durable execution ownership");
@@ -328,7 +334,7 @@ public final class AgentExecutionFactory {
         if (run.childRun()) {
             if (request.parentRun() == null
                     || !Objects.equals(
-                            run.parentToolCallId(), request.parentRun().toolCallId())
+                    run.parentToolCallId(), request.parentRun().toolCallId())
                     || !Objects.equals(run.agentName(), request.parentRun().agentName())) {
                 throw new IllegalArgumentException(
                         "Child RuntimeContext must carry its durable parent run identity");

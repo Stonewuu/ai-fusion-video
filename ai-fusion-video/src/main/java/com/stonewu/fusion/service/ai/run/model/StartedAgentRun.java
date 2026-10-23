@@ -5,7 +5,9 @@ import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import java.time.Instant;
 import java.util.Objects;
 
-/** Persisted identity and ownership returned after a run admission transaction commits. */
+/**
+ * Persisted identity and ownership returned after a run admission transaction commits.
+ */
 public record StartedAgentRun(
         String runId,
         String conversationId,

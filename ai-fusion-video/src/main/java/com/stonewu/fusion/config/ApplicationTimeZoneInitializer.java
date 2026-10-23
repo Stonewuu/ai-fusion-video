@@ -1,13 +1,15 @@
 package com.stonewu.fusion.config;
 
+import org.springframework.context.ApplicationContextInitializer;
+import org.springframework.context.ConfigurableApplicationContext;
+
 import java.time.DateTimeException;
 import java.time.ZoneId;
 import java.util.TimeZone;
 
-import org.springframework.context.ApplicationContextInitializer;
-import org.springframework.context.ConfigurableApplicationContext;
-
-/** 在 Spring Bean 初始化前应用配置的系统时区。 */
+/**
+ * 在 Spring Bean 初始化前应用配置的系统时区。
+ */
 public class ApplicationTimeZoneInitializer
         implements ApplicationContextInitializer<ConfigurableApplicationContext> {
 

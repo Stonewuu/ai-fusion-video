@@ -7,7 +7,9 @@ import reactor.core.publisher.Mono;
 
 import java.util.Optional;
 
-/** Reactive boundary for owner-fenced and allow-listed system terminal CAS operations. */
+/**
+ * Reactive boundary for owner-fenced and allow-listed system terminal CAS operations.
+ */
 public interface RunTerminalCoordinator {
 
     Mono<Optional<CommittedAgentEvent>> terminateOwned(

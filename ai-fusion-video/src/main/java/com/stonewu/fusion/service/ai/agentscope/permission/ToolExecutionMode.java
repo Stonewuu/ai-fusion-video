@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.ai.agentscope.permission;
 
-/** User-selected tool execution policy for one assistant conversation turn. */
+/**
+ * User-selected tool execution policy for one assistant conversation turn.
+ */
 public enum ToolExecutionMode {
     DEFAULT,
     ALWAYS_ASK,

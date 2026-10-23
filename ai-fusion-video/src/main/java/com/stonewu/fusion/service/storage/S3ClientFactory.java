@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.storage;
 
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.auth.credentials.AwsBasicCredentials;
@@ -10,7 +11,6 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.S3ClientBuilder;
 import software.amazon.awssdk.services.s3.S3Configuration;
 
-import jakarta.annotation.PreDestroy;
 import java.net.URI;
 import java.util.Locale;
 import java.util.Map;

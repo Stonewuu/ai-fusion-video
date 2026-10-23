@@ -9,7 +9,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** Coalesces lossy Redis hints without allowing them to become replay state. */
+/**
+ * Coalesces lossy Redis hints without allowing them to become replay state.
+ */
 final class ReplayWakeGate {
 
     private final AtomicBoolean dirty = new AtomicBoolean();

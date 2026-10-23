@@ -4,7 +4,9 @@ import lombok.Data;
 
 import java.util.List;
 
-/** User decisions for one durable AgentScope permission pause. */
+/**
+ * User decisions for one durable AgentScope permission pause.
+ */
 @Data
 public class ToolConfirmationReqVO {
 

@@ -9,7 +9,9 @@ import org.springframework.stereotype.Component;
 import java.util.List;
 import java.util.function.UnaryOperator;
 
-/** OpenAI-shaped, non-official image APIs such as NewAPI async task endpoints. */
+/**
+ * OpenAI-shaped, non-official image APIs such as NewAPI async task endpoints.
+ */
 @Component
 public class NewApiImageProtocolAdapter implements OpenAiCompatibleImageProtocolAdapter {
 

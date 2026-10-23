@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.media.MediaBlobCleanupMapper">
+    <insert id="discover">
+        INSERT IGNORE INTO afv_media_blob_cleanup(blob_id,status,eligible_at,next_attempt_at,created_at,updated_at)
+        SELECT b.id,'WAITING',TIMESTAMPADD(DAY,#{days},b.orphaned_at),TIMESTAMPADD(DAY,#{days},b.orphaned_at),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6)
+        FROM afv_media_blob b WHERE b.state='ORPHAN' AND b.orphaned_at IS NOT NULL
+            AND NOT EXISTS (SELECT 1 FROM afv_media_blob_cleanup c WHERE c.blob_id=b.id)
+        ORDER BY b.orphaned_at,b.id LIMIT 100
+    </insert>
+    <select id="next" resultType="String">
+        SELECT blob_id FROM afv_media_blob_cleanup WHERE status&lt;&gt;'PURGED' AND next_attempt_at&lt;=UTC_TIMESTAMP(6)
+            AND eligible_at&lt;=UTC_TIMESTAMP(6) AND (lease_until IS NULL OR lease_until&lt;=UTC_TIMESTAMP(6))
+        ORDER BY next_attempt_at,blob_id LIMIT 1 FOR UPDATE SKIP LOCKED
+    </select>
+    <select id="oldEnough" resultType="Boolean">
+        SELECT orphaned_at&lt;=TIMESTAMPADD(DAY,#{days},UTC_TIMESTAMP(6)) FROM afv_media_blob WHERE id=#{id}
+    </select>
+    <update id="claim">
+        UPDATE afv_media_blob_cleanup SET status='CLAIMED',owner_id=#{owner},epoch=epoch+1,attempts=attempts+1,lease_until=TIMESTAMPADD(MINUTE,2,UTC_TIMESTAMP(6)),last_error=NULL,updated_at=UTC_TIMESTAMP(6) WHERE blob_id=#{id}
+    </update>
+    <update id="purged">
+        UPDATE afv_media_blob_cleanup SET status='PURGED',owner_id=NULL,lease_until=NULL,purged_at=UTC_TIMESTAMP(6),last_error=NULL,updated_at=UTC_TIMESTAMP(6) WHERE blob_id=#{id}
+    </update>
+    <update id="defer">
+        UPDATE afv_media_blob_cleanup SET status='WAITING',owner_id=NULL,lease_until=NULL,next_attempt_at=TIMESTAMPADD(MINUTE,#{minutes},UTC_TIMESTAMP(6)),last_error='存储文件清理未完成，将自动重试；请检查存储配置',updated_at=UTC_TIMESTAMP(6) WHERE blob_id=#{id}
+    </update>
+    <update id="block">
+        UPDATE afv_media_blob_cleanup SET status='BLOCKED',owner_id=NULL,lease_until=NULL,next_attempt_at=TIMESTAMPADD(DAY,1,UTC_TIMESTAMP(6)),last_error=#{reason},updated_at=UTC_TIMESTAMP(6) WHERE blob_id=#{id}
+    </update>
+    <select id="lockLease" resultType="com.stonewu.fusion.mapper.media.MediaBlobCleanupMapper$Lease">
+        SELECT owner_id,epoch,status,lease_until&gt;UTC_TIMESTAMP(6) AS valid FROM afv_media_blob_cleanup WHERE blob_id=#{id} FOR UPDATE
+    </select>
+</mapper>

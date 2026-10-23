@@ -1,29 +1,24 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.script.Script;
-import com.stonewu.fusion.entity.script.ScriptEpisode;
-import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.project.ProjectService;
-import com.stonewu.fusion.service.script.ScriptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/** 删除剧本模块资源工具。 */
+/**
+ * 删除剧本模块资源工具。
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class DeleteScriptChildResourceToolExecutor implements ToolExecutor {
 
+    private final ScriptToolCommands commands;
+
     private static final String RESOURCE_EPISODE = "episode";
     private static final String RESOURCE_SCENE = "scene";
 
-    private final ScriptService scriptService;
-    private final ProjectService projectService;
 
     @Override
     public String getToolName() {
@@ -46,6 +41,7 @@ public class DeleteScriptChildResourceToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "expectedVersion": { "type": "integer", "minimum": 0, "description": "刚刚读取的对象版本；创建分集传剧本版本，更新分集传分集版本" },
                         "resourceType": {
                             "type": "string",
                             "enum": ["episode", "scene"],
@@ -53,7 +49,7 @@ public class DeleteScriptChildResourceToolExecutor implements ToolExecutor {
                         },
                         "resourceId": {"type": "integer", "description": "要删除的资源ID"}
                     },
-                    "required": ["resourceType", "resourceId"],
+                    "required": ["expectedVersion", "resourceType", "resourceId"],
                     "additionalProperties": false
                 }
                 """;
@@ -61,56 +57,6 @@ public class DeleteScriptChildResourceToolExecutor implements ToolExecutor {
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            String resourceType = params.getStr("resourceType");
-            Long resourceId = params.getLong("resourceId");
-            if (resourceType == null || resourceId == null) {
-                return error("缺少 resourceType 或 resourceId");
-            }
-
-            Long scriptId = resolveScriptId(resourceType, resourceId);
-            Script script = scriptService.getById(scriptId);
-            if (!projectService.canAccessProject(script.getProjectId(), context.getUserId())) {
-                return error("无权删除该剧本资源");
-            }
-
-            switch (resourceType) {
-                case RESOURCE_EPISODE -> scriptService.deleteEpisode(resourceId);
-                case RESOURCE_SCENE -> scriptService.deleteScene(resourceId);
-                default -> {
-                    return error("resourceType 仅支持 episode 或 scene");
-                }
-            }
-            return JSONUtil.createObj()
-                    .set("status", "success")
-                    .set("deletedResourceType", resourceType)
-                    .set("deletedResourceId", resourceId)
-                    .toString();
-        } catch (Exception e) {
-            log.error("删除剧本资源失败", e);
-            return error("删除剧本资源失败: " + e.getMessage());
-        }
-    }
-
-    private Long resolveScriptId(String resourceType, Long resourceId) {
-        return switch (resourceType) {
-            case RESOURCE_EPISODE -> {
-                ScriptEpisode episode = scriptService.getEpisodeById(resourceId);
-                yield episode.getScriptId();
-            }
-            case RESOURCE_SCENE -> {
-                ScriptSceneItem scene = scriptService.getSceneById(resourceId);
-                if (scene.getScriptId() != null) {
-                    yield scene.getScriptId();
-                }
-                yield scriptService.getEpisodeById(scene.getEpisodeId()).getScriptId();
-            }
-            default -> throw new IllegalArgumentException("resourceType 仅支持 episode 或 scene");
-        };
-    }
-
-    private String error(String message) {
-        return JSONUtil.createObj().set("status", "error").set("message", message).toString();
+        return commands.delete(toolInput, context);
     }
 }

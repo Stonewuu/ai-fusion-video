@@ -30,11 +30,15 @@ public class AiProviderContextFactory {
             throw new BusinessException("AI 模型不存在");
         }
         ApiConfig apiConfig = resolveApiConfig(model.getApiConfigId());
+        if (!Integer.valueOf(1).equals(apiConfig.getStatus())) {
+            throw new BusinessException(409, "API 配置已停用，请先启用后再调用模型");
+        }
         Map<String, Object> config = parseConfig(model.getConfig(), model.getId());
         AiModelMetadata metadata = aiModelMetadataResolver.resolve(model, apiConfig);
         String requestProtocol = metadata.modelProtocol();
         if (StrUtil.isBlank(requestProtocol)) {
-            throw new BusinessException("文本模型未配置请求协议：请在模型中设置覆盖协议，或在 API 配置中设置文本默认协议");
+            throw new BusinessException(
+                    "文本模型未配置请求协议：请在模型中设置覆盖协议，或在 API 配置中设置文本默认协议");
         }
         return AiProviderContext.builder()
                 .model(model)

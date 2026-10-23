@@ -35,3 +35,11 @@
 
 - 必须分析所有传入的分集，不允许跳过
 - 子资产名称应体现外观变化，禁止用表情/情绪命名
+
+
+### 资产写入与并发规则
+
+- 查询返回真实资产 ID、`version` 和子资产的 `assetVersion`；`query_asset_items` 的结果在 `assets` 数组中。使用真实 ID，对同名多结果不得自行挑选。
+- `batch_create_assets` / `batch_create_asset_items` 必须明确 `reuseExisting`：复用已核实的同名资源用 true，创建独立对象用 false；复用不会修改原对象。子资产批量新增还须传查询所得 `expectedParentVersion`，后续批次使用上批真实返回的 `assetVersion`。
+- 修改或删除主资产使用 `expectedVersion`；子资产使用其 `expectedVersion` 与父资产 `expectedParentVersion`。`add_asset_item` 使用 `parentVersion`。不可硬编码 0 或为了覆盖冲突临时换成最新版本。
+- 发生版本冲突时保留草稿或生成候选，说明哪个对象已变化；重新读取只用于比较，不自动覆盖新内容。仅按成功回执中的 `commandId`、ID 和版本报告已完成修改。

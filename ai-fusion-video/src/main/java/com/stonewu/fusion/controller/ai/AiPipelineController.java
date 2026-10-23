@@ -1,32 +1,16 @@
 package com.stonewu.fusion.controller.ai;
 
 import com.stonewu.fusion.common.CommonResult;
-import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
-import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
-import com.stonewu.fusion.controller.ai.vo.PipelineRunStatusRespVO;
-import com.stonewu.fusion.controller.ai.vo.RunningPipelineRunRespVO;
-import com.stonewu.fusion.controller.ai.vo.ToolConfirmationReqVO;
-import com.stonewu.fusion.controller.ai.vo.ToolConfirmationExpiryReqVO;
+import com.stonewu.fusion.controller.ai.vo.*;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopePipelineRunService;
-import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
-import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
-import com.stonewu.fusion.service.ai.run.CancellationCoordinator;
-import com.stonewu.fusion.service.ai.run.AgentConfirmationService;
-import com.stonewu.fusion.service.ai.run.AgentConfirmationExpiryCoordinator;
-import com.stonewu.fusion.service.ai.run.PipelineCursorParser;
+import com.stonewu.fusion.service.ai.run.*;
 import com.stonewu.fusion.service.ai.run.model.RunCursor;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.http.codec.ServerSentEvent;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -34,7 +18,9 @@ import java.util.List;
 
 import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 
-/** Durable, user-authorized pipeline HTTP and SSE API. */
+/**
+ * Durable, user-authorized pipeline HTTP and SSE API.
+ */
 @Tag(name = "AI Pipeline")
 @RestController
 @RequestMapping("/api/ai/pipeline")
@@ -55,10 +41,11 @@ public class AiPipelineController {
             @RequestBody AiChatReqVO request) {
         long currentUserId = requireCurrentUserId();
         return runQueries.authorizeConversationForStart(
-                request.getConversationId(), currentUserId)
+                        request.getConversationId(), currentUserId)
                 .thenMany(Flux.defer(() -> pipelineRuns.stream(
                         request, currentUserId)))
-                .map(this::toSse);
+                .map(this::toSse)
+                .transform(AgentPipelineStreamSupport::keepAlive);
     }
 
     @Operation(summary = "继续失败或已取消的 Pipeline")
@@ -67,7 +54,8 @@ public class AiPipelineController {
             @RequestParam String conversationId) {
         long currentUserId = requireCurrentUserId();
         return pipelineRuns.streamContinuation(conversationId, currentUserId)
-                .map(this::toSse);
+                .map(this::toSse)
+                .transform(AgentPipelineStreamSupport::keepAlive);
     }
 
     @Operation(summary = "取消 Pipeline")
@@ -77,7 +65,7 @@ public class AiPipelineController {
             @RequestParam(required = false) String conversationId) {
         long currentUserId = requireCurrentUserId();
         return runQueries.resolveAuthorizedTarget(
-                runId, conversationId, currentUserId)
+                        runId, conversationId, currentUserId)
                 .flatMap(run -> cancellations.cancel(
                         run.getRunId(), currentUserId))
                 .thenReturn(CommonResult.success(true));
@@ -111,15 +99,15 @@ public class AiPipelineController {
             @RequestHeader(name = "Last-Event-ID", required = false) String lastEventId) {
         long currentUserId = requireCurrentUserId();
         return runQueries.resolveAuthorizedTarget(
-                runId, conversationId, currentUserId)
+                        runId, conversationId, currentUserId)
                 .flatMapMany(run -> {
                     RunCursor cursor = cursorParser.parse(
                             run.getRunId(), afterSequence, lastEventId);
                     return replayService.replayThenLive(
-                            cursor.runId(), cursor.afterSequence())
+                                    cursor.runId(), cursor.afterSequence())
                             .concatMap(event -> runQueries.project(run, event))
                             .map(this::toSse);
-                });
+                }).transform(AgentPipelineStreamSupport::keepAlive);
     }
 
     @Operation(summary = "查询 Pipeline 运行状态")

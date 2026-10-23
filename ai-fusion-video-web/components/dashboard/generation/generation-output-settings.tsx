@@ -1,5 +1,7 @@
 "use client";
 
+import { videoDurationForResolution, videoDurationOptions, videoInputState, videoMaxDuration, videoRatioOptions } from "@/lib/video-model-rules";
+
 import { Check, Minus, Plus } from "lucide-react";
 import type { GenerationCapabilities } from "@/lib/generation-capabilities";
 import { Input } from "@/components/ui/input";
@@ -26,7 +28,9 @@ function ChoiceGroup({
   options: string[];
   onChange: (value: string) => void;
 }) {
-  if (options.length === 0) return null;
+  if (options.length === 0) {
+    return null;
+  }
 
   return (
     <div>
@@ -45,7 +49,7 @@ function ChoiceGroup({
                 : "border-border/40 bg-background/65 text-muted-foreground hover:border-primary/20 hover:bg-background hover:text-foreground",
             )}
           >
-            {option}
+            {option === "adaptive" ? "自适应" : option}
           </button>
         ))}
       </div>
@@ -152,21 +156,30 @@ export function GenerationOutputSettings({
     <section className="rounded-[18px] border border-border/45 bg-background/48 p-3.5">
       <div className="flex items-center justify-between gap-3">
         <h4 className="text-xs font-semibold">输出参数</h4>
-        <span className="text-[10px] text-muted-foreground">仅显示模型支持项</span>
+        <span className="text-[10px] text-muted-foreground">
+          仅显示模型支持项
+        </span>
       </div>
 
       <div className="mt-3 space-y-3.5">
         <ChoiceGroup
           label="画面比例"
           value={form.ratio}
-          options={capabilities?.supportedAspectRatios || []}
+          options={videoRatioOptions(
+            capabilities?.supportedAspectRatios || [],
+            capabilities?.videoRules,
+            videoInputState(form),
+          )}
           onChange={(ratio) => onChange({ ratio })}
         />
         <ChoiceGroup
           label="分辨率"
           value={form.resolution}
           options={capabilities?.supportedResolutions || []}
-          onChange={(resolution) => onChange({ resolution })}
+          onChange={(resolution) => {
+            const duration = capabilities ? videoDurationForResolution(form.duration, capabilities, resolution) : form.duration;
+            onChange({ resolution, duration });
+          }}
         />
 
         <div className="grid gap-2 sm:grid-cols-2">
@@ -182,7 +195,9 @@ export function GenerationOutputSettings({
             <GenerationDurationSlider
               value={form.duration}
               min={capabilities.minDuration}
-              max={capabilities.maxDuration}
+              max={videoMaxDuration(capabilities, form.resolution)}
+              automatic={capabilities.videoRules?.automaticDuration}
+              options={videoDurationOptions(capabilities, form.resolution)}
               onChange={(duration) => onChange({ duration })}
             />
           )}
@@ -190,38 +205,52 @@ export function GenerationOutputSettings({
 
         {mode === "video" && (
           <>
-            <div>
-              <label className="text-[10px] font-medium text-muted-foreground">
-                随机种子
-              </label>
-              <Input
-                type="number"
-                value={form.seed}
-                onChange={(event) => onChange({ seed: event.target.value })}
-                placeholder="随机"
-                className="mt-2 h-9 rounded-xl bg-background/65"
-              />
-            </div>
+            {capabilities?.supportSeed !== false && (
+              <div className="flex flex-col gap-2">
+                <label className="text-[10px] font-medium text-muted-foreground">
+                  随机种子
+                </label>
+                <Input
+                  type="number"
+                  value={form.seed}
+                  onChange={(event) => onChange({ seed: event.target.value })}
+                  placeholder="随机"
+                  min={-1}
+                  max={2147483647}
+                />
+              </div>
+            )}
             <div className="grid grid-cols-3 gap-2">
-              <ToggleOption
-                label="生成声音"
-                checked={form.generateAudio}
-                disabled={!capabilities?.supportGenerateAudio}
-                onChange={(generateAudio) => onChange({ generateAudio })}
-              />
-              <ToggleOption
-                label="固定镜头"
-                checked={form.cameraFixed}
-                disabled={!capabilities?.supportCameraFixed}
-                onChange={(cameraFixed) => onChange({ cameraFixed })}
-              />
-              <ToggleOption
-                label="添加水印"
-                checked={form.watermark}
-                disabled={!capabilities?.supportWatermark}
-                onChange={(watermark) => onChange({ watermark })}
-              />
+              {capabilities?.supportGenerateAudio && (
+                <ToggleOption
+                  label="生成声音"
+                  checked={form.generateAudio}
+                  disabled={!capabilities?.supportGenerateAudio}
+                  onChange={(generateAudio) => onChange({ generateAudio })}
+                />
+              )}
+              {capabilities?.supportCameraFixed && (
+                <ToggleOption
+                  label="固定镜头"
+                  checked={form.cameraFixed}
+                  disabled={!capabilities?.supportCameraFixed}
+                  onChange={(cameraFixed) => onChange({ cameraFixed })}
+                />
+              )}
+              {capabilities?.supportWatermark && (
+                <ToggleOption
+                  label="添加水印"
+                  checked={form.watermark}
+                  disabled={!capabilities?.supportWatermark}
+                  onChange={(watermark) => onChange({ watermark })}
+                />
+              )}
             </div>
+            {capabilities?.videoRules?.fixedGenerateAudio && (
+              <p className="text-xs text-muted-foreground">
+                此模型会同时生成视频声音。
+              </p>
+            )}
           </>
         )}
       </div>

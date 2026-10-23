@@ -1,6 +1,8 @@
 package com.stonewu.fusion.enums.ai;
 
-/** Stable legacy projection type emitted by a terminal run event. */
+/**
+ * Stable legacy projection type emitted by a terminal run event.
+ */
 public enum AgentTerminalOutputType {
 
     DONE(AgentRunStatus.COMPLETED),

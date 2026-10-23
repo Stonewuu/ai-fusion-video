@@ -7,16 +7,12 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import com.stonewu.fusion.service.generation.transport.GenerationHttpClients;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
+import okhttp3.*;
 import okio.BufferedSource;
 import org.springframework.stereotype.Component;
 
@@ -24,12 +20,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * Google Flow Reverse API OpenAI 兼容请求客户端。
@@ -46,7 +39,7 @@ public class GoogleFlowReverseApiClient {
     private final StorageConfigService storageConfigService;
     private final PresetArtStyleResourceResolver presetArtStyleResourceResolver;
 
-    private final OkHttpClient streamHttpClient = new OkHttpClient.Builder()
+    private final OkHttpClient streamHttpClient = GenerationHttpClients.providerRequestBuilder()
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(60, TimeUnit.SECONDS)
@@ -59,7 +52,8 @@ public class GoogleFlowReverseApiClient {
             .followRedirects(true)
             .build();
 
-    public CompletionResult generate(String prompt, String modelCode, List<String> imageUrls, ApiConfig apiConfig) {
+    public Supplier<CompletionResult> prepare(String prompt, String modelCode, List<String> imageUrls,
+                                              ApiConfig apiConfig) {
         String baseUrl = GoogleFlowReverseApiSupport.requireBaseUrl(apiConfig);
         if (StrUtil.isBlank(apiConfig.getApiKey())) {
             throw new BusinessException("GoogleFlowReverseApi 缺少 API Key 配置");
@@ -67,7 +61,18 @@ public class GoogleFlowReverseApiClient {
 
         try {
             String requestBody = buildRequestBody(prompt, modelCode, imageUrls);
-            return executeStreamingRequest(baseUrl, apiConfig.getApiKey(), requestBody, apiConfig);
+            Request request = new Request.Builder().url(baseUrl + "/v1/chat/completions")
+                    .post(RequestBody.create(requestBody, JSON))
+                    .addHeader("Authorization", "Bearer " + apiConfig.getApiKey())
+                    .addHeader("Content-Type", "application/json").addHeader("Accept", "text/event-stream").build();
+            OkHttpClient client = AiProxySupport.okHttpClient(streamHttpClient, apiConfig);
+            return () -> {
+                try {
+                    return executeStreamingRequest(client, request);
+                } catch (IOException failure) {
+                    throw new IllegalStateException("GoogleFlowReverseApi 请求失败", failure);
+                }
+            };
         } catch (IOException e) {
             log.error("[GoogleFlowReverseApi] 请求失败: model={}", modelCode, e);
             throw new BusinessException("GoogleFlowReverseApi 请求失败: " + e.getMessage());
@@ -107,21 +112,13 @@ public class GoogleFlowReverseApiClient {
         return OBJECT_MAPPER.writeValueAsString(body);
     }
 
-    private CompletionResult executeStreamingRequest(String baseUrl, String apiKey, String requestBody,
-                                                     ApiConfig apiConfig) throws IOException {
-        Request request = new Request.Builder()
-                .url(baseUrl + "/v1/chat/completions")
-                .post(RequestBody.create(requestBody, JSON))
-                .addHeader("Authorization", "Bearer " + apiKey)
-                .addHeader("Content-Type", "application/json")
-                .addHeader("Accept", "text/event-stream")
-                .build();
-
-        OkHttpClient client = AiProxySupport.okHttpClient(streamHttpClient, apiConfig);
+    private CompletionResult executeStreamingRequest(OkHttpClient client, Request request) throws IOException {
         try (Response response = client.newCall(request).execute()) {
             if (!response.isSuccessful()) {
                 String errorBody = response.body() != null ? response.body().string() : "";
-                throw new BusinessException("GoogleFlowReverseApi 请求失败: HTTP " + response.code() + " " + extractErrorMessage(errorBody));
+                throw new BusinessException(
+                        "GoogleFlowReverseApi 请求失败: HTTP " + response.code() + " " + extractErrorMessage(
+                                errorBody));
             }
             if (response.body() == null) {
                 throw new BusinessException("GoogleFlowReverseApi 响应体为空");
@@ -154,7 +151,8 @@ public class GoogleFlowReverseApiClient {
                 JsonNode payload = OBJECT_MAPPER.readTree(eventPayload);
                 if (payload.has("error")) {
                     JsonNode error = payload.get("error");
-                    throw new BusinessException("GoogleFlowReverseApi 生成失败: " + textOf(error.get("message"), textOf(error.get("detail"), "未知错误")));
+                    throw new BusinessException("GoogleFlowReverseApi 生成失败: " + textOf(error.get("message"),
+                            textOf(error.get("detail"), "未知错误")));
                 }
 
                 requestId = textOf(payload.get("id"), requestId);
@@ -221,7 +219,8 @@ public class GoogleFlowReverseApiClient {
             return loadLocalMedia(sourceUrl);
         }
         if (presetArtStyleResourceResolver.isPresetArtStylePath(sourceUrl)) {
-            PresetArtStyleResourceResolver.PresetArtStyleResource resource = presetArtStyleResourceResolver.load(sourceUrl);
+            PresetArtStyleResourceResolver.PresetArtStyleResource resource = presetArtStyleResourceResolver.load(
+                    sourceUrl);
             return new BinaryResource(resource.bytes(), resource.mimeType());
         }
         Request request = new Request.Builder()
@@ -249,7 +248,8 @@ public class GoogleFlowReverseApiClient {
 
         for (Path candidate : candidates) {
             if (candidate != null && Files.exists(candidate) && Files.isRegularFile(candidate)) {
-                return new BinaryResource(Files.readAllBytes(candidate), normalizeMimeType(null, candidate.getFileName().toString()));
+                return new BinaryResource(Files.readAllBytes(candidate),
+                        normalizeMimeType(null, candidate.getFileName().toString()));
             }
         }
         throw new BusinessException("本地参考图不存在: " + sourceUrl);

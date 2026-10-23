@@ -1,6 +1,8 @@
 package com.stonewu.fusion.controller.ai.vo;
 
-/** Authoritative status snapshot for one durable root or child run. */
+/**
+ * Authoritative status snapshot for one durable root or child run.
+ */
 public record PipelineRunStatusRespVO(
         String runId,
         String status,

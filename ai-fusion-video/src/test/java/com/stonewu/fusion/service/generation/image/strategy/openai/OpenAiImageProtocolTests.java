@@ -7,7 +7,6 @@ import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.generation.image.strategy.support.OpenAiCompatibleImageProtocolContext;
 import com.stonewu.fusion.service.generation.image.strategy.support.OpenAiCompatibleImageProtocolSupport;
 import com.stonewu.fusion.service.generation.image.strategy.support.OpenAiCompatibleImageRequest;
-import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import okhttp3.OkHttpClient;
@@ -27,7 +26,6 @@ class OpenAiImageProtocolTests {
     private final OpenAiCompatibleImageProtocolSupport support =
             new OpenAiCompatibleImageProtocolSupport(
                     mock(ModelPresetService.class),
-                    mock(MediaStorageService.class),
                     mock(StorageConfigService.class),
                     new PresetArtStyleResourceResolver(),
                     new OkHttpClient()

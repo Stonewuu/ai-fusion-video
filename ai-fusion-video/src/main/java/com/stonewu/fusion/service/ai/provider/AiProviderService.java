@@ -48,6 +48,13 @@ public class AiProviderService {
         return new AgentScopeModelProvision(agentScopeModel, fingerprint(context));
     }
 
+    public AgentScopeModelProvision provisionSingleRequestModel(AiModel model) {
+        AiProviderContext context = contextFactory.createForModel(model);
+        ChatModelBase generated = providerRegistry.getProvider(context)
+                .createAgentScopeModel(context.toBuilder().singleRequest(true).build());
+        return new AgentScopeModelProvision(generated, fingerprint(context));
+    }
+
     private String fingerprint(AiProviderContext context) {
         AiModel model = Objects.requireNonNull(context.getModel(), "provider model must not be null");
         ApiConfig apiConfig = context.getApiConfig();
@@ -92,27 +99,28 @@ public class AiProviderService {
     public List<RemoteModelVO> listRemoteModels(Long apiConfigId) {
         AiProviderContext context = contextFactory.createForApiConfig(apiConfigId);
         return providerRegistry.getProvider(context).listRemoteModels(context).stream()
-            .map(model -> enrichRemoteModel(context.getPlatform(), model))
-            .toList();
-        }
+                .map(model -> enrichRemoteModel(context.getPlatform(), model))
+                .toList();
+    }
 
-        private RemoteModelVO enrichRemoteModel(String providerPlatform, RemoteModelVO model) {
+    private RemoteModelVO enrichRemoteModel(String providerPlatform, RemoteModelVO model) {
         RemoteModelMetadata metadata = aiModelMetadataResolver.resolveRemoteModel(
-            providerPlatform,
-            model.getId(),
-            StrUtil.blankToDefault(model.getDisplayName(), model.getOwnedBy()),
-            model.getModelType());
+                providerPlatform,
+                model.getId(),
+                StrUtil.blankToDefault(model.getDisplayName(), model.getOwnedBy()),
+                model.getModelType());
 
         Integer resolvedModelType = model.getModelType() != null ? model.getModelType() : metadata.modelType();
         return RemoteModelVO.builder()
-            .id(model.getId())
-            .displayName(StrUtil.blankToDefault(model.getDisplayName(), metadata.displayName()))
-            .ownedBy(model.getOwnedBy())
-            .providerPlatform(StrUtil.blankToDefault(model.getProviderPlatform(), metadata.providerPlatform()))
-            .modelType(resolvedModelType)
-            .modelProtocol(StrUtil.blankToDefault(model.getModelProtocol(), metadata.modelProtocol()))
-            .capabilityPresetCode(modelPresetService.findPresetCode(model.getId(), resolvedModelType))
-            .inferredMetadata(model.getInferredMetadata() != null ? model.getInferredMetadata() : metadata.inferred())
-            .build();
+                .id(model.getId())
+                .displayName(StrUtil.blankToDefault(model.getDisplayName(), metadata.displayName()))
+                .ownedBy(model.getOwnedBy())
+                .providerPlatform(StrUtil.blankToDefault(model.getProviderPlatform(), metadata.providerPlatform()))
+                .modelType(resolvedModelType)
+                .modelProtocol(StrUtil.blankToDefault(model.getModelProtocol(), metadata.modelProtocol()))
+                .capabilityPresetCode(modelPresetService.findPresetCode(model.getId(), resolvedModelType))
+                .inferredMetadata(
+                        model.getInferredMetadata() != null ? model.getInferredMetadata() : metadata.inferred())
+                .build();
     }
 }

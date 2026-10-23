@@ -10,10 +10,10 @@ import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.transport.ProxyConfig;
 import io.agentscope.extensions.model.anthropic.AnthropicChatModel;
 import io.agentscope.extensions.model.anthropic.formatter.AnthropicChatFormatter;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.anthropic.AnthropicChatOptions;
 import org.springframework.ai.anthropic.api.AnthropicApi;
 import org.springframework.ai.chat.model.ChatModel;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -37,10 +37,14 @@ public class AnthropicAiProvider extends AbstractAiProvider {
         requireApiKey(context.getApiKey(), "Anthropic");
 
         AnthropicApi.Builder apiBuilder = AnthropicApi.builder().apiKey(context.getApiKey());
-        apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
-            context.getApiConfig(), 60 * 1000, 25 * 60 * 1000));
-        apiBuilder.webClientBuilder(AiProxySupport.webClientBuilder(
-            context.getApiConfig(), "anthropic-provider", Duration.ofMinutes(25)));
+        var rest = AiProxySupport.restClientBuilder(context.getApiConfig(), 60 * 1000, 25 * 60 * 1000);
+        var web = AiProxySupport.webClientBuilder(context.getApiConfig(), "anthropic-provider", Duration.ofMinutes(25));
+        if (GatewayAuthentication.bearer(context.getConfig())) {
+            rest.defaultHeader("Authorization", "Bearer " + context.getApiKey());
+            web.defaultHeader("Authorization", "Bearer " + context.getApiKey());
+        }
+        apiBuilder.restClientBuilder(rest);
+        apiBuilder.webClientBuilder(web);
         String rootBaseUrl = resolveRootBaseUrl(context.getBaseUrl());
         if (StrUtil.isNotBlank(rootBaseUrl)) {
             apiBuilder.baseUrl(rootBaseUrl);
@@ -63,12 +67,20 @@ public class AnthropicAiProvider extends AbstractAiProvider {
         requireApiKey(context.getApiKey(), "Anthropic");
         GenerateOptions defaultOptions = buildReasoningOptions(context);
         String rootBaseUrl = resolveRootBaseUrl(context.getBaseUrl());
+        if (context.isSingleRequest()) {
+            return new SingleRequestAnthropicModel(context, rootBaseUrl,
+                    GenerateOptions.mergeOptions(defaultOptions, buildGeminiGenerateOptions(context)));
+        }
         AnthropicChatModel.Builder builder = AnthropicChatModel.builder()
-                .apiKey(context.getApiKey())
                 .modelName(context.getModelName())
                 .stream(true)
                 .formatter(agentScopeFormatter())
                 .baseUrl(rootBaseUrl);
+        if (GatewayAuthentication.bearer(context.getConfig())) {
+            builder.authToken(context.getApiKey());
+        } else {
+            builder.apiKey(context.getApiKey());
+        }
         if (defaultOptions != null) {
             builder.defaultOptions(defaultOptions);
         }
@@ -144,6 +156,6 @@ public class AnthropicAiProvider extends AbstractAiProvider {
     }
 
     private String resolveRootBaseUrl(String baseUrl) {
-        return StrUtil.isBlank(baseUrl) ? "https://api.anthropic.com" : normalizeBaseUrl(baseUrl);
+        return StrUtil.isBlank(baseUrl) ? "https://api.anthropic.com" : normalizeBaseUrl(baseUrl).replaceAll("/v1$", "");
     }
 }

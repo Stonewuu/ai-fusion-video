@@ -1,0 +1,312 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.ai.AgentRunMapper">
+    <select id="activeMediaScope" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT run_id, actor_team_id, project_id FROM afv_agent_run
+        WHERE run_id = #{runId} AND user_id = #{userId} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch}
+            AND status = 'RUNNING' AND cancel_requested_at IS NULL
+            AND lease_until &gt; UTC_TIMESTAMP(6) AND deadline_at &gt; UTC_TIMESTAMP(6)
+    </select>
+    <select id="lockActiveMutation" resultType="String">
+        SELECT run_id FROM afv_agent_run WHERE run_id = #{context.agentRunId} AND user_id = #{context.actor.userId}
+        AND owner_instance_id = #{context.ownerInstanceId} AND owner_epoch = #{context.ownerEpoch} AND status = 'RUNNING'
+        AND actor_team_id &lt;=&gt; #{context.actor.teamId}
+        AND (canvas_scope_json IS NULL OR JSON_UNQUOTE(JSON_EXTRACT(canvas_scope_json, '$.canvasId')) = #{context.canvasId})
+        AND lease_until &gt; UTC_TIMESTAMP(6) AND deadline_at &gt; UTC_TIMESTAMP(6)
+        AND cancel_requested_at IS NULL AND (project_id IS NULL OR project_id = #{projectId}) FOR UPDATE
+    </select>
+    <select id="hasPendingCanvasNode" resultType="boolean">
+        SELECT COUNT(*) &gt; 0 FROM afv_canvas_agent_node_job j JOIN afv_agent_run r
+            ON j.node_run_id=JSON_UNQUOTE(JSON_EXTRACT(r.canvas_scope_json,'$.nodeRunId'))
+        WHERE r.run_id=#{runId} AND j.cancel_requested=FALSE AND r.cancel_requested_at IS NULL
+            AND ((r.run_id=j.agent_run_id AND j.dispatch_state IN ('QUEUED','DISPATCHING'))
+                OR (r.parent_run_id IS NOT NULL AND EXISTS(SELECT 1 FROM afv_agent_run p WHERE p.run_id=r.parent_run_id
+                    AND p.status IN ('RUNNING','WAITING_EXTERNAL','WAITING_CONFIRMATION') AND p.cancel_requested_at IS NULL
+                    AND p.deadline_at&gt;UTC_TIMESTAMP(3))))
+            AND r.next_sequence=1 AND r.deadline_at&gt;UTC_TIMESTAMP(3)
+            AND NOT EXISTS(SELECT 1 FROM afv_agent_model_call_usage u WHERE u.run_id=r.run_id)
+    </select>
+    <select id="selectByRunIdForUpdate" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT *
+        FROM afv_agent_run FORCE INDEX (uk_agent_run_id)
+        WHERE run_id = #{runId}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+    <select id="selectByRunId" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT *
+        FROM afv_agent_run FORCE INDEX (uk_agent_run_id)
+        WHERE run_id = #{runId}
+        LIMIT 1
+    </select>
+    <select id="selectProjectionRecoveryCandidates" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT *
+        FROM afv_agent_run
+        WHERE terminal_sequence IS NOT NULL
+          AND (
+            projected_through_sequence &lt; terminal_sequence
+            OR projection_completed_at IS NULL
+          )
+        ORDER BY id
+        LIMIT #{limit}
+    </select>
+    <select id="selectAuthorizedByRunId" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT r.*
+        FROM afv_agent_run r FORCE INDEX (uk_agent_run_id)
+        INNER JOIN afv_agent_conversation c
+          ON c.conversation_id = r.conversation_id
+         AND c.deleted = 0
+        WHERE r.run_id = #{runId}
+          AND r.user_id = #{userId}
+          AND c.user_id = #{userId}
+        LIMIT 1
+    </select>
+    <select id="selectAuthorizedPreferredRootByConversation" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT r.*
+        FROM afv_agent_run r FORCE INDEX (idx_agent_run_conversation_status)
+        INNER JOIN afv_agent_conversation c
+          ON c.conversation_id = r.conversation_id
+         AND c.deleted = 0
+        WHERE r.conversation_id = #{conversationId}
+          AND r.parent_run_id IS NULL
+          AND r.user_id = #{userId}
+          AND c.user_id = #{userId}
+        ORDER BY
+          CASE WHEN r.status IN (
+            'RUNNING', 'WAITING_CONFIRMATION', 'WAITING_EXTERNAL',
+            'CANCEL_REQUESTED') THEN 0 ELSE 1 END,
+          r.id DESC
+        LIMIT 1
+    </select>
+    <select id="selectLatestRootByConversation" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT *
+        FROM afv_agent_run FORCE INDEX (idx_agent_run_conversation_status)
+        WHERE conversation_id = #{conversationId}
+          AND parent_run_id IS NULL
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+    <select id="selectAuthorizedRunningRoots" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT r.*
+        FROM afv_agent_run r FORCE INDEX (idx_agent_run_user_status)
+        INNER JOIN afv_agent_conversation c
+          ON c.conversation_id = r.conversation_id
+         AND c.deleted = 0
+        WHERE r.user_id = #{userId}
+          AND c.user_id = #{userId}
+          AND r.parent_run_id IS NULL
+          AND r.status IN (
+            'RUNNING', 'WAITING_CONFIRMATION', 'WAITING_EXTERNAL',
+            'CANCEL_REQUESTED')
+        ORDER BY r.update_time DESC, r.id DESC
+    </select>
+    <select id="selectStateSessionIdsByConversation" resultType="String">
+        SELECT DISTINCT agent_state_session_id
+        FROM afv_agent_run
+        WHERE conversation_id = #{conversationId}
+        ORDER BY agent_state_session_id
+    </select>
+    <select id="selectDatabaseNow" resultType="java.time.LocalDateTime">
+        SELECT UTC_TIMESTAMP(3)
+    </select>
+    <select id="selectByParentAndToolCallForUpdate" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT *
+        FROM afv_agent_run FORCE INDEX (uk_agent_run_parent_tool)
+        WHERE parent_run_id = #{parentRunId}
+          AND parent_tool_call_id = #{parentToolCallId}
+        LIMIT 1
+        FOR UPDATE
+    </select>
+    <select id="selectActiveChildren" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT *
+        FROM afv_agent_run FORCE INDEX (idx_agent_run_parent_status)
+        WHERE parent_run_id = #{parentRunId}
+          AND status IN (
+              'RUNNING',
+              'WAITING_CONFIRMATION',
+              'WAITING_EXTERNAL',
+              'CANCEL_REQUESTED')
+        ORDER BY id
+    </select>
+    <update id="advanceRunningSequence">
+        UPDATE afv_agent_run
+        SET next_sequence = #{nextSequence},
+            update_time = #{now}
+        WHERE id = #{runId}
+          AND status = 'RUNNING'
+          AND owner_epoch = #{ownerEpoch}
+          AND owner_instance_id IS NOT NULL
+          AND lease_until &gt; #{now}
+          AND deadline_at &gt; #{now}
+    </update>
+    <update id="enterWaitingConfirmation">
+        UPDATE afv_agent_run
+        SET status = 'WAITING_CONFIRMATION',
+            owner_instance_id = NULL,
+            lease_until = NULL,
+            waiting_reply_id = #{replyId},
+            waiting_tool_call_id = NULL,
+            waiting_tool_name = NULL,
+            wait_expires_at = #{expiresAt},
+            deadline_at = #{expiresAt},
+            paused_through_sequence = #{pausedThroughSequence},
+            next_sequence = #{nextSequence},
+            update_time = #{now}
+        WHERE id = #{runId}
+          AND status = 'RUNNING'
+          AND owner_epoch = #{ownerEpoch}
+          AND owner_instance_id IS NOT NULL
+          AND lease_until &gt; #{now}
+          AND deadline_at &gt; #{now}
+    </update>
+    <update id="enterWaitingExternal">
+        UPDATE afv_agent_run
+        SET status = 'WAITING_EXTERNAL',
+            owner_instance_id = NULL,
+            lease_until = NULL,
+            waiting_reply_id = NULL,
+            waiting_tool_call_id = #{toolCallId},
+            waiting_tool_name = #{toolName},
+            wait_expires_at = #{expiresAt},
+            deadline_at = #{deadlineAt},
+            external_check_after = #{now},
+            external_resume_json = NULL,
+            external_resume_sequence = NULL,
+            external_resume_at = NULL,
+            paused_through_sequence = #{pausedThroughSequence},
+            next_sequence = #{nextSequence},
+            update_time = #{now}
+        WHERE id = #{runId}
+          AND status = 'RUNNING'
+          AND owner_epoch = #{ownerEpoch}
+          AND owner_instance_id IS NOT NULL
+          AND lease_until &gt; #{now}
+          AND deadline_at &gt; #{now}
+    </update>
+    <update id="resumeConfirmation">
+        UPDATE afv_agent_run
+        SET status = 'RUNNING',
+            owner_instance_id = #{newOwnerInstanceId},
+            owner_epoch = #{newOwnerEpoch},
+            lease_until = #{leaseUntil},
+            deadline_at = #{deadlineAt},
+            heartbeat_at = #{now},
+            waiting_reply_id = NULL,
+            waiting_tool_call_id = NULL,
+            waiting_tool_name = NULL,
+            wait_expires_at = NULL,
+            next_sequence = #{nextSequence},
+            update_time = #{now}
+        WHERE id = #{runId}
+          AND status = 'WAITING_CONFIRMATION'
+          AND owner_epoch = #{oldOwnerEpoch}
+          AND waiting_reply_id = #{replyId}
+          AND wait_expires_at &gt; #{now}
+    </update>
+    <update id="resumeExternal">
+        UPDATE afv_agent_run
+        SET status = 'RUNNING',
+            owner_instance_id = #{newOwnerInstanceId},
+            owner_epoch = #{newOwnerEpoch},
+            lease_until = #{leaseUntil},
+            heartbeat_at = #{now},
+            waiting_reply_id = NULL,
+            waiting_tool_call_id = NULL,
+            waiting_tool_name = NULL,
+            wait_expires_at = NULL,
+            next_sequence = #{nextSequence},
+            update_time = #{now}
+        WHERE id = #{runId}
+          AND status = 'WAITING_EXTERNAL'
+          AND owner_epoch = #{oldOwnerEpoch}
+          AND waiting_tool_call_id = #{toolCallId}
+          AND wait_expires_at &gt; #{now}
+          AND deadline_at &gt; #{now}
+    </update>
+    <update id="recordCanvasResumeDispatch">
+        UPDATE afv_agent_run SET external_resume_json = #{payload}, external_resume_sequence = #{sequence},
+            external_resume_at = #{now}, deadline_at = #{deadline}, lease_until = #{leaseUntil},
+            external_check_after = NULL
+        WHERE run_id = #{runId} AND status = 'RUNNING' AND owner_epoch = #{epoch}
+    </update>
+    <update id="renewOwnedLease">
+        UPDATE afv_agent_run
+        SET heartbeat_at = UTC_TIMESTAMP(3),
+            lease_until = LEAST(
+                TIMESTAMPADD(MICROSECOND, #{leaseMicros}, UTC_TIMESTAMP(3)),
+                deadline_at)
+        WHERE run_id = #{runId}
+          AND owner_instance_id = #{ownerInstanceId}
+          AND owner_epoch = #{ownerEpoch}
+          AND status = 'RUNNING'
+          AND lease_until &gt; UTC_TIMESTAMP(3)
+          AND deadline_at &gt; UTC_TIMESTAMP(3)
+    </update>
+    <select id="countValidOwnedLease" resultType="int">
+        SELECT COUNT(*)
+        FROM afv_agent_run FORCE INDEX (uk_agent_run_id)
+        WHERE run_id = #{runId}
+          AND owner_instance_id = #{ownerInstanceId}
+          AND owner_epoch = #{ownerEpoch}
+          AND status = 'RUNNING'
+          AND lease_until &gt; UTC_TIMESTAMP(3)
+          AND deadline_at &gt; UTC_TIMESTAMP(3)
+    </select>
+    <update id="acknowledgeOwnedCancellation">
+        UPDATE afv_agent_run
+        SET cancel_acknowledged_at = UTC_TIMESTAMP(3),
+            lease_until = LEAST(lease_until, UTC_TIMESTAMP(3)),
+            update_time = UTC_TIMESTAMP(3)
+        WHERE run_id = #{runId}
+          AND owner_instance_id = #{ownerInstanceId}
+          AND owner_epoch = #{ownerEpoch}
+          AND status = 'CANCEL_REQUESTED'
+    </update>
+    <update id="markCancellationBroadcast">
+        UPDATE afv_agent_run
+        SET cancel_broadcast_at = #{now},
+            cancel_next_attempt_at = #{nextAttemptAt},
+            update_time = #{now}
+        WHERE run_id = #{runId}
+          AND status = 'CANCEL_REQUESTED'
+    </update>
+    <select id="selectExpiredLeaseCandidates" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT *
+        FROM afv_agent_run FORCE INDEX (idx_agent_run_lease)
+        WHERE status IN ('RUNNING', 'CANCEL_REQUESTED')
+          AND lease_until IS NOT NULL
+          AND lease_until &lt;= #{now}
+        ORDER BY lease_until, id
+        LIMIT #{limit}
+    </select>
+    <select id="selectCancellationRetryCandidates" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT *
+        FROM afv_agent_run FORCE INDEX (idx_agent_run_cancel)
+        WHERE status = 'CANCEL_REQUESTED'
+          AND cancel_acknowledged_at IS NULL
+          AND (cancel_next_attempt_at IS NULL
+               OR cancel_next_attempt_at &lt;= #{now})
+        ORDER BY cancel_next_attempt_at, id
+        LIMIT #{limit}
+    </select>
+    <select id="waitingForCanvas" resultType="String">
+        SELECT run_id FROM afv_agent_run WHERE status='WAITING_EXTERNAL'
+          AND waiting_tool_name='await_canvas_run' AND canvas_scope_json IS NOT NULL
+          AND external_check_after &lt;= UTC_TIMESTAMP(3) AND wait_expires_at &gt; UTC_TIMESTAMP(3)
+        ORDER BY external_check_after, id LIMIT 32
+    </select>
+    <select id="dispatchingCanvasResume" resultType="String">
+        SELECT run_id FROM afv_agent_run WHERE status='RUNNING' AND external_resume_json IS NOT NULL
+          AND (owner_instance_id=#{instance} OR lease_until &lt;= UTC_TIMESTAMP(3)) AND deadline_at &gt; UTC_TIMESTAMP(3)
+        ORDER BY external_resume_at, id LIMIT 32
+    </select>
+    <update id="deferCanvasCheck">
+        UPDATE afv_agent_run SET external_check_after=DATE_ADD(UTC_TIMESTAMP(3), INTERVAL 2 SECOND), update_time=update_time
+        WHERE run_id=#{id} AND status='WAITING_EXTERNAL' AND waiting_tool_name='await_canvas_run'
+          AND external_check_after &lt;= UTC_TIMESTAMP(3)
+    </update>
+    <update id="clearCanvasResume">
+        UPDATE afv_agent_run SET external_resume_json=NULL, external_resume_sequence=NULL, external_resume_at=NULL,
+            update_time=update_time WHERE run_id=#{id} AND owner_epoch=#{epoch} AND external_resume_sequence=#{sequence}
+    </update>
+</mapper>

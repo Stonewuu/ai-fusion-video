@@ -29,7 +29,9 @@ public record StartAgentRunCommand(
         Duration ownerLease,
         Instant deadline,
         String userContent,
-        String referencesJson) {
+        String referencesJson,
+        Long actorTeamId,
+        String canvasScopeJson) {
 
     public StartAgentRunCommand {
         requireText(runId, "runId");
@@ -39,6 +41,9 @@ public record StartAgentRunCommand(
         }
         if (projectId != null && projectId <= 0) {
             throw new IllegalArgumentException("projectId must be positive when provided");
+        }
+        if (actorTeamId != null && actorTeamId <= 0) {
+            throw new IllegalArgumentException("actorTeamId must be positive when provided");
         }
         requireText(agentType, "agentType");
         requireOptionalText(parentRunId, "parentRunId");

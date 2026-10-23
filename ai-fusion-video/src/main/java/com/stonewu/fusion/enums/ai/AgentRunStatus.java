@@ -1,6 +1,8 @@
 package com.stonewu.fusion.enums.ai;
 
-/** Durable states accepted by the agent-run persistence contract. */
+/**
+ * Durable states accepted by the agent-run persistence contract.
+ */
 public enum AgentRunStatus {
 
     RUNNING(false),

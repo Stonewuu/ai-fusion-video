@@ -7,11 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.HashMap;
-import java.util.HexFormat;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 
 public final class PersistedAgentKernelSnapshotResolver implements AgentKernelSnapshotResolver {
 
@@ -63,7 +59,7 @@ public final class PersistedAgentKernelSnapshotResolver implements AgentKernelSn
             if (schemaVersion == null
                     || !schemaVersion.isIntegralNumber()
                     || schemaVersion.intValue()
-                        != AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION) {
+                    != AgentKernelSnapshotPayload.CURRENT_SCHEMA_VERSION) {
                 throw unavailable("Persisted kernel snapshot schema is unsupported");
             }
 
@@ -98,7 +94,7 @@ public final class PersistedAgentKernelSnapshotResolver implements AgentKernelSn
             ToolManifestSnapshot available = availableByName.get(persisted.name());
             if (available == null
                     || !persisted.implementationVersion()
-                        .equals(available.implementationVersion())
+                    .equals(available.implementationVersion())
                     || !persisted.schemaSha256().equals(available.schemaSha256())
                     || persisted.readOnly() != available.readOnly()
                     || persisted.concurrencySafe() != available.concurrencySafe()) {

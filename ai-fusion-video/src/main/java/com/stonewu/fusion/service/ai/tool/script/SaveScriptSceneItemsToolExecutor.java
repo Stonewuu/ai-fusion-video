@@ -1,20 +1,12 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
-import cn.hutool.json.JSONArray;
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.ToolPermissionRisk;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
-import com.stonewu.fusion.service.script.ScriptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -27,8 +19,8 @@ import java.util.Map;
 @Slf4j
 public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
 
-    private final ScriptService scriptService;
-    private final ToolResourceAccessGuard accessGuard;
+    private final ScriptToolCommands commands;
+
 
     @Override
     public String getToolName() {
@@ -51,7 +43,7 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
                 - 每次调用 scenes 数组最多传入 2 个场次
                 - 如果一集有超过 2 个场次，必须分多次调用
                 - 第一次调用传入前 1-2 个场次，overwriteMode 必须设为 true（会清空旧数据）
-                - 第二次及之后每次传入后续 1-2 个场次，overwriteMode 不传或设为 false（追加模式）
+                - 第二次及之后每次传入后续 1-2 个场次，overwriteMode 不传或设为 false（追加模式），episode_version 使用上次写入回执的新版本
 
                 ## scene_heading 格式规则
                 场景标头格式为：「内/外景 + 地点 + 时间」。示例：
@@ -150,61 +142,6 @@ public class SaveScriptSceneItemsToolExecutor implements ToolExecutor {
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long scriptEpisodeId = params.getLong("scriptEpisodeId");
-            Integer episodeVersion = params.getInt("episode_version");
-            JSONArray scenesArray = params.getJSONArray("scenes");
-            boolean overwriteMode = Boolean.TRUE.equals(params.getBool("overwriteMode"));
-
-            if (scriptEpisodeId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少必要参数: scriptEpisodeId").toString();
-            }
-            if (scenesArray == null || scenesArray.isEmpty() || scenesArray.size() > 2) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "scenes 每次必须传入 1-2 个场次").toString();
-            }
-            accessGuard.requireScriptEpisode(scriptEpisodeId, context.getUserId());
-
-            List<ScriptSceneItem> sceneItems = new ArrayList<>();
-            for (int i = 0; i < scenesArray.size(); i++) {
-                JSONObject sceneJson = scenesArray.getJSONObject(i);
-                ScriptSceneItem item = ScriptSceneItem.builder()
-                            .sceneHeading(sceneJson.getStr("scene_heading"))
-                            .location(sceneJson.getStr("location"))
-                            .timeOfDay(sceneJson.getStr("time_of_day"))
-                            .intExt(sceneJson.getStr("int_ext"))
-                            .sceneDescription(sceneJson.getStr("scene_description"))
-                            .sceneAssetId(sceneJson.getLong("scene_asset_id"))
-                            .characters(sceneJson.containsKey("characters")
-                                    ? sceneJson.getJSONArray("characters").toString()
-                                    : null)
-                            .characterAssetIds(sceneJson.containsKey("character_asset_ids")
-                                    ? sceneJson.getJSONArray("character_asset_ids").toString()
-                                    : null)
-                            .propAssetIds(sceneJson.containsKey("prop_asset_ids")
-                                    ? sceneJson.getJSONArray("prop_asset_ids").toString()
-                                    : null)
-                            .dialogues(
-                                    sceneJson.containsKey("dialogues") ? sceneJson.getJSONArray("dialogues").toString()
-                                            : null)
-                            .status(1)
-                        .build();
-                sceneItems.add(item);
-            }
-
-            scriptService.batchSaveSceneItems(scriptEpisodeId, episodeVersion, sceneItems, overwriteMode);
-
-            JSONObject resultObj = JSONUtil.createObj()
-                    .set("scriptEpisodeId", scriptEpisodeId)
-                    .set("sceneCount", sceneItems.size())
-                    .set("overwriteMode", overwriteMode)
-                    .set("message", String.format("成功%s写入 %d 个场次", overwriteMode ? "覆盖" : "追加", sceneItems.size()));
-
-            return resultObj.toString();
-        } catch (Exception e) {
-            log.error("保存场次数据失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "保存失败: " + e.getMessage()).toString();
-        }
+        return commands.saveScenes(toolInput, context);
     }
 }

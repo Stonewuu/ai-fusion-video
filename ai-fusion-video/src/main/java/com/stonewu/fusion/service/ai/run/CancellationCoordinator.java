@@ -23,7 +23,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** Durably requests cancellation before broadcasting or interrupting executions. */
+/**
+ * Durably requests cancellation before broadcasting or interrupting executions.
+ */
 @Service
 public final class CancellationCoordinator implements RunShutdownCancellationPort {
 
@@ -127,10 +129,10 @@ public final class CancellationCoordinator implements RunShutdownCancellationPor
         }
         Mono<Void> localCancellation = isOwnedByThisInstance(run)
                 ? ownedCancellations.acknowledgeAndFinalize(
-                                run.getRunId(),
-                                run.getOwnerInstanceId(),
-                                run.getOwnerEpoch())
-                        .then()
+                        run.getRunId(),
+                        run.getOwnerInstanceId(),
+                        run.getOwnerEpoch())
+                .then()
                 : Mono.empty();
         return Mono.when(publish, localCancellation);
     }

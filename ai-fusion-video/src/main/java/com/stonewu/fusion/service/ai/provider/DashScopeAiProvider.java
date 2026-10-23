@@ -11,16 +11,12 @@ import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.transport.HttpTransport;
 import io.agentscope.extensions.model.dashscope.DashScopeChatModel.Builder;
-import org.springframework.ai.chat.model.ChatModel;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 /**
  * DashScope 提供商。
@@ -53,10 +49,10 @@ public class DashScopeAiProvider extends AbstractAiProvider {
                 .dashScopeApi(DashScopeApi.builder()
                         .baseUrl(DashScopeGenerationSupport.resolveRootBaseUrl(context.getBaseUrl()))
                         .apiKey(apiKey)
-                .restClientBuilder(AiProxySupport.restClientBuilder(
-                    context.getApiConfig(), 60 * 1000, 25 * 60 * 1000))
-                .webClientBuilder(AiProxySupport.webClientBuilder(
-                    context.getApiConfig(), "dashscope-provider", Duration.ofMinutes(25)))
+                        .restClientBuilder(AiProxySupport.restClientBuilder(
+                                context.getApiConfig(), 60 * 1000, 25 * 60 * 1000))
+                        .webClientBuilder(AiProxySupport.webClientBuilder(
+                                context.getApiConfig(), "dashscope-provider", Duration.ofMinutes(25)))
                         .build())
                 .defaultOptions(options)
                 .build();
@@ -65,6 +61,9 @@ public class DashScopeAiProvider extends AbstractAiProvider {
     @Override
     public ChatModelBase createAgentScopeModel(AiProviderContext context) {
         GenerateOptions defaultOptions = buildGeminiGenerateOptions(context);
+        if (context.isSingleRequest()) {
+            defaultOptions = SingleRequestModelSupport.options(defaultOptions);
+        }
         Builder builder = io.agentscope.extensions.model.dashscope.DashScopeChatModel.builder()
                 .apiKey(context.getApiKey())
                 .modelName(context.getModelName())
@@ -76,11 +75,12 @@ public class DashScopeAiProvider extends AbstractAiProvider {
         if (isReasoningEnabled(context)) {
             builder.enableThinking(true);
         }
-        HttpTransport proxyTransport = AiProxySupport.agentScopeHttpTransport(context.getApiConfig());
+        HttpTransport proxyTransport = SingleRequestModelSupport.transport(context);
         if (proxyTransport != null) {
             builder.httpTransport(proxyTransport);
         }
-        return builder.build();
+        var model = builder.build();
+        return context.isSingleRequest() ? SingleRequestModelSupport.own(model, proxyTransport) : model;
     }
 
     @Override
@@ -89,7 +89,8 @@ public class DashScopeAiProvider extends AbstractAiProvider {
         String baseUrl = resolveApiBaseUrl(context.getBaseUrl());
         String url = joinUrl(baseUrl, "/models");
         log.info("[DashScopeAiProvider] 获取远程模型列表: {}", url);
-        String response = executeGet(url, Map.of("Authorization", "Bearer " + context.getApiKey()), context.getApiConfig());
+        String response = executeGet(url, Map.of("Authorization", "Bearer " + context.getApiKey()),
+                context.getApiConfig());
         List<RemoteModelVO> models = new ArrayList<>(parseDataArrayModels(response, "dashscope"));
         models.forEach(model -> {
             if (model.getModelType() == null) {

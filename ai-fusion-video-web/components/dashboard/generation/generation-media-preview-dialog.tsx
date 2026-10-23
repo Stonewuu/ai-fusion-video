@@ -1,4 +1,6 @@
 "use client";
+import { ManagedVideo } from "@/components/media/managed-video";
+
 
 import {
   useRef,
@@ -17,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import { cn } from "@/lib/utils";
 
 export interface GenerationMediaPreview {
@@ -245,7 +247,7 @@ export function GenerationMediaPreviewDialog({
             }}
           >
             {preview?.type === "video" ? (
-              <video
+              <ManagedVideo
                 key={preview.url}
                 src={preview.url}
                 poster={preview.posterUrl}

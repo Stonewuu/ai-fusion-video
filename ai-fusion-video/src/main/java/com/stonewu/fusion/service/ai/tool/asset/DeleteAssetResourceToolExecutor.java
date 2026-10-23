@@ -1,26 +1,24 @@
 package com.stonewu.fusion.service.ai.tool.asset;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.asset.Asset;
-import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.asset.AssetService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-/** 删除资产模块资源工具。 */
+/**
+ * 删除资产模块资源工具。
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class DeleteAssetResourceToolExecutor implements ToolExecutor {
 
+    private final AssetToolCommands commands;
+
     private static final String RESOURCE_ASSET = "asset";
     private static final String RESOURCE_ITEM = "item";
 
-    private final AssetService assetService;
 
     @Override
     public String getToolName() {
@@ -43,6 +41,8 @@ public class DeleteAssetResourceToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "expectedVersion": { "type": "integer", "minimum": 0, "description": "修改/删除对象刚刚读取的 version，图片回填使用生成前版本" },
+                        "expectedParentVersion": { "type": "integer", "minimum": 0, "description": "主资产版本 assetVersion，图片回填使用生成前版本；删除主资产不传" },
                         "resourceType": {
                             "type": "string",
                             "enum": ["asset", "item"],
@@ -50,7 +50,7 @@ public class DeleteAssetResourceToolExecutor implements ToolExecutor {
                         },
                         "resourceId": {"type": "integer", "description": "要删除的资源ID"}
                     },
-                    "required": ["resourceType", "resourceId"],
+                    "required": ["expectedVersion", "resourceType", "resourceId"],
                     "additionalProperties": false
                 }
                 """;
@@ -58,45 +58,6 @@ public class DeleteAssetResourceToolExecutor implements ToolExecutor {
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            String resourceType = params.getStr("resourceType");
-            Long resourceId = params.getLong("resourceId");
-            if (resourceType == null || resourceId == null) {
-                return error("缺少 resourceType 或 resourceId");
-            }
-
-            Asset asset;
-            if (RESOURCE_ASSET.equals(resourceType)) {
-                asset = assetService.getById(resourceId);
-            } else if (RESOURCE_ITEM.equals(resourceType)) {
-                AssetItem item = assetService.getItemById(resourceId);
-                asset = assetService.getById(item.getAssetId());
-            } else {
-                return error("resourceType 仅支持 asset 或 item");
-            }
-
-            if (!assetService.canAccessAsset(asset, context.getUserId())) {
-                return error("无权删除该资产资源");
-            }
-
-            if (RESOURCE_ASSET.equals(resourceType)) {
-                assetService.delete(resourceId);
-            } else {
-                assetService.deleteItem(resourceId);
-            }
-            return JSONUtil.createObj()
-                    .set("status", "success")
-                    .set("deletedResourceType", resourceType)
-                    .set("deletedResourceId", resourceId)
-                    .toString();
-        } catch (Exception e) {
-            log.error("删除资产资源失败", e);
-            return error("删除资产资源失败: " + e.getMessage());
-        }
-    }
-
-    private String error(String message) {
-        return JSONUtil.createObj().set("status", "error").set("message", message).toString();
+        return commands.execute(getToolName(), toolInput, context);
     }
 }

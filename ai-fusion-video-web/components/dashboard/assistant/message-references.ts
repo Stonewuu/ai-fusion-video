@@ -24,6 +24,7 @@ export interface ParsedAssistantMessageReferences {
   skills: AssistantSkillReferenceOption[];
   mcpTools: AssistantMcpToolReferenceOption[];
   attachments: AssistantMessageAttachmentReference[];
+  canvas?: { id: string; title: string; selectedNodeIds: string[] };
 }
 
 const INPUT_TYPES = new Set<AiMultimodalInputType>(["image", "video", "audio", "file"]);
@@ -48,6 +49,9 @@ export function parseAssistantMessageReferences(
       version,
       projectId: explicitProjectId ?? project?.id ?? null,
       project,
+      ...(isRecord(value.canvas) && isNonEmptyString(value.canvas.id) && isNonEmptyString(value.canvas.title)
+        && Array.isArray(value.canvas.selectedNodeIds) && value.canvas.selectedNodeIds.every((id) => typeof id === "string")
+        ? { canvas: { id: value.canvas.id, title: value.canvas.title, selectedNodeIds: value.canvas.selectedNodeIds as string[] } } : {}),
       skills: Array.isArray(value.skills)
         ? value.skills.flatMap((item) => {
             const skill = parseSkillReference(item, version);

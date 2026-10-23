@@ -10,48 +10,78 @@ import java.util.Map;
 @Data
 public class StorageConfigSaveReqVO {
 
-    /** ID（更新时必传） */
+    /**
+     * ID（更新时必传）
+     */
     private Long id;
 
-    /** 配置名称 */
+    /**
+     * 配置名称
+     */
     private String name;
 
-    /** 存储类型：local / s3 */
+    /**
+     * 存储类型：local / s3
+     */
     private String type;
 
-    /** S3 兼容厂商 */
+    /**
+     * S3 兼容厂商
+     */
     private String provider;
 
-    /** OSS 端点地址 */
+    /**
+     * OSS 端点地址
+     */
     private String endpoint;
 
-    /** OSS 存储桶名称 */
+    /**
+     * OSS 存储桶名称
+     */
     private String bucketName;
 
-    /** OSS Access Key */
+    /**
+     * OSS Access Key
+     */
     private String accessKey;
 
-    /** OSS Secret Key */
+    /**
+     * OSS Secret Key
+     */
     private String secretKey;
 
-    /** 区域 */
+    /**
+     * 区域
+     */
     private String region;
 
-    /** 存储根路径 */
+    /**
+     * 存储根路径
+     */
     private String basePath;
 
-    /** 自定义域名 */
+    /**
+     * 自定义域名
+     */
     private String customDomain;
 
-    /** 厂商扩展配置 */
+    /**
+     * 厂商扩展配置
+     */
     private Map<String, Object> options;
 
-    /** 是否为默认存储配置 */
+    /**
+     * 是否为默认存储配置
+     */
     private Boolean isDefault;
 
-    /** 状态 */
+    /**
+     * 状态
+     */
     private Integer status;
 
-    /** 备注 */
+    /**
+     * 备注
+     */
     private String remark;
 }

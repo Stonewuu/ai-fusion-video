@@ -23,6 +23,14 @@ class ModelPresetServiceTests {
     }
 
     @Test
+    void sponsoredCapabilitiesDoNotReplaceOfficialPresetsWithTheSameModelId() {
+        assertEquals("MiniMax-H3", service.findPresetCode("MiniMax-H3", 3));
+        assertEquals("minimax_h3", service.getPreset("MiniMax-H3").getStr("modelProtocol"));
+        assertEquals("metaso_video", service.getPreset("metaso:MiniMax-H3").getStr("modelProtocol"));
+        assertEquals("MiniMax-H3", service.getPreset("metaso:MiniMax-H3").getStr("modelCode"));
+    }
+
+    @Test
     void shouldLoadOnlyRecentAndCurrentlyAvailableOpenAiAndGoogleImageGenerations() {
         assertFalse(service.hasPreset("dall-e-3"));
         assertFalse(service.hasPreset("imagen-3.0-generate-002"));

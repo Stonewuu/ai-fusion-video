@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasMapper">
+    <select id="lock" resultType="com.stonewu.fusion.entity.canvas.CanvasEntity">
+        SELECT * FROM afv_canvas WHERE id = #{id} FOR UPDATE
+    </select>
+    <insert id="admit">
+        INSERT INTO afv_canvas(id, title, project_id, owner_type, owner_id, created_by, create_time, update_time)
+        VALUES (#{id}, #{title}, #{projectId}, #{ownerType}, #{ownerId}, #{userId}, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+        ON DUPLICATE KEY UPDATE id = id
+    </insert>
+    <update id="advance">
+        UPDATE afv_canvas SET revision = revision + 1, next_event_sequence = next_event_sequence + 1,
+            update_time = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND revision = #{revision} AND next_event_sequence = #{sequence}
+    </update>
+    <select id="countProjectManagers" resultType="int">
+        SELECT COUNT(*) FROM afv_project p WHERE p.id = #{projectId} AND p.deleted = FALSE AND (
+            (p.owner_type = 1 AND p.owner_id = #{userId}) OR EXISTS (
+                SELECT 1 FROM afv_project_member pm WHERE pm.project_id = p.id AND pm.user_id = #{userId}
+                    AND pm.deleted = FALSE AND pm.role IN (1, 2)) OR (
+                p.owner_type = 2 AND EXISTS (SELECT 1 FROM afv_team_member tm
+                    WHERE tm.team_id = p.owner_id AND tm.user_id = #{userId} AND tm.deleted = FALSE
+                        AND tm.status = 1 AND tm.role IN (1, 2))))
+    </select>
+    <select id="accessible" resultType="com.stonewu.fusion.entity.canvas.CanvasEntity">
+        SELECT c.*, p.name AS project_name
+        FROM afv_canvas c LEFT JOIN afv_project p ON p.id = c.project_id AND p.deleted = FALSE
+        WHERE c.archived = #{archived}
+            AND (c.project_id IS NULL
+                <if test="!projects.isEmpty()">OR c.project_id IN
+                    <foreach collection="projects" item="project" open="(" separator="," close=")">#{project}</foreach>
+                </if>)
+            AND (c.created_by = #{userId} OR (c.owner_type = 1 AND c.owner_id = #{userId})
+                OR EXISTS (SELECT 1 FROM afv_canvas_member cm WHERE cm.canvas_id = c.id AND cm.user_id = #{userId})
+                <if test="!projects.isEmpty()">OR c.project_id IN
+                    <foreach collection="projects" item="project" open="(" separator="," close=")">#{project}</foreach>
+                </if>)
+            AND (c.project_id IS NULL OR p.id IS NOT NULL)
+        <if test="projectId != null">AND c.project_id = #{projectId}</if>
+        <if test="search != null">AND (c.title LIKE #{search} ESCAPE '!' OR p.name LIKE #{search} ESCAPE '!')</if>
+        ORDER BY c.update_time DESC, c.id
+    </select>
+</mapper>

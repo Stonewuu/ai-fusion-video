@@ -5,8 +5,9 @@ import { http } from "./client";
 /** 资产（角色/场景/道具等） */
 export interface Asset {
   id: number;
+  version: number;
   userId: number;
-  projectId: number;
+  projectId: number | null;
   type: string;
   name: string;
   description: string | null;
@@ -25,6 +26,8 @@ export interface Asset {
 /** 子资产（图片/变体） */
 export interface AssetItem {
   id: number;
+  version: number;
+  assetVersion: number;
   assetId: number;
   itemType: string | null;
   name: string | null;
@@ -40,46 +43,53 @@ export interface AssetItem {
 
 /** 创建资产请求 */
 export interface AssetCreateReq {
-  projectId: number;
+  sourceType?: 1 | 2;
+  projectId: number | null;
   type: string;
   name: string;
-  description?: string;
-  coverUrl?: string;
-  properties?: string;
+  description?: string | null;
+  coverUrl?: string | null;
+  properties?: Record<string, unknown> | null;
   tags?: string[];
+  initialItem?: Omit<AssetItemCreateReq, "assetId" | "parentVersion">;
 }
 
 /** 更新资产请求 */
 export interface AssetUpdateReq {
   id: number;
+  version: number;
   type?: string;
-  name?: string;
-  description?: string;
-  coverUrl?: string;
-  properties?: string;
+  name?: string | null;
+  description?: string | null;
+  coverUrl?: string | null;
+  properties?: Record<string, unknown> | null;
   tags?: string[];
   status?: number;
 }
 
 /** 创建子资产请求 */
 export interface AssetItemCreateReq {
+  sourceType?: 1 | 2;
   assetId: number;
+  parentVersion: number;
   itemType?: string;
-  name?: string;
-  imageUrl?: string;
-  thumbnailUrl?: string;
-  properties?: string;
+  name?: string | null;
+  imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  properties?: Record<string, unknown> | null;
   sortOrder?: number;
 }
 
 /** 更新子资产请求 */
 export interface AssetItemUpdateReq {
   id: number;
+  version: number;
+  assetVersion: number;
   itemType?: string;
-  name?: string;
-  imageUrl?: string;
-  thumbnailUrl?: string;
-  properties?: string;
+  name?: string | null;
+  imageUrl?: string | null;
+  thumbnailUrl?: string | null;
+  properties?: Record<string, unknown> | null;
   sortOrder?: number;
 }
 
@@ -136,8 +146,8 @@ export const assetApi = {
   },
 
   /** 按项目查询资产及其所有子资产 */
-  listWithItems: (projectId: number) => 
-    http.get<never, AssetWithItems[]>(`/api/asset/list-with-items?projectId=${projectId}`),
+  listWithItems: (projectId: number | null) =>
+    http.get<never, AssetWithItems[]>("/api/asset/list-with-items", { params: projectId === null ? {} : { projectId } }),
 
   /** 分页查询当前用户的资产（跨项目），含类型统计 */
   listAll: (params?: {
@@ -158,15 +168,16 @@ export const assetApi = {
   },
 
   /** 创建资产 */
-  create: (data: AssetCreateReq) =>
-    http.post<never, Asset>("/api/asset", data),
+  create: ({ projectId, ...fields }: AssetCreateReq, requestId: string = crypto.randomUUID()) =>
+    http.post<never, AssetWithItems>("/api/asset", { projectId, requestId, fields }),
 
   /** 更新资产 */
-  update: (data: AssetUpdateReq) =>
-    http.put<never, Asset>("/api/asset", data),
+  update: ({ id, version, ...patch }: AssetUpdateReq, requestId: string = crypto.randomUUID()) =>
+    http.put<never, Asset>("/api/asset", { id, version, requestId, patch }),
 
   /** 删除资产 */
-  delete: (id: number) => http.delete<never, boolean>(`/api/asset/${id}`),
+  delete: (id: number, version: number, requestId: string = crypto.randomUUID()) =>
+    http.delete<never, boolean>(`/api/asset/${id}`, { params: { version, requestId } }),
 
   // ========== 元数据 ==========
 
@@ -185,14 +196,14 @@ export const assetApi = {
     http.get<never, AssetItem[]>(`/api/asset/${assetId}/items`),
 
   /** 创建子资产 */
-  createItem: (data: AssetItemCreateReq) =>
-    http.post<never, AssetItem>("/api/asset/item", data),
+  createItem: ({ assetId, parentVersion, ...fields }: AssetItemCreateReq, requestId: string = crypto.randomUUID()) =>
+    http.post<never, AssetItem>("/api/asset/item", { assetId, parentVersion, requestId, fields }),
 
   /** 更新子资产 */
-  updateItem: (data: AssetItemUpdateReq) =>
-    http.put<never, AssetItem>("/api/asset/item", data),
+  updateItem: ({ id, version, assetVersion, ...patch }: AssetItemUpdateReq, requestId: string = crypto.randomUUID()) =>
+    http.put<never, AssetItem>("/api/asset/item", { id, version, assetVersion, requestId, patch }),
 
   /** 删除子资产 */
-  deleteItem: (id: number) =>
-    http.delete<never, boolean>(`/api/asset/item/${id}`),
+  deleteItem: (id: number, version: number, parentVersion: number, requestId: string = crypto.randomUUID()) =>
+    http.delete<never, boolean>(`/api/asset/item/${id}`, { params: { version, parentVersion, requestId } }),
 };

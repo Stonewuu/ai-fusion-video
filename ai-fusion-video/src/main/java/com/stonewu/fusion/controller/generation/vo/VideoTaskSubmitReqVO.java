@@ -3,17 +3,23 @@ package com.stonewu.fusion.controller.generation.vo;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
+import lombok.EqualsAndHashCode;
 
 /**
  * 提交生视频任务请求 VO
  */
 @Schema(description = "提交生视频任务请求")
 @Data
-public class VideoTaskSubmitReqVO {
+@EqualsAndHashCode(callSuper = true)
+public class VideoTaskSubmitReqVO extends GenerationScopeReqVO {
+
+    @NotBlank(message = "生成请求标识不能为空")
+    private String requestId;
+
+    private Long workflowVersionId;
 
     private Long projectId;
 
-    @NotBlank(message = "提示词不能为空")
     private String prompt;
 
     private Long promptTemplateId;

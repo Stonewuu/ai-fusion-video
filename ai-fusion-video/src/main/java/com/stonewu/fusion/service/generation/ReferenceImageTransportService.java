@@ -9,10 +9,18 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import com.stonewu.fusion.service.canvas.model.CanvasActor;
+import com.stonewu.fusion.service.generation.job.RemoteGenerationJob;
+import com.stonewu.fusion.service.media.MediaInputTransport;
+import com.stonewu.fusion.service.media.MediaIntakeService;
+import com.stonewu.fusion.service.media.MediaReference;
+import com.stonewu.fusion.service.media.model.MediaKind;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import com.stonewu.fusion.service.system.SystemConfigService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import okhttp3.HttpUrl;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
@@ -25,17 +33,15 @@ import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
-/** Resolves reference images to the exact transport formats declared by a model. */
+/**
+ * Resolves reference images to the exact transport formats declared by a model.
+ */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ReferenceImageTransportService {
 
     public static final String FORMAT_URL = "url";
@@ -45,6 +51,7 @@ public class ReferenceImageTransportService {
     private final StorageConfigService storageConfigService;
     private final SystemConfigService systemConfigService;
     private final PresetArtStyleResourceResolver presetArtStyleResourceResolver;
+    private final MediaInputTransport media;
 
     private final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(1, TimeUnit.MINUTES)
@@ -60,7 +67,9 @@ public class ReferenceImageTransportService {
                 array.toList(String.class).forEach(value -> addNormalizedFormat(formats, value));
             } else if (configuredFormats instanceof Iterable<?> iterable) {
                 for (Object value : iterable) {
-                    if (value != null) addNormalizedFormat(formats, value.toString());
+                    if (value != null) {
+                        addNormalizedFormat(formats, value.toString());
+                    }
                 }
             } else if (configuredFormats != null) {
                 addNormalizedFormat(formats, configuredFormats.toString());
@@ -77,7 +86,9 @@ public class ReferenceImageTransportService {
     }
 
     public void validateInputs(AiModel model, JSONObject modelConfig, List<String> sources) {
-        if (sources == null || sources.isEmpty()) return;
+        if (sources == null || sources.isEmpty()) {
+            return;
+        }
         ReferenceImageTransportCapability capability = resolveCapability(modelConfig);
         for (String source : sources) {
             selectTransport(model, capability, source);
@@ -87,23 +98,42 @@ public class ReferenceImageTransportService {
     public List<String> resolveInputs(AiModel model,
                                       JSONObject modelConfig,
                                       List<String> sources,
-                                      ApiConfig apiConfig) {
-        if (sources == null || sources.isEmpty()) return List.of();
+                                      ApiConfig apiConfig, CanvasActor actor, RemoteGenerationJob.Claim claim) {
+        if (sources == null || sources.isEmpty()) {
+            return List.of();
+        }
         ReferenceImageTransportCapability capability = resolveCapability(modelConfig);
         List<String> resolved = new ArrayList<>();
-        for (String source : sources) {
-            TransportSelection selection = selectTransport(model, capability, source);
-            if (selection.transport() == ReferenceImageTransport.URL) {
-                resolved.add(selection.value());
-            } else {
-                resolved.add(toDataUri(selection.value(), apiConfig));
+        for (int index = 0; index < sources.size(); index++) {
+            try {
+                TransportSelection selection = selectTransport(model, capability, sources.get(index));
+                if (MediaReference.managed(selection.value())) {
+                    if (actor == null) {
+                        throw new BusinessException(403, "托管媒体输入缺少经过认证的用户");
+                    }
+                    resolved.add(selection.transport() == ReferenceImageTransport.URL
+                            ? media.generationUrl(selection.value(), actor, MediaKind.IMAGE, claim)
+                            : media.dataUri(selection.value(), actor, MediaKind.IMAGE,
+                            MediaIntakeService.MAX_UPLOAD_BYTES));
+                } else if (selection.transport() == ReferenceImageTransport.URL) {
+                    resolved.add(selection.value());
+                } else {
+                    resolved.add(toDataUri(selection.value(), apiConfig));
+                }
+            } catch (RuntimeException failure) {
+                // 不记录可能含签名或凭据的原始 URL；失败原因继续由任务执行器持久化。
+                log.warn("参考图处理失败，停止本次生成: model={}, referenceIndex={}, errorType={}",
+                        model == null ? null : model.getCode(), index + 1, failure.getClass().getSimpleName());
+                throw failure;
             }
         }
         return List.copyOf(resolved);
     }
 
     public List<String> parseJsonInputs(String json, String fieldName) {
-        if (StrUtil.isBlank(json)) return List.of();
+        if (StrUtil.isBlank(json)) {
+            return List.of();
+        }
         try {
             return JSONUtil.parseArray(json).toList(String.class).stream()
                     .filter(StrUtil::isNotBlank)
@@ -115,14 +145,26 @@ public class ReferenceImageTransportService {
     }
 
     private TransportSelection selectTransport(AiModel model,
-                                                ReferenceImageTransportCapability capability,
-                                                String source) {
+                                               ReferenceImageTransportCapability capability,
+                                               String source) {
         String normalizedSource = StrUtil.trim(source);
         if (StrUtil.isBlank(normalizedSource)) {
             throw unsupported(model, "参考图地址为空");
         }
         if (!capability.supportsAny()) {
             throw unsupported(model, "未配置允许的参考图传递模式，请在模型能力中启用 URL 或 base64/Data URI");
+        }
+
+        if (MediaReference.managed(normalizedSource)) {
+            MediaReference.id(normalizedSource);
+            if (capability.supportsDataUri()) {
+                return new TransportSelection(ReferenceImageTransport.DATA_URI, normalizedSource);
+            }
+            String base = systemConfigService.getPublicResourceBaseUrl();
+            if (capability.supportsUrl() && isPotentiallyPublicHttpUrl(base)) {
+                return new TransportSelection(ReferenceImageTransport.URL, normalizedSource);
+            }
+            throw unsupported(model, "托管媒体的 URL 传递需要配置可访问的后端资源公网地址");
         }
 
         if (StrUtil.startWithIgnoreCase(normalizedSource, "data:")) {
@@ -139,7 +181,8 @@ public class ReferenceImageTransportService {
             if (capability.supportsDataUri()) {
                 return new TransportSelection(ReferenceImageTransport.DATA_URI, normalizedSource);
             }
-            throw unsupported(model, "当前参考图 URL 指向本机、回环或内网地址，远端模型无法访问，且模型未启用 base64/Data URI 传递模式");
+            throw unsupported(model,
+                    "当前参考图 URL 指向本机、回环或内网地址，远端模型无法访问，且模型未启用 base64/Data URI 传递模式");
         } else {
             if (capability.supportsUrl()) {
                 String publicUrl = systemConfigService.resolvePublicUrl(normalizedSource);
@@ -159,7 +202,9 @@ public class ReferenceImageTransportService {
     }
 
     private String toDataUri(String source, ApiConfig apiConfig) {
-        if (StrUtil.startWithIgnoreCase(source, "data:")) return source;
+        if (StrUtil.startWithIgnoreCase(source, "data:")) {
+            return source;
+        }
         try {
             BinaryResource resource = loadBinaryResource(source, apiConfig);
             return "data:" + resource.mimeType() + ";base64,"
@@ -170,7 +215,10 @@ public class ReferenceImageTransportService {
     }
 
     private BinaryResource loadBinaryResource(String source, ApiConfig apiConfig) throws IOException {
-        if (source.startsWith("/media/")) return loadLocalMedia(source);
+        source = resolveLocalResourceSource(source);
+        if (source.startsWith("/media/")) {
+            return loadLocalMedia(source);
+        }
         if (presetArtStyleResourceResolver.isPresetArtStylePath(source)) {
             var resource = presetArtStyleResourceResolver.load(source);
             return new BinaryResource(resource.bytes(), normalizeMimeType(resource.mimeType(), source));
@@ -191,18 +239,54 @@ public class ReferenceImageTransportService {
         throw new BusinessException("参考图地址不可访问: " + source);
     }
 
+    /** 本站完整资源地址与相对路径等价，不经容器外部网关重新下载。 */
+    private String resolveLocalResourceSource(String source) {
+        if (!isHttpUrl(source)) {
+            return source;
+        }
+        String configuredBase = systemConfigService.getPublicResourceBaseUrl();
+        if (StrUtil.isBlank(configuredBase)) {
+            return source;
+        }
+        HttpUrl url;
+        HttpUrl base;
+        try {
+            url = HttpUrl.get(source);
+            base = HttpUrl.get(configuredBase);
+        } catch (IllegalArgumentException invalid) {
+            throw new BusinessException("参考图或后端资源地址不是有效的 HTTP(S) URL");
+        }
+        if (!url.scheme().equals(base.scheme()) || !url.host().equals(base.host())
+                || url.port() != base.port() || !url.username().isEmpty() || !url.password().isEmpty()) {
+            return source;
+        }
+        String prefix = base.encodedPath().replaceAll("/+$", "");
+        if (!url.encodedPath().startsWith(prefix + "/")) {
+            return source;
+        }
+        String path = URI.create(url.encodedPath().substring(prefix.length())).getPath();
+        return path.startsWith("/media/") || presetArtStyleResourceResolver.isPresetArtStylePath(path)
+                ? path : source;
+    }
+
     private BinaryResource loadLocalMedia(String source) throws IOException {
         String relativePath = source.replaceFirst("^/media/?", "");
         List<Path> candidates = new ArrayList<>();
         StorageConfig config = storageConfigService.getDefaultConfig();
         if (config != null && StrUtil.isNotBlank(config.getBasePath())) {
             Path candidate = resolveLocalMediaPath(config.getBasePath(), relativePath);
-            if (candidate != null) candidates.add(candidate);
+            if (candidate != null) {
+                candidates.add(candidate);
+            }
         }
         Path defaultCandidate = resolveLocalMediaPath(DEFAULT_LOCAL_MEDIA_BASE_PATH, relativePath);
-        if (defaultCandidate != null) candidates.add(defaultCandidate);
+        if (defaultCandidate != null) {
+            candidates.add(defaultCandidate);
+        }
         for (Path candidate : candidates) {
-            if (Files.exists(candidate) && Files.isRegularFile(candidate)) return loadFile(candidate);
+            if (Files.exists(candidate) && Files.isRegularFile(candidate)) {
+                return loadFile(candidate);
+            }
         }
         throw new BusinessException("本地参考图不存在: " + source);
     }
@@ -218,25 +302,41 @@ public class ReferenceImageTransportService {
     }
 
     private String normalizeMimeType(String contentType, String source) {
-        if (StrUtil.isNotBlank(contentType)) return contentType.split(";", 2)[0].trim();
+        if (StrUtil.isNotBlank(contentType)) {
+            return contentType.split(";", 2)[0].trim();
+        }
         String lower = StrUtil.blankToDefault(source, "").toLowerCase(Locale.ROOT);
-        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-        if (lower.endsWith(".webp")) return "image/webp";
-        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (lower.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (lower.endsWith(".gif")) {
+            return "image/gif";
+        }
         return "image/png";
     }
 
     private Boolean readBoolean(JSONObject config, String key) {
-        if (config == null || !config.containsKey(key)) return null;
+        if (config == null || !config.containsKey(key)) {
+            return null;
+        }
         Object value = config.get(key);
-        if (value instanceof Boolean bool) return bool;
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
         return value == null ? null : Boolean.parseBoolean(value.toString());
     }
 
     private void addNormalizedFormat(Set<String> formats, String value) {
         String normalized = StrUtil.blankToDefault(value, "").trim().toLowerCase(Locale.ROOT);
-        if ("base64".equals(normalized) || "data-uri".equals(normalized)) normalized = FORMAT_DATA_URI;
-        if (FORMAT_URL.equals(normalized) || FORMAT_DATA_URI.equals(normalized)) formats.add(normalized);
+        if ("base64".equals(normalized) || "data-uri".equals(normalized)) {
+            normalized = FORMAT_DATA_URI;
+        }
+        if (FORMAT_URL.equals(normalized) || FORMAT_DATA_URI.equals(normalized)) {
+            formats.add(normalized);
+        }
     }
 
     private BusinessException unsupported(AiModel model, String reason) {
@@ -284,11 +384,17 @@ public class ReferenceImageTransportService {
     }
 
     private boolean isIpLiteral(String host) {
-        if (host.indexOf(':') >= 0) return true;
-        if (host.isEmpty()) return false;
+        if (host.indexOf(':') >= 0) {
+            return true;
+        }
+        if (host.isEmpty()) {
+            return false;
+        }
         for (int i = 0; i < host.length(); i++) {
             char current = host.charAt(i);
-            if (current != '.' && !Character.isDigit(current)) return false;
+            if (current != '.' && !Character.isDigit(current)) {
+                return false;
+            }
         }
         return true;
     }

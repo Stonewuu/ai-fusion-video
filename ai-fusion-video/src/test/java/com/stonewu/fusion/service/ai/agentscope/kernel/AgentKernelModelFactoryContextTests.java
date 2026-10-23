@@ -1,6 +1,9 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
 import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.service.media.AgentMediaInputResolver;
+import com.stonewu.fusion.service.ai.run.model.AgentModelRequests;
+import com.stonewu.fusion.service.ai.agentscope.message.MediaResolvingChatModel;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
 import com.stonewu.fusion.service.ai.provider.AiProviderService;
 import com.stonewu.fusion.service.ai.provider.AiProviderService.AgentScopeModelProvision;
@@ -24,6 +27,8 @@ class AgentKernelModelFactoryContextTests {
     void existingAgentScopeFactoryIsTheOnlyKernelModelFactoryBean() {
         try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
             context.registerBean(AiProviderService.class, () -> mock(AiProviderService.class));
+            context.registerBean(AgentMediaInputResolver.class, () -> mock(AgentMediaInputResolver.class));
+            context.registerBean(AgentModelRequests.class, () -> mock(AgentModelRequests.class));
             context.register(AgentScopeModelFactory.class);
             context.refresh();
 
@@ -43,11 +48,11 @@ class AgentKernelModelFactoryContextTests {
         ChatModelBase secondModel = mock(ChatModelBase.class);
         AiModel model = AiModel.builder().id(7L).code("model-a").build();
         String modelFingerprint = AgentKernelKey.modelRecordFingerprint(model);
-        when(provider.provisionAgentScopeModel(org.mockito.ArgumentMatchers.any(AiModel.class)))
+        when(provider.provisionSingleRequestModel(org.mockito.ArgumentMatchers.any(AiModel.class)))
                 .thenReturn(
                         new AgentScopeModelProvision(firstModel, modelFingerprint),
                         new AgentScopeModelProvision(secondModel, modelFingerprint));
-        AgentScopeModelFactory factory = new AgentScopeModelFactory(provider);
+        AgentScopeModelFactory factory = new AgentScopeModelFactory(provider, mock(AgentMediaInputResolver.class), mock(AgentModelRequests.class));
         AgentKernelKey key = AgentKernelKey.create(
                 "writer",
                 modelFingerprint,
@@ -62,9 +67,13 @@ class AgentKernelModelFactoryContextTests {
         OwnedChatModel second = factory.create(spec);
 
         assertThat(first).isNotSameAs(second);
-        assertThat(first.model()).isSameAs(firstModel);
-        assertThat(second.model()).isSameAs(secondModel);
-        verify(provider, times(2)).provisionAgentScopeModel(
+        assertThat(first.model()).isInstanceOf(MediaResolvingChatModel.class);
+        first.model().getModelName();
+        verify(firstModel).getModelName();
+        assertThat(second.model()).isNotSameAs(first.model());
+        second.model().getModelName();
+        verify(secondModel).getModelName();
+        verify(provider, times(2)).provisionSingleRequestModel(
                 org.mockito.ArgumentMatchers.any(AiModel.class));
     }
 
@@ -72,9 +81,9 @@ class AgentKernelModelFactoryContextTests {
     void rejectsAndClosesAProvisionedModelWhenProviderConfigurationChanged() {
         AiProviderService provider = mock(AiProviderService.class);
         CloseableModel model = new CloseableModel();
-        when(provider.provisionAgentScopeModel(org.mockito.ArgumentMatchers.any(AiModel.class)))
+        when(provider.provisionSingleRequestModel(org.mockito.ArgumentMatchers.any(AiModel.class)))
                 .thenReturn(new AgentScopeModelProvision(model, "current-provider-fingerprint"));
-        AgentScopeModelFactory factory = new AgentScopeModelFactory(provider);
+        AgentScopeModelFactory factory = new AgentScopeModelFactory(provider, mock(AgentMediaInputResolver.class), mock(AgentModelRequests.class));
         AiModel configuredModel = AiModel.builder().id(7L).code("model-a").build();
         AgentKernelKey key = AgentKernelKey.create(
                 "writer", "stale-provider-fingerprint", AgentKernelKey.promptVersion("Write"),

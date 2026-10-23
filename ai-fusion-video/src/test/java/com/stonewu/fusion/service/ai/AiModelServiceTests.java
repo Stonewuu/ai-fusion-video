@@ -11,6 +11,7 @@ import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
+import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
@@ -20,11 +21,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.model.Generation;
-import org.springframework.ai.chat.prompt.Prompt;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,6 +33,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.never;
 
 @ExtendWith(MockitoExtension.class)
 class AiModelServiceTests {
@@ -61,6 +58,9 @@ class AiModelServiceTests {
     @Mock
     private ComfyUiWorkflowService comfyUiWorkflowService;
 
+    @Mock
+    private GenerationModelCapabilityService generationCapabilities;
+
     private AiModelService aiModelService;
 
     @BeforeEach
@@ -71,7 +71,8 @@ class AiModelServiceTests {
                 modelPresetService,
                 new AiModelMetadataResolver(apiConfigService),
                 chatModelFactory,
-                comfyUiWorkflowService
+                comfyUiWorkflowService,
+                generationCapabilities
         );
     }
 
@@ -174,14 +175,8 @@ class AiModelServiceTests {
                 .code("gemini-2.5-flash")
                 .modelType(1)
                 .build();
-        ChatModel chatModel = mock(ChatModel.class);
-        ChatResponse chatResponse = new ChatResponse(
-                java.util.List.of(new Generation(new AssistantMessage("OK")))
-        );
-
         when(aiModelMapper.selectById(303L)).thenReturn(model);
-        when(chatModelFactory.getOrCreate(model)).thenReturn(chatModel);
-        when(chatModel.call(any(Prompt.class))).thenReturn(chatResponse);
+        when(chatModelFactory.checkConnectivity(model, "Connectivity test. Reply with OK only.")).thenReturn("OK");
 
         AiModelConnectivityRespVO result = aiModelService.testTextModelConnectivity(303L);
 
@@ -274,5 +269,16 @@ class AiModelServiceTests {
                 .contains("id");
         assertThat(wrapper.getParamNameValuePairs().values())
                 .contains(expectedModelType, excludeId, true, false);
+    }
+
+    @Test
+    void conflictingWorkflowLimitsCannotBeSavedEvenWithoutFrontendValidation() {
+        var model = AiModel.builder().name("工作流").code("local").modelType(2).apiConfigId(1L)
+                .comfyuiWorkflowId(2L).config("{\"maxReferenceImages\":2}").build();
+        when(apiConfigService.getById(1L)).thenReturn(ApiConfig.builder().id(1L).platform("comfyui")
+                .imageProtocol("comfyui").build());
+        when(generationCapabilities.getMergedModelConfig(model)).thenThrow(new BusinessException(400, "使用上限与工作流冲突"));
+        assertThrows(BusinessException.class, () -> aiModelService.createAiModel(model));
+        verify(aiModelMapper, never()).insert(model);
     }
 }

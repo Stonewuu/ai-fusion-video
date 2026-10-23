@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.media.MediaJobSubmissionMapper">
+    <insert id="prepare">
+        INSERT INTO afv_media_job_submission(job_id, step, attempt_id, created_at) VALUES (#{id}, #{step}, #{attempt}, UTC_TIMESTAMP(6))
+    </insert>
+    <update id="acknowledge">
+        UPDATE afv_media_job_submission SET provider_task_id = #{providerId}, acknowledged_at = UTC_TIMESTAMP(6)
+        WHERE attempt_id = #{attempt} AND (provider_task_id IS NULL OR provider_task_id = #{providerId})
+    </update>
+    <select id="lockAttempts" resultType="String">
+        SELECT attempt_id FROM afv_media_job_submission WHERE job_id = #{id} ORDER BY step FOR UPDATE
+    </select>
+</mapper>

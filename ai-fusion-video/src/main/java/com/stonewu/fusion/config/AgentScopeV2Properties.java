@@ -3,13 +3,7 @@ package com.stonewu.fusion.config;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 @ConfigurationProperties(prefix = "fusion.agentscope.v2")
 public class AgentScopeV2Properties {
@@ -189,9 +183,9 @@ public class AgentScopeV2Properties {
     public static final class Execution {
         private String instanceId;
         private Duration ownerLease = Duration.ofSeconds(30);
-        private Duration runTimeout = Duration.ofMinutes(30);
+        private Duration runTimeout = Duration.ZERO;
         private Duration confirmationTimeout = Duration.ofHours(48);
-        private int maxIters = 999;
+        private int maxIters = 0;
 
         public String getInstanceId() {
             return instanceId;
@@ -216,7 +210,10 @@ public class AgentScopeV2Properties {
         }
 
         public void setRunTimeout(Duration runTimeout) {
-            this.runTimeout = requirePositive(runTimeout, "runTimeout");
+            if (runTimeout == null || runTimeout.isNegative()) {
+                throw new IllegalArgumentException("runTimeout must not be negative; zero means unlimited");
+            }
+            this.runTimeout = runTimeout;
         }
 
         public Duration getConfirmationTimeout() {
@@ -233,8 +230,8 @@ public class AgentScopeV2Properties {
         }
 
         public void setMaxIters(int maxIters) {
-            if (maxIters <= 0) {
-                throw new IllegalArgumentException("maxIters must be greater than zero");
+            if (maxIters < 0) {
+                throw new IllegalArgumentException("maxIters must not be negative; zero means unlimited");
             }
             this.maxIters = maxIters;
         }

@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.resource.ResourceReadMapper">
+    <sql id="table">
+        <choose>
+            <when test="type.name() == 'PROJECT'">afv_project</when>
+            <when test="type.name() == 'SCRIPT'">afv_script</when>
+            <when test="type.name() == 'SCRIPT_EPISODE'">afv_script_episode</when>
+            <when test="type.name() == 'SCRIPT_SCENE'">afv_script_scene_item</when>
+            <when test="type.name() == 'STORYBOARD'">afv_storyboard</when>
+            <when test="type.name() == 'STORYBOARD_EPISODE'">afv_storyboard_episode</when>
+            <when test="type.name() == 'STORYBOARD_SCENE'">afv_storyboard_scene</when>
+            <when test="type.name() == 'SHOT'">afv_storyboard_item</when>
+            <when test="type.name() == 'ASSET'">afv_asset</when>
+            <when test="type.name() == 'ASSET_ITEM'">afv_asset_item</when>
+        </choose>
+    </sql>
+    <sql id="projectColumn">
+        <choose>
+            <when test="type.name() == 'PROJECT'">r.id</when>
+            <when test="type.name() == 'SCRIPT' or type.name() == 'STORYBOARD' or type.name() == 'ASSET'">r.project_id</when>
+            <otherwise>p.project_id</otherwise>
+        </choose>
+    </sql>
+    <sql id="joins">
+        <choose>
+            <when test="type.name() == 'SCRIPT_EPISODE' or type.name() == 'SCRIPT_SCENE'">
+                JOIN afv_script p ON p.id = r.script_id
+                <if test="!historical">AND p.deleted = FALSE</if>
+                <if test="type.name() == 'SCRIPT_SCENE'">
+                    JOIN afv_script_episode e ON e.id = r.episode_id AND e.script_id = p.id
+                    <if test="!historical">AND e.deleted = FALSE</if>
+                </if>
+            </when>
+            <when test="type.name() == 'STORYBOARD_EPISODE' or type.name() == 'STORYBOARD_SCENE' or type.name() == 'SHOT'">
+                JOIN afv_storyboard p ON p.id = r.storyboard_id
+                <if test="!historical">AND p.deleted = FALSE</if>
+                <choose>
+                    <when test="type.name() == 'STORYBOARD_SCENE'">
+                        JOIN afv_storyboard_episode e ON e.id = r.episode_id AND e.storyboard_id = p.id
+                        <if test="!historical">AND e.deleted = FALSE</if>
+                    </when>
+                    <when test="type.name() == 'SHOT'">
+                        AND (r.storyboard_episode_id IS NULL OR EXISTS (
+                            SELECT 1 FROM afv_storyboard_episode e WHERE e.id = r.storyboard_episode_id AND e.storyboard_id = p.id
+                            <if test="!historical">AND e.deleted = FALSE</if>
+                        ))
+                        AND (r.storyboard_scene_id IS NULL OR EXISTS (
+                            SELECT 1 FROM afv_storyboard_scene s
+                            JOIN afv_storyboard_episode e ON e.id = s.episode_id AND e.storyboard_id = p.id
+                            <if test="!historical">AND e.deleted = FALSE</if>
+                            WHERE s.id = r.storyboard_scene_id AND s.storyboard_id = p.id
+                            <if test="!historical">AND s.deleted = FALSE</if>
+                            AND (r.storyboard_episode_id IS NULL OR r.storyboard_episode_id = e.id)
+                        ))
+                    </when>
+                </choose>
+            </when>
+            <when test="type.name() == 'ASSET_ITEM'">
+                JOIN afv_asset p ON p.id = r.asset_id
+                <if test="!historical">AND p.deleted = FALSE</if>
+            </when>
+        </choose>
+    </sql>
+    <select id="header" resultType="com.stonewu.fusion.mapper.resource.ResourceReadMapper$Header">
+        SELECT r.id, r.version, r.deleted, <include refid="projectColumn"/> AS project_id
+        FROM <include refid="table"/> r <include refid="joins"/>
+        WHERE r.id = #{id}
+        <if test="!includeDeleted">AND r.deleted = FALSE</if>
+        <if test="lock">FOR UPDATE</if>
+    </select>
+    <select id="data" resultType="java.util.LinkedHashMap">
+        <bind name="historical" value="false"/>
+        SELECT r.* FROM <include refid="table"/> r <include refid="joins"/>
+        WHERE r.id = #{id} AND r.version = #{version} AND r.deleted = FALSE
+    </select>
+    <select id="raw" resultType="java.util.LinkedHashMap">
+        SELECT r.* FROM <include refid="table"/> r WHERE r.id = #{id}
+        <if test="lock">FOR UPDATE</if>
+    </select>
+    <select id="currentStoryboard" resultType="Long">
+        SELECT id FROM afv_storyboard WHERE project_id = #{projectId} AND deleted = FALSE
+        AND script_id = (SELECT id FROM afv_script WHERE project_id = #{projectId} AND deleted = FALSE ORDER BY create_time DESC, id DESC LIMIT 1)
+        ORDER BY create_time DESC, id DESC LIMIT 1
+    </select>
+    <select id="storyboardChildren" resultType="Long">
+        <bind name="historical" value="false"/>
+        SELECT r.id FROM <include refid="table"/> r <include refid="joins"/>
+        <if test="type.name() == 'SHOT'">
+            LEFT JOIN afv_storyboard_episode ordering_ep ON ordering_ep.id = r.storyboard_episode_id
+            LEFT JOIN afv_storyboard_scene ordering_scene ON ordering_scene.id = r.storyboard_scene_id
+        </if>
+        WHERE
+        <choose>
+            <when test="parentType.name() == 'STORYBOARD'">r.storyboard_id</when>
+            <when test="parentType.name() == 'STORYBOARD_EPISODE' and type.name() == 'STORYBOARD_SCENE'">r.episode_id</when>
+            <when test="parentType.name() == 'STORYBOARD_EPISODE' and type.name() == 'SHOT'">r.storyboard_episode_id</when>
+            <when test="parentType.name() == 'STORYBOARD_SCENE' and type.name() == 'SHOT'">r.storyboard_scene_id</when>
+        </choose>
+        = #{parentId} AND r.deleted = FALSE ORDER BY
+        <choose>
+            <when test="type.name() == 'SHOT'">
+                CASE WHEN ordering_ep.id IS NULL THEN 1 ELSE 0 END, ordering_ep.sort_order, ordering_ep.id,
+                CASE WHEN ordering_scene.id IS NULL THEN 1 ELSE 0 END, ordering_scene.sort_order, ordering_scene.id,
+            </when>
+            <when test="type.name() == 'STORYBOARD_SCENE'">e.sort_order, e.id,</when>
+        </choose>
+        r.sort_order, r.id
+    </select>
+    <select id="countStoryboardChildren" resultType="long">
+        <bind name="historical" value="false"/>
+        SELECT COUNT(*) FROM <include refid="table"/> r <include refid="joins"/>
+        WHERE r.storyboard_id = #{storyboardId} AND r.deleted = FALSE
+    </select>
+    <select id="lockProjectResources" resultType="com.stonewu.fusion.mapper.resource.ResourceReadMapper$Header">
+        <bind name="historical" value="false"/>
+        SELECT r.id, r.version, r.deleted, <include refid="projectColumn"/> AS project_id
+        FROM <include refid="table"/> r <include refid="joins"/>
+        WHERE <include refid="projectColumn"/> = #{projectId} AND r.deleted = FALSE ORDER BY r.id FOR UPDATE
+    </select>
+</mapper>

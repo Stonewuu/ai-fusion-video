@@ -3,10 +3,13 @@ package com.stonewu.fusion.service.ai;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.config.ai.AiAgentDefinition;
 import com.stonewu.fusion.config.ai.AiAgentRegistry;
+import com.stonewu.fusion.service.ai.configuration.AgentDefinitionConfiguration;
+import com.stonewu.fusion.service.ai.configuration.AgentSettingsOverride;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * AI Agent 配置服务
@@ -18,6 +21,23 @@ import java.util.List;
 public class AiAgentService {
 
     private final AiAgentRegistry agentRegistry;
+    private final AgentDefinitionConfiguration configurations;
+
+    public AiAgentDefinition getConfigured(String type, Long userId) {
+        return configurations.definition(type, userId);
+    }
+
+    public String snapshot(String type, Long userId) {
+        return configurations.snapshot(type, userId);
+    }
+
+    public AiAgentDefinition fromSnapshot(String type, Map<String, String> variables) {
+        return configurations.fromSnapshot(type, variables);
+    }
+
+    public AgentSettingsOverride snapshotOverride(String type, Map<String, String> variables) {
+        return configurations.snapshotOverride(type, variables);
+    }
 
     /**
      * 获取所有 Agent 定义

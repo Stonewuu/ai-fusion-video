@@ -27,9 +27,11 @@ import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Mono;
@@ -50,6 +52,7 @@ import static org.assertj.core.groups.Tuple.tuple;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers(disabledWithoutDocker = false)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AgentProjectionRecoveryIT {
 
     @Container
@@ -57,12 +60,16 @@ class AgentProjectionRecoveryIT {
             .withDatabaseName("ai_fusion_video")
             .withUsername("afv")
             .withPassword("afv-test");
+    @Container private static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4.5-alpine").withExposedPorts(6379);
 
     @DynamicPropertySource
     static void configure(DynamicPropertyRegistry properties) {
         properties.add("spring.datasource.url", MYSQL::getJdbcUrl);
         properties.add("spring.datasource.username", MYSQL::getUsername);
         properties.add("spring.datasource.password", MYSQL::getPassword);
+        properties.add("spring.data.redis.host", REDIS::getHost);
+        properties.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        properties.add("spring.data.redis.password", () -> "");
         properties.add("spring.datasource.hikari.maximum-pool-size", () -> 32);
         properties.add("spring.datasource.hikari.minimum-idle", () -> 0);
         properties.add("fusion.agentscope.v2.state.mode", () -> "in-memory");
@@ -454,7 +461,8 @@ class AgentProjectionRecoveryIT {
                 Duration.ofMinutes(2),
                 Instant.now().plus(Duration.ofMinutes(10)),
                 "hello",
-                null)));
+                null,
+                null, null)));
     }
 
     private AgentKernelSnapshot snapshot() {

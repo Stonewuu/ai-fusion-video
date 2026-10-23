@@ -5,14 +5,16 @@ import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;
 
-import java.util.Objects;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Per-run count-and-byte bounded bridge between AgentScope and the durable journal. */
+/**
+ * Per-run count-and-byte bounded bridge between AgentScope and the durable journal.
+ */
 public final class BoundedAgentEventIngress {
 
     public static final int DEFAULT_MAX_EVENTS = 4096;

@@ -4,7 +4,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Temporary downloaded output that must be closed after platform persistence. */
+/**
+ * Temporary downloaded output that must be closed after platform persistence.
+ */
 public record ComfyUiDownloadedFile(
         Path path,
         String contentType,

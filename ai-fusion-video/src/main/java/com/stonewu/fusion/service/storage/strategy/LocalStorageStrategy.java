@@ -12,11 +12,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.file.CopyOption;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -124,14 +120,30 @@ public class LocalStorageStrategy implements StorageStrategy {
         // 优先从 Content-Type 推断
         if (StrUtil.isNotBlank(contentType)) {
             String lower = contentType.toLowerCase();
-            if (lower.contains("png")) return "png";
-            if (lower.contains("jpeg") || lower.contains("jpg")) return "jpg";
-            if (lower.contains("gif")) return "gif";
-            if (lower.contains("webp")) return "webp";
-            if (lower.contains("svg")) return "svg";
-            if (lower.contains("mp4")) return "mp4";
-            if (lower.contains("webm")) return "webm";
-            if (lower.contains("mov") || lower.contains("quicktime")) return "mov";
+            if (lower.contains("png")) {
+                return "png";
+            }
+            if (lower.contains("jpeg") || lower.contains("jpg")) {
+                return "jpg";
+            }
+            if (lower.contains("gif")) {
+                return "gif";
+            }
+            if (lower.contains("webp")) {
+                return "webp";
+            }
+            if (lower.contains("svg")) {
+                return "svg";
+            }
+            if (lower.contains("mp4")) {
+                return "mp4";
+            }
+            if (lower.contains("webm")) {
+                return "webm";
+            }
+            if (lower.contains("mov") || lower.contains("quicktime")) {
+                return "mov";
+            }
         }
 
         // 从 URL 提取

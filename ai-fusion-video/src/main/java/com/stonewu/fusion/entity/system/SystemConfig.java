@@ -24,12 +24,18 @@ public class SystemConfig extends BaseEntity {
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 配置键 */
+    /**
+     * 配置键
+     */
     private String configKey;
 
-    /** 配置值 */
+    /**
+     * 配置值
+     */
     private String configValue;
 
-    /** 备注 */
+    /**
+     * 备注
+     */
     private String remark;
 }

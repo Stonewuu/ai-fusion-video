@@ -179,6 +179,27 @@ class RunExecutionSupervisorTests {
     }
 
     @Test
+    void externalCanvasWaitReleasesExecutionOnlyAfterItsCheckpointIsPersisted() {
+        Fixture fixture = fixture();
+        var payload = JsonNodeFactory.instance.objectNode().put("replyId", "canvas-reply");
+        payload.putArray("toolCalls").addObject().put("id", "canvas-call").put("name", "await_canvas_run")
+                .putObject("input").put("canvasRunId", "canvas-run");
+        var pause = new AgentEventEnvelope("canvas-wait-event", "REQUIRE_EXTERNAL_EXECUTION", "main", "canvas-reply",
+                null, null, null, null, null, payload, Instant.now());
+        when(fixture.journal.appendOwned(anyString(), anyString(), anyLong(), any()))
+                .thenReturn(Mono.just(Optional.of(new CommittedAgentEvent(12, fixture.command.run().runId(), 5, pause, Instant.now()))));
+        when(fixture.waitingState.enterWaitingExternal(anyString(), anyLong(), any(), any())).thenReturn(Mono.just(true));
+        when(fixture.executionFactory.start(anyString(), anyString(), anyLong(), anyString(), any(), any(), any(), any()))
+                .thenReturn(Mono.just(execution(fixture.command.run(), Flux.just(pause), new AtomicReference<>(), new AtomicInteger())));
+        StepVerifier.create(fixture.supervisor.start(fixture.command)).verifyComplete();
+        StepVerifier.create(fixture.registry.awaitEmpty(Duration.ofSeconds(1))).verifyComplete();
+        var checkpoint = ArgumentCaptor.forClass(WaitingCheckpoint.class);
+        verify(fixture.waitingState).enterWaitingExternal(eq(fixture.command.run().runId()), eq(fixture.command.run().ownerEpoch()), checkpoint.capture(), any());
+        assertThat(checkpoint.getValue().pausedThroughSequence()).isEqualTo(5);
+        verify(fixture.terminals, never()).terminateOwned(any(), anyString(), anyLong());
+    }
+
+    @Test
     void durablyMirrorsCommittedChildEventsToTheOwnedParentRun() {
         Fixture fixture = fixture();
         ParentAgentRunContext parent = new ParentAgentRunContext(

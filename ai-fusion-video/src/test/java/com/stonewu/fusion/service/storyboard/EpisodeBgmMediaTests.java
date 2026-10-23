@@ -33,7 +33,7 @@ class EpisodeBgmMediaTests {
                 "yuv420p", "-c:a", "aac", video.toString()));
         run(List.of("ffmpeg", "-v", "error", "-y", "-f", "lavfi", "-i",
                 "sine=frequency=880:duration=" + musicSeconds, "-c:a", "aac", music.toString()));
-        EpisodeBgmService service = new EpisodeBgmService(new EpisodeBgmProperties(), null, null, null);
+        EpisodeBgmService service = new EpisodeBgmService(new EpisodeBgmProperties(), null);
         run(service.buildMixCommand(video, music, null, true, 4, output));
         Process probe = new ProcessBuilder("ffprobe", "-v", "error", "-select_streams", "v:0",
                 "-show_entries", "stream=duration", "-of", "csv=p=0", output.toString()).start();

@@ -1,20 +1,11 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.script.ScriptSceneItem;
-import com.stonewu.fusion.entity.script.Script;
-import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
-import com.stonewu.fusion.service.script.ScriptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 剧本结构查询工具（get_script_structure）
@@ -26,8 +17,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class ScriptStructureQueryToolExecutor implements ToolExecutor {
 
-    private final ScriptService scriptService;
-    private final ToolResourceAccessGuard accessGuard;
+    private final ScriptToolQueries queries;
+
 
     @Override
     public String getToolName() {
@@ -77,87 +68,6 @@ public class ScriptStructureQueryToolExecutor implements ToolExecutor {
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long projectId = params.getLong("projectId");
-            String detailLevel = params.getStr("detailLevel", "outline");
-
-            if (projectId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 projectId").toString();
-            }
-            accessGuard.requireProject(projectId, context.getUserId());
-
-            Script script = scriptService.getByProjectId(projectId);
-            if (script == null) {
-                return JSONUtil.createObj().set("status", "success").set("result", "该项目尚无剧本").toString();
-            }
-
-            List<ScriptEpisode> episodes = scriptService.listEpisodes(script.getId());
-
-            JSONObject scriptInfo = JSONUtil.createObj()
-                    .set("scriptId", script.getId())
-                    .set("title", script.getTitle())
-                    .set("totalEpisodes", script.getTotalEpisodes())
-                    .set("parsingStatus", script.getParsingStatus());
-
-            List<JSONObject> episodeList = episodes.stream().map(ep -> {
-                JSONObject epObj = JSONUtil.createObj()
-                        .set("scriptEpisodeId", ep.getId())
-                        .set("episodeNumber", ep.getEpisodeNumber())
-                        .set("title", ep.getTitle())
-                        .set("synopsis", ep.getSynopsis())
-                        .set("totalScenes", ep.getTotalScenes())
-                        .set("version", ep.getVersion());
-
-                List<ScriptSceneItem> items = scriptService.listScenesByEpisode(ep.getId());
-
-                switch (detailLevel) {
-                    case "summary" -> {
-                        List<JSONObject> sceneSummaries = items.stream()
-                                .map(item -> JSONUtil.createObj()
-                                        .set("scriptSceneItemId", item.getId())
-                                        .set("sceneNumber", item.getSceneNumber())
-                                        .set("sceneHeading", item.getSceneHeading())
-                                        .set("sceneDescription", item.getSceneDescription())
-                                        .set("characters", item.getCharacters()))
-                                .collect(Collectors.toList());
-                        epObj.set("scenes", sceneSummaries);
-                    }
-                    case "full" -> {
-                        List<JSONObject> scenesFull = items.stream()
-                                .map(item -> JSONUtil.createObj()
-                                        .set("scriptSceneItemId", item.getId())
-                                        .set("sceneNumber", item.getSceneNumber())
-                                        .set("sceneHeading", item.getSceneHeading())
-                                        .set("location", item.getLocation())
-                                        .set("timeOfDay", item.getTimeOfDay())
-                                        .set("intExt", item.getIntExt())
-                                        .set("characters", item.getCharacters())
-                                        .set("characterAssetIds", item.getCharacterAssetIds())
-                                        .set("sceneAssetId", item.getSceneAssetId())
-                                        .set("sceneDescription", item.getSceneDescription())
-                                        .set("dialogues", item.getDialogues()))
-                                .collect(Collectors.toList());
-                        epObj.set("scenes", scenesFull);
-                    }
-                    default -> {
-                        List<JSONObject> sceneOutlines = items.stream()
-                                .map(item -> JSONUtil.createObj()
-                                        .set("scriptSceneItemId", item.getId())
-                                        .set("sceneNumber", item.getSceneNumber())
-                                        .set("sceneHeading", item.getSceneHeading()))
-                                .collect(Collectors.toList());
-                        epObj.set("scenes", sceneOutlines);
-                    }
-                }
-                return epObj;
-            }).collect(Collectors.toList());
-
-            scriptInfo.set("episodes", episodeList);
-            return scriptInfo.toString();
-        } catch (Exception e) {
-            log.error("查询剧本结构失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "查询失败: " + e.getMessage()).toString();
-        }
+        return queries.execute(getToolName(), toolInput, context);
     }
 }

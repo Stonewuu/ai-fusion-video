@@ -336,8 +336,6 @@ export function SaveEpisodeResult({ data }: { data: unknown }) {
   const message = obj.message as string | undefined;
   const episodeNumber = obj.episodeNumber as number | undefined;
   const title = obj.title as string | undefined;
-  const episodeId = obj.scriptEpisodeId ?? obj.episodeId;
-  const version = obj.episode_version;
 
   return (
     <div className="space-y-1">
@@ -345,10 +343,6 @@ export function SaveEpisodeResult({ data }: { data: unknown }) {
         <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
         {message || `第${episodeNumber ?? "?"}集「${title || ""}」保存成功`}
       </p>
-      <div className="flex gap-3 text-[10px] text-muted-foreground/60">
-        {episodeId !== undefined && <span>分集ID: {String(episodeId)}</span>}
-        {version !== undefined && <span>版本: v{String(version)}</span>}
-      </div>
     </div>
   );
 }
@@ -363,7 +357,6 @@ export function CreateResult({
   const obj = data as Record<string, unknown>;
   const status = obj.status as string | undefined;
   const message = obj.message as string | undefined;
-  const id = obj.id ?? obj.assetId ?? obj.itemId;
   const name = obj.name as string | undefined;
 
   const toolLabels: Record<string, string> = {
@@ -384,11 +377,6 @@ export function CreateResult({
         {message || (status === "error" ? `${label}创建失败` : `${label}创建成功`)}
       </p>
       {name && <p className="text-[10px] text-foreground/80">名称: {name}</p>}
-      {id !== undefined && (
-        <p className="text-[10px] text-muted-foreground/60">
-          {label}ID: {String(id)}
-        </p>
-      )}
     </div>
   );
 }

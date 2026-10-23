@@ -14,14 +14,9 @@ import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.mapper.ai.AgentEventMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
-import com.stonewu.fusion.service.ai.run.model.PendingConfirmation;
-import com.stonewu.fusion.service.ai.run.model.PendingExternalExecution;
-import com.stonewu.fusion.service.ai.run.model.ResumeConfirmationCommand;
-import com.stonewu.fusion.service.ai.run.model.ResumeExternalCommand;
-import com.stonewu.fusion.service.ai.run.model.ResumedAgentRun;
-import com.stonewu.fusion.service.ai.run.model.WaitingCheckpoint;
-import org.springframework.stereotype.Service;
+import com.stonewu.fusion.service.ai.run.model.*;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
@@ -33,15 +28,12 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.util.Comparator;
-import java.util.HexFormat;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Supplier;
 
-/** MySQL-backed, owner-fenced WAITING state transitions. */
+/**
+ * MySQL-backed, owner-fenced WAITING state transitions.
+ */
 @Service
 public final class DurableAgentWaitingStateService implements AgentWaitingStatePort {
 
@@ -85,7 +77,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 schedulers, "schedulers must not be null");
         this.signals = Objects.requireNonNull(signals, "signals must not be null");
         this.runTimeout = Objects.requireNonNull(
-                properties, "properties must not be null")
+                        properties, "properties must not be null")
                 .getExecution()
                 .getRunTimeout();
     }
@@ -115,7 +107,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 .flatMap(transition -> publishCommitted(transition.signal())
                         .thenReturn(transition.entered()))
                 .doOnNext(entered -> {
-                    if (entered) metrics.waitingEntered();
+                    if (entered) {
+                        metrics.waitingEntered();
+                    }
                 });
     }
 
@@ -135,7 +129,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         return transactional(() -> enterWaitingExternalTx(
                 safeRunId, expectedOwnerEpoch, safeCheckpoint, safePending))
                 .doOnNext(entered -> {
-                    if (entered) metrics.waitingEntered();
+                    if (entered) {
+                        metrics.waitingEntered();
+                    }
                 });
     }
 
@@ -286,7 +282,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
             return false;
         }
         requireCheckpoint(run, checkpoint);
-        LocalDateTime expiresAt = clampedExpiry(pending.expiresAt(), run, now);
+        boolean canvasWait = "await_canvas_run".equals(pending.toolName()) && run.getCanvasScopeJson() != null;
+        LocalDateTime expiresAt = canvasWait
+                ? canvasWaitExpiry(pending.expiresAt(), run, now) : clampedExpiry(pending.expiresAt(), run, now);
         PendingExternalExecution normalized = new PendingExternalExecution(
                 pending.toolCallId(),
                 pending.toolName(),
@@ -304,6 +302,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         long sequence = nextSequence(run);
         ObjectNode payload = JsonNodeFactory.instance.objectNode()
                 .put("toolCallId", normalized.toolCallId())
+                .put("outputType", "EXTERNAL_EXECUTION_REQUIRED")
                 .put("toolName", normalized.toolName())
                 .put("suspendedPayloadJson", normalized.suspendedPayloadJson())
                 .put("expiresAt", normalized.expiresAt().toString());
@@ -314,7 +313,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 WAITING_SOURCE,
                 null,
                 normalized.toolCallId(),
-                null,
+                "EXTERNAL_EXECUTION_REQUIRED",
                 payload,
                 now);
         int updated = runMapper.enterWaitingExternal(
@@ -323,6 +322,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 normalized.toolCallId(),
                 normalized.toolName(),
                 expiresAt,
+                canvasWait ? expiresAt : run.getDeadlineAt(),
                 checkpoint.pausedThroughSequence(),
                 increment(sequence),
                 now);
@@ -330,6 +330,25 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
             throw conflict("Agent 运行所有权已变更");
         }
         return true;
+    }
+
+    private LocalDateTime canvasWaitExpiry(Instant requested, AgentRun run, LocalDateTime now) {
+        if (runTimeout.isZero()) {
+            return LocalDateTime.ofInstant(requested, ZoneOffset.UTC).truncatedTo(ChronoUnit.MILLIS);
+        }
+        LocalDateTime upper = now.plusHours(4);
+        LocalDateTime absolute = run.getStartedAt().plusHours(24);
+        if (absolute.isBefore(upper)) {
+            upper = absolute;
+        }
+        LocalDateTime candidate = LocalDateTime.ofInstant(requested, ZoneOffset.UTC);
+        if (candidate.isBefore(upper)) {
+            upper = candidate;
+        }
+        if (!upper.isAfter(now)) {
+            throw conflict("本次智能体运行已达到最长等待时间");
+        }
+        return upper.truncatedTo(ChronoUnit.MILLIS);
     }
 
     private PendingConfirmation getPendingConfirmationTx(
@@ -389,7 +408,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         requireSameExpiry(run, pending.expiresAt());
 
         long newEpoch = incrementOwnerEpoch(run);
-        LocalDateTime deadline = now.plus(runTimeout).truncatedTo(ChronoUnit.MILLIS);
+        LocalDateTime deadline = AgentExecutionLimits.deadlineFrom(now, runTimeout);
         LocalDateTime leaseUntil = leaseUntil(now, command.ownerLease(), deadline);
         long sequence = nextSequence(run);
         ObjectNode payload = JsonNodeFactory.instance.objectNode()
@@ -429,6 +448,16 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 now) != 1) {
             throw conflict("确认请求已由其他节点处理");
         }
+        if (run.getCanvasScopeJson() != null) {
+            var dispatch = JsonNodeFactory.instance.objectNode();
+            var confirmation = dispatch.putObject("confirmation");
+            confirmation.set("toolCalls", parseArray(pending.suspendedToolCallsJson(), "suspendedToolCallsJson"));
+            confirmation.set("decisions", objectMapper.valueToTree(command.decisionResults()));
+            if (runMapper.recordCanvasResumeDispatch(command.runId(), newEpoch, dispatch.toString(), sequence,
+                    now, deadline, leaseUntil) != 1) {
+                throw conflict("审批续跑消息未持久化");
+            }
+        }
         return new ResumeConfirmationTransition(
                 resumed(run, command.newOwnerInstanceId(), newEpoch, leaseUntil, deadline),
                 new EventSignal(command.runId(), sequence));
@@ -438,8 +467,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         if (signal == null) {
             return Mono.empty();
         }
-        return signals.publishWakeup(signal.runId(), signal.sequence())
-                .onErrorResume(failure -> Mono.empty());
+        return Mono.fromRunnable(() -> signals.notifyCommitted(signal.runId(), signal.sequence()));
     }
 
     private ResumedAgentRun resumeExternalTx(ResumeExternalCommand command) {
@@ -481,6 +509,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 null,
                 payload,
                 now);
+        if ("await_canvas_run".equals(pending.toolName()) && run.getCanvasScopeJson() != null) {
+            sequence = appendCanvasToolResults(run, pending, payload.path("result"), sequence, now);
+        }
         if (runMapper.resumeExternal(
                 run.getId(),
                 run.getOwnerEpoch(),
@@ -492,20 +523,62 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 now) != 1) {
             throw conflict("外部执行请求已由其他节点处理");
         }
+        LocalDateTime deadline = run.getDeadlineAt();
+        if ("await_canvas_run".equals(pending.toolName()) && run.getCanvasScopeJson() != null) {
+            deadline = AgentExecutionLimits.deadlineFrom(now, runTimeout);
+            if (!runTimeout.isZero() && deadline.isAfter(run.getStartedAt().plusHours(24))) {
+                deadline = run.getStartedAt().plusHours(24);
+            }
+            leaseUntil = leaseUntil(now, command.ownerLease(), deadline);
+            if (runMapper.recordCanvasResumeDispatch(command.runId(), newEpoch, command.resultPayloadJson(), sequence,
+                    now, deadline, leaseUntil) != 1) {
+                throw conflict("外部恢复消息未持久化");
+            }
+        }
         return resumed(
                 run,
                 command.newOwnerInstanceId(),
                 newEpoch,
                 leaseUntil,
-                run.getDeadlineAt());
+                deadline);
+    }
+
+    private long appendCanvasToolResults(AgentRun run, PendingExternalExecution pending, JsonNode result,
+                                         long sequence, LocalDateTime now) {
+        var calls = parseObject(pending.suspendedPayloadJson(), "suspendedPayloadJson").path("toolCalls");
+        var results = result.path("results");
+        if (!calls.isArray() || calls.isEmpty() || calls.size() > 16 || !results.isArray() || results.size() != calls.size()) {
+            throw conflict("外部结果与等待的工具数量不符");
+        }
+        Map<String, String> expected = new LinkedHashMap<>();
+        for (JsonNode call : calls) {
+            if (expected.put(requireJsonText(call.get("id"), "id"),
+                    requireJsonText(call.get("name"), "name")) != null) {
+                throw conflict("等待的工具编号重复");
+            }
+        }
+        for (JsonNode entry : results) {
+            String id = requireJsonText(entry.get("toolCallId"), "toolCallId"), name = requireJsonText(
+                    entry.get("toolName"), "toolName");
+            if (!name.equals(expected.remove(id)) || !entry.path("result").isObject()) {
+                throw conflict("外部工具结果身份不符");
+            }
+            boolean failed = "error".equals(entry.path("result").path("status").asText());
+            var payload = JsonNodeFactory.instance.objectNode().put("outputType", "TOOL_FINISHED")
+                    .put("toolCallId", id).put("toolName", name).put("toolStatus", failed ? "error" : "success")
+                    .put("result", writeJson(entry.path("result")));
+            sequence = increment(sequence);
+            insertEvent(run, sequence, "PLATFORM_TOOL_RESULT", WAITING_SOURCE, null, id, "TOOL_FINISHED", payload, now);
+        }
+        return sequence;
     }
 
     private void requireCheckpoint(AgentRun run, WaitingCheckpoint checkpoint) {
         if (!Objects.equals(run.getAgentStateSessionId(), checkpoint.sessionId())
                 || !Objects.equals(run.getKernelFingerprint(), checkpoint.kernelFingerprint())
                 || !Objects.equals(
-                        run.getAgentDefinitionSnapshotJson(),
-                        checkpoint.agentDefinitionSnapshotJson())) {
+                run.getAgentDefinitionSnapshotJson(),
+                checkpoint.agentDefinitionSnapshotJson())) {
             throw conflict("WAITING 检查点与持久化运行身份不一致");
         }
         long lastCommitted = nextSequence(run) - 1;
@@ -736,7 +809,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 ownerInstanceId,
                 ownerEpoch,
                 toInstant(leaseUntil),
-                toInstant(deadline));
+                toInstant(deadline), run.getCanvasScopeJson() != null);
     }
 
     private long nextSequence(AgentRun run) {
@@ -777,11 +850,11 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 && Objects.equals(left.decisionIds(), right.decisionIds())
                 && Objects.equals(left.expiresAt(), right.expiresAt())
                 && Objects.equals(
-                        parseJson(left.pendingToolCallsJson(), "pendingToolCallsJson"),
-                        parseJson(right.pendingToolCallsJson(), "pendingToolCallsJson"))
+                parseJson(left.pendingToolCallsJson(), "pendingToolCallsJson"),
+                parseJson(right.pendingToolCallsJson(), "pendingToolCallsJson"))
                 && Objects.equals(
-                        parseJson(left.suspendedToolCallsJson(), "suspendedToolCallsJson"),
-                        parseJson(right.suspendedToolCallsJson(), "suspendedToolCallsJson"));
+                parseJson(left.suspendedToolCallsJson(), "suspendedToolCallsJson"),
+                parseJson(right.suspendedToolCallsJson(), "suspendedToolCallsJson"));
     }
 
     private boolean sameExternal(
@@ -790,8 +863,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 && Objects.equals(left.toolName(), right.toolName())
                 && Objects.equals(left.expiresAt(), right.expiresAt())
                 && Objects.equals(
-                        parseJson(left.suspendedPayloadJson(), "suspendedPayloadJson"),
-                        parseJson(right.suspendedPayloadJson(), "suspendedPayloadJson"));
+                parseJson(left.suspendedPayloadJson(), "suspendedPayloadJson"),
+                parseJson(right.suspendedPayloadJson(), "suspendedPayloadJson"));
     }
 
     private ArrayNode textArray(Set<String> values) {

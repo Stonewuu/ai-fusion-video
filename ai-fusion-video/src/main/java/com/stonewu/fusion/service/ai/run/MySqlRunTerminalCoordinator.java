@@ -1,13 +1,13 @@
 package com.stonewu.fusion.service.ai.run;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.enums.ai.AgentRuntimeErrorCode;
-import com.stonewu.fusion.repository.ai.AgentEventRepository;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
+import com.stonewu.fusion.repository.ai.AgentEventRepository;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailure;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
@@ -26,7 +26,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Reactive terminal adapter with fail-closed StateStore completion checks. */
+/**
+ * Reactive terminal adapter with fail-closed StateStore completion checks.
+ */
 @Service
 @RequiredArgsConstructor
 public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
@@ -70,11 +72,9 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
     private Mono<Optional<CommittedAgentEvent>> afterTerminalCommit(
             Optional<CommittedAgentEvent> committed) {
         recordTerminal(committed);
-        return committed.filter(CommittedAgentEvent::publishRequired)
-                .map(event -> signals.publishWakeup(event.runId(), event.sequence())
-                        .onErrorResume(failure -> Mono.empty())
-                        .thenReturn(committed))
-                .orElseGet(() -> Mono.just(committed));
+        committed.filter(CommittedAgentEvent::publishRequired)
+                .ifPresent(event -> signals.notifyCommitted(event.runId(), event.sequence()));
+        return Mono.just(committed);
     }
 
     private void recordTerminal(Optional<CommittedAgentEvent> committed) {

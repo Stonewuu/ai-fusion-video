@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.media.MediaBlobMapper">
+    <select id="lockState" resultType="String">
+        SELECT state FROM afv_media_blob WHERE id = #{id} FOR UPDATE NOWAIT
+    </select>
+    <select id="countStorageReferences" resultType="long">
+        SELECT (SELECT COUNT(*) FROM afv_media_blob WHERE storage_config_id = #{id} AND state &lt;&gt; 'PURGED') + (SELECT COUNT(*) FROM afv_canvas_export_blob WHERE storage_config_id = #{id} AND state &lt;&gt; 'PURGED')
+    </select>
+    <select id="lockReady" resultType="String">
+        SELECT id FROM afv_media_blob WHERE id=#{id} AND state='READY' FOR UPDATE
+    </select>
+    <update id="orphanStaging">
+        UPDATE afv_media_blob SET state = 'ORPHAN',orphaned_at=COALESCE(orphaned_at,UTC_TIMESTAMP(6)) WHERE id = #{id} AND state = 'STAGING'
+    </update>
+    <update id="orphan">
+        UPDATE afv_media_blob SET state = 'ORPHAN',orphaned_at=COALESCE(orphaned_at,UTC_TIMESTAMP(6)) WHERE id = #{id}
+    </update>
+</mapper>

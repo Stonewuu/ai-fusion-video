@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.ai.run.model;
 
-/** Provider-neutral token usage persisted for one model call. */
+/**
+ * Provider-neutral token usage persisted for one model call.
+ */
 public record NormalizedModelUsage(
         Long inputTokens,
         Long outputTokens,

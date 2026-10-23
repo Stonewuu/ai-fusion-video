@@ -5,34 +5,26 @@ import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.common.BusinessException;
-import com.stonewu.fusion.service.ai.model.AiModelMetadata;
-import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
-import com.stonewu.fusion.entity.generation.VideoItem;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.ApiConfigService;
+import com.stonewu.fusion.service.ai.model.AiModelMetadata;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
+import com.stonewu.fusion.service.generation.job.*;
+import com.stonewu.fusion.service.generation.transport.GenerationHttpClients;
 import com.stonewu.fusion.service.generation.video.VideoGenerationService;
 import com.stonewu.fusion.service.generation.video.strategy.VideoGenerationStrategy;
-import com.stonewu.fusion.service.generation.video.strategy.newapi.NewApiVideoProtocolAdapter;
-import com.stonewu.fusion.service.generation.video.strategy.newapi.NewApiVideoProtocolContext;
-import com.stonewu.fusion.service.generation.video.strategy.newapi.NewApiVideoProtocolRouter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import okhttp3.*;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
@@ -64,7 +56,7 @@ public class NewApiVideoStrategy implements VideoGenerationStrategy {
     private final GenerationModelCapabilityService generationModelCapabilityService;
     private final NewApiVideoProtocolRouter protocolRouter;
 
-    private final OkHttpClient okHttpClient = new OkHttpClient.Builder()
+    private final OkHttpClient okHttpClient = GenerationHttpClients.providerRequestBuilder()
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -81,114 +73,34 @@ public class NewApiVideoStrategy implements VideoGenerationStrategy {
     }
 
     @Override
-    public String submit(VideoTask task) {
-        AiModel model = resolveModel(task);
-        ApiConfig apiConfig = resolveApiConfig(model);
-        JSONObject modelConfig = generationModelCapabilityService.getMergedModelConfig(model);
-        NewApiVideoProtocolContext protocolContext = buildProtocolContext(model, apiConfig, task, modelConfig);
-        NewApiVideoProtocolAdapter protocolAdapter = protocolRouter.resolve(protocolContext);
-
-        List<VideoItem> items = videoGenerationService.listItems(task.getId());
-        if (items.isEmpty()) {
-            throw new BusinessException("视频任务缺少生成条目");
-        }
-
-        String firstPlatformTaskId = null;
-        for (VideoItem item : items) {
-            if (StrUtil.isNotBlank(item.getPlatformTaskId())) {
-                firstPlatformTaskId = StrUtil.blankToDefault(firstPlatformTaskId, item.getPlatformTaskId());
-                continue;
-            }
-
-            JSONObject requestBody = protocolAdapter.buildSubmitBody(protocolContext);
-            String platformTaskId = submitTask(
-                    apiConfig, protocolAdapter.resolveSubmitPath(protocolContext), requestBody);
-            item.setPlatformTaskId(platformTaskId);
-            videoGenerationService.updateItem(item);
-
-            if (firstPlatformTaskId == null) {
-                firstPlatformTaskId = platformTaskId;
-            }
-        }
-
-        log.info("[NewApi Video] 任务已创建: taskId={}, model={}, count={}",
-                task.getTaskId(), model.getCode(), items.size());
-        return firstPlatformTaskId;
+    public PreparedGenerationCall prepare(VideoTask task, AiModel model, ApiConfig apiConfig) {
+        var config = generationModelCapabilityService.getMergedModelConfig(model);
+        var context = buildProtocolContext(model, apiConfig, task, config);
+        var adapter = protocolRouter.resolve(context);
+        Request request = new Request.Builder().url(resolveApiUrl(apiConfig, adapter.resolveSubmitPath(context)))
+                .addHeader("Authorization", "Bearer " + apiConfig.getApiKey())
+                .addHeader("Content-Type", "application/json")
+                .post(RequestBody.create(adapter.buildSubmitBody(context).toString(), JSON_MEDIA_TYPE)).build();
+        var client = AiProxySupport.okHttpClient(okHttpClient, apiConfig);
+        return new PreparedGenerationCall(GenerationPreparedRequest.ordinary(), () ->
+                GenerationProviderReceipt.accepted(submitTask(client, request)));
     }
 
     @Override
-    public void poll(String platformTaskId, VideoTask task) {
-        AiModel model = resolveModel(task);
-        ApiConfig apiConfig = resolveApiConfig(model);
-        JSONObject modelConfig = generationModelCapabilityService.getMergedModelConfig(model);
-        NewApiVideoProtocolContext protocolContext = buildProtocolContext(model, apiConfig, task, modelConfig);
-        NewApiVideoProtocolAdapter protocolAdapter = protocolRouter.resolve(protocolContext);
-
-        List<VideoItem> items = videoGenerationService.listItems(task.getId());
-        int successCount = 0;
-
-        if (items.isEmpty()) {
-            NewApiVideoResult result = waitForTask(
-                    apiConfig, platformTaskId, modelConfig, protocolContext, protocolAdapter);
-            if (StrUtil.isBlank(result.videoUrl())) {
-                throw new BusinessException("New API 视频任务成功但未返回视频地址: " + platformTaskId);
-            }
-            task.setSuccessCount(1);
-            videoGenerationService.update(task);
-            return;
-        }
-
-        for (VideoItem item : items) {
-            String currentPlatformTaskId = StrUtil.blankToDefault(item.getPlatformTaskId(), platformTaskId);
-            if (StrUtil.isBlank(currentPlatformTaskId)) {
-                item.setStatus(2);
-                item.setErrorMsg("New API 平台任务 ID 为空");
-                videoGenerationService.updateItem(item);
-                throw new BusinessException("New API 平台任务 ID 为空");
-            }
-
-            try {
-                NewApiVideoResult result = waitForTask(
-                        apiConfig, currentPlatformTaskId, modelConfig, protocolContext, protocolAdapter);
-                if (StrUtil.isBlank(result.videoUrl())) {
-                    item.setStatus(2);
-                    item.setErrorMsg("New API 返回成功但无视频 URL");
-                    videoGenerationService.updateItem(item);
-                    throw new BusinessException("New API 返回成功但无视频 URL: " + currentPlatformTaskId);
-                }
-
-                item.setPlatformTaskId(currentPlatformTaskId);
-                item.setVideoUrl(result.videoUrl());
-                item.setCoverUrl(result.coverUrl());
-                item.setFirstFrameUrl(result.firstFrameUrl());
-                item.setLastFrameUrl(result.lastFrameUrl());
-                item.setDuration(result.duration() != null ? result.duration() : task.getDuration());
-                item.setStatus(1);
-                item.setErrorMsg(null);
-                videoGenerationService.updateItem(item);
-                successCount++;
-            } catch (BusinessException e) {
-                item.setStatus(2);
-                item.setErrorMsg(e.getMessage());
-                videoGenerationService.updateItem(item);
-                throw e;
-            }
-        }
-
-        task.setSuccessCount(successCount);
-        videoGenerationService.update(task);
-        log.info("[NewApi Video] 视频生成完成: taskId={}, successCount={}", task.getTaskId(), successCount);
+    public RemoteGenerationResult query(String platformTaskId, VideoTask task, AiModel model, ApiConfig apiConfig) {
+        var config = generationModelCapabilityService.getMergedModelConfig(model);
+        var context = buildProtocolContext(model, apiConfig, task, config);
+        var adapter = protocolRouter.resolve(context);
+        var result = queryTask(apiConfig, adapter.resolveQueryPath(context, platformTaskId));
+        Long interval = getPositiveLong(config, "pollIntervalMillis", "pollIntervalMs", "pollInterval");
+        return ProviderJobStates.result(normalizeStatus(result.status()), result.errorMessage(),
+                interval == null ? 10 : (int) Math.ceil(interval / 1000.0),
+                () -> List.of(new RemoteGenerationResult.Output(
+                        result.videoUrl(), result.coverUrl(), result.firstFrameUrl(), result.lastFrameUrl(),
+                        result.duration() == null ? task.getDuration() : result.duration())));
     }
 
-    private String submitTask(ApiConfig apiConfig, String submitPath, JSONObject requestBody) {
-        Request request = new Request.Builder()
-                .url(resolveApiUrl(apiConfig, submitPath))
-                .addHeader("Authorization", "Bearer " + apiConfig.getApiKey())
-                .addHeader("Content-Type", "application/json")
-                .post(RequestBody.create(requestBody.toString(), JSON_MEDIA_TYPE))
-                .build();
-
-        OkHttpClient client = AiProxySupport.okHttpClient(okHttpClient, apiConfig);
+    private String submitTask(OkHttpClient client, Request request) {
         try (Response response = client.newCall(request).execute()) {
             String responseBody = response.body() != null ? response.body().string() : "";
             if (!response.isSuccessful()) {
@@ -205,44 +117,6 @@ public class NewApiVideoStrategy implements VideoGenerationStrategy {
         }
     }
 
-    private NewApiVideoResult waitForTask(ApiConfig apiConfig, String platformTaskId, JSONObject modelConfig,
-                                          NewApiVideoProtocolContext protocolContext,
-                                          NewApiVideoProtocolAdapter protocolAdapter) {
-        long pollIntervalMillis = getPositiveLong(modelConfig,
-                "pollIntervalMillis", "pollIntervalMs", "pollInterval") != null
-                ? getPositiveLong(modelConfig, "pollIntervalMillis", "pollIntervalMs", "pollInterval")
-                : DEFAULT_POLL_INTERVAL_MILLIS;
-        long timeoutMillis = getPositiveLong(modelConfig,
-                "pollTimeoutMillis", "pollTimeoutMs") != null
-                ? getPositiveLong(modelConfig, "pollTimeoutMillis", "pollTimeoutMs")
-                : DEFAULT_POLL_TIMEOUT_MILLIS;
-
-        Integer timeoutSeconds = getPositiveInteger(modelConfig,
-                "pollTimeoutSeconds", "pollTimeout", "timeoutSeconds");
-        if (timeoutSeconds != null) {
-            timeoutMillis = timeoutSeconds * 1000L;
-        }
-
-        long deadline = System.currentTimeMillis() + timeoutMillis;
-        while (System.currentTimeMillis() <= deadline) {
-            NewApiVideoResult result = queryTask(apiConfig,
-                    protocolAdapter.resolveQueryPath(protocolContext, platformTaskId));
-            String normalizedStatus = normalizeStatus(result.status());
-
-            if ("completed".equals(normalizedStatus) || "succeeded".equals(normalizedStatus)) {
-                return result;
-            }
-            if ("failed".equals(normalizedStatus) || "error".equals(normalizedStatus)
-                    || "canceled".equals(normalizedStatus) || "cancelled".equals(normalizedStatus)) {
-                throw new BusinessException("New API 视频任务失败: "
-                        + StrUtil.blankToDefault(result.errorMessage(), "未知错误"));
-            }
-
-            sleepQuietly(pollIntervalMillis);
-        }
-
-        throw new BusinessException("New API 视频任务轮询超时: " + platformTaskId);
-    }
 
     private NewApiVideoResult queryTask(ApiConfig apiConfig, String queryPath) {
         Request request = new Request.Builder()
@@ -338,30 +212,6 @@ public class NewApiVideoStrategy implements VideoGenerationStrategy {
                 objectFieldString(root, "data", "id"));
     }
 
-    private AiModel resolveModel(VideoTask task) {
-        if (task.getModelId() == null) {
-            throw new BusinessException("New API 视频任务缺少 modelId");
-        }
-        AiModel model = aiModelService.getById(task.getModelId());
-        if (model == null) {
-            throw new BusinessException("New API 视频模型不存在: modelId=" + task.getModelId());
-        }
-        return model;
-    }
-
-    private ApiConfig resolveApiConfig(AiModel model) {
-        if (model.getApiConfigId() == null) {
-            throw new BusinessException("New API 视频模型缺少 apiConfigId");
-        }
-        ApiConfig apiConfig = apiConfigService.getById(model.getApiConfigId());
-        if (apiConfig == null) {
-            throw new BusinessException("New API API 配置不存在");
-        }
-        if (StrUtil.isBlank(apiConfig.getApiKey())) {
-            throw new BusinessException("New API 缺少 API Key 配置");
-        }
-        return apiConfig;
-    }
 
     private String resolveApiUrl(ApiConfig apiConfig, String path) {
         String normalizedPath = StrUtil.blankToDefault(path, NewApiVideoProtocolAdapter.DEFAULT_SUBMIT_PATH);
@@ -500,7 +350,8 @@ public class NewApiVideoStrategy implements VideoGenerationStrategy {
                 continue;
             }
             try {
-                int parsed = value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString().trim());
+                int parsed = value instanceof Number number ? number.intValue() : Integer.parseInt(
+                        value.toString().trim());
                 if (parsed > 0) {
                     return parsed;
                 }
@@ -521,7 +372,8 @@ public class NewApiVideoStrategy implements VideoGenerationStrategy {
                 continue;
             }
             try {
-                long parsed = value instanceof Number number ? number.longValue() : Long.parseLong(value.toString().trim());
+                long parsed = value instanceof Number number ? number.longValue() : Long.parseLong(
+                        value.toString().trim());
                 if (parsed > 0) {
                     return parsed;
                 }
@@ -554,14 +406,6 @@ public class NewApiVideoStrategy implements VideoGenerationStrategy {
         return status == null ? "" : status.trim().toLowerCase();
     }
 
-    private void sleepQuietly(long intervalMillis) {
-        try {
-            TimeUnit.MILLISECONDS.sleep(intervalMillis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException("New API 视频任务轮询被中断");
-        }
-    }
 
     private record NewApiVideoResult(String status, String videoUrl, String coverUrl,
                                      String firstFrameUrl, String lastFrameUrl,

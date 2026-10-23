@@ -21,29 +21,45 @@ import lombok.*;
 @AllArgsConstructor
 public class User extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 登录用户名（唯一） */
+    /**
+     * 登录用户名（唯一）
+     */
     private String username;
 
-    /** 登录密码（BCrypt 加密存储） */
+    /**
+     * 登录密码（BCrypt 加密存储）
+     */
     private String password;
 
-    /** 用户昵称（显示名称） */
+    /**
+     * 用户昵称（显示名称）
+     */
     private String nickname;
 
-    /** 头像URL */
+    /**
+     * 头像URL
+     */
     private String avatar;
 
-    /** 邮箱地址 */
+    /**
+     * 邮箱地址
+     */
     private String email;
 
-    /** 手机号码 */
+    /**
+     * 手机号码
+     */
     private String phone;
 
-    /** 状态：0-禁用 1-启用 */
+    /**
+     * 状态：0-禁用 1-启用
+     */
     @Builder.Default
     private Integer status = 1;
 }

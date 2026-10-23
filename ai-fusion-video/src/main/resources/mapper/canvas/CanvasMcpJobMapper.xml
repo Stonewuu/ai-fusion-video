@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasMcpJobMapper">
+    <select id="lock" resultType="com.stonewu.fusion.entity.canvas.CanvasMcpJobEntity">
+        SELECT * FROM afv_canvas_mcp_job WHERE id = #{id} FOR UPDATE
+    </select>
+    <insert id="insertJob">
+        INSERT INTO afv_canvas_mcp_job(id,node_run_id,run_id,user_id,contract_id,input_json,deadline_at,created_at,updated_at)
+        VALUES(#{id},#{nodeRunId},#{runId},#{userId},#{contractId},#{input},LEAST(#{deadline},TIMESTAMPADD(HOUR,1,UTC_TIMESTAMP(6))),UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))
+    </insert>
+    <select id="next" resultType="String">
+        SELECT j.id FROM afv_canvas_mcp_job j JOIN afv_canvas_mcp_contract c ON c.id=j.contract_id
+        WHERE (j.status='READY' OR (j.status='RUNNING' AND j.lease_until&lt;=UTC_TIMESTAMP(6)))
+            AND (j.permit_held=TRUE OR j.cancel_requested=TRUE OR j.request_started_at IS NOT NULL
+                OR j.deadline_at&lt;=UTC_TIMESTAMP(6) OR c.enabled=FALSE OR c.deleted=TRUE
+                OR NOT EXISTS(SELECT 1 FROM afv_canvas_mcp_job busy WHERE busy.contract_id=j.contract_id AND busy.permit_held=TRUE))
+        ORDER BY j.created_at,j.id LIMIT 1 FOR UPDATE SKIP LOCKED
+    </select>
+    <update id="claim">
+        UPDATE afv_canvas_mcp_job SET status='RUNNING',owner_instance_id=#{owner},owner_epoch=owner_epoch+1,
+            lease_until=TIMESTAMPADD(SECOND,90,UTC_TIMESTAMP(6)),permit_held=TRUE,revision=revision+1,updated_at=UTC_TIMESTAMP(6) WHERE id=#{id}
+    </update>
+    <select id="leased" resultType="com.stonewu.fusion.entity.canvas.CanvasMcpJobEntity">
+        SELECT * FROM afv_canvas_mcp_job WHERE id=#{id} AND owner_instance_id=#{owner} AND owner_epoch=#{epoch}
+            AND status='RUNNING' AND lease_until&gt;UTC_TIMESTAMP(6) FOR UPDATE
+    </select>
+    <update id="heartbeat">
+        UPDATE afv_canvas_mcp_job SET lease_until=TIMESTAMPADD(SECOND,90,UTC_TIMESTAMP(6))
+        WHERE id=#{id} AND owner_instance_id=#{owner} AND owner_epoch=#{epoch} AND status='RUNNING' AND lease_until&gt;UTC_TIMESTAMP(6)
+    </update>
+    <update id="begin">
+        UPDATE afv_canvas_mcp_job SET request_started_at=UTC_TIMESTAMP(6),request_owner_instance_id=#{owner},request_owner_epoch=#{epoch},
+            revision=revision+1,updated_at=UTC_TIMESTAMP(6) WHERE id=#{id} AND request_started_at IS NULL
+    </update>
+    <update id="received">
+        UPDATE afv_canvas_mcp_job SET result_json=#{result},result_hash=#{hash},received_at=UTC_TIMESTAMP(6),permit_held=FALSE,
+            revision=revision+1,updated_at=UTC_TIMESTAMP(6)
+        WHERE id=#{id} AND request_started_at IS NOT NULL AND request_owner_instance_id=#{owner} AND request_owner_epoch=#{epoch}
+    </update>
+    <update id="finish">
+        UPDATE afv_canvas_mcp_job SET status=#{status},error_msg=#{error},permit_held=#{permit},owner_instance_id=NULL,lease_until=NULL,
+            revision=revision+1,updated_at=UTC_TIMESTAMP(6) WHERE id=#{id}
+    </update>
+    <update id="cancel">
+        UPDATE afv_canvas_mcp_job SET cancel_requested=TRUE,revision=revision+1,updated_at=UTC_TIMESTAMP(6) WHERE id=#{id} AND cancel_requested=FALSE
+    </update>
+    <update id="adminCancel">
+        UPDATE afv_canvas_mcp_job SET status='CANCELLED',cancel_requested=TRUE,permit_held=FALSE,
+            owner_epoch=owner_epoch+1,owner_instance_id=NULL,lease_until=NULL,error_msg=#{message},revision=revision+1,updated_at=UTC_TIMESTAMP(6) WHERE id=#{id}
+    </update>
+</mapper>

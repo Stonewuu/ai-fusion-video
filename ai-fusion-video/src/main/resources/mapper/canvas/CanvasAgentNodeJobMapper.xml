@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasAgentNodeJobMapper">
+    <select id="previousScopes" resultType="String">
+        SELECT j.scope_json FROM afv_canvas_agent_node_job j JOIN afv_canvas_node_run n ON n.id=j.node_run_id
+        WHERE n.parent_node_run_id=#{parent} AND (n.attempt&lt;#{attempt} OR (n.attempt=#{attempt} AND n.item_index&lt;#{itemIndex}))
+            AND n.status IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','BLOCKED','CANCELLED')
+        ORDER BY n.item_index,n.attempt
+    </select>
+    <select id="lockActiveScope" resultType="String">
+        SELECT scope_json FROM afv_canvas_agent_node_job WHERE node_run_id=#{nodeRunId} AND cancel_requested=FALSE FOR UPDATE
+    </select>
+    <select id="countAgentRuns" resultType="long">
+        SELECT COUNT(*) FROM afv_agent_run WHERE JSON_UNQUOTE(JSON_EXTRACT(canvas_scope_json,'$.nodeRunId'))=#{nodeRunId}
+    </select>
+    <select id="pendingChildren" resultType="String">
+        SELECT r.run_id FROM afv_agent_run r JOIN afv_agent_run p ON p.run_id=r.parent_run_id
+        JOIN afv_canvas_agent_node_job j ON j.node_run_id=JSON_UNQUOTE(JSON_EXTRACT(r.canvas_scope_json,'$.nodeRunId'))
+        WHERE r.status='RUNNING' AND r.next_sequence=1 AND r.cancel_requested_at IS NULL AND r.deadline_at&gt;UTC_TIMESTAMP(3)
+            AND (r.owner_instance_id=#{instance} OR r.lease_until&lt;=UTC_TIMESTAMP(3)) AND j.cancel_requested=FALSE
+            AND p.status IN ('RUNNING','WAITING_EXTERNAL','WAITING_CONFIRMATION') AND p.cancel_requested_at IS NULL
+            AND p.deadline_at&gt;UTC_TIMESTAMP(3)
+            AND NOT EXISTS(SELECT 1 FROM afv_agent_model_call_usage u WHERE u.run_id=r.run_id)
+        ORDER BY r.id LIMIT 32
+    </select>
+    <select id="lock" resultType="com.stonewu.fusion.entity.canvas.CanvasAgentNodeJobEntity">
+        SELECT * FROM afv_canvas_agent_node_job WHERE node_run_id = #{nodeRunId} FOR UPDATE
+    </select>
+    <insert id="insertQueued">
+        INSERT INTO afv_canvas_agent_node_job(node_run_id,canvas_run_id,agent_run_id,conversation_id,snapshot_json,
+          input_json,scope_json,dispatch_state,created_at,updated_at) VALUES(#{nodeRunId},#{canvasRunId},#{agentRunId},#{conversationId},#{snapshot},#{input},#{scope},'QUEUED',UTC_TIMESTAMP(3),UTC_TIMESTAMP(3))
+    </insert>
+    <select id="pending" resultType="String">
+        SELECT j.node_run_id FROM afv_canvas_agent_node_job j JOIN afv_agent_run r ON r.run_id=j.agent_run_id
+        WHERE j.dispatch_state IN ('QUEUED','DISPATCHING') AND r.status='RUNNING'
+          AND (r.owner_instance_id=#{instance} OR r.lease_until&lt;=UTC_TIMESTAMP(3))
+          AND r.deadline_at&gt;UTC_TIMESTAMP(3) ORDER BY j.created_at LIMIT 16
+    </select>
+    <update id="dispatching">
+        UPDATE afv_canvas_agent_node_job SET dispatch_state='DISPATCHING',updated_at=UTC_TIMESTAMP(3) WHERE node_run_id=#{nodeRunId}
+    </update>
+    <update id="dispatched">
+        UPDATE afv_canvas_agent_node_job j JOIN afv_agent_run r ON r.run_id=j.agent_run_id
+        SET j.dispatch_state='DISPATCHED',j.updated_at=UTC_TIMESTAMP(3) WHERE j.node_run_id=#{nodeRunId} AND r.owner_epoch=#{epoch}
+    </update>
+    <update id="updateScope">
+        UPDATE afv_canvas_agent_node_job SET scope_json=#{scope},updated_at=UTC_TIMESTAMP(3) WHERE node_run_id=#{nodeRunId}
+    </update>
+    <update id="requestCancel">
+        UPDATE afv_canvas_agent_node_job SET cancel_requested=TRUE,updated_at=UTC_TIMESTAMP(3) WHERE node_run_id=#{nodeRunId}
+    </update>
+    <select id="agentRunIds" resultType="String">
+        SELECT run_id FROM afv_agent_run WHERE JSON_UNQUOTE(JSON_EXTRACT(canvas_scope_json,'$.nodeRunId'))=#{nodeRunId} ORDER BY id LIMIT 65
+    </select>
+    <select id="unresolvedModelIds" resultType="String">
+        SELECT m.id FROM afv_agent_model_request m JOIN afv_agent_run r ON r.run_id=m.run_id
+        WHERE JSON_UNQUOTE(JSON_EXTRACT(r.canvas_scope_json,'$.nodeRunId'))=#{nodeRunId} AND m.permit_held=TRUE
+            AND (m.status='UNKNOWN_SUBMISSION' OR r.status IN ('COMPLETED','FAILED','CANCELLED'))
+        ORDER BY m.created_at,m.id
+    </select>
+    <select id="childStates" resultType="String">
+        SELECT status FROM afv_agent_run WHERE JSON_UNQUOTE(JSON_EXTRACT(canvas_scope_json,'$.nodeRunId'))=#{nodeRunId}
+            AND run_id&lt;&gt;#{runId}
+    </select>
+    <select id="ended" resultType="String">
+        SELECT j.agent_run_id FROM afv_canvas_agent_node_job j JOIN afv_agent_run r ON r.run_id=j.agent_run_id
+                            WHERE j.agent_run_id=#{id} AND j.node_run_id=#{nodeRunId} AND r.status IN ('COMPLETED','FAILED','CANCELLED')
+                                AND NOT EXISTS(SELECT 1 FROM afv_agent_run c WHERE JSON_UNQUOTE(JSON_EXTRACT(c.canvas_scope_json,'$.nodeRunId'))=j.node_run_id
+                                    AND c.status NOT IN ('COMPLETED','FAILED','CANCELLED'))
+                                AND NOT EXISTS(SELECT 1 FROM afv_generation_submission s JOIN afv_remote_generation_job g ON g.submission_id=s.id
+                                    WHERE s.canvas_node_run_id=j.node_run_id AND (g.permit_held=TRUE OR g.state NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','CANCELLED')))
+                                AND NOT EXISTS(SELECT 1 FROM afv_agent_model_request m JOIN afv_agent_run c ON c.run_id=m.run_id
+                                    WHERE JSON_UNQUOTE(JSON_EXTRACT(c.canvas_scope_json,'$.nodeRunId'))=j.node_run_id AND m.permit_held=TRUE)
+    </select>
+</mapper>

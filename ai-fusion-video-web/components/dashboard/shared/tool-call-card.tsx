@@ -1,9 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Ban,
-  Braces,
   CheckCircle2,
   ChevronDown,
   ChevronRight,
@@ -19,13 +18,16 @@ import { Button } from "@/components/ui/button";
 import type { ToolTimelineStatus } from "@/lib/store/pipeline-store";
 import { cn } from "@/lib/utils";
 import { getToolDisplayName } from "./ai-task-display";
-import { formatToolResultJson } from "./tool-call-argument-model";
+import { inspectToolArguments } from "./tool-call-argument-model";
 import { ToolCallArguments } from "./tool-call-arguments";
-import { ToolCallJson } from "./tool-call-json";
 import { ToolResultViewport } from "./tool-result-viewport";
 import { useToolConfirmationCountdown } from "./tool-confirmation-countdown";
+import type { ToolApprovalReview } from "@/lib/ai/tool-approval-review";
+import { ToolApprovalReviewContent } from "./tool-approval-review";
+import { isCanvasTool } from "@/lib/canvas/tool-presentation";
 
 export interface ToolCallApproval {
+  review?: ToolApprovalReview;
   decision?: "approve" | "deny";
   submitting: boolean;
   showActions: boolean;
@@ -64,7 +66,7 @@ function statusContent(
   }
   switch (status) {
     case "preparing":
-      return { label: "正在发起工具调用", icon: Loader2, className: "animate-spin text-primary motion-reduce:animate-none" };
+      return { label: "准备中", icon: Loader2, className: "animate-spin text-primary motion-reduce:animate-none" };
     case "calling":
       return { label: "执行中", icon: Loader2, className: "animate-spin text-primary motion-reduce:animate-none" };
     case "awaiting_approval":
@@ -98,11 +100,13 @@ function ToolCallItem({
     && item.status !== "cancelled";
   const argumentsReady = item.status !== "preparing"
     && item.argumentsText.trim().length > 0;
-  const jsonViewReady = hasResult || argumentsReady;
+  const argumentsInvalid = useMemo(() => argumentsReady && !inspectToolArguments(item.argumentsText).valid,
+    [argumentsReady, item.argumentsText]);
+  const canvasTool = isCanvasTool(item.toolName);
+  const missingCanvasReview = canvasTool && item.status === "awaiting_approval" && !approval?.review;
   const [argumentsExpanded, setArgumentsExpanded] = useState(
-    item.status === "awaiting_approval" && !hasResult,
+    item.status === "awaiting_approval" && !hasResult && !approval?.review,
   );
-  const [jsonView, setJsonView] = useState(false);
   const showCountdown = approval?.showCountdown !== false;
   const approvalCountdown = useToolConfirmationCountdown(
     approval?.expiresAt,
@@ -134,20 +138,7 @@ function ToolCallItem({
         <h3 className="min-w-0 truncate text-sm font-medium">
           {getToolDisplayName(item.toolName)}
         </h3>
-        <Button
-          type="button"
-          variant="ghost"
-          size="xs"
-          className={cn(
-            "pointer-events-none ml-auto opacity-0 transition-opacity duration-150 group-focus-within/tool-call:pointer-events-auto group-focus-within/tool-call:opacity-100 group-hover/tool-call:pointer-events-auto group-hover/tool-call:opacity-100 motion-reduce:transition-none",
-            !jsonViewReady && "hidden",
-          )}
-          onClick={() => setJsonView((current) => !current)}
-        >
-          {jsonView ? <ListTree /> : <Braces />}
-          {jsonView ? "返回友好视图" : "查看 JSON"}
-        </Button>
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
           <StatusIcon className={cn("size-3.5", status.className)} aria-hidden="true" />
           {status.label}
           {item.status === "awaiting_approval"
@@ -161,12 +152,6 @@ function ToolCallItem({
 
       {hasResult ? (
         <div className="border-t border-border/20 px-3 py-3">
-          {jsonView ? (
-            <ToolCallJson
-              code={formatToolResultJson(result)}
-              label="执行结果 JSON"
-            />
-          ) : (
             <ToolResultViewport>
               {(expanded) => result === null ? (
                 <p className="text-xs text-muted-foreground">
@@ -177,14 +162,21 @@ function ToolCallItem({
                   toolName={item.toolName}
                   content={result}
                   expanded={expanded}
+                  failed={item.status === "error"}
                 />
               )}
             </ToolResultViewport>
-          )}
         </div>
       ) : null}
 
-      {argumentsReady ? (
+      {approval?.review && !argumentsInvalid ? <ToolApprovalReviewContent review={approval.review} /> : null}
+      {item.status === "awaiting_approval" && (argumentsInvalid || missingCanvasReview) ? (
+        <p role="alert" className="border-t border-border/20 px-3 py-3 text-xs text-destructive">
+          暂时无法完整展示这次操作，不能确认执行。请拒绝后重新提出要求。
+        </p>
+      ) : null}
+
+      {argumentsReady && !canvasTool ? (
         <div className="border-t border-border/20">
           <Button
             type="button"
@@ -196,14 +188,13 @@ function ToolCallItem({
           >
             {argumentsExpanded ? <ChevronDown /> : <ChevronRight />}
             <ListTree />
-            调用参数
+            操作内容
           </Button>
           {argumentsExpanded ? (
             <div className="px-3 pb-3">
               <ToolCallArguments
                 argumentsText={item.argumentsText}
                 toolName={item.toolName}
-                view={jsonView ? "json" : "friendly"}
               />
             </div>
           ) : null}
@@ -235,7 +226,7 @@ function ToolCallItem({
             type="button"
             variant="default"
             size="sm"
-            disabled={submissionPending}
+            disabled={submissionPending || argumentsInvalid || missingCanvasReview}
             onClick={approval.onApprove}
           >
             {approval.submitting && approval.decision === "approve" ? (

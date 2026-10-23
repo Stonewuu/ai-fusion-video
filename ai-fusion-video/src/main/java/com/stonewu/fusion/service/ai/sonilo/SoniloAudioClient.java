@@ -8,15 +8,10 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.config.EpisodeBgmProperties;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import com.stonewu.fusion.service.generation.transport.GenerationHttpClients;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.MediaType;
-import okhttp3.MultipartBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
-import okhttp3.ResponseBody;
+import okhttp3.*;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -48,10 +43,14 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 public class SoniloAudioClient {
 
-    /** API 配置中的平台标识 */
+    /**
+     * API 配置中的平台标识
+     */
     public static final String PLATFORM = "sonilo";
 
-    /** 官方接口地址；API 配置的地址留空时使用 */
+    /**
+     * 官方接口地址；API 配置的地址留空时使用
+     */
     public static final String DEFAULT_BASE_URL = "https://api.sonilo.com";
 
     private static final String PATH_VIDEO_TO_MUSIC = "/v1/video-to-music";
@@ -63,7 +62,13 @@ public class SoniloAudioClient {
 
     private final EpisodeBgmProperties properties;
 
-    private final OkHttpClient httpClient = new OkHttpClient.Builder()
+    private final OkHttpClient httpClient = GenerationHttpClients.providerRequestBuilder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(5, TimeUnit.MINUTES)
+            .writeTimeout(15, TimeUnit.MINUTES)
+            .build();
+
+    private final OkHttpClient downloadHttpClient = new OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.MINUTES)
             .writeTimeout(15, TimeUnit.MINUTES)
@@ -152,7 +157,8 @@ public class SoniloAudioClient {
                 .header("User-Agent", USER_AGENT)
                 .get()
                 .build();
-        try (Response response = clientFor(apiConfig).newCall(request).execute()) {
+        try (Response response = AiProxySupport.okHttpClient(downloadHttpClient, apiConfig).newCall(request)
+                .execute()) {
             ResponseBody body = response.body();
             if (!response.isSuccessful() || body == null) {
                 throw new BusinessException("配乐结果下载失败 (HTTP " + response.code() + ")");
@@ -224,7 +230,7 @@ public class SoniloAudioClient {
     /**
      * 单次查询任务。5xx / 网络异常返回 null 交给上层按时限重试；4xx 直接抛出。
      */
-    private JSONObject tryQueryTask(ApiConfig apiConfig, String taskId) {
+    public JSONObject tryQueryTask(ApiConfig apiConfig, String taskId) {
         Request request = new Request.Builder()
                 .url(resolveBaseUrl(apiConfig) + PATH_TASKS + taskId)
                 .header("Authorization", "Bearer " + requireApiKey(apiConfig))

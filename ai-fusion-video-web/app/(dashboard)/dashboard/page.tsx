@@ -28,7 +28,7 @@ import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { AssistantBrandIcon } from "@/components/dashboard/assistant/assistant-brand-icon";
 import { requestAssistantOpen } from "@/components/dashboard/assistant/open-assistant";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 
 // ============================================================
 // 动画
@@ -163,15 +163,9 @@ export default function DashboardPage() {
     [hasTextModel, hasImageModel, hasVideoModel]
   );
 
-  // 外部访问就绪状态 (配置了公网 S3 或配置了公网访问地址 resourceBaseUrl)
-  const hasPublicS3 = useMemo(
-    () => storageConfigs.some((c) => c.isDefault && (c.status === 1 || c.status === undefined) && c.type === "s3"),
-    [storageConfigs]
-  );
-  const hasResourceUrl = useMemo(() => Boolean(resourceBaseUrl?.trim()), [resourceBaseUrl]);
-  const isExternalReady = useMemo(() => hasPublicS3 || hasResourceUrl, [hasPublicS3, hasResourceUrl]);
-
-
+  const hasStorage = useMemo(() => storageConfigs.filter((c) => c.isDefault && c.status === 1).length === 1, [storageConfigs]);
+  const hasResourceUrl = Boolean(resourceBaseUrl?.trim());
+  const isExternalReady = hasStorage && hasResourceUrl;
 
   if (loading) {
     return (
@@ -268,7 +262,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-        {/* 外部访问就绪状态 */}
+        {/* URL 媒体输入状态 */}
         <div
           onClick={() => router.push("/settings/storage")}
           className={cn(
@@ -291,21 +285,15 @@ export default function DashboardPage() {
                   : "bg-amber-500/10 text-amber-400 border-amber-500/20"
               )}
             >
-              {isExternalReady ? "已就绪" : "未就绪"}
+              {isExternalReady ? "已配置" : "待配置"}
             </span>
           </div>
           <div className="mt-2.5">
             <p className={cn("text-base font-bold tracking-tight", isExternalReady ? "text-foreground" : "text-amber-400/90")}>
-              {isExternalReady ? "服务就绪" : "未就绪"}
+              {isExternalReady ? "已配置" : "待配置"}
             </p>
             <p className="text-[11px] text-muted-foreground/70 mt-0.5 truncate">
-              {hasPublicS3 && hasResourceUrl
-                ? "已配置公网 S3 & 访问域名"
-                : hasPublicS3
-                ? "已配置公网 S3 存储"
-                : hasResourceUrl
-                ? "已配置公网访问地址"
-                : "需配置公网 S3 或访问地址"}
+              {isExternalReady ? "已配置默认存储和资源访问地址" : !hasStorage ? "需配置默认媒体存储" : "URL 输入需配置后端资源公网地址"}
             </p>
           </div>
         </div>

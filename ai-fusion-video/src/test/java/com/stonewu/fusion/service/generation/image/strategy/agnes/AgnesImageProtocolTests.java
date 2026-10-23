@@ -7,7 +7,6 @@ import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.generation.image.strategy.support.OpenAiCompatibleImageProtocolContext;
 import com.stonewu.fusion.service.generation.image.strategy.support.OpenAiCompatibleImageProtocolSupport;
 import com.stonewu.fusion.service.generation.image.strategy.support.OpenAiCompatibleImageRequest;
-import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import okhttp3.OkHttpClient;
@@ -25,7 +24,6 @@ class AgnesImageProtocolTests {
     private final OpenAiCompatibleImageProtocolSupport support =
             new OpenAiCompatibleImageProtocolSupport(
                     mock(ModelPresetService.class),
-                    mock(MediaStorageService.class),
                     mock(StorageConfigService.class),
                     new PresetArtStyleResourceResolver(),
                     new OkHttpClient()
@@ -38,13 +36,21 @@ class AgnesImageProtocolTests {
                 context("agnes-image-2.0-flash", 1024, 768, agnes20Config()))));
         JSONObject body21 = JSONUtil.parseObj(readBody(agnesAdapter.buildRequest(
                 context("agnes-image-2.1-flash", 2624, 1472, agnes21Config()))));
+        ModelPresetService presets = new ModelPresetService();
+        presets.init();
+        JSONObject body25 = JSONUtil.parseObj(readBody(agnesAdapter.buildRequest(
+                context("agnes-image-2.5-flash", 2624, 1472,
+                        JSONUtil.parseObj(presets.getPresetConfig("agnes-image-2.5-flash"))))));
 
         assertThat(body20.getStr("size")).isEqualTo("1024x768");
         assertThat(body20.containsKey("ratio")).isFalse();
         assertThat(body21.getStr("size")).isEqualTo("2K");
         assertThat(body21.getStr("ratio")).isEqualTo("16:9");
+        assertThat(body25.getStr("model")).isEqualTo("agnes-image-2.5-flash");
+        assertThat(body25.getStr("size")).isEqualTo("2K");
+        assertThat(body25.getStr("ratio")).isEqualTo("16:9");
 
-        for (JSONObject body : List.of(body20, body21)) {
+        for (JSONObject body : List.of(body20, body21, body25)) {
             assertThat(body.containsKey("n")).isFalse();
             assertThat(body.containsKey("response_format")).isFalse();
             assertThat(body.containsKey("tags")).isFalse();

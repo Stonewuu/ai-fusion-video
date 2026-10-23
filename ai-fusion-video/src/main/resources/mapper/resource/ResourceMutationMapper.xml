@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.resource.ResourceMutationMapper">
+    <insert id="insert" useGeneratedKeys="true" keyProperty="row.id" keyColumn="id">
+        <bind name="type" value="row.type"/>
+        INSERT INTO <include refid="com.stonewu.fusion.mapper.resource.ResourceReadMapper.table"/>
+        <foreach collection="row.columns" index="column" item="value" open="(" separator="," close=")">`${column}`</foreach>
+        VALUES <foreach collection="row.columns" item="value" open="(" separator="," close=")">#{value}</foreach>
+    </insert>
+    <insert id="insertCopy" useGeneratedKeys="true" keyProperty="row.id" keyColumn="id">
+        <bind name="type" value="row.type"/>
+        INSERT INTO <include refid="com.stonewu.fusion.mapper.resource.ResourceReadMapper.table"/>
+        (<foreach collection="row.columns" index="column" item="value" separator=",">`${column}`</foreach>, create_time, update_time)
+        VALUES (<foreach collection="row.columns" item="value" separator=",">#{value}</foreach>, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    </insert>
+    <update id="patch">
+        UPDATE <include refid="com.stonewu.fusion.mapper.resource.ResourceReadMapper.table"/>
+        <set>
+            <foreach collection="columns" index="column" item="value">`${column}` = #{value},</foreach>
+            version = version + 1, update_time = CURRENT_TIMESTAMP
+        </set>
+        WHERE id = #{id} AND version = #{version}
+        <if test="!includeDeleted">AND deleted = FALSE</if>
+    </update>
+    <update id="replaceCopy">
+        UPDATE <include refid="com.stonewu.fusion.mapper.resource.ResourceReadMapper.table"/>
+        <set>
+            <foreach collection="columns" index="column" item="value">`${column}` = #{value},</foreach>
+            update_time = CURRENT_TIMESTAMP
+        </set>
+        WHERE id = #{id}
+    </update>
+    <update id="markDeletedEpisodeCopy">
+        UPDATE afv_storyboard_episode SET deleted_id = #{id} WHERE id = #{id}
+    </update>
+    <select id="lockChildren" resultType="Long">
+        SELECT id FROM <include refid="com.stonewu.fusion.mapper.resource.ResourceReadMapper.table"/>
+        WHERE `${column}` = #{parentId} AND deleted = FALSE ORDER BY sort_order, id FOR UPDATE
+    </select>
+    <select id="lockEpisodeShots" resultType="Long">
+        SELECT id FROM afv_storyboard_item
+        WHERE (storyboard_episode_id = #{episodeId} OR storyboard_scene_id IN (
+            SELECT id FROM afv_storyboard_scene WHERE episode_id = #{episodeId} AND deleted = FALSE
+        )) AND deleted = FALSE ORDER BY sort_order, id FOR UPDATE
+    </select>
+    <select id="lockProjectTitles" resultType="java.util.LinkedHashMap">
+        SELECT id, version, title FROM <include refid="com.stonewu.fusion.mapper.resource.ResourceReadMapper.table"/>
+        WHERE project_id = #{projectId} AND deleted = FALSE ORDER BY id FOR UPDATE
+    </select>
+    <select id="columns" resultType="String">
+        SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = #{table}
+    </select>
+    <select id="referencing" resultType="Long">
+        SELECT id FROM <include refid="com.stonewu.fusion.mapper.resource.ResourceReadMapper.table"/>
+        WHERE deleted = FALSE AND
+        <choose>
+            <when test="collection">
+                JSON_VALID(`${column}`) AND JSON_CONTAINS(
+                    <choose>
+                        <when test="nestedPath != null">JSON_EXTRACT(`${column}`, #{nestedPath})</when>
+                        <otherwise>`${column}`</otherwise>
+                    </choose>, CAST(#{jsonId} AS JSON))
+            </when>
+            <otherwise>`${column}` = #{resourceId}</otherwise>
+        </choose>
+    </select>
+</mapper>

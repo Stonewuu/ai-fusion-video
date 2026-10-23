@@ -1,8 +1,6 @@
 package com.stonewu.fusion.entity.generation;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import com.stonewu.fusion.common.BaseEntity;
 import lombok.*;
 
@@ -21,35 +19,63 @@ import lombok.*;
 @AllArgsConstructor
 public class ImageItem extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 所属生图任务ID */
+    /**
+     * 生成结果内容版本，写入必须匹配读取版本。
+     */
+    @Builder.Default
+    @TableField(updateStrategy = FieldStrategy.NEVER)
+    private Integer version = 0;
+
+    /**
+     * 所属生图任务ID
+     */
+    @TableField(updateStrategy = FieldStrategy.NEVER)
     private Long taskId;
 
-    /** 平台侧任务ID，用于回调和状态查询 */
+    /**
+     * 平台侧任务ID，用于回调和状态查询
+     */
     private String platformTaskId;
 
-    /** 生成的图片URL */
+    /**
+     * 生成的图片URL
+     */
     private String imageUrl;
 
-    /** 缩略图URL */
+    /**
+     * 缩略图URL
+     */
     private String thumbnailUrl;
 
-    /** 图片宽度（像素） */
+    /**
+     * 图片宽度（像素）
+     */
     private Integer width;
 
-    /** 图片高度（像素） */
+    /**
+     * 图片高度（像素）
+     */
     private Integer height;
 
-    /** 文件大小（字节） */
+    /**
+     * 文件大小（字节）
+     */
     private Long fileSize;
 
-    /** 状态：0-生成中 1-成功 2-失败 */
+    /**
+     * 状态：0-生成中 1-成功 2-失败
+     */
     @Builder.Default
     private Integer status = 0;
 
-    /** 失败时的错误信息 */
+    /**
+     * 失败时的错误信息
+     */
     private String errorMsg;
 }

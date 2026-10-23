@@ -17,6 +17,7 @@ import java.nio.file.Paths;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -43,9 +44,8 @@ class EpisodeBgmServiceTests {
     void setUp() {
         properties = new EpisodeBgmProperties();
         properties.setMusicVolume(0.7);
-        episodeBgmService = new EpisodeBgmService(properties, soniloAudioClient, mediaStorageService, apiConfigService);
+        episodeBgmService = new EpisodeBgmService(properties, apiConfigService);
         ReflectionTestUtils.setField(episodeBgmService, "ffmpegPath", "ffmpeg");
-        ReflectionTestUtils.setField(episodeBgmService, "ffprobePath", "ffprobe");
     }
 
     @Test
@@ -64,12 +64,12 @@ class EpisodeBgmServiceTests {
     }
 
     @Test
-    void resolveApiConfigPicksLowestIdWhenSeveralEnabled() {
+    void resolveApiConfigRejectsAmbiguousEnabledProviders() {
         ApiConfig newer = ApiConfig.builder().id(7L).name("Sonilo B").platform("sonilo").apiKey("sk-b").build();
         ApiConfig older = ApiConfig.builder().id(3L).name("Sonilo A").platform("sonilo").apiKey("sk-a").build();
         when(apiConfigService.getListByPlatform("sonilo")).thenReturn(List.of(newer, older));
 
-        assertThat(episodeBgmService.resolveApiConfig()).isSameAs(older);
+        assertThatThrownBy(() -> episodeBgmService.resolveApiConfig()).hasMessageContaining("只启用一个");
     }
 
     @Test

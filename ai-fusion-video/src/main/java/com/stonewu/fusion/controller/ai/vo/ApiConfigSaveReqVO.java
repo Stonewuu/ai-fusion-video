@@ -10,6 +10,7 @@ public class ApiConfigSaveReqVO {
     private Long id;
     @NotBlank(message = "配置名称不能为空")
     private String name;
+    private String providerId;
     private String platform;
     private String textProtocol;
     private String imageProtocol;

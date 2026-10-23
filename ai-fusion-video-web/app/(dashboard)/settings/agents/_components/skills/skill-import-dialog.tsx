@@ -270,7 +270,7 @@ export function SkillImportDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="min-h-0 overflow-y-auto py-1">
+        <div className="min-h-0 overflow-y-auto px-1 py-1">
           <div className="space-y-4">
             <div
               className="rounded-lg border-2 border-dashed border-border/40 bg-background/70 p-5 text-center"

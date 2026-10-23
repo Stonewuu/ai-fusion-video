@@ -7,6 +7,7 @@ import com.stonewu.fusion.config.ai.AiAgentRegistry;
 import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.AiAgentService;
+import com.stonewu.fusion.service.ai.configuration.AgentConfigurationTestSupport;
 import com.stonewu.fusion.service.ai.AiToolConfigService;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopeModelFactory;
@@ -39,7 +40,7 @@ class AgentKernelSpecFactoryTests {
     @BeforeEach
     void setUp() {
         registry = new AiAgentRegistry();
-        AiAgentService agents = new AiAgentService(registry);
+        AiAgentService agents = AgentConfigurationTestSupport.agents(registry);
         AiToolConfigService tools = new AiToolConfigService(List.of(), registry);
         AgentScopeModelFactory models = mock(AgentScopeModelFactory.class);
         model = AiModel.builder()
@@ -59,7 +60,7 @@ class AgentKernelSpecFactoryTests {
                 models,
                 new AgentScopeV2Properties(),
                 new ObjectMapper(),
-                mcp);
+                mcp, AgentConfigurationTestSupport.skills(agents));
     }
 
     @Test
@@ -299,13 +300,14 @@ class AgentKernelSpecFactoryTests {
         when(tool.isConcurrencySafe()).thenReturn(true);
         AgentScopeModelFactory models = mock(AgentScopeModelFactory.class);
         when(models.modelConfigFingerprint(model)).thenReturn("a".repeat(64));
+        AiAgentService agents = AgentConfigurationTestSupport.agents(registry);
         AgentKernelSpecFactory toolFactory = new AgentKernelSpecFactory(
-                new AiAgentService(registry),
+                agents,
                 new AiToolConfigService(List.of(tool), registry),
                 models,
                 new AgentScopeV2Properties(),
                 new ObjectMapper(),
-                mcp);
+                mcp, AgentConfigurationTestSupport.skills(agents));
         AgentKernelSpec original = toolFactory.createRoot(
                 request().setEnabledTools(List.of("read_script")),
                 model,

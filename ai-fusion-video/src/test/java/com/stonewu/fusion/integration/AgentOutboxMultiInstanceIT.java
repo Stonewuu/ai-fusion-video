@@ -293,7 +293,8 @@ class AgentOutboxMultiInstanceIT {
                 Duration.ofMinutes(2),
                 Instant.now().plus(Duration.ofMinutes(10)),
                 "hello",
-                null)));
+                null,
+                null, null)));
     }
 
     private AgentKernelSnapshot snapshot() {

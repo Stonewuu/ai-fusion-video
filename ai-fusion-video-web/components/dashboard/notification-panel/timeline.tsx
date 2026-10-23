@@ -1,4 +1,6 @@
 "use client";
+import { ManagedMediaLink } from "@/components/media/managed-media-link";
+
 
 import {
   memo,
@@ -133,7 +135,7 @@ function TaskMediaLinks({ mediaLinks }: { mediaLinks: TaskMediaLinkInfo[] }) {
               <p className="text-xs font-medium text-muted-foreground">
                 {mediaLink.label}
               </p>
-              <a
+              <ManagedMediaLink
                 href={mediaLink.resolvedUrl}
                 target="_blank"
                 rel="noreferrer"
@@ -141,9 +143,9 @@ function TaskMediaLinks({ mediaLinks }: { mediaLinks: TaskMediaLinkInfo[] }) {
                 title={mediaLink.resolvedUrl}
               >
                 {mediaLink.resolvedUrl}
-              </a>
+              </ManagedMediaLink>
             </div>
-            <a
+            <ManagedMediaLink
               href={mediaLink.resolvedUrl}
               target="_blank"
               rel="noreferrer"
@@ -152,7 +154,7 @@ function TaskMediaLinks({ mediaLinks }: { mediaLinks: TaskMediaLinkInfo[] }) {
             >
               <Download className="h-3.5 w-3.5" />
               下载视频
-            </a>
+            </ManagedMediaLink>
           </div>
         </div>
       ))}
@@ -161,6 +163,7 @@ function TaskMediaLinks({ mediaLinks }: { mediaLinks: TaskMediaLinkInfo[] }) {
 }
 
 export interface TimelineToolConfirmation {
+  reviews?: Readonly<Record<string, import("@/lib/ai/tool-approval-review").ToolApprovalReview | undefined>>;
   toolCallIds: string[];
   parentToolCallId?: string;
   decisions: Readonly<Record<string, boolean>>;
@@ -383,6 +386,7 @@ const SubAgentCard = memo(function SubAgentCard({
                         result: child.result,
                       }]}
                       approval={{
+                        review: toolConfirmation.reviews?.[child.id],
                         decision: confirmationDecision(toolConfirmation, child.id),
                         submitting: toolConfirmation.submitting,
                         showActions: toolConfirmation.showActions,
@@ -563,6 +567,7 @@ function MessageTimelineRowContent({
           result: row.item.result,
         }]}
         approval={{
+          review: toolConfirmation.reviews?.[row.item.id],
           decision: confirmationDecision(toolConfirmation, row.item.id),
           submitting: toolConfirmation.submitting,
           showActions: toolConfirmation.showActions,

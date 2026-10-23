@@ -1,8 +1,10 @@
 "use client";
+import { ManagedVideo } from "@/components/media/managed-video";
+
 
 import { useEffect, useRef, useState } from "react";
 import { Clapperboard, Film } from "lucide-react";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { storyboardShotTypeNames } from "../constants";
 
@@ -54,7 +56,7 @@ function StoryboardShotCard({
         <div className="relative min-h-10 w-16 shrink-0 self-stretch overflow-hidden rounded-md border border-border/20 bg-muted/20">
           {hasVideo ? (
             <>
-              <video
+              <ManagedVideo
                 src={videoUrl || ""}
                 className="absolute inset-0 h-full w-full object-contain"
                 muted

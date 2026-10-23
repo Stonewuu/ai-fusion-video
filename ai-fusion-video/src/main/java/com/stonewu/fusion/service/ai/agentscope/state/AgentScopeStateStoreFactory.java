@@ -1,9 +1,9 @@
 package com.stonewu.fusion.service.ai.agentscope.state;
 
+import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.state.InMemoryAgentStateStore;
 import io.agentscope.extensions.mysql.state.MysqlAgentStateStore;
-import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
 
 import javax.sql.DataSource;
 import java.util.Objects;

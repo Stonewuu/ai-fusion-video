@@ -95,7 +95,7 @@ export function StoryboardSceneList({ workspace }: { workspace: ReturnType<typeo
                     onSelectItem={handleSelectItem}
                     onUpdateItemField={handleUpdateItemField}
                     onAddItem={() =>
-                      handleAddItem(scene.id, scene.episodeId)
+                      handleAddItem(scene.id)
                     }
                     onDeleteItem={handleDeleteItem}
                     onReorderItems={(reordered) =>
@@ -115,7 +115,7 @@ export function StoryboardSceneList({ workspace }: { workspace: ReturnType<typeo
                     selectedItemId={selectedItemId}
                     onSelectItem={handleSelectItem}
                     onAddItem={() =>
-                      handleAddItem(scene.id, scene.episodeId)
+                      handleAddItem(scene.id)
                     }
                     onDeleteItem={handleDeleteItem}
                     onReorderItems={(reordered) =>

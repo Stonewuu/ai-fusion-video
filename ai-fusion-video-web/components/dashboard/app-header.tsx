@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   FolderKanban,
   Images,
+  Workflow,
   Wrench,
   Settings,
   Bell,
@@ -16,7 +17,7 @@ import {
 } from "lucide-react";
 import { MenuBar, MobileMenuPanel } from "@/components/ui/glow-menu";
 import type { MenuDisplayMode } from "@/components/ui/glow-menu";
-import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { UserAvatarDropdown } from "@/components/ui/menu";
 import { NotificationPanel } from "@/components/dashboard/notification-panel";
 import { ClientErrorBoundary } from "@/components/client-error-boundary";
@@ -41,6 +42,13 @@ const menuItems = [
     gradient:
       "radial-gradient(circle, rgba(168,85,247,0.15) 0%, rgba(147,51,234,0.06) 50%, rgba(126,34,206,0) 85%, rgba(126,34,206,0) 100%)",
     iconColor: "text-purple-500",
+  },
+  {
+    icon: Workflow,
+    label: "画布",
+    href: "/canvases",
+    gradient: "radial-gradient(circle, color-mix(in srgb, var(--primary) 15%, transparent) 0%, transparent 85%)",
+    iconColor: "text-primary",
   },
   {
     icon: Images,
@@ -70,6 +78,7 @@ const menuItems = [
 
 // 路由与菜单标签的映射关系
 const routeToLabel: Record<string, string> = {
+  "/canvases": "画布",
   "/dashboard": "仪表盘",
   "/projects": "项目",
   "/assets": "资产",
@@ -233,11 +242,15 @@ export function AppHeader() {
         rightContent={
           <div className="flex items-center gap-2 justify-end">
             {/* 主题切换按钮 */}
-            <AnimatedThemeToggler className="rounded-xl text-violet-500 hover:text-violet-600 hover:bg-violet-500/10 dark:text-violet-300 dark:hover:text-violet-200 dark:hover:bg-violet-400/10 transition-colors" />
+            <ThemeToggle />
 
             {/* 通知按钮 */}
             <button
               ref={bellRef}
+              type="button"
+              aria-label={runningCount > 0 ? `运行与通知，${runningCount} 个任务进行中` : "运行与通知"}
+              aria-expanded={panelExpanded}
+              title="运行与通知"
               onClick={() => {
                 if (panelExpanded) {
                   setPanelExpanded(false);
@@ -247,7 +260,7 @@ export function AppHeader() {
                 }
               }}
               className={cn(
-                "relative p-2 rounded-xl transition-colors",
+                "relative p-2 rounded-xl transition-colors focus-visible:outline-2 focus-visible:outline-ring focus-visible:outline-offset-2",
                 "text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 dark:text-amber-300 dark:hover:text-amber-200 dark:hover:bg-amber-400/10",
                 panelExpanded
                   ? "bg-amber-500/15 text-amber-600 dark:bg-amber-400/15 dark:text-amber-200"
@@ -259,7 +272,7 @@ export function AppHeader() {
                 <>
                   {/* 扩散光圈：仅运行中时显示 */}
                   {runningCount > 0 && (
-                    <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-blue-500/40 animate-ping" />
+                    <span className="absolute top-1 right-1 h-4 w-4 rounded-full bg-blue-500/40 animate-ping motion-reduce:animate-none" />
                   )}
                   {/* 静态数字徽标 */}
                   <span
@@ -301,6 +314,7 @@ export function AppHeader() {
 
             {/* 用户头像下拉菜单 */}
             <UserAvatarDropdown
+              className="[&>button>div]:bg-none [&>button>div]:bg-primary [&>button>div]:text-primary-foreground"
               user={{
                 name: user?.nickname || user?.username || "用户",
                 email: user?.email || user?.username,

@@ -19,6 +19,8 @@ export interface AiModel {
   sort: number;
   status: number;
   config: string | null;
+  generationConfig?: Record<string, unknown> | null;
+  capabilityError?: string | null;
   maxConcurrency: number | null;
   defaultModel: boolean;
   supportVision: boolean;
@@ -40,6 +42,22 @@ export interface AiModelConnectivityResult {
   responseText: string;
   durationMs: number;
   testedAt: string;
+}
+
+export interface ComfyUiInputCapability {
+  maximum: number | null;
+  minimum: number;
+  minimumWhenProvided: number;
+  workflowMaximum: number | null;
+  usageMaximum: number | null;
+}
+
+export interface ComfyUiResolvedCapabilities extends Record<string, unknown> {
+  comfyuiWorkflowVersionId: number;
+  comfyuiWorkflowVersionNo: number;
+  comfyuiFields: string[];
+  comfyuiInputs: Record<string, ComfyUiInputCapability>;
+  comfyuiImageUsageMaximum: number | null;
 }
 
 /** 创建 AI 模型请求 */
@@ -92,6 +110,8 @@ export interface AiModelUpdateReq {
 
 /** 模型能力预设（从后端 JSON 加载） */
 export interface ModelPreset {
+  providerId?: string;
+  modelCapabilities?: Record<string, unknown>;
   code: string;
   modelCode?: string;
   name: string;
@@ -141,6 +161,7 @@ export interface AiModelPageReq {
 export interface ApiConfig {
   id: number;
   name: string;
+  providerId?: string | null;
   platform: string | null;
   textProtocol: string | null;
   imageProtocol: string | null;
@@ -166,6 +187,7 @@ export interface ApiConfig {
 export interface ApiConfigSaveReq {
   id?: number;
   name: string;
+  providerId?: string;
   platform?: string;
   textProtocol?: string;
   imageProtocol?: string;
@@ -253,6 +275,14 @@ export const PLATFORM_LABELS: Record<string, string> = {
 // ========== API ==========
 
 export const aiModelApi = {
+  comfyUiCapabilities: (data: {
+    apiConfigId: number;
+    comfyuiWorkflowId: number;
+    modelType: number;
+    config?: string;
+    capabilityPresetCode?: string;
+  }) => http.post<never, ComfyUiResolvedCapabilities>("/api/ai/model/comfyui-capabilities", data),
+
   /** 获取 AI 模型详情 */
   get: (id: number) => http.get<never, AiModel>(`/api/ai/model/get?id=${id}`),
 
@@ -314,6 +344,17 @@ export const apiConfigApi = {
     query.set("pageNo", String(params.pageNo ?? 1));
     query.set("pageSize", String(params.pageSize ?? 10));
     return http.get<never, PageResult<ApiConfig>>(`/api/ai/api-config/page?${query.toString()}`);
+  },
+
+  /** 管理页读取全部配置，包含等待补充密钥的停用账号。 */
+  listAll: async (): Promise<ApiConfig[]> => {
+    const pageSize = 100;
+    const firstPage = await apiConfigApi.page({ pageNo: 1, pageSize });
+    const followingPages = await Promise.all(
+      Array.from({ length: Math.max(0, Math.ceil(firstPage.total / pageSize) - 1) }, (_, index) =>
+        apiConfigApi.page({ pageNo: index + 2, pageSize })),
+    );
+    return [firstPage, ...followingPages].flatMap((page) => page.list);
   },
 
   /** 创建 API 配置 */

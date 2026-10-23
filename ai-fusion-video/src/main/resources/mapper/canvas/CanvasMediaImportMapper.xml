@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasMediaImportMapper">
+    <select id="request" resultType="String">
+        SELECT j.id FROM afv_media_job j JOIN afv_canvas_media_import b ON b.job_id = j.id
+        WHERE j.actor_user_id = #{actor} AND j.request_id = #{requestId} AND b.canvas_id = #{canvasId} AND b.actor_team_id &lt;=&gt; #{teamId}
+    </select>
+    <select id="history" resultType="String">
+        SELECT j.id FROM afv_canvas_media_import b JOIN afv_media_job j ON j.id = b.job_id
+        WHERE b.canvas_id = #{canvasId} AND j.actor_user_id = #{actor} AND b.actor_team_id &lt;=&gt; #{teamId} AND b.node_run_id IS NULL
+        ORDER BY b.created_at DESC, b.job_id DESC LIMIT 21 OFFSET #{offset}
+    </select>
+    <select id="active" resultType="String">
+        SELECT j.id FROM afv_canvas_media_import b JOIN afv_media_job j ON j.id = b.job_id
+        WHERE b.canvas_id = #{canvasId} AND j.actor_user_id = #{actor} AND b.actor_team_id &lt;=&gt; #{teamId} AND b.node_run_id IS NULL
+            AND (j.status IN ('QUEUED','WAITING','RUNNING') OR (j.cancel_requested = FALSE
+                AND JSON_EXTRACT(b.placement_json, '$.automatic') = TRUE
+                AND EXISTS (SELECT 1 FROM JSON_TABLE(j.checkpoint_json, '$.items[*]' COLUMNS(
+                    item_status VARCHAR(24) PATH '$.status', command_id VARCHAR(36) PATH '$.commandId')) item
+                    WHERE item.item_status = 'SUCCEEDED' AND item.command_id IS NULL)))
+        ORDER BY b.created_at, b.job_id LIMIT 50
+    </select>
+    <insert id="insertImport">
+        INSERT INTO afv_canvas_media_import(job_id, canvas_id, actor_team_id, placement_json, created_at) VALUES (#{id}, #{canvasId}, #{teamId}, #{placement}, UTC_TIMESTAMP(6))
+    </insert>
+</mapper>

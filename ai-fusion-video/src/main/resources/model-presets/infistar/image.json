@@ -1,0 +1,1790 @@
+[
+  {
+    "code": "infistar:gpt-image-2",
+    "modelCode": "gpt-image-2",
+    "name": "GPT Image 2",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "supportCustomSize": true,
+      "sizeMultiple": 16,
+      "maxEdge": 3840,
+      "maxAspectRatio": 3,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "minPixels": 655360,
+      "maxPixels": 8294400,
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "4:3",
+        "3:4",
+        "5:4",
+        "4:5",
+        "16:9",
+        "9:16",
+        "2:1",
+        "1:2",
+        "21:9",
+        "9:21"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "2:3": "1024x1536",
+          "3:2": "1536x1024",
+          "4:3": "1024x768",
+          "3:4": "768x1024",
+          "5:4": "1280x1024",
+          "4:5": "1024x1280",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "2:1": "2048x1024",
+          "1:2": "1024x2048",
+          "21:9": "2016x864",
+          "9:21": "864x2016"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:2": "2048x1360",
+          "2:3": "1360x2048",
+          "4:3": "2048x1536",
+          "3:4": "1536x2048",
+          "5:4": "2560x2048",
+          "4:5": "2048x2560",
+          "16:9": "2048x1152",
+          "9:16": "1152x2048",
+          "2:1": "2688x1344",
+          "1:2": "1344x2688",
+          "21:9": "2688x1152",
+          "9:21": "1152x2688"
+        },
+        "4K": {
+          "16:9": "3840x2160",
+          "9:16": "2160x3840",
+          "2:1": "3840x1920",
+          "1:2": "1920x3840",
+          "21:9": "3840x1648",
+          "9:21": "1648x3840",
+          "1:1": "2880x2880",
+          "3:2": "3456x2304",
+          "2:3": "2304x3456",
+          "4:3": "3264x2448",
+          "3:4": "2448x3264",
+          "5:4": "3200x2560",
+          "4:5": "2560x3200"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:gpt-image-1.5",
+    "modelCode": "gpt-image-1.5",
+    "name": "GPT Image 1.5",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "minPixels": 1048576,
+      "maxPixels": 1572864,
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2"
+      ],
+      "supportedSizes": {
+        "standard": {
+          "1:1": "1024x1024",
+          "2:3": "1024x1536",
+          "3:2": "1536x1024"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "standard"
+      ],
+      "defaultResolution": "standard",
+      "defaultSizeTier": "standard",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:wan2.7-image-pro",
+    "modelCode": "wan2.7-image-pro",
+    "name": "Wan 2.7 Image Pro",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 921600,
+      "maxPixels": 16777216,
+      "supportedAspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "16:9",
+        "9:16",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "3:4": "864x1152",
+          "4:3": "1152x864",
+          "16:9": "1312x736",
+          "9:16": "736x1312",
+          "2:3": "832x1248",
+          "3:2": "1248x832",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:4": "1728x2304",
+          "4:3": "2304x1728",
+          "16:9": "2848x1600",
+          "9:16": "1600x2848",
+          "2:3": "1664x2496",
+          "3:2": "2496x1664",
+          "21:9": "3136x1344"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "3:4": "3520x4704",
+          "4:3": "4704x3520",
+          "16:9": "5504x3040",
+          "9:16": "3040x5504",
+          "2:3": "3328x4992",
+          "3:2": "4992x3328",
+          "21:9": "6240x2656"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:wan2.7-image",
+    "modelCode": "wan2.7-image",
+    "name": "Wan 2.7 Image",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 921600,
+      "maxPixels": 4194304,
+      "supportedAspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "16:9",
+        "9:16",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "3:4": "864x1152",
+          "4:3": "1152x864",
+          "16:9": "1312x736",
+          "9:16": "736x1312",
+          "2:3": "832x1248",
+          "3:2": "1248x832",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:4": "1728x2304",
+          "4:3": "2304x1728",
+          "16:9": "2688x1536",
+          "9:16": "1536x2688",
+          "2:3": "1664x2496",
+          "3:2": "2496x1664",
+          "21:9": "3072x1312"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:qwen-image-2.0-pro",
+    "modelCode": "qwen-image-2.0-pro",
+    "name": "Qwen Image 2.0 Pro",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 262144,
+      "maxPixels": 4194304,
+      "supportedAspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "16:9",
+        "9:16"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "3:4": "864x1152",
+          "4:3": "1152x864",
+          "16:9": "1312x736",
+          "9:16": "736x1312"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:4": "1728x2304",
+          "4:3": "2304x1728",
+          "16:9": "2688x1536",
+          "9:16": "1536x2688"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:qwen-image-2.0",
+    "modelCode": "qwen-image-2.0",
+    "name": "Qwen Image 2.0",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 262144,
+      "maxPixels": 4194304,
+      "supportedAspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "16:9",
+        "9:16"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "3:4": "864x1152",
+          "4:3": "1152x864",
+          "16:9": "1312x736",
+          "9:16": "736x1312"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:4": "1728x2304",
+          "4:3": "2304x1728",
+          "16:9": "2688x1536",
+          "9:16": "1536x2688"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:qwen-image-max",
+    "modelCode": "qwen-image-max",
+    "name": "Qwen Image Max",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1328,
+      "defaultHeight": 1328,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ],
+      "supportedSizes": {
+        "标准": {
+          "1:1": "1328x1328",
+          "4:3": "1472x1104",
+          "3:4": "1104x1472",
+          "16:9": "1664x928",
+          "9:16": "928x1664"
+        }
+      },
+      "supportReferenceImages": false,
+      "maxReferenceImages": 0,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "标准"
+      ],
+      "defaultResolution": "标准",
+      "defaultSizeTier": "标准",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:qwen-image-plus",
+    "modelCode": "qwen-image-plus",
+    "name": "Qwen Image Plus",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1328,
+      "defaultHeight": 1328,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ],
+      "supportedSizes": {
+        "标准": {
+          "1:1": "1328x1328",
+          "4:3": "1472x1104",
+          "3:4": "1104x1472",
+          "16:9": "1664x928",
+          "9:16": "928x1664"
+        }
+      },
+      "supportReferenceImages": false,
+      "maxReferenceImages": 0,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "标准"
+      ],
+      "defaultResolution": "标准",
+      "defaultSizeTier": "标准",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:qwen-image",
+    "modelCode": "qwen-image",
+    "name": "Qwen Image",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1328,
+      "defaultHeight": 1328,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ],
+      "supportedSizes": {
+        "标准": {
+          "1:1": "1328x1328",
+          "4:3": "1472x1104",
+          "3:4": "1104x1472",
+          "16:9": "1664x928",
+          "9:16": "928x1664"
+        }
+      },
+      "supportReferenceImages": false,
+      "maxReferenceImages": 0,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "标准"
+      ],
+      "defaultResolution": "标准",
+      "defaultSizeTier": "标准",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:doubao-seedream-5-0-260128",
+    "modelCode": "doubao-seedream-5-0-260128",
+    "name": "Seedream 5.0",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "supportCustomSize": true,
+      "maxAspectRatio": 16,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 3686400,
+      "maxPixels": 16777216,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "16:9": "2848x1600",
+          "9:16": "1600x2848",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3136x1344"
+        },
+        "3K": {
+          "1:1": "3072x3072",
+          "4:3": "3456x2592",
+          "3:4": "2592x3456",
+          "16:9": "4096x2304",
+          "9:16": "2304x4096",
+          "3:2": "3744x2496",
+          "2:3": "2496x3744",
+          "21:9": "4704x2016"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "4:3": "4704x3520",
+          "3:4": "3520x4704",
+          "16:9": "5504x3040",
+          "9:16": "3040x5504",
+          "3:2": "4992x3328",
+          "2:3": "3328x4992",
+          "21:9": "6240x2656"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "2K",
+        "3K",
+        "4K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:doubao-seedream-4-0-250828",
+    "modelCode": "doubao-seedream-4-0-250828",
+    "name": "Seedream 4.0",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "无限星河 Images 接口；尺寸按此模型的公开规格配置，参考图按账号实际接口支持情况启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "supportCustomSize": true,
+      "maxAspectRatio": 16,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 921600,
+      "maxPixels": 16777216,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "16:9": "1280x720",
+          "9:16": "720x1280",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1512x648"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "16:9": "2848x1600",
+          "9:16": "1600x2848",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3136x1344"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "4:3": "4704x3520",
+          "3:4": "3520x4704",
+          "16:9": "5504x3040",
+          "9:16": "3040x5504",
+          "3:2": "4992x3328",
+          "2:3": "3328x4992",
+          "21:9": "6240x2656"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:gpt-image-2.5-sunburst",
+    "modelCode": "gpt-image-2.5-sunburst",
+    "name": "GPT Image 2.5 Sunburst",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "supportCustomSize": true,
+      "sizeMultiple": 16,
+      "maxEdge": 3840,
+      "maxAspectRatio": 3,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "minPixels": 655360,
+      "maxPixels": 8294400,
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "4:3",
+        "3:4",
+        "5:4",
+        "4:5",
+        "16:9",
+        "9:16",
+        "2:1",
+        "1:2",
+        "21:9",
+        "9:21"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "2:3": "1024x1536",
+          "3:2": "1536x1024",
+          "4:3": "1024x768",
+          "3:4": "768x1024",
+          "5:4": "1280x1024",
+          "4:5": "1024x1280",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "2:1": "2048x1024",
+          "1:2": "1024x2048",
+          "21:9": "2016x864",
+          "9:21": "864x2016"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:2": "2048x1360",
+          "2:3": "1360x2048",
+          "4:3": "2048x1536",
+          "3:4": "1536x2048",
+          "5:4": "2560x2048",
+          "4:5": "2048x2560",
+          "16:9": "2048x1152",
+          "9:16": "1152x2048",
+          "2:1": "2688x1344",
+          "1:2": "1344x2688",
+          "21:9": "2688x1152",
+          "9:21": "1152x2688"
+        },
+        "4K": {
+          "16:9": "3840x2160",
+          "9:16": "2160x3840",
+          "2:1": "3840x1920",
+          "1:2": "1920x3840",
+          "21:9": "3840x1648",
+          "9:21": "1648x3840",
+          "1:1": "2880x2880",
+          "3:2": "3456x2304",
+          "2:3": "2304x3456",
+          "4:3": "3264x2448",
+          "3:4": "2448x3264",
+          "5:4": "3200x2560",
+          "4:5": "2560x3200"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": true,
+      "asyncMode": false,
+      "quality": "auto",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:gpt-image-2.5-flare",
+    "modelCode": "gpt-image-2.5-flare",
+    "name": "GPT Image 2.5 Flare",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "supportCustomSize": true,
+      "sizeMultiple": 16,
+      "maxEdge": 3840,
+      "maxAspectRatio": 3,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "minPixels": 655360,
+      "maxPixels": 8294400,
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "4:3",
+        "3:4",
+        "5:4",
+        "4:5",
+        "16:9",
+        "9:16",
+        "2:1",
+        "1:2",
+        "21:9",
+        "9:21"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "2:3": "1024x1536",
+          "3:2": "1536x1024",
+          "4:3": "1024x768",
+          "3:4": "768x1024",
+          "5:4": "1280x1024",
+          "4:5": "1024x1280",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "2:1": "2048x1024",
+          "1:2": "1024x2048",
+          "21:9": "2016x864",
+          "9:21": "864x2016"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:2": "2048x1360",
+          "2:3": "1360x2048",
+          "4:3": "2048x1536",
+          "3:4": "1536x2048",
+          "5:4": "2560x2048",
+          "4:5": "2048x2560",
+          "16:9": "2048x1152",
+          "9:16": "1152x2048",
+          "2:1": "2688x1344",
+          "1:2": "1344x2688",
+          "21:9": "2688x1152",
+          "9:21": "1152x2688"
+        },
+        "4K": {
+          "16:9": "3840x2160",
+          "9:16": "2160x3840",
+          "2:1": "3840x1920",
+          "1:2": "1920x3840",
+          "21:9": "3840x1648",
+          "9:21": "1648x3840",
+          "1:1": "2880x2880",
+          "3:2": "3456x2304",
+          "2:3": "2304x3456",
+          "4:3": "3264x2448",
+          "3:4": "2448x3264",
+          "5:4": "3200x2560",
+          "4:5": "2560x3200"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": true,
+      "asyncMode": false,
+      "quality": "auto",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:qwen-image-3.0-pro",
+    "modelCode": "qwen-image-3.0-pro",
+    "name": "Qwen Image 3.0 Pro",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 262144,
+      "maxPixels": 4194304,
+      "supportedAspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "16:9",
+        "9:16"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "3:4": "864x1152",
+          "4:3": "1152x864",
+          "16:9": "1312x736",
+          "9:16": "736x1312"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:4": "1728x2304",
+          "4:3": "2304x1728",
+          "16:9": "2688x1536",
+          "9:16": "1536x2688"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxAspectRatio": 8,
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:qwen-image-3.0",
+    "modelCode": "qwen-image-3.0",
+    "name": "Qwen Image 3.0",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 262144,
+      "maxPixels": 4194304,
+      "supportedAspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "16:9",
+        "9:16"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "3:4": "864x1152",
+          "4:3": "1152x864",
+          "16:9": "1312x736",
+          "9:16": "736x1312"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "3:4": "1728x2304",
+          "4:3": "2304x1728",
+          "16:9": "2688x1536",
+          "9:16": "1536x2688"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxAspectRatio": 8,
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:qwen-image-edit-max",
+    "modelCode": "qwen-image-edit-max",
+    "name": "Qwen Image Edit Max",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "defaultAspectRatio": "1:1",
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2048x1536",
+          "3:4": "1536x2048",
+          "16:9": "2048x1152",
+          "9:16": "1152x2048",
+          "3:2": "2040x1360",
+          "2:3": "1360x2040",
+          "21:9": "2016x864"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxCount": 1,
+      "supportCustomSize": true,
+      "minEdge": 512,
+      "maxEdge": 2048
+    }
+  },
+  {
+    "code": "infistar:qwen-image-edit-plus",
+    "modelCode": "qwen-image-edit-plus",
+    "name": "Qwen Image Edit Plus",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "defaultAspectRatio": "1:1",
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2048x1536",
+          "3:4": "1536x2048",
+          "16:9": "2048x1152",
+          "9:16": "1152x2048",
+          "3:2": "2040x1360",
+          "2:3": "1360x2040",
+          "21:9": "2016x864"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxCount": 1,
+      "supportCustomSize": true,
+      "minEdge": 512,
+      "maxEdge": 2048
+    }
+  },
+  {
+    "code": "infistar:doubao-seedream-5-0-pro",
+    "modelCode": "doubao-seedream-5-0-pro",
+    "name": "Seedream 5.0 Pro",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 1,
+      "maxCount": 1,
+      "supportSequentialImages": false,
+      "supportStreaming": false,
+      "supportWebSearch": false,
+      "supportCustomSize": true,
+      "maxAspectRatio": 16,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 921600,
+      "maxPixels": 4624220,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "16:9": "1424x800",
+          "9:16": "800x1424",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2368x1776",
+          "3:4": "1776x2368",
+          "16:9": "2816x1584",
+          "9:16": "1584x2816",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3136x1344"
+        }
+      },
+      "referenceImageFormField": "image",
+      "asyncMode": false,
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:doubao-seedream-5-0-flash",
+    "modelCode": "doubao-seedream-5-0-flash",
+    "name": "Seedream 5.0 Flash",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 1,
+      "maxCount": 1,
+      "supportSequentialImages": false,
+      "supportStreaming": false,
+      "supportWebSearch": false,
+      "supportCustomSize": true,
+      "maxAspectRatio": 16,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 921600,
+      "maxPixels": 4624220,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "16:9": "1424x800",
+          "9:16": "800x1424",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2368x1776",
+          "3:4": "1776x2368",
+          "16:9": "2816x1584",
+          "9:16": "1584x2816",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3136x1344"
+        }
+      },
+      "referenceImageFormField": "image",
+      "asyncMode": false,
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:doubao-seedream-4-5",
+    "modelCode": "doubao-seedream-4-5",
+    "name": "Seedream 4.5",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 1,
+      "maxCount": 15,
+      "maxTotalImages": 15,
+      "supportSequentialImages": true,
+      "supportWebSearch": false,
+      "supportCustomSize": true,
+      "maxAspectRatio": 16,
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "minPixels": 3686400,
+      "maxPixels": 16777216,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "16:9": "2848x1600",
+          "9:16": "1600x2848",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3136x1344"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "4:3": "4704x3520",
+          "3:4": "3520x4704",
+          "16:9": "5504x3040",
+          "9:16": "3040x5504",
+          "3:2": "4992x3328",
+          "2:3": "3328x4992",
+          "21:9": "6240x2656"
+        }
+      },
+      "referenceImageFormField": "image",
+      "asyncMode": false,
+      "supportedResolutions": [
+        "2K",
+        "4K"
+      ],
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1"
+    }
+  },
+  {
+    "code": "infistar:step-2x-large",
+    "modelCode": "step-2x-large",
+    "name": "Step 2X Large",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "常用尺寸与比例默认模板，可按所用线路调整。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "defaultAspectRatio": "1:1",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "16:9": "2560x1440",
+          "9:16": "1440x2560",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3024x1296"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "4:3": "4608x3456",
+          "3:4": "3456x4608",
+          "16:9": "5120x2880",
+          "9:16": "2880x5120",
+          "3:2": "4992x3328",
+          "2:3": "3328x4992",
+          "21:9": "6048x2592"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxCount": 1
+    }
+  },
+  {
+    "code": "infistar:step-image-edit-2",
+    "modelCode": "step-image-edit-2",
+    "name": "Step Image Edit 2",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "defaultAspectRatio": "1:1",
+      "supportedResolutions": [
+        "1K"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1184x896",
+          "3:4": "896x1184",
+          "16:9": "1360x768",
+          "9:16": "768x1360"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxCount": 1
+    }
+  },
+  {
+    "code": "infistar:grok-imagine-image",
+    "modelCode": "grok-imagine-image",
+    "name": "Grok Imagine Image",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "defaultAspectRatio": "1:1",
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "16:9": "2560x1440",
+          "9:16": "1440x2560",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3024x1296"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxCount": 1
+    }
+  },
+  {
+    "code": "infistar:grok-imagine-image-quality",
+    "modelCode": "grok-imagine-image-quality",
+    "name": "Grok Imagine Image Quality",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "defaultAspectRatio": "1:1",
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "16:9": "2560x1440",
+          "9:16": "1440x2560",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3024x1296"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxCount": 1
+    }
+  },
+  {
+    "code": "infistar:jimeng-image-4.6",
+    "modelCode": "jimeng-image-4.6",
+    "name": "即梦 Image 4.6",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1216x912",
+          "3:4": "912x1216",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "3:2": "1296x864",
+          "2:3": "864x1296",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "16:9": "2560x1440",
+          "9:16": "1440x2560",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3024x1296"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "4:3": "4608x3456",
+          "3:4": "3456x4608",
+          "16:9": "5120x2880",
+          "9:16": "2880x5120",
+          "3:2": "4992x3328",
+          "2:3": "3328x4992",
+          "21:9": "6048x2592"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxCount": 1,
+      "minPixels": 1048576,
+      "maxPixels": 16777216,
+      "maxAspectRatio": 3,
+      "supportCustomSize": true
+    }
+  },
+  {
+    "code": "infistar:jimeng-image-4.0",
+    "modelCode": "jimeng-image-4.0",
+    "name": "即梦 Image 4.0",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "按原厂规格预填尺寸和比例，参考图入口按当前平台接口权限启用。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 2048,
+      "defaultHeight": 2048,
+      "defaultResolution": "2K",
+      "defaultSizeTier": "2K",
+      "defaultAspectRatio": "1:1",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1216x912",
+          "3:4": "912x1216",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "3:2": "1296x864",
+          "2:3": "864x1296",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "16:9": "2560x1440",
+          "9:16": "1440x2560",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3024x1296"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "4:3": "4608x3456",
+          "3:4": "3456x4608",
+          "16:9": "5120x2880",
+          "9:16": "2880x5120",
+          "3:2": "4992x3328",
+          "2:3": "3328x4992",
+          "21:9": "6048x2592"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxCount": 1,
+      "minPixels": 1048576,
+      "maxPixels": 16777216,
+      "maxAspectRatio": 3,
+      "supportCustomSize": true
+    }
+  }
+]

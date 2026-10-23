@@ -1,12 +1,8 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
-import com.stonewu.fusion.service.script.ScriptService;
+import com.stonewu.fusion.service.canvas.model.CanvasValueType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -19,8 +15,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class UpdateScriptInfoToolExecutor implements ToolExecutor {
 
-    private final ScriptService scriptService;
-    private final ToolResourceAccessGuard accessGuard;
+    private final ScriptToolCommands commands;
+
 
     @Override
     public String getToolName() {
@@ -46,54 +42,19 @@ public class UpdateScriptInfoToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "expectedVersion": { "type": "integer", "minimum": 0, "description": "刚刚读取的对象版本；创建分集传剧本版本，更新分集传分集版本" },
                         "scriptId": { "type": "integer", "description": "剧本ID（必填）" },
                         "storySynopsis": { "type": "string", "description": "全剧故事梗概（200-500字概述）" },
                         "charactersJson": { "type": "array", "description": "人物表JSON快照", "items": { "type": "object", "properties": { "name": { "type": "string" }, "assetId": { "type": "integer" }, "description": { "type": "string" }, "importance": { "type": "string" } }, "required": ["name"] } },
                         "genre": { "type": "string", "description": "类型/风格" }
                     },
-                    "required": ["scriptId"]
+                    "required": ["expectedVersion", "scriptId"]
                 }
                 """;
     }
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long scriptId = params.getLong("scriptId");
-            if (scriptId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 scriptId").toString();
-            }
-
-            Script script = accessGuard.requireScript(scriptId, context.getUserId());
-            StringBuilder updatedFields = new StringBuilder();
-
-            if (params.containsKey("storySynopsis")) {
-                script.setStorySynopsis(params.getStr("storySynopsis"));
-                updatedFields.append("故事梗概、");
-            }
-            if (params.containsKey("charactersJson")) {
-                Object chars = params.get("charactersJson");
-                script.setCharactersJson(chars instanceof String ? (String) chars : JSONUtil.toJsonStr(chars));
-                updatedFields.append("人物表、");
-            }
-            if (params.containsKey("genre")) {
-                script.setGenre(params.getStr("genre"));
-                updatedFields.append("类型、");
-            }
-
-            if (updatedFields.isEmpty()) {
-                return JSONUtil.createObj().set("status", "error").set("message", "未指定任何要更新的字段").toString();
-            }
-
-            scriptService.update(script);
-            updatedFields.setLength(updatedFields.length() - 1);
-            return JSONUtil.createObj()
-                    .set("scriptId", scriptId)
-                    .set("message", "已更新剧本信息：" + updatedFields).toString();
-        } catch (Exception e) {
-            log.error("更新剧本信息失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "更新失败: " + e.getMessage()).toString();
-        }
+        return commands.patch(CanvasValueType.SCRIPT, "scriptId", toolInput, context);
     }
 }

@@ -19,16 +19,24 @@ import java.util.List;
 @AllArgsConstructor
 public class AiAgentDefinition {
 
-    /** Agent 类型唯一标识 */
+    /**
+     * Agent 类型唯一标识
+     */
     private String type;
 
-    /** Agent 显示名称 */
+    /**
+     * Agent 显示名称
+     */
     private String name;
 
-    /** 系统提示词 */
+    /**
+     * 系统提示词
+     */
     private String systemPrompt;
 
-    /** 指令模板 */
+    /**
+     * 指令模板
+     */
     private String instructionTemplate;
 
     /**
@@ -38,15 +46,37 @@ public class AiAgentDefinition {
      */
     private String defaultUserMessage;
 
-    /** 是否启用工具（0=不启用，1=启用） */
+    /**
+     * 是否启用工具（0=不启用，1=启用）
+     */
     @Builder.Default
     private Integer enableTools = 0;
 
-    /** 该 Agent 可用的 callback 工具名列表（白名单），为 null 表示所有已注册工具 */
+    /**
+     * 该 Agent 可用的 callback 工具名列表（白名单），为 null 表示所有已注册工具
+     */
     private List<String> toolNames;
 
-    /** Agent 类型的子工具定义列表（子 Agent 工具） */
+    /**
+     * Agent 类型的子工具定义列表（子 Agent 工具）
+     */
     private List<SubAgentToolDef> subAgentTools;
+
+    /**
+     * 用户配置的默认 Skill；空列表表示不主动启用。
+     */
+    @Builder.Default
+    private List<String> defaultSkills = List.of();
+
+    /**
+     * 默认 MCP 工具；null 表示使用该智能体可用的 MCP 配置。
+     */
+    private List<String> mcpToolNames;
+
+    /**
+     * 覆盖平台步数设置，0 表示不限；null 继承平台配置。
+     */
+    private Integer maxIters;
 
     /**
      * 子 Agent 工具定义
@@ -59,21 +89,37 @@ public class AiAgentDefinition {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class SubAgentToolDef {
-        /** 工具标识名 */
+        /**
+         * 工具标识名
+         */
         private String toolName;
-        /** 工具显示名称 */
+        /**
+         * 工具显示名称
+         */
         private String displayName;
-        /** 工具描述（告诉父 Agent 何时使用此子 Agent） */
+        /**
+         * 工具描述（告诉父 Agent 何时使用此子 Agent）
+         */
         private String description;
-        /** 入参 JSON Schema */
+        /**
+         * 入参 JSON Schema
+         */
         private String parametersSchema;
-        /** 关联的子 Agent 类型标识（从 AiAgentRegistry 中查找） */
+        /**
+         * 关联的子 Agent 类型标识（从 AiAgentRegistry 中查找）
+         */
         private String refAgentType;
-        /** 输出 JSON Schema（约束子 Agent 的输出格式） */
+        /**
+         * 输出 JSON Schema（约束子 Agent 的输出格式）
+         */
         private String outputSchema;
-        /** 覆盖子 Agent 的 systemPrompt（优先于子 Agent 自身的配置） */
+        /**
+         * 覆盖子 Agent 的 systemPrompt（优先于子 Agent 自身的配置）
+         */
         private String systemPromptOverride;
-        /** 覆盖子 Agent 的 instruction（优先于子 Agent 自身的配置） */
+        /**
+         * 覆盖子 Agent 的 instruction（优先于子 Agent 自身的配置）
+         */
         private String instructionOverride;
     }
 }

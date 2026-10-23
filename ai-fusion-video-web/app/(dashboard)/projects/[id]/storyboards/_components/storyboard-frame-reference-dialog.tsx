@@ -3,7 +3,7 @@
 import { useCallback, useRef, useState } from "react";
 import { Image as ImageIcon, Loader2, Sparkles, X, ZoomIn } from "lucide-react";
 import ImageInput from "@/components/dashboard/image-input";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import { Textarea } from "@/components/ui/textarea";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { toastApiError } from "@/lib/api/toast-api-error";
@@ -13,7 +13,7 @@ import type { Project } from "@/lib/api/project";
 import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
 
 type FrameUpdateHandler = (
-  itemId: number,
+  item: StoryboardItem,
   frameType: StoryboardFrameType,
   imageUrl: string | null
 ) => Promise<void> | void;
@@ -220,7 +220,7 @@ export function FrameReferenceSection({
     skipNextChangeConfirmRef.current = false;
     try {
       setUpdating(true);
-      await onUpdateFrame(item.id, frameType, nextUrl);
+      await onUpdateFrame(item, frameType, nextUrl);
     } catch (err) {
       console.error(`更新${label}失败:`, err);
       toastApiError(err, `更新${label}失败，请重试`);

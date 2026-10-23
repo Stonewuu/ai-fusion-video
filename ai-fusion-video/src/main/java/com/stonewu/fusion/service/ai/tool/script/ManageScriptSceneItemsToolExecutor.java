@@ -1,21 +1,12 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
-import cn.hutool.json.JSONArray;
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.script.ScriptSceneItem;
-import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.ToolPermissionRisk;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
-import com.stonewu.fusion.service.script.ScriptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -28,8 +19,8 @@ import java.util.Map;
 @Slf4j
 public class ManageScriptSceneItemsToolExecutor implements ToolExecutor {
 
-    private final ScriptService scriptService;
-    private final ToolResourceAccessGuard accessGuard;
+    private final ScriptToolCommands commands;
+
 
     @Override
     public String getToolName() {
@@ -56,6 +47,7 @@ public class ManageScriptSceneItemsToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "episode_version": { "type": "integer", "minimum": 0, "description": "刚刚查询的分集版本，保护整个场次集合" },
                         "action": {
                             "type": "string",
                             "enum": ["add", "delete"],
@@ -63,7 +55,7 @@ public class ManageScriptSceneItemsToolExecutor implements ToolExecutor {
                         },
                         "scriptEpisodeId": {
                             "type": "integer",
-                            "description": "集ID（add 操作必填）"
+                            "description": "集ID（新增和删除均必填；删除对象必须属于同一集）"
                         },
                         "scriptSceneItemIds": {
                             "type": "array",
@@ -100,7 +92,7 @@ public class ManageScriptSceneItemsToolExecutor implements ToolExecutor {
                             }
                         }
                     },
-                    "required": ["action"]
+                    "required": ["action", "scriptEpisodeId", "episode_version"]
                 }
                 """;
     }
@@ -119,75 +111,6 @@ public class ManageScriptSceneItemsToolExecutor implements ToolExecutor {
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            String action = params.getStr("action");
-
-            if ("delete".equals(action)) {
-                JSONArray ids = params.getJSONArray("scriptSceneItemIds");
-                if (ids == null || ids.isEmpty()) {
-                    return JSONUtil.createObj().set("status", "error").set("message", "删除操作需提供 scriptSceneItemIds")
-                            .toString();
-                }
-                List<Long> deletedIds = new ArrayList<>();
-                for (int i = 0; i < ids.size(); i++) {
-                    Long id = ids.getLong(i);
-                    accessGuard.requireScriptScene(id, context.getUserId());
-                    scriptService.deleteScene(id);
-                    deletedIds.add(id);
-                }
-                return JSONUtil.createObj()
-                        .set("action", "delete")
-                        .set("deletedCount", deletedIds.size())
-                        .set("message", String.format("成功删除 %d 个场次", deletedIds.size())).toString();
-
-            } else if ("add".equals(action)) {
-                Long scriptEpisodeId = params.getLong("scriptEpisodeId");
-                if (scriptEpisodeId == null) {
-                    return JSONUtil.createObj().set("status", "error").set("message", "新增操作需提供 scriptEpisodeId").toString();
-                }
-                JSONArray scenesArray = params.getJSONArray("scenes");
-                if (scenesArray == null || scenesArray.isEmpty()) {
-                    return JSONUtil.createObj().set("status", "error").set("message", "新增操作需提供 scenes").toString();
-                }
-
-                ScriptEpisode episode = accessGuard.requireScriptEpisode(scriptEpisodeId, context.getUserId());
-                List<ScriptSceneItem> existing = scriptService.listScenesByEpisode(scriptEpisodeId);
-                int nextOrder = existing.isEmpty() ? 0 : existing.get(existing.size() - 1).getSortOrder() + 1;
-
-                List<Long> createdIds = new ArrayList<>();
-                for (int i = 0; i < scenesArray.size(); i++) {
-                    JSONObject sceneJson = scenesArray.getJSONObject(i);
-                    ScriptSceneItem item = ScriptSceneItem.builder()
-                            .episodeId(scriptEpisodeId)
-                            .scriptId(episode.getScriptId())
-                            .sceneNumber(String.format("%d-%d", episode.getEpisodeNumber(), nextOrder + i + 1))
-                            .sceneHeading(sceneJson.getStr("scene_heading"))
-                            .location(sceneJson.getStr("location"))
-                            .timeOfDay(sceneJson.getStr("time_of_day"))
-                            .intExt(sceneJson.getStr("int_ext"))
-                            .sceneDescription(sceneJson.getStr("scene_description"))
-                            .dialogues(
-                                    sceneJson.containsKey("dialogues") ? sceneJson.getJSONArray("dialogues").toString()
-                                            : null)
-                            .sortOrder(nextOrder + i)
-                            .status(1)
-                            .build();
-                    ScriptSceneItem saved = scriptService.createScene(item);
-                    createdIds.add(saved.getId());
-                }
-
-                return JSONUtil.createObj()
-                        .set("action", "add")
-                        .set("createdCount", createdIds.size())
-                        .set("createdIds", createdIds)
-                        .set("message", String.format("成功新增 %d 个场次", createdIds.size())).toString();
-            } else {
-                return JSONUtil.createObj().set("status", "error").set("message", "无效的 action: " + action).toString();
-            }
-        } catch (Exception e) {
-            log.error("管理场次失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "操作失败: " + e.getMessage()).toString();
-        }
+        return commands.manageScenes(toolInput, context);
     }
 }

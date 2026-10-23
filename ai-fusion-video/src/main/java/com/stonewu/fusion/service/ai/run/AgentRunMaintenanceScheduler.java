@@ -11,7 +11,9 @@ import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Periodic lease heartbeat, cancellation retry, and expired-owner convergence. */
+/**
+ * Periodic lease heartbeat, cancellation retry, and expired-owner convergence.
+ */
 @Component
 @Slf4j
 public final class AgentRunMaintenanceScheduler {
@@ -43,7 +45,7 @@ public final class AgentRunMaintenanceScheduler {
         this.projections = Objects.requireNonNull(
                 projections, "projections must not be null");
         this.ownerLease = Objects.requireNonNull(
-                properties, "properties must not be null")
+                        properties, "properties must not be null")
                 .getExecution()
                 .getOwnerLease();
     }
@@ -60,7 +62,8 @@ public final class AgentRunMaintenanceScheduler {
         maintainOnce()
                 .doFinally(ignored -> running.set(false))
                 .subscribe(
-                        ignored -> { },
+                        ignored -> {
+                        },
                         failure -> log.error(
                                 "Agent run maintenance failed: type={}",
                                 failure.getClass().getSimpleName()));

@@ -231,8 +231,8 @@ export function ComfyUiWorkflowEditor({
             <p className="mt-1 text-xs text-muted-foreground">按 6 步完成导入、绑定、试运行与发布。</p>
           </div>
           {workflow && (
-            <div className="flex flex-col items-end gap-1.5">
-              <div className="flex items-center gap-2">
+            <div className="flex min-w-0 max-w-full flex-col gap-2 sm:items-end">
+              <div className="flex max-w-full flex-wrap items-center gap-2">
                 <Select
                   value={selectedVersion ? String(selectedVersion.id) : null}
                   onValueChange={value => {
@@ -243,7 +243,7 @@ export function ComfyUiWorkflowEditor({
                   items={versionOptions}
                   disabled={versionsLoading || versions.length === 0}
                 >
-                  <SelectTrigger className="w-44 text-xs"><SelectValue placeholder={versionsLoading ? "加载中" : versions.length === 0 ? "暂无版本" : "选择版本"} /></SelectTrigger>
+                  <SelectTrigger className="w-44 max-w-full text-xs"><SelectValue placeholder={versionsLoading ? "加载中" : versions.length === 0 ? "暂无版本" : "选择版本"} /></SelectTrigger>
                   <SelectContent className="text-xs"><SelectGroup>{versionOptions.map(option => <SelectItem key={option.value} value={option.value} className="text-xs">{option.label}</SelectItem>)}</SelectGroup></SelectContent>
                 </Select>
                 <Button variant="outline" onClick={() => { setSelectedVersion(null); setVersionDraft({ ...versionDraft, id: undefined }); setStep(1); }}>
@@ -262,12 +262,13 @@ export function ComfyUiWorkflowEditor({
           )}
         </div>
 
-        <div className="mt-3 flex gap-1 overflow-x-auto pb-1">
+        <div className="mt-3 flex gap-1 overflow-x-auto scroll-p-1 p-1">
           {STEPS.map((label, index) => (
             <button
               key={label}
               type="button"
               onClick={() => workflow || index === 0 ? setStep(index) : undefined}
+              onFocus={(event) => event.currentTarget.scrollIntoView({ block: "nearest", inline: "center" })}
               disabled={!workflow && index > 0}
               className={cn(
                 "h-8 shrink-0 rounded-xl px-3 text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40",

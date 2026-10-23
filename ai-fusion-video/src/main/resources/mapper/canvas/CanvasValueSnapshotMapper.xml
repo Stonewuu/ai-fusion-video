@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasValueSnapshotMapper">
+    <insert id="create">
+        INSERT INTO afv_canvas_value_snapshot(id,canvas_id,node_id,port_id,schema_version,value_json,
+        source_canvas_id,source_node_run_id,source_output_id,source_snapshot_id,created_by,created_at,source_kind,template_hash)
+        VALUES(#{row.id},#{row.canvasId},#{row.nodeId},#{row.portId},1,#{row.valueJson},#{row.sourceCanvasId},
+        #{row.sourceNodeRunId},#{row.sourceOutputId},#{row.sourceSnapshotId},#{row.createdBy},UTC_TIMESTAMP(6),#{row.sourceKind},#{row.templateHash})
+    </insert>
+</mapper>

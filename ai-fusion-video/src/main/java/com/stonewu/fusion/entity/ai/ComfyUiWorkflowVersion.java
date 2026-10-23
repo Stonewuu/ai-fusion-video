@@ -1,19 +1,14 @@
 package com.stonewu.fusion.entity.ai;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import com.stonewu.fusion.common.BaseEntity;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
-import lombok.ToString;
+import lombok.*;
 
 import java.time.LocalDateTime;
 
-/** Immutable executable version of a ComfyUI workflow. */
+/**
+ * Immutable executable version of a ComfyUI workflow.
+ */
 @TableName("afv_comfyui_workflow_version")
 @Data
 @EqualsAndHashCode(callSuper = true)
@@ -29,6 +24,9 @@ public class ComfyUiWorkflowVersion extends BaseEntity {
     public static final int TEST_PENDING = 0;
     public static final int TEST_PASSED = 1;
     public static final int TEST_FAILED = 2;
+    public static final int TEST_RUNNING = 3;
+    public static final int TEST_CANCELLED = 4;
+    public static final int TEST_NEEDS_REVIEW = 5;
 
     @TableId(type = IdType.AUTO)
     private Long id;
@@ -52,14 +50,23 @@ public class ComfyUiWorkflowVersion extends BaseEntity {
     @Builder.Default
     private Integer validationStatus = VALIDATION_PENDING;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String validationMessage;
 
     @Builder.Default
     private Integer testStatus = TEST_PENDING;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String testMessage;
 
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private LocalDateTime lastTestTime;
+
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String lastTestRunId;
+
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
+    private String testApiConfigHash;
 
     @Builder.Default
     private Boolean published = false;

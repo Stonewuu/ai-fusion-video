@@ -5,16 +5,14 @@ import { ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   formatToolArgumentScalar,
-  formatToolArgumentsJson,
   listToolArgumentEntries,
   parseEmbeddedJsonArgument,
-  parseToolArguments,
+  inspectToolArguments,
   type ToolArgumentEntry,
   type ToolArguments,
   type ToolArgumentValue,
 } from "./tool-call-argument-model";
 import { getToolArgumentItemLabel } from "./tool-call-argument-metadata";
-import { ToolCallJson } from "./tool-call-json";
 
 const LONG_TEXT_LENGTH = 240;
 const SUMMARY_EXCLUDED_FIELDS = new Set([
@@ -352,32 +350,32 @@ function ArgumentEntryView({
 export function ToolCallArguments({
   argumentsText,
   toolName,
-  view,
 }: {
   argumentsText: string;
   toolName: string;
-  view: "friendly" | "json";
 }) {
-  const argumentsValue = useMemo(
-    () => parseToolArguments(argumentsText),
+  const inspected = useMemo(
+    () => inspectToolArguments(argumentsText),
     [argumentsText],
   );
+  if (!inspected.valid) {
+    return (
+      <div className="space-y-3">
+        <p role="alert" className="text-xs text-destructive">操作信息不完整，请拒绝后重新提出要求。</p>
+      </div>
+    );
+  }
+  const argumentsValue = inspected.value;
   const entries = listToolArgumentEntries(argumentsValue, toolName);
 
   return (
     <div>
-      {view === "friendly" ? (
-        entries.length === 0 ? (
-          <p className="py-2 text-xs text-muted-foreground">此工具无需调用参数</p>
+      {entries.length === 0 ? (
+          <p className="py-2 text-xs text-muted-foreground">这一步无需额外设置</p>
         ) : (
           <ObjectValue value={argumentsValue} depth={0} toolName={toolName} />
         )
-      ) : (
-        <ToolCallJson
-          code={formatToolArgumentsJson(argumentsValue)}
-          label="调用参数 JSON"
-        />
-      )}
+      }
     </div>
   );
 }

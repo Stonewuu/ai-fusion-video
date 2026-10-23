@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { http } from "@/lib/api/client";
-import { storageConfigApi } from "@/lib/api/storage";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import {
   resolveReferenceImageUploadAvailability,
@@ -22,24 +21,10 @@ export function useReferenceImageUploadAvailability(
   useEffect(() => {
     let cancelled = false;
 
-    Promise.all([
-      http.get<never, string | null>("/api/system/config/resource_base_url"),
-      storageConfigApi.list(),
-    ])
-      .then(([resourceBaseUrl, storageConfigs]) => {
+    http.get<never, string | null>("/api/system/config/resource_base_url")
+      .then((resourceBaseUrl) => {
         if (cancelled) return;
-        const defaultStorage = storageConfigs.find(
-          (config) => config.isDefault && config.status === 1,
-        );
-        const publicObjectStorage = Boolean(
-          defaultStorage &&
-            defaultStorage.type === "s3",
-        );
-        setRuntimeConfig({
-          loaded: true,
-          publicMediaAccessConfigured:
-            Boolean(resourceBaseUrl?.trim()) || publicObjectStorage,
-        });
+        setRuntimeConfig({ loaded: true, publicMediaAccessConfigured: Boolean(resourceBaseUrl?.trim()) });
       })
       .catch((error) => {
         if (!cancelled) {

@@ -1,13 +1,15 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
 import com.stonewu.fusion.config.AgentScopeV2Properties;
+import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
+import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
+import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentScopeShutdownRecoveryBridge;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreGuardedChatModel;
-import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceBaseStore;
-import com.stonewu.fusion.service.ai.agentscope.permission.AgentToolPermissionPolicy;
-import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
+import com.stonewu.fusion.service.ai.run.AgentExecutionLimits;
+import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.tool.Toolkit;
 import io.agentscope.core.tool.ToolkitConfig;
@@ -127,6 +129,9 @@ public final class AgentScopeHarnessFactory {
                     .sysPrompt(spec.systemPrompt())
                     .model(new StateStoreGuardedChatModel(
                             ownedModel.model(), failures, contextWindow))
+                    // Each reasoning request has its own durable admission. The
+                    // Harness must not turn a failed response into another paid call.
+                    .maxRetries(1) // AgentScope counts the first attempt in this budget.
                     .stateStore(stateStore)
                     .toolkit(toolkit)
                     .permissionContext(AgentToolPermissionPolicy.contextFor(
@@ -134,10 +139,16 @@ public final class AgentScopeHarnessFactory {
                     .middleware(shutdownRecoveryBridge)
                     .compaction(compactionConfig(contextWindow))
                     .maxIters(spec.maxIters())
+                    .toolExecutionConfig(ExecutionConfig.builder()
+                            .timeout(AgentExecutionLimits.FRAMEWORK_TOOL_TIMEOUT).maxAttempts(1).build())
                     .disableFilesystemTools()
                     .disableShellTool()
+                    .disableWebTools()
                     .disableMemoryTools()
                     .disableMemoryHooks()
+                    // 对话由平台日志和 AgentStateStore 保存，不生成 SDK 的本地文本副本。
+                    .disableTranscript()
+                    .enableAgentTracingLog(false)
                     .disableSessionPersistence()
                     .disableWorkspaceContext()
                     .disableAtPathExpansion()
@@ -150,13 +161,16 @@ public final class AgentScopeHarnessFactory {
             } else {
                 builder.disableDefaultWorkspaceSkills();
             }
-            if (skillRegistry.enabled()) {
+            boolean canvasBound = "true".equals(spec.promptVariables().get("canvasBound"))
+                    || "true".equals(spec.promptVariables().get("canvasNodeExecution"));
+            if (!canvasBound && skillRegistry.enabled()) {
                 builder.skillRepositories(skillRegistry.repositories());
             }
-            if (workspaceStore != null || skillRegistry.enabled()) {
+            if (!canvasBound && (workspaceStore != null || skillRegistry.enabled())) {
                 builder.skillsEnabled(true);
             } else {
                 builder.disableDynamicSkills()
+                        .disableDefaultWorkspaceSkills()
                         .skillsEnabled(false);
             }
             agent = builder.build();

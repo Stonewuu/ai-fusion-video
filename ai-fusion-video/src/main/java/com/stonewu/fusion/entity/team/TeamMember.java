@@ -23,23 +23,35 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class TeamMember extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 所属团队ID */
+    /**
+     * 所属团队ID
+     */
     private Long teamId;
 
-    /** 成员用户ID */
+    /**
+     * 成员用户ID
+     */
     private Long userId;
 
-    /** 角色：1-创建者 2-管理员 3-普通成员 */
+    /**
+     * 角色：1-创建者 2-管理员 3-普通成员
+     */
     private Integer role;
 
-    /** 状态：0-禁用 1-启用 */
+    /**
+     * 状态：0-禁用 1-启用
+     */
     @Builder.Default
     private Integer status = 1;
 
-    /** 加入时间 */
+    /**
+     * 加入时间
+     */
     private LocalDateTime joinTime;
 }

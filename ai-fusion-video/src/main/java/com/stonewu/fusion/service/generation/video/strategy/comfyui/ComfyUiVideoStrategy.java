@@ -1,5 +1,18 @@
 package com.stonewu.fusion.service.generation.video.strategy.comfyui;
 
+import com.stonewu.fusion.entity.ai.ApiConfig;
+
+import com.stonewu.fusion.service.generation.job.ProviderJobStates;
+
+import com.stonewu.fusion.service.generation.job.GenerationLeaseScope;
+
+import com.stonewu.fusion.service.generation.job.RemoteGenerationResult;
+
+import com.stonewu.fusion.service.generation.job.GenerationProviderReceipt;
+
+import com.stonewu.fusion.service.generation.job.GenerationPreparedRequest;
+import com.stonewu.fusion.service.generation.job.PreparedGenerationCall;
+
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
@@ -10,12 +23,16 @@ import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiExecutionContext;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiGenerationExecutor;
+import com.stonewu.fusion.service.ai.comfyui.ComfyUiBoundInputs;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiPreparedSubmission;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiStoredOutput;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiJobResult;
 import com.stonewu.fusion.service.generation.video.VideoGenerationService;
 import com.stonewu.fusion.service.generation.video.strategy.VideoGenerationStrategy;
+import com.stonewu.fusion.service.media.GenerationMediaService;
+import com.stonewu.fusion.service.media.model.MediaKind;
+import com.stonewu.fusion.service.generation.GenerationKind;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -38,6 +55,7 @@ public class ComfyUiVideoStrategy implements VideoGenerationStrategy {
     private final AiModelService aiModelService;
     private final VideoGenerationService videoGenerationService;
     private final ComfyUiGenerationExecutor executor;
+    private final GenerationMediaService media;
 
     @Override
     public String getName() {
@@ -45,88 +63,57 @@ public class ComfyUiVideoStrategy implements VideoGenerationStrategy {
     }
 
     @Override
-    public String submit(VideoTask task) {
-        AiModel model = requireModel(task);
-        ComfyUiExecutionContext context = executor.resolveContext(model, task.getWorkflowVersionId());
-        ComfyUiPreparedSubmission submission = executor.prepare(
-                context, task.getTaskId(), videoValues(task, model));
-        List<VideoItem> items = videoGenerationService.listItems(task.getId());
-        if (items.isEmpty()) {
-            throw new BusinessException(400, "视频任务缺少生成条目");
-        }
-        for (VideoItem item : items) {
-            item.setPlatformTaskId(submission.promptId());
-            videoGenerationService.updateItem(item);
-        }
-        executor.submit(submission);
-        log.info("[ComfyUI Video] 已提交: taskId={}, promptId={}, workflowVersionId={}",
-                task.getTaskId(), submission.promptId(), task.getWorkflowVersionId());
-        return submission.promptId();
+    public int batchSize(VideoTask task, AiModel model, ApiConfig apiConfig) { return task.getCount(); }
+
+    @Override
+    public PreparedGenerationCall prepare(VideoTask task, AiModel model, ApiConfig apiConfig) {
+        var context = executor.resolveContext(model, task.getWorkflowVersionId(), apiConfig);
+        var values = videoValues(task, model);
+        var prepared = executor.prepare(context, GenerationLeaseScope.require().id(), values);
+        return new PreparedGenerationCall(new GenerationPreparedRequest(prepared.promptId(), prepared.prompt()), () -> {
+            executor.submit(prepared);
+            return GenerationProviderReceipt.accepted(prepared.promptId());
+        });
     }
 
     @Override
-    public void poll(String platformTaskId, VideoTask task) {
-        AiModel model = requireModel(task);
-        ComfyUiExecutionContext context = executor.resolveContext(model, task.getWorkflowVersionId());
-        ComfyUiJobResult job = executor.waitForJob(
-                context, platformTaskId, pollInterval(model), timeout(model));
-        List<ComfyUiStoredOutput> outputs = executor.storeOutputs(context, job);
-        List<ComfyUiStoredOutput> videos = outputs.stream()
-                .filter(output -> "video".equals(output.mediaType())
-                        && "primary".equals(output.role()))
-                .toList();
-        List<ComfyUiStoredOutput> covers = outputs.stream()
-                .filter(output -> "image".equals(output.mediaType())
-                        && "cover".equals(output.role()))
-                .toList();
-        List<VideoItem> items = videoGenerationService.listItems(task.getId());
-        if (videos.size() < items.size()) {
-            throw new BusinessException(502,
-                    "ComfyUI 返回视频数量不足，期望 " + items.size() + "，实际 " + videos.size());
+    public RemoteGenerationResult query(String platformTaskId, VideoTask task, AiModel model, ApiConfig apiConfig) {
+        var context = executor.resolveContext(model, task.getWorkflowVersionId(), apiConfig);
+        var job = executor.query(context, platformTaskId);
+        if (!job.completed()) return ProviderJobStates.result(job.status(), "ComfyUI 工作流未成功结束", 3, List::of);
+        String prefix = "comfy-" + GenerationLeaseScope.require().id() + "-";
+        var stored = executor.storeOutputs(context, job, (output, file, index) ->
+                media.file(GenerationKind.VIDEO, task.getId(), prefix + index, file.path(),
+                        switch (output.mediaType()) {
+                            case "image" -> MediaKind.IMAGE;
+                            case "video" -> MediaKind.VIDEO;
+                            default -> throw new BusinessException("ComfyUI 输出媒体类型未登记");
+                        }));
+        var videos = stored.stream().filter(output -> "video".equals(output.mediaType()) && "primary".equals(output.role())).toList();
+        var covers = stored.stream().filter(output -> "image".equals(output.mediaType()) && "cover".equals(output.role())).toList();
+        if (!covers.isEmpty() && covers.size() != videos.size()) throw new BusinessException("ComfyUI 视频和封面数量不匹配");
+        var results = new ArrayList<RemoteGenerationResult.Output>();
+        for (int i = 0; i < videos.size(); i++) {
+            results.add(RemoteGenerationResult.Output.video(videos.get(i).url(), covers.isEmpty() ? null : covers.get(i).url(), task.getDuration()));
         }
-        for (int index = 0; index < items.size(); index++) {
-            VideoItem item = items.get(index);
-            ComfyUiStoredOutput video = videos.get(index);
-            item.setPlatformTaskId(platformTaskId);
-            item.setVideoUrl(video.url());
-            item.setFileSize(video.size());
-            item.setDuration(task.getDuration());
-            if (!covers.isEmpty()) {
-                item.setCoverUrl(covers.get(Math.min(index, covers.size() - 1)).url());
-            }
-            item.setStatus(1);
-            item.setErrorMsg(null);
-            videoGenerationService.updateItem(item);
-        }
-        task.setSuccessCount(items.size());
-        videoGenerationService.update(task);
+        return RemoteGenerationResult.success(results);
     }
 
     @Override
-    public boolean cancel(String platformTaskId, VideoTask task) {
-        return executor.cancel(
-                executor.resolveContext(requireModel(task), task.getWorkflowVersionId()),
-                platformTaskId);
+    public boolean cancel(String platformTaskId, VideoTask task, AiModel model, ApiConfig apiConfig) {
+        return executor.cancel(executor.resolveContext(model, task.getWorkflowVersionId(), apiConfig), platformTaskId);
     }
 
-    @Override
-    public boolean persistsResults() {
-        return true;
-    }
 
-    private AiModel requireModel(VideoTask task) {
-        AiModel model = task == null || task.getModelId() == null
-                ? null : aiModelService.getById(task.getModelId());
-        if (model == null) throw new BusinessException(404, "ComfyUI 视频模型不存在");
-        return model;
-    }
+
+
 
     private Map<String, Object> videoValues(VideoTask task, AiModel model) {
         Map<String, Object> values = new LinkedHashMap<>();
         values.put("prompt", StrUtil.blankToDefault(task.getPrompt(), ""));
         values.put("duration", task.getDuration());
         values.put("count", Math.max(1, task.getCount()));
-        values.put("seed", task.getSeed() != null ? task.getSeed() : randomSeed());
+        values.put("seed", task.getSeed() != null && task.getSeed() >= 0 ? task.getSeed() : randomSeed());
         values.put("generateAudio", task.getGenerateAudio());
         int[] resolution = parseResolution(task.getResolution());
         if (resolution != null) {
@@ -147,6 +134,7 @@ public class ComfyUiVideoStrategy implements VideoGenerationStrategy {
         if (!videos.isEmpty()) values.put("referenceVideos", videos);
         List<String> audios = parseList(task.getReferenceAudioUrls());
         if (!audios.isEmpty()) values.put("referenceAudios", audios);
+        ComfyUiBoundInputs.overlay(values, task.getWorkflowInputs(), task.getCount());
         return values;
     }
 

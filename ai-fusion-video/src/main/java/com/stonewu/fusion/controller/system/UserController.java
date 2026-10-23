@@ -33,7 +33,7 @@ public class UserController {
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<PageResult<UserRespVO>> getUserPage(@Valid UserPageReqVO reqVO) {
         return success(userService.getPage(reqVO.getUsername(), reqVO.getNickname(),
-                reqVO.getStatus(), reqVO.getPageNo(), reqVO.getPageSize())
+                        reqVO.getStatus(), reqVO.getPageNo(), reqVO.getPageSize())
                 .map(this::enrichUserVO));
     }
 

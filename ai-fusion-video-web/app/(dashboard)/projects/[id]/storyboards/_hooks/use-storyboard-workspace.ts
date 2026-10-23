@@ -1,5 +1,6 @@
 "use client";
 
+import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -14,7 +15,9 @@ import { reconcileStoryboardGroups } from "../storyboard-data";
 import { SIDEBAR_COLLAPSED_STORAGE_KEY, type ViewMode, type SidebarSelection, type SceneWithItems } from "../storyboard-types";
 
 export function useStoryboardWorkspace(projectId: number) {
+  const composeRequests = useCommandRequestKey();
   const { project } = useProject();
+  const requests = useCommandRequestKey();
   const { confirm } = useConfirm();
   const attachTaskStream = usePipelineStore((state) => state.attachTaskStream);
   const setNotificationOpen = usePipelineStore((state) => state.setNotificationOpen);
@@ -150,7 +153,6 @@ export function useStoryboardWorkspace(projectId: number) {
   }, [currentEpisodeId]);
 
   const [composedPreviewUrl, setComposedPreviewUrl] = useState<string | null>(null);
-  const [runningComposeEpisodeIds, setRunningComposeEpisodeIds] = useState<number[]>([]);
   const [submittingComposeEpisodeIds, setSubmittingComposeEpisodeIds] = useState<number[]>([]);
 
   // 滚动定位 refs
@@ -284,13 +286,15 @@ export function useStoryboardWorkspace(projectId: number) {
   }, [refreshStoryboardData]);
 
   const handleBindScriptEpisode = useCallback(async (
-    storyboardEpisodeId: number,
+    episode: StoryboardEpisode,
     scriptEpisodeId: number
   ) => {
-    const updated = await storyboardApi.bindScriptEpisode(storyboardEpisodeId, scriptEpisodeId);
+    const payload = { id: episode.id, version: episode.version, scriptEpisodeId };
+    const updated = await storyboardApi.bindScriptEpisode(episode.id, episode.version, scriptEpisodeId, requests.forPayload(payload));
+    requests.clear();
     await refreshStoryboardData();
     return updated;
-  }, [refreshStoryboardData]);
+  }, [refreshStoryboardData, requests]);
 
   
 
@@ -471,25 +475,21 @@ export function useStoryboardWorkspace(projectId: number) {
 
   // ========== 操作 ==========
 
-  const handleAddItem = async (sceneId: number, episodeId?: number) => {
+  const handleAddItem = async (sceneId: number) => {
     if (!storyboard) return;
     const group = sceneGroups.find((g) => g.scene.id === sceneId);
-    const currentItems = group?.items || [];
+    if (!group) return;
+    const currentItems = group.items;
     try {
-      const newItem = await storyboardApi.createItem({
-        storyboardId: storyboard.id,
+      const payload = {
         storyboardSceneId: sceneId,
-        storyboardEpisodeId: episodeId,
+        parentVersion: group.scene.version,
         sortOrder: currentItems.length,
         shotNumber: String(currentItems.length + 1),
-      });
-      setSceneGroups((prev) =>
-        prev.map((g) =>
-          g.scene.id === sceneId
-            ? { ...g, items: [...g.items, newItem] }
-            : g
-        )
-      );
+      };
+      const newItem = await storyboardApi.createItem(payload, requests.forPayload(payload));
+      requests.clear();
+      await refreshStoryboardData();
       setSelectedItemId(newItem.id);
     } catch (err) {
       console.error("添加新分镜条目失败:", err);
@@ -497,16 +497,18 @@ export function useStoryboardWorkspace(projectId: number) {
     }
   };
 
-  const handleDeleteEpisode = async (episodeId: number) => {
-    const ok = await confirm({ title: "删除分镜集", description: "确定要删除该分镜集吗？相关的分镜内容也将被一并删除，此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return false;
+  const handleDeleteEpisode = async (episode: StoryboardEpisode) => {
+    const episodeId = episode.id;
+    const ok = await confirm({ title: "删除分镜集", description: "确定要删除该分镜集吗？相关的分镜内容也将被一并删除，已有引用会显示失效，媒体文件会保留。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return false;
     try {
-      await storyboardApi.deleteEpisode(episodeId);
+      await storyboardApi.deleteEpisode(episodeId, episode.version, requests.forPayload({ deleteEpisode: episodeId, version: episode.version }));
+      requests.clear();
       if (
         sidebarSelection.episodeId === episodeId
       ) {
         setSidebarSelection({ type: "all" });
       }
-      loadStoryboard();
+      await refreshStoryboardData();
       return true;
     } catch (err) {
       console.error("删除分集失败:", err);
@@ -515,14 +517,17 @@ export function useStoryboardWorkspace(projectId: number) {
     }
   };
 
-  const handleDeleteScene = async (sceneId: number, episodeId: number) => {
+  const handleDeleteScene = async (scene: StoryboardScene) => {
+    const sceneId = scene.id;
+    const episodeId = scene.episodeId;
     const ok = await confirm({ title: "删除分镜场次", description: "确定要删除该分镜场次吗？场次内的所有镜头将被一并删除。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return false;
     try {
-      await storyboardApi.deleteScene(sceneId);
+      await storyboardApi.deleteScene(sceneId, scene.version, requests.forPayload({ deleteScene: sceneId, version: scene.version }));
+      requests.clear();
       if (sidebarSelection.sceneId === sceneId) {
         setSidebarSelection({ type: "episode", episodeId });
       }
-      loadSceneGroups(episodeId);
+      await refreshStoryboardData();
       return true;
     } catch (err) {
       console.error("删除分镜头报错", err);
@@ -531,29 +536,22 @@ export function useStoryboardWorkspace(projectId: number) {
     }
   };
 
-  const handleReorderScenes = async (episodeId: number, sortedScenes: import("@/lib/api/storyboard").StoryboardScene[]) => {
-    try {
-      await Promise.all(
-        sortedScenes.map((scene, idx) =>
-          storyboardApi.updateScene({ id: scene.id, sortOrder: idx })
-        )
-      );
-      if (
-        sidebarSelection.type === "all" ||
-        sidebarSelection.episodeId === episodeId
-      ) {
-        loadSceneGroups(sidebarSelection.type === "all" ? undefined : episodeId);
-      }
-    } catch (err) {
-      console.error("更新排序失败", err);
-      throw err;
-    }
+  const handleReorderScenes = async (episode: StoryboardEpisode, sortedScenes: StoryboardScene[]) => {
+    const ids = sortedScenes.map(scene => scene.id);
+    const payload = { reorderScenes: episode.id, version: episode.version, ids };
+    await storyboardApi.reorderScenes(episode.id, episode.version, ids, requests.forPayload(payload));
+    requests.clear();
+    await refreshStoryboardData();
   };
 
   const handleDeleteItem = async (itemId: number) => {
-    const ok = await confirm({ title: "删除镜头", description: "确定要删除该镜头吗？此操作无法撤销。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
+    const item = sceneGroups.flatMap(group => group.items).find(candidate => candidate.id === itemId);
+    if (!item) return;
+    const ok = await confirm({ title: "删除镜头", description: "确定要删除该镜头吗？已有引用会显示失效，媒体文件会保留。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
     try {
-      await storyboardApi.deleteItem(itemId);
+      await storyboardApi.deleteItem(itemId, item.version, requests.forPayload({ deleteItem: itemId, version: item.version }));
+      requests.clear();
+      await refreshStoryboardData();
       setSceneGroups((prev) =>
         prev.map((g) => ({
           ...g,
@@ -569,24 +567,28 @@ export function useStoryboardWorkspace(projectId: number) {
   };
 
   const handleUpdateItemField = async (
-    itemId: number,
+    item: StoryboardItem,
     field: string,
     value: string | number | null
   ) => {
     try {
-      const updated = await storyboardApi.updateItem({
-        id: itemId,
-        [field]: field === "duration" ? (value ? Number(value) : null) : value,
-      });
+      const payload = {
+        id: item.id,
+        version: item.version,
+        [field]: field === "duration" ? (value === "" || value === null ? null : Number(value)) : value,
+      };
+      const updated = await storyboardApi.updateItem(payload, requests.forPayload(payload));
+      requests.clear();
       setSceneGroups((prev) =>
         prev.map((g) => ({
           ...g,
           items: g.items.map((i) => (i.id === updated.id ? updated : i)),
         }))
       );
+      await refreshStoryboardData();
     } catch (err) {
       console.error("更新条目失败:", err);
-      toastApiError(err, "更新条目失败");
+      throw err;
     }
   };
 
@@ -626,20 +628,24 @@ export function useStoryboardWorkspace(projectId: number) {
 
   /** 手动更新镜头首尾帧 */
   const handleUpdateItemFrame = useCallback(
-    async (itemId: number, frameType: StoryboardFrameType, imageUrl: string | null) => {
+    async (item: StoryboardItem, frameType: StoryboardFrameType, imageUrl: string | null) => {
       try {
-        const updated = await storyboardApi.updateFrame(itemId, {
+        const payload = {
+          version: item.version,
           frameType,
           imageUrl,
           prompt: null,
-        });
+        };
+        const updated = await storyboardApi.updateFrame(item.id, payload, requests.forPayload({ itemId: item.id, ...payload }));
+        requests.clear();
         updateItemInSceneGroups(updated);
+        await refreshStoryboardData();
       } catch (err) {
         console.error("更新镜头首尾帧失败:", err);
         throw err;
       }
     },
-    [updateItemInSceneGroups]
+    [updateItemInSceneGroups, refreshStoryboardData, requests]
   );
 
   /** 提交镜头首尾帧 AI 生成任务 */
@@ -663,44 +669,28 @@ export function useStoryboardWorkspace(projectId: number) {
     setFrameDialogItemId(null);
   }, []);
 
-  // 拖拽排序
-  const handleReorderItems = async (
-    sceneId: number,
-    reorderedItems: import("@/lib/api/storyboard").StoryboardItem[]
-  ) => {
-    // 乐观更新本地状态
-    setSceneGroups((prev) =>
-      prev.map((g) =>
-        g.scene.id === sceneId ? { ...g, items: reorderedItems } : g
-      )
-    );
-    // 后台批量更新 sortOrder
+  // 业务顺序一次原子提交；失败时保留已确认的界面顺序。
+  const handleReorderItems = async (sceneId: number, reorderedItems: StoryboardItem[]) => {
+    const group = sceneGroups.find(entry => entry.scene.id === sceneId);
+    if (!group) return;
+    const ids = reorderedItems.map(item => item.id);
     try {
-      await storyboardApi.batchUpdateItemSort(
-        reorderedItems.map((item) => item.id)
-      );
-    } catch (err) {
-      console.error("更新排序失败:", err);
-      toastApiError(err, "更新排序失败");
-    }
+      const result = await storyboardApi.reorderItems(sceneId, group.scene.version, ids,
+        requests.forPayload({ reorderItems: sceneId, version: group.scene.version, ids }));
+      requests.clear();
+      setSceneGroups(current => current.map(entry => entry.scene.id === sceneId ? { scene: result.parent, items: result.children } : entry));
+      await refreshStoryboardData();
+    } catch (err) { toastApiError(err, "更新排序失败"); }
   };
-
-
 
   useEffect(() => {
     refreshCurrentEpisode();
   }, [refreshCurrentEpisode]);
 
   /** 提交本集合成视频任务 */
-  const handleComposeEpisodeVideo = useCallback(async () => {
+  const handleComposeEpisodeVideo = useCallback(async (includeBgm: boolean) => {
     if (!currentEpisodeId || !currentEpisode) return;
-    if (
-      submittingComposeEpisodeIds.includes(currentEpisodeId) ||
-      runningComposeEpisodeIds.includes(currentEpisodeId) ||
-      currentEpisode.composeStatus === 1
-    ) {
-      return;
-    }
+    if (submittingComposeEpisodeIds.includes(currentEpisodeId)) return;
 
     const epLabel = currentEpisode.title?.trim()
       || (currentEpisode.episodeNumber != null ? `第 ${currentEpisode.episodeNumber} 集` : `集 ${currentEpisode.id}`);
@@ -709,12 +699,10 @@ export function useStoryboardWorkspace(projectId: number) {
     );
     setNotificationOpen(true);
     try {
-      const taskId = await storyboardApi.composeEpisodeVideo(currentEpisodeId);
+      const taskId = await storyboardApi.composeEpisodeVideo(currentEpisodeId, currentEpisode.version, composeRequests.forPayload({ episodeId: currentEpisodeId, version: currentEpisode.version, includeBgm }), includeBgm);
+      composeRequests.clear();
       setSubmittingComposeEpisodeIds((prev) =>
         prev.filter((id) => id !== currentEpisodeId)
-      );
-      setRunningComposeEpisodeIds((prev) =>
-        prev.includes(currentEpisodeId) ? prev : [...prev, currentEpisodeId]
       );
 
       attachTaskStream({
@@ -723,9 +711,6 @@ export function useStoryboardWorkspace(projectId: number) {
         taskId,
         cancellable: false,
         onSettled: () => {
-          setRunningComposeEpisodeIds((prev) =>
-            prev.filter((id) => id !== currentEpisodeId)
-          );
           void refreshCurrentEpisode();
         },
       });
@@ -737,17 +722,14 @@ export function useStoryboardWorkspace(projectId: number) {
       setSubmittingComposeEpisodeIds((prev) =>
         prev.filter((id) => id !== currentEpisodeId)
       );
-      setRunningComposeEpisodeIds((prev) =>
-        prev.filter((id) => id !== currentEpisodeId)
-      );
     }
   }, [
     currentEpisodeId,
     currentEpisode,
     submittingComposeEpisodeIds,
-    runningComposeEpisodeIds,
     projectId,
     attachTaskStream,
+    composeRequests,
     setNotificationOpen,
     refreshCurrentEpisode,
   ]);
@@ -794,7 +776,7 @@ export function useStoryboardWorkspace(projectId: number) {
     currentEpisodeId,
     composedPreviewUrl,
     setComposedPreviewUrl,
-    runningComposeEpisodeIds,
+    runningComposeEpisodeIds: currentEpisode?.composeStatus === 1 ? [currentEpisode.id] : [],
     submittingComposeEpisodeIds,
     sceneRefs,
     scrollContainerRef,

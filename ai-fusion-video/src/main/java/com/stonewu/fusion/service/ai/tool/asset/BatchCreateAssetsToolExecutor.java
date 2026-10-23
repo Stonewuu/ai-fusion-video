@@ -1,21 +1,11 @@
 package com.stonewu.fusion.service.ai.tool.asset;
 
-import cn.hutool.json.JSONArray;
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.asset.Asset;
-import com.stonewu.fusion.entity.asset.AssetItem;
-import com.stonewu.fusion.entity.project.Project;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.asset.AssetService;
-import com.stonewu.fusion.service.project.ProjectService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * 批量创建资产工具（batch_create_assets）
@@ -25,13 +15,13 @@ import java.util.List;
 @Slf4j
 public class BatchCreateAssetsToolExecutor implements ToolExecutor {
 
+    private final AssetToolCommands commands;
+
     /**
      * 单次批量创建资产的最大数量
      */
     private static final int MAX_BATCH_SIZE = 10;
 
-    private final AssetService assetService;
-    private final ProjectService projectService;
 
     @Override
     public String getToolName() {
@@ -107,6 +97,7 @@ public class BatchCreateAssetsToolExecutor implements ToolExecutor {
                         {
                             "type": "object",
                             "properties": {
+                        "reuseExisting": { "type": "boolean", "description": "true：按名称复用唯一已有对象并返回其实际内容，创建字段不会覆盖已有内容；false：创建独立副本" },
                                 "projectId": {
                                     "type": "integer",
                                     "description": "项目ID（必填）"
@@ -156,7 +147,7 @@ public class BatchCreateAssetsToolExecutor implements ToolExecutor {
                                     }
                                 }
                             },
-                            "required": ["projectId", "assets"]
+                            "required": ["reuseExisting", "projectId", "assets"]
                         }
                         """,
                 MAX_BATCH_SIZE, MAX_BATCH_SIZE);
@@ -164,98 +155,6 @@ public class BatchCreateAssetsToolExecutor implements ToolExecutor {
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long projectId = params.getLong("projectId");
-            JSONArray assetsArray = params.getJSONArray("assets");
-
-            if (projectId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 projectId").toString();
-            }
-            if (assetsArray == null || assetsArray.isEmpty()) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 assets 数组").toString();
-            }
-            if (assetsArray.size() > MAX_BATCH_SIZE) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", String.format("单次最多创建 %d 个资产，当前传入 %d 个。请分多次调用。",
-                                MAX_BATCH_SIZE, assetsArray.size()))
-                        .toString();
-            }
-
-            Long userId = context.getUserId();
-
-            if (!projectService.canAccessProject(projectId, userId)) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "无权访问该项目").toString();
-            }
-
-            List<JSONObject> created = new ArrayList<>();
-            List<JSONObject> existing = new ArrayList<>();
-
-            for (int i = 0; i < assetsArray.size(); i++) {
-                JSONObject data = assetsArray.getJSONObject(i);
-                String type = data.getStr("type");
-                String name = data.getStr("name");
-
-                if (type == null || name == null || name.isBlank()) {
-                    continue;
-                }
-
-                // 去重检查
-                Asset found = assetService.findByProjectTypeAndName(projectId, type, name);
-                if (found != null) {
-                    existing.add(JSONUtil.createObj()
-                            .set("type", type).set("name", name).set("assetId", found.getId()));
-                } else {
-                    Asset asset = Asset.builder()
-                            .projectId(projectId)
-                            .type(type)
-                            .name(name)
-                            .description(data.getStr("description"))
-                            .properties(
-                                    data.containsKey("properties") ? data.getJSONObject("properties").toString() : null)
-                            .sourceType(2)
-                            .userId(userId)
-                            .build();
-                    Asset saved = assetService.create(asset);
-
-                    // 处理 initialItem
-                    JSONObject initialItemData = data.getJSONObject("initialItem");
-                    if (initialItemData != null) {
-                        List<AssetItem> items = assetService.listItems(saved.getId());
-                        if (!items.isEmpty()) {
-                            AssetItem first = items.get(0);
-                            if (initialItemData.getStr("name") != null)
-                                first.setName(initialItemData.getStr("name"));
-                            if (initialItemData.getStr("itemType") != null)
-                                first.setItemType(initialItemData.getStr("itemType"));
-                            if (initialItemData.getStr("imageUrl") != null)
-                                first.setImageUrl(initialItemData.getStr("imageUrl"));
-                            if (initialItemData.containsKey("properties"))
-                                first.setProperties(initialItemData.getJSONObject("properties").toString());
-                            assetService.updateItem(first);
-                        }
-                    }
-
-                    created.add(JSONUtil.createObj()
-                            .set("type", type).set("name", name).set("assetId", saved.getId()));
-                }
-            }
-
-            List<JSONObject> allAssets = new ArrayList<>(created);
-            allAssets.addAll(existing);
-
-            return JSONUtil.createObj()
-                    .set("created", created)
-                    .set("existing", existing)
-                    .set("allAssets", allAssets)
-                    .set("createdCount", created.size())
-                    .set("existingCount", existing.size())
-                    .set("message", String.format("新建 %d 个资产，复用 %d 个已有资产", created.size(), existing.size()))
-                    .toString();
-        } catch (Exception e) {
-            log.error("批量创建资产失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "创建失败: " + e.getMessage()).toString();
-        }
+        return commands.execute(getToolName(), toolInput, context);
     }
 }

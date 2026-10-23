@@ -9,6 +9,7 @@ import type {
 import type { AssistantProjectReference } from "./reference-types";
 
 interface AssistantReferenceContextProps {
+  children?: ReactNode;
   project: AssistantProjectReference | null;
   skills: AssistantSkillReferenceOption[];
   mcpTools: AssistantMcpToolReferenceOption[];
@@ -46,6 +47,7 @@ function ReferenceChip({ label, title, icon, onRemove }: ReferenceChipProps) {
 }
 
 export function AssistantReferenceContext({
+  children,
   project,
   skills,
   mcpTools,
@@ -53,16 +55,16 @@ export function AssistantReferenceContext({
   onRemoveSkill,
   onRemoveMcpTool,
 }: AssistantReferenceContextProps) {
-  const hasReferences = !!project || skills.length > 0 || mcpTools.length > 0;
+  const hasReferences = !!children || !!project || skills.length > 0 || mcpTools.length > 0;
   if (!hasReferences) return null;
 
   return (
-    <div className="flex min-h-9 flex-wrap items-center gap-1.5 border-b border-border/20 px-2 py-1.5">
-      <span className="mr-0.5 text-[10px] font-medium text-muted-foreground">引用</span>
+    <div role="group" aria-label="助手引用" className="flex min-h-9 flex-wrap items-center gap-1.5 border-b border-border/20 px-2 py-1.5">
+      {children || <span className="mr-0.5 text-[10px] font-medium text-muted-foreground">引用</span>}
       {project ? (
         <ReferenceChip
           label={project.name}
-          title={`项目 · ${project.name} · #${project.id}`}
+          title={`项目 · ${project.name}`}
           icon={<FolderKanban className="size-3.5" />}
           onRemove={onRemoveProject}
         />

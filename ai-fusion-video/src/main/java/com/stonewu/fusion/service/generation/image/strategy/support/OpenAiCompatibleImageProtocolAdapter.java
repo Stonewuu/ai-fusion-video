@@ -13,9 +13,11 @@ public interface OpenAiCompatibleImageProtocolAdapter {
     OpenAiCompatibleImageRequest buildRequest(OpenAiCompatibleImageProtocolContext context);
 
     List<String> parseImageUrls(OpenAiCompatibleImageProtocolContext context, String responseBody,
-                               UnaryOperator<String> persistRemoteUrl);
+                                UnaryOperator<String> persistRemoteUrl);
 
-    /** Whether the upstream accepts only one image per generation request. */
+    /**
+     * Whether the upstream accepts only one image per generation request.
+     */
     default boolean isSingleImagePerRequest(OpenAiCompatibleImageProtocolContext context) {
         return false;
     }

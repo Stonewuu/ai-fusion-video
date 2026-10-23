@@ -5,26 +5,22 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiConnectionRespVO;
 import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowValidationRespVO;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiStoredOutputRespVO;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowTestRespVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.ai.ComfyUiWorkflow;
 import com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion;
 import com.stonewu.fusion.service.ai.ApiConfigService;
+import com.stonewu.fusion.service.ai.ProviderConfigurationFingerprint;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiConnectionResult;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiNativeClient;
+import com.stonewu.fusion.service.canvas.CanvasJson;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-/** Online validation against the exact target ComfyUI instance. */
+/**
+ * Online validation against the exact target ComfyUI instance.
+ */
 @Service
 @RequiredArgsConstructor
 public class ComfyUiWorkflowValidationService {
@@ -33,7 +29,7 @@ public class ComfyUiWorkflowValidationService {
     private final ComfyUiWorkflowService workflowService;
     private final ComfyUiWorkflowDocumentService documentService;
     private final ComfyUiNativeClient nativeClient;
-    private final ComfyUiGenerationExecutor generationExecutor;
+    private final CanvasJson json;
 
     public ComfyUiConnectionRespVO testConnection(Long apiConfigId) {
         ApiConfig apiConfig = requireComfyUiApiConfig(apiConfigId);
@@ -51,6 +47,7 @@ public class ComfyUiWorkflowValidationService {
         ComfyUiWorkflowVersion version = workflowService.requireVersion(versionId);
         ComfyUiWorkflow workflow = workflowService.requireWorkflow(version.getWorkflowId());
         ApiConfig apiConfig = requireComfyUiApiConfig(workflow.getApiConfigId());
+        String apiHash = ProviderConfigurationFingerprint.of(apiConfig, json);
         try {
             nativeClient.testConnection(apiConfig);
             ObjectNode apiWorkflow = documentService.parseApiWorkflow(version.getApiWorkflowJson());
@@ -77,7 +74,7 @@ public class ComfyUiWorkflowValidationService {
             String message = valid
                     ? "已在目标 ComfyUI 校验 " + checkedNodes + " 个节点"
                     : buildFailureMessage(missingClasses, invalidModelInputs);
-            workflowService.recordValidation(versionId, valid, message);
+            workflowService.recordValidation(versionId, version.getWorkflowHash(), apiHash, valid, message);
             return ComfyUiWorkflowValidationRespVO.builder()
                     .valid(valid)
                     .checkedNodeCount(checkedNodes)
@@ -86,45 +83,7 @@ public class ComfyUiWorkflowValidationService {
                     .message(message)
                     .build();
         } catch (BusinessException error) {
-            workflowService.recordValidation(versionId, false, error.getMessage());
-            throw error;
-        }
-    }
-
-    public ComfyUiWorkflowTestRespVO testVersion(Long versionId, Map<String, Object> inputs) {
-        ComfyUiExecutionContext context = generationExecutor.resolveTestContext(versionId);
-        ComfyUiPreparedSubmission submission = generationExecutor.prepare(
-                context, "workflow-test-" + versionId, inputs);
-        long startedAt = System.currentTimeMillis();
-        try {
-            generationExecutor.submit(submission);
-            long timeout = context.workflow().getModelType() == 2
-                    ? 25L * 60L * 1_000L : 60L * 60L * 1_000L;
-            var job = generationExecutor.waitForJob(
-                    context, submission.promptId(), 2_000L, timeout);
-            List<ComfyUiStoredOutput> stored = generationExecutor.storeOutputs(context, job);
-            long duration = System.currentTimeMillis() - startedAt;
-            String message = "试运行成功，已保存 " + stored.size() + " 个输出";
-            workflowService.recordExecutionTest(versionId, true, message);
-            return ComfyUiWorkflowTestRespVO.builder()
-                    .passed(true)
-                    .promptId(submission.promptId())
-                    .durationMillis(duration)
-                    .outputs(stored.stream().map(output -> ComfyUiStoredOutputRespVO.builder()
-                            .mediaType(output.mediaType())
-                            .role(output.role())
-                            .url(output.url())
-                            .size(output.size())
-                            .build()).toList())
-                    .message(message)
-                    .build();
-        } catch (BusinessException error) {
-            try {
-                generationExecutor.cancel(context, submission.promptId());
-            } catch (RuntimeException ignored) {
-                // Test failure remains the authoritative error.
-            }
-            workflowService.recordExecutionTest(versionId, false, error.getMessage());
+            workflowService.recordValidation(versionId, version.getWorkflowHash(), apiHash, false, error.getMessage());
             throw error;
         }
     }

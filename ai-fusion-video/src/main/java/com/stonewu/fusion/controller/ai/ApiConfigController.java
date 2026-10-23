@@ -1,6 +1,7 @@
 package com.stonewu.fusion.controller.ai;
 
 import com.stonewu.fusion.common.CommonResult;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.controller.ai.vo.ApiConfigPageReqVO;
 import com.stonewu.fusion.controller.ai.vo.ApiConfigRespVO;
@@ -10,8 +11,9 @@ import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiConnectionRespVO;
 import com.stonewu.fusion.convert.ai.ApiConfigConvert;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.ApiConfigService;
-import com.stonewu.fusion.service.ai.provider.AiProviderService;
+import com.stonewu.fusion.service.ai.catalog.ProviderCatalogService;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowValidationService;
+import com.stonewu.fusion.service.ai.provider.AiProviderService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -33,6 +35,7 @@ public class ApiConfigController {
     private final ApiConfigService apiConfigService;
     private final AiProviderService aiProviderService;
     private final ComfyUiWorkflowValidationService comfyUiWorkflowValidationService;
+    private final ProviderCatalogService providerCatalogService;
 
     @PostMapping("/create")
     @Operation(summary = "创建API配置")
@@ -40,6 +43,7 @@ public class ApiConfigController {
     public CommonResult<Long> create(@Valid @RequestBody ApiConfigSaveReqVO reqVO) {
         ApiConfig config = ApiConfig.builder()
                 .name(reqVO.getName()).platform(reqVO.getPlatform())
+                .providerId(reqVO.getProviderId())
                 .textProtocol(reqVO.getTextProtocol())
                 .imageProtocol(reqVO.getImageProtocol())
                 .videoProtocol(reqVO.getVideoProtocol())
@@ -61,12 +65,12 @@ public class ApiConfigController {
     @Operation(summary = "更新API配置")
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<Boolean> update(@Valid @RequestBody ApiConfigSaveReqVO reqVO) {
-        apiConfigService.updateApiConfig(reqVO.getId(), reqVO.getName(), reqVO.getPlatform(),
-            reqVO.getTextProtocol(), reqVO.getImageProtocol(), reqVO.getVideoProtocol(),
-            reqVO.getApiUrl(), reqVO.getAutoAppendV1Path(), reqVO.getProxyType(),
-            reqVO.getProxyHost(), reqVO.getProxyPort(), reqVO.getProxyUsername(),
-            reqVO.getProxyPassword(), reqVO.getApiKey(), reqVO.getAppId(), reqVO.getAppSecret(),
-            reqVO.getModelId(), reqVO.getStatus(), reqVO.getRemark());
+        apiConfigService.updateApiConfig(reqVO.getId(), reqVO.getName(), reqVO.getPlatform(), reqVO.getProviderId(),
+                reqVO.getTextProtocol(), reqVO.getImageProtocol(), reqVO.getVideoProtocol(),
+                reqVO.getApiUrl(), reqVO.getAutoAppendV1Path(), reqVO.getProxyType(),
+                reqVO.getProxyHost(), reqVO.getProxyPort(), reqVO.getProxyUsername(),
+                reqVO.getProxyPassword(), reqVO.getApiKey(), reqVO.getAppId(), reqVO.getAppSecret(),
+                reqVO.getModelId(), reqVO.getStatus(), reqVO.getRemark());
         return success(true);
     }
 
@@ -81,6 +85,7 @@ public class ApiConfigController {
     @GetMapping("/get")
     @Operation(summary = "获取API配置详情")
     @Parameter(name = "id", description = "配置ID", required = true)
+    @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<ApiConfigRespVO> get(@RequestParam("id") Long id) {
         ApiConfig config = apiConfigService.getById(id);
         return success(config == null ? null : ApiConfigConvert.INSTANCE.convert(config));
@@ -91,12 +96,13 @@ public class ApiConfigController {
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<PageResult<ApiConfigRespVO>> page(@Valid ApiConfigPageReqVO reqVO) {
         return success(apiConfigService.getPage(reqVO.getName(), reqVO.getPlatform(),
-                reqVO.getStatus(), reqVO.getPageNo(), reqVO.getPageSize())
+                        reqVO.getStatus(), reqVO.getPageNo(), reqVO.getPageSize())
                 .map(ApiConfigConvert.INSTANCE::convert));
     }
 
     @GetMapping("/list")
     @Operation(summary = "获取启用的API配置列表")
+    @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<List<ApiConfigRespVO>> list() {
         return success(ApiConfigConvert.INSTANCE.convertList(apiConfigService.getEnabledList()));
     }
@@ -106,6 +112,11 @@ public class ApiConfigController {
     @Parameter(name = "id", description = "API配置ID", required = true)
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<List<RemoteModelVO>> remoteModels(@RequestParam("id") Long id) {
+        var config = apiConfigService.getById(id);
+        if (config != null && config.getProviderId() != null
+                && providerCatalogService.require(config.getProviderId()).quickSetup()) {
+            throw new BusinessException(400, "此提供商请使用快速配置读取模型，以保留平台协议和能力参数");
+        }
         return success(aiProviderService.listRemoteModels(id));
     }
 

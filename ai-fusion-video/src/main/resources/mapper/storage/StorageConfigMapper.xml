@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.storage.StorageConfigMapper">
+    <select id="selectForUpdate" resultType="com.stonewu.fusion.entity.storage.StorageConfig">
+        SELECT * FROM afv_storage_config WHERE id = #{id} AND deleted = FALSE FOR UPDATE
+    </select>
+    <select id="lockActiveDefaults" resultType="com.stonewu.fusion.entity.storage.StorageConfig">
+        SELECT id, type, base_path FROM afv_storage_config WHERE is_default = TRUE
+            AND status = 1 AND deleted = FALSE ORDER BY id LIMIT 2 FOR UPDATE
+    </select>
+</mapper>

@@ -1,21 +1,11 @@
 package com.stonewu.fusion.service.ai.tool.storyboard;
 
-import cn.hutool.json.JSONArray;
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.storyboard.StoryboardEpisode;
-import com.stonewu.fusion.entity.storyboard.StoryboardItem;
-import com.stonewu.fusion.entity.storyboard.StoryboardScene;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
-import com.stonewu.fusion.service.storyboard.StoryboardService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.math.BigDecimal;
-import java.util.List;
 
 /**
  * 插入分镜条目工具（insert_storyboard_item）
@@ -26,9 +16,8 @@ import java.util.List;
 @RequiredArgsConstructor
 @Slf4j
 public class StoryboardItemInsertToolExecutor implements ToolExecutor {
+    private final StoryboardToolCommands tools;
 
-    private final StoryboardService storyboardService;
-    private final ToolResourceAccessGuard accessGuard;
 
     @Override
     public String getToolName() {
@@ -117,7 +106,9 @@ public class StoryboardItemInsertToolExecutor implements ToolExecutor {
                         },
                         "characterIds": {
                             "type": "array",
-                            "items": { "type": "integer" },
+                            "items": {
+                                "type": "integer"
+                            },
                             "description": "出场角色子资产ID列表（AssetItem.id）"
                         },
                         "sceneAssetItemId": {
@@ -126,85 +117,38 @@ public class StoryboardItemInsertToolExecutor implements ToolExecutor {
                         },
                         "propIds": {
                             "type": "array",
-                            "items": { "type": "integer" },
+                            "items": {
+                                "type": "integer"
+                            },
                             "description": "道具子资产ID列表（AssetItem.id）"
                         },
                         "remark": {
                             "type": "string",
                             "description": "备注"
+                        },
+                        "expectedParentVersion": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "description": "调用方读取的父集合版本：创建场次用分镜集 version，插入镜头用场次 version"
+                        },
+                        "insertAfterId": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "description": "在同一场次指定镜头后插入；缺省时追加"
                         }
                     },
-                    "required": ["storyboardSceneId", "content"]
+                    "required": [
+                        "storyboardSceneId",
+                        "content",
+                        "expectedParentVersion"
+                    ],
+                    "additionalProperties": false
                 }
                 """;
     }
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long storyboardSceneId = params.getLong("storyboardSceneId");
-            if (storyboardSceneId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 storyboardSceneId").toString();
-            }
-            String content = params.getStr("content");
-            if (content == null || content.isBlank()) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 content").toString();
-            }
-
-            StoryboardScene scene = accessGuard.requireStoryboardScene(storyboardSceneId, context.getUserId());
-            StoryboardEpisode episode = accessGuard.requireStoryboardEpisode(
-                    scene.getStoryboardId(), scene.getEpisodeId(), context.getUserId());
-            List<StoryboardItem> existing = storyboardService.listItemsByScene(storyboardSceneId);
-            int nextOrder = existing.isEmpty() ? 0 : existing.get(existing.size() - 1).getSortOrder() + 1;
-
-            // 处理角色子资产ID列表
-            String characterIdsJson = null;
-            JSONArray charArray = params.getJSONArray("characterIds");
-            if (charArray != null) {
-                characterIdsJson = charArray.toString();
-            }
-
-            // 处理道具子资产ID列表
-            String propIdsJson = null;
-            JSONArray propArray = params.getJSONArray("propIds");
-            if (propArray != null) {
-                propIdsJson = propArray.toString();
-            }
-
-            StoryboardItem item = StoryboardItem.builder()
-                    .storyboardId(scene.getStoryboardId())
-                    .storyboardEpisodeId(episode.getId())
-                    .storyboardSceneId(storyboardSceneId)
-                    .sortOrder(nextOrder)
-                    .shotNumber(params.getStr("shotNumber"))
-                    .shotType(params.getStr("shotType"))
-                    .content(content)
-                    .sceneExpectation(params.getStr("sceneExpectation"))
-                    .dialogue(params.getStr("dialogue"))
-                    .sound(params.getStr("sound"))
-                    .soundEffect(params.getStr("soundEffect"))
-                    .music(params.getStr("music"))
-                    .cameraMovement(params.getStr("cameraMovement"))
-                    .cameraAngle(params.getStr("cameraAngle"))
-                    .cameraEquipment(params.getStr("cameraEquipment"))
-                    .focalLength(params.getStr("focalLength"))
-                    .transition(params.getStr("transition"))
-                    .characterIds(characterIdsJson)
-                    .sceneAssetItemId(params.getLong("sceneAssetItemId"))
-                    .propIds(propIdsJson)
-                    .remark(params.getStr("remark"))
-                    .duration(params.get("duration") != null ? new BigDecimal(params.getStr("duration")) : null)
-                    .build();
-
-            StoryboardItem saved = storyboardService.createItem(item);
-            return JSONUtil.createObj()
-                    .set("itemId", saved.getId())
-                    .set("sortOrder", saved.getSortOrder())
-                    .set("message", "分镜条目添加成功").toString();
-        } catch (Exception e) {
-            log.error("插入分镜条目失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "操作失败: " + e.getMessage()).toString();
-        }
+        return tools.execute(getToolName(), toolInput, context);
     }
 }

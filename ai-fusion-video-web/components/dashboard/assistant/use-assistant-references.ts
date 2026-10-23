@@ -8,13 +8,15 @@ import {
   type KeyboardEvent,
   type RefObject,
 } from "react";
-import {
-  getAssistantReferenceOptions,
-  type AssistantMcpToolReferenceOption,
-  type AssistantReferenceOptions,
-  type AssistantSkillReferenceOption,
+import type {
+  AssistantAgentType,
+  AssistantMcpToolReferenceOption,
+  AssistantReferenceOptions,
+  AssistantSkillReferenceOption,
 } from "@/lib/api/ai-assistant";
-import { projectApi, type Project } from "@/lib/api/project";
+import type { Project } from "@/lib/api/project";
+import { invalidateAssistantReferences, loadAssistantProjects, loadAssistantReferenceOptions } from "./catalog-cache";
+import { subscribeAgentConfiguration } from "@/lib/agent-configuration-events";
 import type {
   AssistantCapabilityReference,
   AssistantProjectReference,
@@ -22,55 +24,9 @@ import type {
   AssistantReferenceTrigger,
 } from "./reference-types";
 
-const REFERENCES_CACHE_TTL_MS = 30_000;
-let cachedReferenceOptions: AssistantReferenceOptions | null = null;
-let cachedReferenceOptionsAt = 0;
-let referenceOptionsRequest: Promise<AssistantReferenceOptions> | null = null;
-let cachedProjects: Project[] | null = null;
-let cachedProjectsAt = 0;
-let projectsRequest: Promise<Project[]> | null = null;
-
-function loadReferenceOptions(): Promise<AssistantReferenceOptions> {
-  const cached = cachedReferenceOptions;
-  if (cached && Date.now() - cachedReferenceOptionsAt < REFERENCES_CACHE_TTL_MS) {
-    return Promise.resolve(cached);
-  }
-  if (!referenceOptionsRequest) {
-    referenceOptionsRequest = getAssistantReferenceOptions()
-      .then((result) => {
-        cachedReferenceOptions = result;
-        cachedReferenceOptionsAt = Date.now();
-        referenceOptionsRequest = null;
-        return result;
-      })
-      .catch((error: unknown) => {
-        referenceOptionsRequest = null;
-        throw error;
-      });
-  }
-  return referenceOptionsRequest;
-}
-
-function loadProjects(): Promise<Project[]> {
-  const cached = cachedProjects;
-  if (cached && Date.now() - cachedProjectsAt < REFERENCES_CACHE_TTL_MS) {
-    return Promise.resolve(cached);
-  }
-  if (!projectsRequest) {
-    projectsRequest = projectApi.list()
-      .then((result) => {
-        cachedProjects = result;
-        cachedProjectsAt = Date.now();
-        projectsRequest = null;
-        return result;
-      })
-      .catch((error: unknown) => {
-        projectsRequest = null;
-        throw error;
-      });
-  }
-  return projectsRequest;
-}
+const EMPTY_REFERENCES: AssistantReferenceOptions = { skills: [], mcpTools: [] };
+const EMPTY_PROJECTS: Project[] = [];
+interface CatalogState<T> { scopeKey: string; value: T; error: string | null }
 
 function detectReferenceTrigger(value: string, cursor: number): AssistantReferenceTrigger | null {
   const prefix = value.slice(0, cursor);
@@ -114,6 +70,8 @@ function capabilitySearchText(item: AssistantCapabilityReference) {
 }
 
 interface UseAssistantReferencesOptions {
+  userId: number | null;
+  agentType: AssistantAgentType;
   active: boolean;
   text: string;
   selectedConversationId: string | null;
@@ -123,7 +81,7 @@ interface UseAssistantReferencesOptions {
 }
 
 interface AssistantReferenceSelectionState {
-  conversationId: string | null;
+  scopeKey: string;
   selectedSkills: AssistantSkillReferenceOption[];
   selectedMcpTools: AssistantMcpToolReferenceOption[];
   projectOverride: AssistantProjectReference | null | undefined;
@@ -131,9 +89,9 @@ interface AssistantReferenceSelectionState {
   activeIndex: number;
 }
 
-function emptySelection(conversationId: string | null): AssistantReferenceSelectionState {
+function emptySelection(scopeKey: string): AssistantReferenceSelectionState {
   return {
-    conversationId,
+    scopeKey,
     selectedSkills: [],
     selectedMcpTools: [],
     projectOverride: undefined,
@@ -143,6 +101,8 @@ function emptySelection(conversationId: string | null): AssistantReferenceSelect
 }
 
 export function useAssistantReferences({
+  userId,
+  agentType,
   active,
   text,
   selectedConversationId,
@@ -150,33 +110,45 @@ export function useAssistantReferences({
   inputRef,
   updateText,
 }: UseAssistantReferencesOptions) {
-  const [referenceOptions, setReferenceOptions] = useState<AssistantReferenceOptions>({
-    skills: [],
-    mcpTools: [],
-  });
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [capabilitiesLoading, setCapabilitiesLoading] = useState(true);
-  const [projectsLoading, setProjectsLoading] = useState(true);
-  const [capabilitiesError, setCapabilitiesError] = useState<string | null>(null);
-  const [projectsError, setProjectsError] = useState<string | null>(null);
+  const referenceScope = `${userId}:${agentType}`;
+  const [configurationRevision, setConfigurationRevision] = useState(0);
+  useEffect(() => {
+    if (!userId) return;
+    return subscribeAgentConfiguration(userId, () => {
+      invalidateAssistantReferences(userId);
+      setConfigurationRevision((value) => value + 1);
+    });
+  }, [userId]);
+  const projectScope = String(userId);
+  const selectionScope = `${referenceScope}:${selectedConversationId ?? "new"}`;
+  const [referenceState, setReferenceState] = useState<CatalogState<AssistantReferenceOptions> | null>(null);
+  const [projectState, setProjectState] = useState<CatalogState<Project[]> | null>(null);
+  const currentReferences = referenceState?.scopeKey === referenceScope ? referenceState : null;
+  const currentProjects = projectState?.scopeKey === projectScope ? projectState : null;
+  const referenceOptions = currentReferences?.value ?? EMPTY_REFERENCES;
+  const projects = currentProjects?.value ?? EMPTY_PROJECTS;
+  const capabilitiesLoading = !!userId && !currentReferences;
+  const projectsLoading = !!userId && !currentProjects;
+  const capabilitiesError = currentReferences?.error ?? null;
+  const projectsError = currentProjects?.error ?? null;
   const [selectionState, setSelectionState] = useState<AssistantReferenceSelectionState>(
-    () => emptySelection(selectedConversationId),
+    () => emptySelection(selectionScope),
   );
   const selection = useMemo(
-    () => selectionState.conversationId === selectedConversationId
+    () => selectionState.scopeKey === selectionScope
       ? selectionState
-      : emptySelection(selectedConversationId),
-    [selectedConversationId, selectionState],
+      : emptySelection(selectionScope),
+    [selectionScope, selectionState],
   );
   const updateSelection = useCallback((
     updater: (current: AssistantReferenceSelectionState) => AssistantReferenceSelectionState,
   ) => {
     setSelectionState((current) => updater(
-      current.conversationId === selectedConversationId
+      current.scopeKey === selectionScope
         ? current
-        : emptySelection(selectedConversationId),
+        : emptySelection(selectionScope),
     ));
-  }, [selectedConversationId]);
+  }, [selectionScope]);
   const {
     selectedSkills,
     selectedMcpTools,
@@ -186,38 +158,32 @@ export function useAssistantReferences({
   } = selection;
 
   useEffect(() => {
-    if (!active) return;
+    if (!active || !userId) return;
     let cancelled = false;
-    void loadReferenceOptions()
+    void loadAssistantReferenceOptions(userId, agentType)
       .then((result) => {
         if (cancelled) return;
-        setReferenceOptions(result);
-        setCapabilitiesError(null);
+        setReferenceState({ scopeKey: referenceScope, value: result, error: null });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setCapabilitiesError(error instanceof Error ? error.message : "加载 Skill/MCP 失败");
-      })
-      .finally(() => {
-        if (!cancelled) setCapabilitiesLoading(false);
+        setReferenceState({ scopeKey: referenceScope, value: EMPTY_REFERENCES,
+          error: error instanceof Error ? error.message : "加载 Skill/MCP 失败" });
       });
-    void loadProjects()
+    void loadAssistantProjects(userId)
       .then((result) => {
         if (cancelled) return;
-        setProjects(result);
-        setProjectsError(null);
+        setProjectState({ scopeKey: projectScope, value: result, error: null });
       })
       .catch((error: unknown) => {
         if (cancelled) return;
-        setProjectsError(error instanceof Error ? error.message : "加载项目失败");
-      })
-      .finally(() => {
-        if (!cancelled) setProjectsLoading(false);
+        setProjectState({ scopeKey: projectScope, value: EMPTY_PROJECTS,
+          error: error instanceof Error ? error.message : "加载项目失败" });
       });
     return () => {
       cancelled = true;
     };
-  }, [active]);
+  }, [active, agentType, projectScope, referenceScope, userId, configurationRevision]);
 
   const inheritedProject = useMemo<AssistantProjectReference | null>(() => {
     if (!effectiveProjectId) return null;
@@ -364,6 +330,6 @@ export function useAssistantReferences({
       selectedMcpTools: current.selectedMcpTools.filter((tool) =>
         tool.serverName !== serverName || tool.toolName !== toolName),
     })),
-    clearTransientReferences: () => setSelectionState(emptySelection(selectedConversationId)),
+    clearTransientReferences: () => setSelectionState(emptySelection(selectionScope)),
   };
 }

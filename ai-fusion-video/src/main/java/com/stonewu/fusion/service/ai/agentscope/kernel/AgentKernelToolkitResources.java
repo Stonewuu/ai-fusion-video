@@ -4,7 +4,8 @@ package com.stonewu.fusion.service.ai.agentscope.kernel;
 public interface AgentKernelToolkitResources extends AutoCloseable {
 
     static AgentKernelToolkitResources none() {
-        return () -> { };
+        return () -> {
+        };
     }
 
     @Override

@@ -1,12 +1,7 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.script.ScriptEpisode;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
-import com.stonewu.fusion.service.script.ScriptService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -21,8 +16,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
 
-    private final ScriptService scriptService;
-    private final ToolResourceAccessGuard accessGuard;
+    private final ScriptToolCommands commands;
+
 
     @Override
     public String getToolName() {
@@ -37,7 +32,7 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
     @Override
     public String getToolDescription() {
         return """
-                创建或更新剧本的一集记录。如果该集数已存在则更新，不存在则创建。
+                创建或更新剧本的一集记录。更新必须传实际 scriptEpisodeId 和该分集的 expectedVersion；创建不传 scriptEpisodeId，expectedVersion 传剧本版本。已存在的集号不能用于隐式覆盖。
                 建议传入 sortOrder 排序值进行排序（默认设置为集号），若不传入则默认使用集号进行排序。
                 返回值中包含 episode_version，请在后续调用 save_script_scene_items 时传入此值。
                 """;
@@ -49,6 +44,8 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "scriptEpisodeId": { "type": "integer", "description": "更新时必填实际分集ID；创建时不传，已有集号不会隐式覆盖" },
+                        "expectedVersion": { "type": "integer", "minimum": 0, "description": "刚刚读取的对象版本；创建分集传剧本版本，更新分集传分集版本" },
                         "scriptId": {
                             "type": "integer",
                             "description": "剧本ID"
@@ -78,43 +75,13 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
                             "description": "剧本分集排序值。默认应设为与该集的 episodeNumber（集号）相同的值（例如第1集传 1，第2集传 2）。"
                         }
                     },
-                    "required": ["scriptId", "episodeNumber", "title"]
+                    "required": ["expectedVersion", "scriptId", "episodeNumber", "title"]
                 }
                 """;
     }
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long scriptId = params.getLong("scriptId");
-            Integer episodeNumber = params.getInt("episodeNumber");
-            String title = params.getStr("title");
-            String synopsis = params.getStr("synopsis");
-            String rawContent = params.getStr("rawContent");
-            Integer sourceType = params.getInt("sourceType");
-            Integer sortOrder = params.getInt("sortOrder");
-
-            if (scriptId == null || episodeNumber == null || title == null || title.isBlank()) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "缺少必要参数: scriptId, episodeNumber, title").toString();
-            }
-
-            accessGuard.requireScript(scriptId, context.getUserId());
-            ScriptEpisode episode = scriptService.saveEpisode(scriptId, episodeNumber, title,
-                    synopsis, rawContent, sourceType, sortOrder);
-
-            JSONObject resultObj = JSONUtil.createObj()
-                    .set("scriptEpisodeId", episode.getId())
-                    .set("episodeNumber", episodeNumber)
-                    .set("title", title)
-                    .set("episode_version", episode.getVersion())
-                    .set("message", String.format("第%d集 \"%s\" 保存成功", episodeNumber, title));
-
-            return resultObj.toString();
-        } catch (Exception e) {
-            log.error("保存集记录失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "保存失败: " + e.getMessage()).toString();
-        }
+        return commands.saveEpisode(toolInput, context);
     }
 }

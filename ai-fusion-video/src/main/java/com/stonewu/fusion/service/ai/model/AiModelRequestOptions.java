@@ -11,7 +11,9 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import java.util.List;
 import java.util.Objects;
 
-/** Builds immutable, request-local model options without mutating the persisted model. */
+/**
+ * Builds immutable, request-local model options without mutating the persisted model.
+ */
 public final class AiModelRequestOptions {
 
     private static final String REASONING_EFFORT = "reasoningEffort";

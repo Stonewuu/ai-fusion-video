@@ -147,10 +147,13 @@ export function ComfyUiBindingEditor({
   if (mode === "input") {
     return (
       <div className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
             <p className="text-sm font-medium">平台输入绑定</p>
             <p className="mt-1 text-xs text-muted-foreground">把业务字段写入明确的节点输入；一个业务字段可绑定多个目标。</p>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+              多图输入请从索引 0 开始逐一绑定，可用数量以工作流实际配置为准。
+            </p>
           </div>
           <Button variant="outline" size="sm" onClick={addInputRow}>
             <Plus />添加绑定

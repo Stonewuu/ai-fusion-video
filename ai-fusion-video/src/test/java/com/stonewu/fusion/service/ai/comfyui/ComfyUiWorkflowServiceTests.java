@@ -10,6 +10,8 @@ import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.mapper.ai.ComfyUiWorkflowMapper;
 import com.stonewu.fusion.mapper.ai.ComfyUiWorkflowVersionMapper;
 import com.stonewu.fusion.service.ai.ApiConfigService;
+import com.stonewu.fusion.service.ai.ProviderConfigurationFingerprint;
+import com.stonewu.fusion.service.canvas.CanvasJson;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -46,7 +48,7 @@ class ComfyUiWorkflowServiceTests {
                 versionMapper,
                 aiModelMapper,
                 apiConfigService,
-                new ComfyUiWorkflowDocumentService(new ObjectMapper()));
+                new ComfyUiWorkflowDocumentService(new ObjectMapper()), new CanvasJson(new ObjectMapper()));
     }
 
     @Test
@@ -78,7 +80,7 @@ class ComfyUiWorkflowServiceTests {
                 .apiConfigId(7L)
                 .modelType(2)
                 .build();
-        when(workflowMapper.selectById(12L)).thenReturn(workflow);
+        when(workflowMapper.selectForUpdate(12L)).thenReturn(workflow);
 
         assertThatThrownBy(() -> service.updateWorkflow(
                 12L, 8L, null, null, null, null, null))
@@ -96,7 +98,7 @@ class ComfyUiWorkflowServiceTests {
                 .testStatus(ComfyUiWorkflowVersion.TEST_FAILED)
                 .published(false)
                 .build();
-        when(workflowMapper.selectOne(any())).thenReturn(workflow);
+        when(workflowMapper.selectForUpdate(12L)).thenReturn(workflow);
         when(versionMapper.selectById(21L)).thenReturn(version);
 
         assertThatThrownBy(() -> service.publishVersion(12L, 21L))
@@ -106,15 +108,18 @@ class ComfyUiWorkflowServiceTests {
 
     @Test
     void publishMarksImmutableVersionAndSwitchesActiveVersion() {
-        ComfyUiWorkflow workflow = ComfyUiWorkflow.builder().id(12L).modelType(2).status(0).build();
+        ComfyUiWorkflow workflow = ComfyUiWorkflow.builder().id(12L).apiConfigId(7L).modelType(2).status(0).build();
+        ApiConfig api = ApiConfig.builder().id(7L).platform("comfyui").status(1).build();
+        when(apiConfigService.getById(7L)).thenReturn(api);
         ComfyUiWorkflowVersion version = ComfyUiWorkflowVersion.builder()
                 .id(21L)
                 .workflowId(12L)
                 .validationStatus(ComfyUiWorkflowVersion.VALIDATION_VALID)
                 .testStatus(ComfyUiWorkflowVersion.TEST_PASSED)
+                .testApiConfigHash(ProviderConfigurationFingerprint.of(api, new CanvasJson(new ObjectMapper())))
                 .published(false)
                 .build();
-        when(workflowMapper.selectOne(any())).thenReturn(workflow);
+        when(workflowMapper.selectForUpdate(12L)).thenReturn(workflow);
         when(versionMapper.selectById(21L)).thenReturn(version);
 
         service.publishVersion(12L, 21L);

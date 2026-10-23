@@ -7,7 +7,6 @@ import {
   reconnectPipelineStream,
   cancelPipeline,
   listRunningPipelines,
-  type AiChatReq,
   type PipelineRunStatusResponse,
   type PipelineRunStatus,
 } from "@/lib/api/ai-pipeline";
@@ -18,12 +17,10 @@ import {
 import {
   cancelCallingTimelineTools,
   restoreOptimisticallyCancelledTimelineTools,
-  type TimelineItem,
 } from "@/lib/store/pipeline-timeline";
 import {
   createPipelineEventHandler,
   generatePipelineTaskId,
-  TOOL_INVALIDATION_MAP,
   type PipelineEventLifecycle,
 } from "@/lib/store/pipeline-event-handler";
 import {
@@ -37,121 +34,8 @@ export type {
   ToolTimelineStatus,
 } from "@/lib/store/pipeline-timeline";
 
-// ========== 数据失效映射 ==========
-
-/** 数据失效类型 */
-export type InvalidationType = "assets" | "scripts" | "storyboards";
-
-// ========== 类型 ==========
-
-export interface PipelineState {
-  status: "running" | "done" | "error" | "cancelled";
-  reasoningText: string;
-  reasoningStartTime?: number;
-  reasoningDurationMs?: number;
-  timeline: TimelineItem[];
-  runId?: string;
-  lastSequence: number;
-  conversationId?: string;
-  error?: string;
-  /** 页面恢复的 Pipeline 在打开详情前不回放 journal 内容。 */
-  contentLoaded?: boolean;
-  contentLoading?: boolean;
-  /** 仅在详情选中时建立前端 reconnect SSE，不影响后端 Pipeline。 */
-  reconnectOnSelect?: boolean;
-  /** 页面列表/轮询得到的后端 run 状态。 */
-  runStatus?: PipelineRunStatus;
-  /** 取消请求已提交，等待 durable terminal event。 */
-  cancelRequested?: boolean;
-  /** 新一轮输出需要与上一轮末尾的文本分开渲染。 */
-  separateNextRootContent?: boolean;
-}
-
-export interface PipelineTask {
-  id: string;
-  label: string;
-  projectId: number | null;
-  status: "running" | "done" | "error" | "cancelled";
-  state: PipelineState;
-  createdAt: number;
-  cancellable?: boolean;
-  /** 当前浏览器仍持有启动配置，可在失败后继续同一会话。 */
-  continuable?: boolean;
-  /** 任务结束时间（done/error/cancelled 时记录） */
-  finishedAt?: number;
-}
-
-// ========== Store ==========
-
-export interface PipelineStoreState {
-  tasks: PipelineTask[];
-  notificationOpen: boolean;
-  /** 是否显示大面板（任务中心） */
-  panelExpanded: boolean;
-  /** 当前展开详情的 pipeline id */
-  expandedTaskId: string | null;
-  /** 是否已恢复过运行中 Pipeline 列表 */
-  runningPipelinesRestored: boolean;
-  /** 数据失效计数器 —— 页面监听对应 key 触发刷新 */
-  invalidation: Record<InvalidationType, number>;
-  triggerInvalidation: (type: InvalidationType) => void;
-
-  // actions
-  addPipeline: (config: {
-    label: string;
-    projectId: number;
-    request: AiChatReq;
-    onComplete?: () => void;
-  }) => string;
-  addPipelineContinuation: (config: {
-    label: string;
-    projectId: number | null;
-    conversationId: string;
-    initialTimeline?: TimelineItem[];
-  }) => string;
-  attachTaskStream: (config: {
-    label: string;
-    projectId: number;
-    taskId: string;
-    cancellable?: boolean;
-    onComplete?: () => void;
-    onSettled?: (status: "done" | "error" | "cancelled") => void;
-  }) => string;
-  /**
-   * 添加一个非 AI 任务（如视频合成），不走 SSE 流。
-   * 调用方负责后续通过 markSimpleTask 推进状态。
-   */
-  addSimpleTask: (config: {
-    label: string;
-    projectId: number;
-    initialNote?: string;
-    onComplete?: () => void;
-  }) => string;
-  /** 推进非 AI 任务的状态（追加结果文本/错误，标记完成或失败） */
-  markSimpleTask: (
-    id: string,
-    update: {
-      status: "done" | "error";
-      resultText?: string;
-      errorText?: string;
-    }
-  ) => void;
-  cancelPipeline: (id: string) => Promise<void>;
-  continuePipeline: (id: string) => void;
-  removePipeline: (id: string) => void;
-  clearCompleted: () => void;
-  setNotificationOpen: (open: boolean) => void;
-  setPanelExpanded: (expanded: boolean) => void;
-  setExpandedTaskId: (id: string | null) => void;
-  /** 首次打开恢复任务详情时，从 journal 起点加载完整内容。 */
-  loadPipelineContent: (id: string) => void;
-  /** 仅终止前端内容流；不会取消后端 Pipeline。 */
-  disconnectPipelineContent: (id: string) => void;
-  /** 页面加载时调用：查询 running 对话并轮询状态，不建立 SSE。 */
-  restoreRunningPipelines: () => void;
-  /** 页面重新可见时，从 durable cursor 恢复本地实时内容流。 */
-  resumePipelineConnections: () => void;
-}
+import type { PipelineState, PipelineTask, PipelineStoreState } from "./pipeline-types";
+export type { PipelineState, PipelineTask, PipelineStoreState } from "./pipeline-types";
 
 // 简单任务的完成回调（不放在 zustand state 里避免序列化问题）
 const simpleTaskCallbacks = new Map<string, () => void>();
@@ -272,11 +156,6 @@ function settleTaskIfRunning(
     if (transitioned) {
       return {
         tasks: nextTasks,
-        invalidation: {
-          assets: (s.invalidation.assets || 0) + 1,
-          scripts: (s.invalidation.scripts || 0) + 1,
-          storyboards: (s.invalidation.storyboards || 0) + 1,
-        },
       };
     }
     return { tasks: nextTasks };
@@ -350,8 +229,6 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
   panelExpanded: false,
   expandedTaskId: null,
   runningPipelinesRestored: false,
-  invalidation: { assets: 0, scripts: 0, storyboards: 0 },
-  triggerInvalidation: (type: InvalidationType) => set((s) => ({ invalidation: { ...s.invalidation, [type]: (s.invalidation[type] || 0) + 1 } })),
 
   addSimpleTask: ({ label, projectId, initialNote, onComplete }) => {
     const id = generatePipelineTaskId();
@@ -404,11 +281,6 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
       if (finished) {
         return {
           tasks: nextTasks,
-          invalidation: {
-            assets: (s.invalidation.assets || 0) + 1,
-            scripts: (s.invalidation.scripts || 0) + 1,
-            storyboards: (s.invalidation.storyboards || 0) + 1,
-          },
         };
       }
       return { tasks: nextTasks };
@@ -654,6 +526,8 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
           onComplete: () => {
             if (streamStatus === "ERROR") {
               settleTaskIfRunning(set, id, "error", { onSettled });
+            } else if (streamStatus === "CANCELLED") {
+              settleTaskIfRunning(set, id, "cancelled", { onSettled });
             } else if (streamStatus === "COMPLETED") {
               settleTaskIfRunning(set, id, "done", {
                 onComplete,
@@ -1057,11 +931,6 @@ function applyPipelineStatus(
     return terminalStatus
       ? {
           tasks,
-          invalidation: {
-            assets: (state.invalidation.assets || 0) + 1,
-            scripts: (state.invalidation.scripts || 0) + 1,
-            storyboards: (state.invalidation.storyboards || 0) + 1,
-          },
         }
       : { tasks };
   });
@@ -1087,12 +956,4 @@ const pipelineStatusSynchronizer = new PipelineStatusSynchronizer({
     console.error(`[Pipeline] 查询 ${target.runId} 状态失败:`, error);
   },
 });
-
-export function triggerToolInvalidation(toolName?: string): void {
-  if (!toolName) return;
-  const target = TOOL_INVALIDATION_MAP[toolName];
-  if (target) {
-    usePipelineStore.getState().triggerInvalidation(target);
-  }
-}
 

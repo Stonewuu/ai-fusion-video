@@ -4,8 +4,13 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelModelFactory;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpec;
 import com.stonewu.fusion.service.ai.agentscope.kernel.OwnedChatModel;
+import com.stonewu.fusion.service.ai.agentscope.message.MediaResolvingChatModel;
+import com.stonewu.fusion.service.ai.agentscope.message.TrackedAgentChatModel;
 import com.stonewu.fusion.service.ai.provider.AiProviderService;
 import com.stonewu.fusion.service.ai.provider.AiProviderService.AgentScopeModelProvision;
+import com.stonewu.fusion.service.ai.run.model.AgentModelRequests;
+import com.stonewu.fusion.service.media.AgentMediaInputResolver;
+import io.agentscope.core.model.ChatModelBase;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -14,18 +19,25 @@ import org.springframework.stereotype.Component;
 public final class AgentScopeModelFactory implements AgentKernelModelFactory {
 
     private final AiProviderService aiProviderService;
+    private final AgentMediaInputResolver media;
+    private final AgentModelRequests requests;
 
     @Override
     public OwnedChatModel create(AgentKernelSpec spec) {
-        AgentScopeModelProvision provision = aiProviderService.provisionAgentScopeModel(spec.model());
-        OwnedChatModel ownedModel = OwnedChatModel.owned(provision.model());
+        return OwnedChatModel.owned(new MediaResolvingChatModel(
+                new TrackedAgentChatModel(provisionRequest(spec), () -> provisionRequest(spec),
+                        spec.model(), requests, spec.key().modelConfigFingerprint()), spec.model(), media));
+    }
+
+    private ChatModelBase provisionRequest(AgentKernelSpec spec) {
+        AgentScopeModelProvision provision = aiProviderService.provisionSingleRequestModel(spec.model());
         if (spec.key().modelConfigFingerprint().equals(provision.modelConfigFingerprint())) {
-            return ownedModel;
+            return provision.model();
         }
         IllegalStateException changed = new IllegalStateException(
                 "AgentScope provider configuration changed while creating the kernel model");
         try {
-            ownedModel.close();
+            OwnedChatModel.owned(provision.model()).close();
         } catch (Throwable closeFailure) {
             changed.addSuppressed(closeFailure);
         }

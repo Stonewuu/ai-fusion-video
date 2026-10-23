@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.system.UserMapper">
+    <select id="lockEnabled" resultType="long">
+        SELECT id FROM sys_user WHERE id = #{id} AND status = 1 AND deleted = FALSE FOR UPDATE
+    </select>
+    <select id="lock" resultType="Long">
+        SELECT id FROM sys_user WHERE id = #{id} FOR UPDATE
+    </select>
+    <select id="displayName" resultType="String">
+        SELECT COALESCE(NULLIF(nickname,''),username) FROM sys_user WHERE id=#{id}
+    </select>
+    <select id="lockPair" resultType="Long">
+        SELECT id FROM sys_user WHERE id IN (#{first}, #{second}) ORDER BY id FOR UPDATE
+    </select>
+</mapper>

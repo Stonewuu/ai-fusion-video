@@ -8,20 +8,20 @@ import com.google.auth.oauth2.GoogleCredentials;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
-import com.stonewu.fusion.entity.generation.ImageItem;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.generation.image.ImageGenerationService;
 import com.stonewu.fusion.service.generation.image.strategy.ImageGenerationStrategy;
-import com.stonewu.fusion.service.storage.MediaStorageService;
+import com.stonewu.fusion.service.generation.job.GenerationPreparedRequest;
+import com.stonewu.fusion.service.generation.job.GenerationProviderReceipt;
+import com.stonewu.fusion.service.generation.job.PreparedGenerationCall;
+import com.stonewu.fusion.service.generation.job.RemoteGenerationResult;
+import com.stonewu.fusion.service.generation.transport.GenerationHttpClients;
+import com.stonewu.fusion.service.media.GenerationMediaService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.MediaType;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import okhttp3.*;
 import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
@@ -52,8 +52,8 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
 
     private final ImageGenerationService imageGenerationService;
     private final AiModelService aiModelService;
-    private final MediaStorageService mediaStorageService;
-    private final OkHttpClient okHttpClient = new OkHttpClient.Builder()
+    private final GenerationMediaService generationMediaService;
+    private final OkHttpClient okHttpClient = GenerationHttpClients.providerRequestBuilder()
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(25, TimeUnit.MINUTES)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -64,11 +64,11 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
         return "vertex_ai";
     }
 
-    @Override
-    public List<String> generate(String prompt, String modelCode, int width, int height, int count,
-                                  List<String> imageUrls, ApiConfig apiConfig) {
+    private PreparedGenerationCall preparePredict(String prompt, String modelCode, int width, int height, int count,
+                                                  List<String> imageUrls, ApiConfig apiConfig) {
         if (imageUrls != null && !imageUrls.isEmpty()) {
-            throw new BusinessException("当前图片模型 " + modelCode + " 使用的是 Vertex AI Imagen 文生图接口，不支持参考图输入");
+            throw new BusinessException(
+                    "当前图片模型 " + modelCode + " 使用的是 Vertex AI Imagen 文生图接口，不支持参考图输入");
         }
 
         String projectId = resolveProjectId(apiConfig);
@@ -80,11 +80,11 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
             url = apiConfig.getApiUrl();
         } else {
             String endpoint = "global".equalsIgnoreCase(location)
-                ? "aiplatform.googleapis.com"
-                : location + "-aiplatform.googleapis.com";
+                    ? "aiplatform.googleapis.com"
+                    : location + "-aiplatform.googleapis.com";
             url = String.format(
-                "https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s:predict",
-                endpoint, projectId, location, modelCode
+                    "https://%s/v1/projects/%s/locations/%s/publishers/google/models/%s:predict",
+                    endpoint, projectId, location, modelCode
             );
         }
 
@@ -93,20 +93,21 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
         String sampleImageSize = mapSampleImageSize(modelCode, width, height);
         String requestBody = buildRequestBody(prompt, count, aspectRatio, sampleImageSize);
 
-        log.info("[VertexAI] 调用文生图 API: model={}, prompt={}, aspectRatio={}, sampleImageSize={}",
-                modelCode, prompt, aspectRatio, sampleImageSize);
-
+        Request request;
         try {
             String accessToken = getAccessToken(apiConfig);
-
-            Request request = new Request.Builder()
+            request = new Request.Builder()
                     .url(url)
                     .addHeader("Authorization", "Bearer " + accessToken)
                     .addHeader("Content-Type", "application/json")
                     .post(RequestBody.create(requestBody, MediaType.get("application/json")))
                     .build();
 
-            OkHttpClient client = AiProxySupport.okHttpClient(okHttpClient, apiConfig);
+        } catch (IOException e) {
+            throw new IllegalArgumentException("Vertex AI 身份准备失败: " + e.getMessage(), e);
+        }
+        OkHttpClient client = AiProxySupport.okHttpClient(okHttpClient, apiConfig);
+        return new PreparedGenerationCall(GenerationPreparedRequest.ordinary(), () -> {
             try (Response response = client.newCall(request).execute()) {
                 if (!response.isSuccessful()) {
                     String errorBody = response.body() != null ? response.body().string() : "unknown";
@@ -114,48 +115,30 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
                 }
 
                 String responseBody = response.body().string();
-                return parseImageUrls(responseBody);
+                return GenerationProviderReceipt.completed(
+                        RemoteGenerationResult.success(parseImageUrls(responseBody).stream()
+                                .map(RemoteGenerationResult.Output::image).toList()));
+            } catch (IOException e) {
+                throw new RuntimeException("Vertex AI 调用异常: " + e.getMessage(), e);
             }
-        } catch (IOException e) {
-            throw new RuntimeException("Vertex AI 调用异常: " + e.getMessage(), e);
-        }
+        });
     }
 
     @Override
-    public String submit(ImageTask task, ApiConfig apiConfig) {
-        AiModel model = resolveModel(task);
-        String modelCode = (model != null && StrUtil.isNotBlank(model.getCode()))
-                ? model.getCode() : "imagen-4.0-generate-001";
+    public int batchSize(ImageTask task, AiModel model, ApiConfig apiConfig) {
+        return task.getCount();
+    }
+
+    @Override
+    public PreparedGenerationCall prepare(ImageTask task, AiModel model, ApiConfig apiConfig) {
         int[] size = resolveDefaultSize(model, task);
-        int count = (task.getCount() != null && task.getCount() > 0) ? task.getCount() : 1;
-
-        // 解析参考图（图生图场景）
-        List<String> imageUrls = parseRefImageUrls(task.getRefImageUrls());
-
-        // 复用纯 API 调用
-        List<String> urls = generate(task.getPrompt(), modelCode, size[0], size[1], count, imageUrls, apiConfig);
-
-        // 更新数据库记录
-        List<ImageItem> items = imageGenerationService.listItems(task.getId());
-        int successCount = 0;
-        for (int i = 0; i < urls.size() && i < items.size(); i++) {
-            ImageItem item = items.get(i);
-            item.setImageUrl(urls.get(i));
-            item.setStatus(1);
-            imageGenerationService.updateItem(item);
-            successCount++;
-        }
-
-        task.setSuccessCount(successCount);
-        imageGenerationService.update(task);
-
-        log.info("[VertexAI] 文生图完成: taskId={}", task.getTaskId());
-        return task.getTaskId();
+        return preparePredict(task.getPrompt(), model.getCode(), size[0], size[1], task.getCount(),
+                parseRefImageUrls(task.getRefImageUrls()), apiConfig);
     }
 
     @Override
-    public void poll(String platformTaskId, ImageTask task, ApiConfig apiConfig) {
-        // Vertex AI Imagen predict 是同步 API，submit 中已处理完成，无需轮询
+    public RemoteGenerationResult query(String platformTaskId, ImageTask task, AiModel model, ApiConfig apiConfig) {
+        throw new IllegalStateException("同步图片结果必须从已保存回执读取");
     }
 
     /**
@@ -205,9 +188,8 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
                 if (prediction.has("bytesBase64Encoded")) {
                     String base64Data = prediction.get("bytesBase64Encoded").asText();
                     byte[] imageBytes = Base64.decode(base64Data);
-                    // 直接通过 MediaStorageService 持久化，避免产生孤立临时文件
-                    String persistedUrl = mediaStorageService.storeBytes(imageBytes, "images", "png");
-                    urls.add(persistedUrl);
+                    String mime = prediction.path("mimeType").asText("image/png");
+                    urls.add("data:" + mime + ";base64," + Base64.encode(imageBytes));
                 } else if (prediction.has("gcsUri")) {
                     urls.add(prediction.get("gcsUri").asText());
                 }
@@ -228,8 +210,10 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
 
         var transportFactory = AiProxySupport.googleHttpTransportFactory(apiConfig);
         GoogleCredentials credentials = (transportFactory == null
-            ? GoogleCredentials.fromStream(new ByteArrayInputStream(apiConfig.getAppSecret().getBytes(StandardCharsets.UTF_8)))
-            : GoogleCredentials.fromStream(new ByteArrayInputStream(apiConfig.getAppSecret().getBytes(StandardCharsets.UTF_8)), transportFactory))
+                ? GoogleCredentials.fromStream(
+                new ByteArrayInputStream(apiConfig.getAppSecret().getBytes(StandardCharsets.UTF_8)))
+                : GoogleCredentials.fromStream(
+                new ByteArrayInputStream(apiConfig.getAppSecret().getBytes(StandardCharsets.UTF_8)), transportFactory))
                 .createScoped(Collections.singletonList(VERTEX_AI_SCOPE));
         credentials.refreshIfExpired();
         return credentials.getAccessToken().getTokenValue();
@@ -240,11 +224,21 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
      */
     private String mapAspectRatio(int width, int height) {
         double ratio = (double) width / height;
-        if (Math.abs(ratio - 1.0) < 0.01) return "1:1";
-        if (Math.abs(ratio - 16.0 / 9.0) < 0.05) return "16:9";
-        if (Math.abs(ratio - 9.0 / 16.0) < 0.05) return "9:16";
-        if (Math.abs(ratio - 4.0 / 3.0) < 0.05) return "4:3";
-        if (Math.abs(ratio - 3.0 / 4.0) < 0.05) return "3:4";
+        if (Math.abs(ratio - 1.0) < 0.01) {
+            return "1:1";
+        }
+        if (Math.abs(ratio - 16.0 / 9.0) < 0.05) {
+            return "16:9";
+        }
+        if (Math.abs(ratio - 9.0 / 16.0) < 0.05) {
+            return "9:16";
+        }
+        if (Math.abs(ratio - 4.0 / 3.0) < 0.05) {
+            return "4:3";
+        }
+        if (Math.abs(ratio - 3.0 / 4.0) < 0.05) {
+            return "3:4";
+        }
         return "1:1";
     }
 
@@ -286,13 +280,5 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
                 || StrUtil.startWithIgnoreCase(apiUrl, "https://");
     }
 
-    private AiModel resolveModel(ImageTask task) {
-        if (task.getModelId() != null) {
-            AiModel model = aiModelService.getById(task.getModelId());
-            if (model != null && StrUtil.isNotBlank(model.getCode())) {
-                return model;
-            }
-        }
-        return null;
-    }
+
 }

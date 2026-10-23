@@ -1,13 +1,13 @@
 package com.stonewu.fusion.service.generation.video.strategy.openai;
+
+import com.fasterxml.jackson.databind.JsonNode;
 import com.stonewu.fusion.service.generation.video.strategy.support.OpenAiCompatibleVideoProtocolAdapter;
 import com.stonewu.fusion.service.generation.video.strategy.support.OpenAiCompatibleVideoProtocolContext;
 import com.stonewu.fusion.service.generation.video.strategy.support.OpenAiCompatibleVideoProtocolSupport;
 import com.stonewu.fusion.service.generation.video.strategy.support.OpenAiCompatibleVideoTaskResult;
-
-import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
 import okhttp3.RequestBody;
+import org.springframework.stereotype.Component;
 
 /**
  * OpenAI 兼容通用视频协议适配器，默认按官方 Sora Videos API 处理。
@@ -30,7 +30,7 @@ public class OpenAiVideoProtocolAdapter implements OpenAiCompatibleVideoProtocol
 
     @Override
     public RequestBody buildSubmitBody(OpenAiCompatibleVideoProtocolContext context) {
-        return support.buildSoraSubmitBody(context);
+        return support.buildMultipartVideosBody(context);
     }
 
     @Override

@@ -18,7 +18,7 @@ import { assetApi } from "@/lib/api/asset";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import type { Asset, AssetItem } from "@/lib/api/asset";
 import { parseDialogues, parseCharacters } from "./utils";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 
 // ========== 资产类型配置 ==========
 
@@ -131,11 +131,6 @@ export function SceneDetail({
   useEffect(() => {
     loadLinkedAssets();
   }, [loadLinkedAssets]);
-
-  const hasLinkedAssets =
-    linkedAssets.characters.length > 0 ||
-    linkedAssets.scenes.length > 0 ||
-    linkedAssets.props.length > 0;
 
   return (
     <div className="p-4 space-y-5">

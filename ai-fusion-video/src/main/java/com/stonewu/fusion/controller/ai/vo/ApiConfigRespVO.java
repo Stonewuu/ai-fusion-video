@@ -2,6 +2,7 @@ package com.stonewu.fusion.controller.ai.vo;
 
 import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
+
 import java.time.LocalDateTime;
 
 @Schema(description = "API配置响应")
@@ -9,6 +10,7 @@ import java.time.LocalDateTime;
 public class ApiConfigRespVO {
     private Long id;
     private String name;
+    private String providerId;
     private String platform;
     private String textProtocol;
     private String imageProtocol;

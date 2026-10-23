@@ -8,6 +8,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
@@ -46,6 +47,11 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         // SSE 流结束后的 async dispatch 不需要重新认证
                         .dispatcherTypeMatchers(DispatcherType.ASYNC).permitAll()
+                        // 内容由短时凭据和逐次权限检查保护，仅开放读取方法。
+                        .requestMatchers(HttpMethod.GET, "/api/media-content/*").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/api/media-content/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/canvas-export-content/*").permitAll()
+                        .requestMatchers(HttpMethod.HEAD, "/api/canvas-export-content/*").permitAll()
                         .requestMatchers(
                                 "/api/auth/login",
                                 "/api/auth/register",

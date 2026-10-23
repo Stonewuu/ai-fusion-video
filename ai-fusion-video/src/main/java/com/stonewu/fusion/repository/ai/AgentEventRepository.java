@@ -8,7 +8,9 @@ import com.stonewu.fusion.service.ai.run.model.SystemTerminalActor;
 import java.util.List;
 import java.util.Optional;
 
-/** Synchronous short-transaction port implemented by the durable MySQL adapter. */
+/**
+ * Synchronous short-transaction port implemented by the durable MySQL adapter.
+ */
 public interface AgentEventRepository {
 
     Optional<CommittedAgentEvent> appendOwnedTx(
@@ -34,7 +36,9 @@ public interface AgentEventRepository {
             long throughSequence,
             int limit);
 
-    /** A point-in-time view used to bound one replay drain. */
+    /**
+     * A point-in-time view used to bound one replay drain.
+     */
     record ReplaySnapshot(long latestSequence, Long terminalSequence) {
 
         public ReplaySnapshot {

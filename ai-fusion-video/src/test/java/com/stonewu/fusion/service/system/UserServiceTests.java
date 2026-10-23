@@ -5,7 +5,6 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.system.Role;
 import com.stonewu.fusion.entity.system.User;
 import com.stonewu.fusion.entity.system.UserRole;
-import com.stonewu.fusion.enums.team.TeamMemberRoleEnum;
 import com.stonewu.fusion.mapper.system.RoleMapper;
 import com.stonewu.fusion.mapper.system.UserMapper;
 import com.stonewu.fusion.mapper.system.UserRoleMapper;
@@ -98,11 +97,12 @@ class UserServiceTests {
         ArgumentCaptor<UserRole> roleCaptor = ArgumentCaptor.forClass(UserRole.class);
         verify(userRoleMapper).insert(roleCaptor.capture());
         assertEquals(2L, roleCaptor.getValue().getRoleId());
-        verify(teamService).addUserToSingleTeam(100L, TeamMemberRoleEnum.MEMBER.getRole());
+        verify(teamService).addRegisteredUserToSingleTeam(100L);
     }
 
     @Test
     void initializeAdminShouldCreateAdminAndInitialTeam() {
+        when(roleMapper.lockByCode("admin")).thenReturn(1L);
         mockUserCreation();
         mockInitAdminRoles();
         when(userRoleMapper.exists(any(LambdaQueryWrapper.class))).thenReturn(false);
@@ -122,6 +122,7 @@ class UserServiceTests {
 
     @Test
     void initializeAdminShouldRejectDuplicateUsername() {
+        when(roleMapper.lockByCode("admin")).thenReturn(1L);
         mockAdminRole();
         when(userRoleMapper.exists(any(LambdaQueryWrapper.class))).thenReturn(false);
         when(userMapper.exists(any(LambdaQueryWrapper.class))).thenReturn(true);

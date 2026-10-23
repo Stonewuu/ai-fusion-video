@@ -7,16 +7,14 @@ import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.repository.ai.AgentRunRepository;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
-import com.stonewu.fusion.service.ai.run.model.ChildRunAdmission;
-import com.stonewu.fusion.service.ai.run.model.ChildRunIdentityConflictException;
-import com.stonewu.fusion.service.ai.run.model.StartAgentRunCommand;
-import com.stonewu.fusion.service.ai.run.model.StartChildAgentRunCommand;
-import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
-import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStateCleanupPolicyService;
+import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
+import com.stonewu.fusion.service.ai.run.model.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Mono;
 
@@ -25,6 +23,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Objects;
 
 /**
@@ -41,12 +40,24 @@ public class AgentRunCoordinator {
     private final TransactionTemplate transactionTemplate;
     private final AgentRuntimeSchedulers schedulers;
     private final AgentStateCleanupPolicyService stateCleanupPolicy;
+    private final List<AgentChildAdmissionPolicy> childPolicies;
 
     public Mono<StartedAgentRun> start(StartAgentRunCommand command) {
         Objects.requireNonNull(command, "command must not be null");
         return Mono.fromCallable(() -> requireTransactionResult(
                         transactionTemplate.execute(ignored -> startTransaction(command))))
                 .subscribeOn(schedulers.journal());
+    }
+
+    /**
+     * 在画布节点受理事务中保存根任务和首条消息；提交后由持久化启动队列投递。
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public StartedAgentRun admitCanvasNode(StartAgentRunCommand command) {
+        if (command.canvasScopeJson() == null) {
+            throw new IllegalArgumentException("专业画布节点缺少作用域");
+        }
+        return startTransaction(command);
     }
 
     public Mono<ChildRunAdmission> startChild(StartChildAgentRunCommand command) {
@@ -74,6 +85,8 @@ public class AgentRunCoordinator {
                 .runId(command.runId())
                 .conversationId(conversation.getConversationId())
                 .userId(conversation.getUserId())
+                .actorTeamId(command.actorTeamId())
+                .canvasScopeJson(command.canvasScopeJson())
                 .projectId(conversation.getProjectId())
                 .agentType(command.agentType())
                 .kernelFingerprint(command.kernelSnapshot().fingerprint())
@@ -103,6 +116,7 @@ public class AgentRunCoordinator {
         AgentRun parent = runRepository.lockRun(command.parentRunId());
         LocalDateTime databaseNow = runRepository.databaseNow();
         requireAdmissibleParent(parent, command, databaseNow);
+        childPolicies.forEach(policy -> policy.admit(parent, command));
 
         LocalDateTime deadline = requireFutureDeadline(command.deadline(), databaseNow);
         if (deadline.isAfter(parent.getDeadlineAt())) {
@@ -113,6 +127,8 @@ public class AgentRunCoordinator {
                 .runId(command.childRunId())
                 .conversationId(parent.getConversationId())
                 .userId(parent.getUserId())
+                .actorTeamId(parent.getActorTeamId())
+                .canvasScopeJson(parent.getCanvasScopeJson())
                 .projectId(parent.getProjectId())
                 .agentType(command.agentDefinitionStableKey())
                 .parentRunId(parent.getRunId())
@@ -159,9 +175,9 @@ public class AgentRunCoordinator {
         if (!Objects.equals(existing.getAgentName(), command.agentName())
                 || !Objects.equals(existing.getAgentType(), command.agentDefinitionStableKey())
                 || !Objects.equals(existing.getKernelFingerprint(),
-                        command.kernelSnapshot().fingerprint())
+                command.kernelSnapshot().fingerprint())
                 || !Objects.equals(existing.getAgentDefinitionSnapshotJson(),
-                        command.kernelSnapshot().snapshotJson())
+                command.kernelSnapshot().snapshotJson())
                 || !Objects.equals(existing.getDeadlineAt(), persistedDeadline)) {
             throw new ChildRunIdentityConflictException(
                     command.parentRunId(), command.parentToolCallId());

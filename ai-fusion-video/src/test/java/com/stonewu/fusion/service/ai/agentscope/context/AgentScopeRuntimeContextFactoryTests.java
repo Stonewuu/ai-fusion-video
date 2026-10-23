@@ -21,7 +21,7 @@ class AgentScopeRuntimeContextFactoryTests {
     @Test
     void createsCanonicalAddressAndAllTypedContexts() {
         ProjectContext project = new ProjectContext(21L);
-        ToolExecutionContext tool = new ToolExecutionContext(42L, 1, 42L);
+        ToolExecutionContext tool = new ToolExecutionContext(42L, 1, 42L, null);
         AgentScopeRuntimeContextRequest request = request(project, tool);
 
         RuntimeContext context = factory.create(request);
@@ -120,7 +120,7 @@ class AgentScopeRuntimeContextFactoryTests {
         assertThatThrownBy(() -> new ProjectContext(-1L))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("projectId");
-        assertThatThrownBy(() -> new ToolExecutionContext(42L, 0, 42L))
+        assertThatThrownBy(() -> new ToolExecutionContext(42L, 0, 42L, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("ownerType");
         assertThatThrownBy(() -> new PipelineRequestContext(" ", PipelineRequestContext.Kind.CHAT))

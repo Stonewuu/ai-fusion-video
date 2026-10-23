@@ -2,10 +2,12 @@ package com.stonewu.fusion.service.ai.tool.project;
 
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.entity.project.Project;
+import com.stonewu.fusion.mapper.project.ProjectMapper;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.project.ProjectService;
+import com.stonewu.fusion.service.canvas.CanvasAccessPolicy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -20,7 +22,8 @@ import java.util.List;
 @Slf4j
 public class ListProjectsToolExecutor implements ToolExecutor {
 
-    private final ProjectService projectService;
+    private final ProjectMapper projectMapper;
+    private final CanvasAccessPolicy access;
 
     @Override
     public String getToolName() {
@@ -60,13 +63,16 @@ public class ListProjectsToolExecutor implements ToolExecutor {
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
         try {
-            Long userId = context.getUserId();
-            List<Project> projects = projectService.listAccessibleByUser(userId);
+            List<Long> ids = access.readableProjects(context.requireMutationContext().actor());
+            List<Project> projects = ids.isEmpty() ? List.of() : projectMapper.selectList(
+                    new LambdaQueryWrapper<Project>()
+                            .in(Project::getId, ids).orderByDesc(Project::getCreateTime));
 
             JSONArray projectList = new JSONArray();
             for (Project project : projects) {
                 projectList.add(JSONUtil.createObj()
                         .set("projectId", project.getId())
+                        .set("version", project.getVersion())
                         .set("name", project.getName())
                         .set("description", project.getDescription() != null && project.getDescription().length() > 100
                                 ? project.getDescription().substring(0, 100) + "..."

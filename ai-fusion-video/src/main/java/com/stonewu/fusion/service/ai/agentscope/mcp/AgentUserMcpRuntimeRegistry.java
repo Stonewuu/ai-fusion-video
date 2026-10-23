@@ -15,15 +15,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.DisposableBean;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
 @Component
 @RequiredArgsConstructor
@@ -96,6 +90,35 @@ public class AgentUserMcpRuntimeRegistry implements DisposableBean {
         return serverService.configurationFingerprint(userId);
     }
 
+    public List<McpWorkflowTool> workflowTools(long userId) {
+        invalidate(userId);
+        var snapshot = snapshot(userId);
+        return snapshot.tools().values().stream().map(tool -> McpWorkflowTool.describe(
+                tool.serverName(), tool.definition(), snapshot.configurationHash(), objectMapper)).toList();
+    }
+
+    public McpWorkflowTool.Opened openWorkflowTool(long userId, String toolName) {
+        var snapshot = snapshot(userId);
+        var tool = snapshot.tools().get(toolName);
+        if (tool == null) {
+            throw new IllegalArgumentException("MCP 工具不存在或未授权给当前账号");
+        }
+        var config = snapshot.servers().get(tool.serverName());
+        var client = createClient(config);
+        try {
+            var current = discover(client, config).stream().filter(value -> value.name().equals(toolName)).findFirst()
+                    .orElseThrow(() -> new IllegalStateException("MCP 工具已从远端移除"));
+            if (!snapshot.configurationHash().equals(configurationFingerprint(userId))) {
+                throw new IllegalStateException("MCP 配置已变化，请重新确认运行计划");
+            }
+            return new McpWorkflowTool.Opened(client, true, McpWorkflowTool.describe(tool.serverName(), current,
+                    snapshot.configurationHash(), objectMapper));
+        } catch (RuntimeException failure) {
+            closeQuietly(client);
+            throw failure;
+        }
+    }
+
     public AgentMcpTestRespVO test(AgentMcpServer server) {
         AgentMcpServerService.AgentScopeV2ServerConfig config = serverService.runtimeConfig(server);
         McpClientWrapper client = null;
@@ -131,11 +154,12 @@ public class AgentUserMcpRuntimeRegistry implements DisposableBean {
     }
 
     private synchronized UserSnapshot snapshot(long userId) {
+        String configurationHash = configurationFingerprint(userId);
         UserSnapshot existing = snapshots.get(userId);
-        if (existing != null) {
+        if (existing != null && existing.configurationHash().equals(configurationHash)) {
             return existing;
         }
-        UserSnapshot created = connect(userId);
+        UserSnapshot created = connect(userId, configurationHash);
         snapshots.put(userId, created);
         if (snapshots.size() > MAX_CACHED_USERS) {
             Iterator<Map.Entry<Long, UserSnapshot>> iterator = snapshots.entrySet().iterator();
@@ -147,7 +171,7 @@ public class AgentUserMcpRuntimeRegistry implements DisposableBean {
         return created;
     }
 
-    private UserSnapshot connect(long userId) {
+    private UserSnapshot connect(long userId, String configurationHash) {
         Map<String, AgentMcpServerService.AgentScopeV2ServerConfig> servers = new LinkedHashMap<>();
         Map<String, UserTool> tools = new LinkedHashMap<>();
         for (AgentMcpServer server : serverService.listEnabled(userId)) {
@@ -170,7 +194,10 @@ public class AgentUserMcpRuntimeRegistry implements DisposableBean {
                 closeQuietly(client);
             }
         }
-        return new UserSnapshot(Map.copyOf(servers), Map.copyOf(tools));
+        if (!configurationHash.equals(configurationFingerprint(userId))) {
+            throw new IllegalStateException("发现工具期间 MCP 配置发生变化，请重新加载");
+        }
+        return new UserSnapshot(Map.copyOf(servers), Map.copyOf(tools), configurationHash);
     }
 
     private Map<String, UserTool> describe(
@@ -205,7 +232,7 @@ public class AgentUserMcpRuntimeRegistry implements DisposableBean {
             result.put(name, new UserTool(
                     config.name(),
                     tool.description() == null ? "" : tool.description(),
-                    manifest(tool)));
+                    manifest(tool), tool));
         }
         return result;
     }
@@ -243,7 +270,7 @@ public class AgentUserMcpRuntimeRegistry implements DisposableBean {
         if (!config.protocolVersions().isEmpty()) {
             builder.protocolVersions(config.protocolVersions().toArray(String[]::new));
         }
-        return builder.timeout(config.timeout())
+        return McpSingleSubmissionHttp.configure(builder).timeout(config.timeout())
                 .initializationTimeout(config.initializationTimeout())
                 .buildAsync()
                 .block(config.initializationTimeout());
@@ -253,7 +280,7 @@ public class AgentUserMcpRuntimeRegistry implements DisposableBean {
             McpClientWrapper client,
             AgentMcpServerService.AgentScopeV2ServerConfig config) {
         List<McpSchema.Tool> tools = client.initialize()
-                .then(client.listTools())
+                .then(Mono.defer(client::listTools))
                 .block(config.initializationTimeout().plus(config.timeout()));
         if (tools == null) {
             throw new IllegalStateException("MCP 服务没有返回工具列表");
@@ -278,12 +305,12 @@ public class AgentUserMcpRuntimeRegistry implements DisposableBean {
 
     private record UserSnapshot(
             Map<String, AgentMcpServerService.AgentScopeV2ServerConfig> servers,
-            Map<String, UserTool> tools) {
+            Map<String, UserTool> tools, String configurationHash) {
     }
 
     private record UserTool(
             String serverName,
             String description,
-            AgentKernelToolManifest manifest) {
+            AgentKernelToolManifest manifest, McpSchema.Tool definition) {
     }
 }

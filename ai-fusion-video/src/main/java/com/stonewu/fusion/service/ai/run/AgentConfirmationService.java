@@ -1,8 +1,6 @@
 package com.stonewu.fusion.service.ai.run;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.common.BusinessException;
@@ -17,27 +15,17 @@ import com.stonewu.fusion.service.ai.run.model.PendingConfirmation;
 import com.stonewu.fusion.service.ai.run.model.ResumeAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.run.model.ResumeConfirmationCommand;
 import com.stonewu.fusion.service.ai.run.model.ResumedAgentRun;
-import io.agentscope.core.event.ConfirmResult;
 import io.agentscope.core.message.Msg;
-import io.agentscope.core.message.ToolUseBlock;
-import io.agentscope.core.message.ToolCallState;
-import io.agentscope.core.message.UserMessage;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
-import java.util.LinkedHashMap;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
-/** Authorizes, durably claims, and resumes a user-confirmed AgentScope tool pause. */
+/**
+ * Authorizes, durably claims, and resumes a user-confirmed AgentScope tool pause.
+ */
 @Service
 public final class AgentConfirmationService {
-
-    private static final TypeReference<Map<String, Object>> OBJECT_MAP = new TypeReference<>() { };
 
     private final AgentWaitingStatePort waitingState;
     private final AgentExecutionRuntimeContextRequests runtimeContexts;
@@ -90,26 +78,8 @@ public final class AgentConfirmationService {
             return Mono.error(new BusinessException(
                     409, "确认决定与当前待审批工具不一致"));
         }
-        List<ToolUseBlock> toolCalls = suspendedToolCalls(pending);
-        Map<String, ToolUseBlock> byId = new LinkedHashMap<>();
-        for (ToolUseBlock toolCall : toolCalls) {
-            if (toolCall.getId() == null || toolCall.getId().isBlank()
-                    || byId.putIfAbsent(toolCall.getId(), toolCall) != null) {
-                return Mono.error(new IllegalStateException(
-                        "Persisted confirmation contains invalid tool identities"));
-            }
-        }
-        if (!byId.keySet().equals(pending.decisionIds())) {
-            return Mono.error(new IllegalStateException(
-                    "Persisted confirmation tool calls do not match decision identities"));
-        }
-        List<ConfirmResult> results = toolCalls.stream()
-                .map(toolCall -> new ConfirmResult(
-                        decisions.get(toolCall.getId()), toolCall))
-                .toList();
-        Msg resumeMessage = UserMessage.builder()
-                .metadata(Map.of(Msg.METADATA_CONFIRM_RESULTS, results))
-                .build();
+        Msg resumeMessage = AgentConfirmationMessages.restore(pending.suspendedToolCallsJson(), decisions,
+                objectMapper);
         ResumeConfirmationCommand transition = new ResumeConfirmationCommand(
                 runId,
                 currentUserId,
@@ -123,6 +93,9 @@ public final class AgentConfirmationService {
     }
 
     private Mono<Void> launchResume(ResumedAgentRun resumed, Msg resumeMessage) {
+        if (resumed.durableDispatch()) {
+            return Mono.empty();
+        }
         AgentKernelSnapshot snapshot = snapshot(resumed);
         ToolExecutionMode toolExecutionMode = ToolExecutionMode.parse(
                 snapshot.payload().promptVariables().get(
@@ -150,61 +123,6 @@ public final class AgentConfirmationService {
             throw new IllegalStateException(
                     "Persisted resume snapshot is invalid", invalidSnapshot);
         }
-    }
-
-    private List<ToolUseBlock> suspendedToolCalls(PendingConfirmation pending) {
-        try {
-            JsonNode parsed = objectMapper.readTree(pending.suspendedToolCallsJson());
-            if (!(parsed instanceof ArrayNode array) || array.isEmpty()) {
-                throw new IllegalStateException(
-                        "Persisted confirmation has no suspended tool calls");
-            }
-            List<ToolUseBlock> calls = new ArrayList<>();
-            for (JsonNode value : array) {
-                Map<String, Object> input = objectMap(value.path("input"));
-                Map<String, Object> metadata = restoreMetadata(
-                        objectMap(value.path("metadata")));
-                String state = requireNodeText(value, "state");
-                calls.add(new ToolUseBlock(
-                        requireNodeText(value, "id"),
-                        requireNodeText(value, "name"),
-                        input,
-                        value.hasNonNull("content") ? value.get("content").asText() : null,
-                        metadata,
-                        ToolCallState.valueOf(state)));
-            }
-            return List.copyOf(calls);
-        } catch (JsonProcessingException | IllegalArgumentException invalidCalls) {
-            throw new IllegalStateException(
-                    "Persisted suspended tool calls are invalid", invalidCalls);
-        }
-    }
-
-    private Map<String, Object> objectMap(JsonNode value) {
-        if (!value.isObject()) {
-            throw new IllegalArgumentException("Persisted tool call map is invalid");
-        }
-        return objectMapper.convertValue(value, OBJECT_MAP);
-    }
-
-    private Map<String, Object> restoreMetadata(Map<String, Object> metadata) {
-        Object signature = metadata.get(ToolUseBlock.METADATA_THOUGHT_SIGNATURE);
-        if (!(signature instanceof String encoded)) {
-            return metadata;
-        }
-        Map<String, Object> restored = new LinkedHashMap<>(metadata);
-        restored.put(
-                ToolUseBlock.METADATA_THOUGHT_SIGNATURE,
-                Base64.getDecoder().decode(encoded));
-        return Map.copyOf(restored);
-    }
-
-    private String requireNodeText(JsonNode value, String field) {
-        JsonNode node = value.get(field);
-        if (node == null || !node.isTextual() || node.textValue().isBlank()) {
-            throw new IllegalArgumentException("Persisted tool call is missing " + field);
-        }
-        return node.textValue();
     }
 
     private Map<String, Boolean> decisions(List<ToolConfirmationReqVO.DecisionVO> values) {

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasExportBlobMapper">
+    <insert id="reserve">
+        INSERT INTO afv_canvas_export_blob(id,export_id,storage_config_id,storage_backend,object_key,encryption_keyset,state,owner_epoch,create_time,update_time) VALUES(#{id},#{exportId},#{storageConfigId},#{backend},#{key},#{keyset},'STAGING',#{epoch},UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))
+    </insert>
+    <update id="complete">
+        UPDATE afv_canvas_export_blob SET state='READY',stored_bytes=#{bytes},update_time=UTC_TIMESTAMP(6) WHERE id=#{id} AND export_id=#{exportId} AND owner_epoch=#{epoch} AND state='STAGING'
+    </update>
+    <update id="orphan">
+        UPDATE afv_canvas_export_blob SET state='ORPHANED',update_time=UTC_TIMESTAMP(6) WHERE export_id=#{id} AND state='STAGING'
+    </update>
+    <select id="expiredOrphan" resultType="com.stonewu.fusion.entity.canvas.CanvasExportBlobEntity">
+        SELECT b.* FROM afv_canvas_export_blob b WHERE b.state='ORPHANED'
+            AND b.update_time&lt;=TIMESTAMPADD(DAY,#{days},UTC_TIMESTAMP(6))
+            AND NOT EXISTS (SELECT 1 FROM afv_canvas_export j WHERE j.blob_id=b.id)
+            AND NOT EXISTS (SELECT 1 FROM afv_canvas_export_event e WHERE e.export_id=b.export_id
+                AND e.event_type='FILE_PURGE_RETRY' AND JSON_UNQUOTE(JSON_EXTRACT(e.detail_json,'$.blobId'))=b.id
+                AND e.create_time&gt;TIMESTAMPADD(HOUR,-1,UTC_TIMESTAMP(6)))
+        ORDER BY b.update_time,b.id LIMIT 1
+    </select>
+    <select id="canPurge" resultType="long">
+        SELECT COUNT(*) FROM afv_canvas_export_blob WHERE id=#{id} AND export_id=#{exportId} AND state='ORPHANED' AND update_time&lt;=TIMESTAMPADD(DAY,#{days},UTC_TIMESTAMP(6))
+    </select>
+    <update id="purged">
+        UPDATE afv_canvas_export_blob SET state='PURGED',encryption_keyset=X'',update_time=UTC_TIMESTAMP(6) WHERE id=#{id} AND state='ORPHANED'
+    </update>
+</mapper>

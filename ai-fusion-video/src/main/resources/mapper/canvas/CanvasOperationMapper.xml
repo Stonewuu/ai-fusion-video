@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasOperationMapper">
+    <select id="undoSource" resultType="com.stonewu.fusion.entity.canvas.CanvasOperationEntity">
+        SELECT o.result_json, o.undo_json FROM afv_canvas_operation o
+        JOIN afv_canvas_event e ON e.operation_id = o.id AND e.canvas_id = o.canvas_id
+        WHERE o.canvas_id = #{canvasId} AND o.id = #{commandId} AND e.event_type IN ('canvas.graph.changed', 'canvas.graph.undone', 'canvas.checkpoint.restored')
+    </select>
+    <select id="history" resultType="com.stonewu.fusion.entity.canvas.CanvasOperationEntity">
+        SELECT o.*, e.event_type, COALESCE(NULLIF(u.nickname,''),u.username,'已删除账号') AS actor_name FROM afv_canvas_operation o
+        JOIN afv_canvas_event e ON e.canvas_id = o.canvas_id AND e.operation_id = o.id
+        LEFT JOIN sys_user u ON u.id = o.actor_user_id
+        WHERE o.canvas_id = #{canvasId} AND o.committed_revision &lt; #{beforeRevision} ORDER BY o.committed_revision DESC LIMIT #{limit}
+    </select>
+    <insert id="append">
+        INSERT INTO afv_canvas_operation(id, canvas_id, actor_user_id, request_id, request_hash, origin, agent_run_id,
+            tool_call_id, committed_revision, request_json, result_json, undo_json, create_time)
+        VALUES (#{row.id}, #{row.canvasId}, #{row.actorUserId}, #{row.requestId}, #{row.requestHash}, #{row.origin}, #{row.agentRunId}, #{row.toolCallId}, #{row.committedRevision}, #{row.requestJson}, #{row.resultJson}, #{row.undoJson}, UTC_TIMESTAMP(6))
+    </insert>
+</mapper>

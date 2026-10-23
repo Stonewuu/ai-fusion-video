@@ -32,6 +32,7 @@ class TokenServiceTests {
 
         when(redisTemplate.opsForValue()).thenReturn(valueOperations);
         when(valueOperations.get(anyString())).thenAnswer(invocation -> redis.get(invocation.getArgument(0)));
+        when(valueOperations.getAndDelete(anyString())).thenAnswer(invocation -> redis.remove(invocation.getArgument(0)));
         doAnswer(invocation -> {
             redis.put(invocation.getArgument(0), invocation.getArgument(1));
             return null;

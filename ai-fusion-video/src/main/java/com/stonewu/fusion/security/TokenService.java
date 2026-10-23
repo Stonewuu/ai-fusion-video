@@ -11,8 +11,8 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
-import java.util.concurrent.TimeUnit;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 基于 Redis 的 Token 服务
@@ -34,9 +34,13 @@ public class TokenService {
     private static final String ACCESS_REFRESH_SUFFIX = ":refresh";
     private static final String REFRESH_ACCESS_SUFFIX = ":access";
 
-    /** access_token 有效期：2 小时 */
+    /**
+     * access_token 有效期：2 小时
+     */
     private static final long ACCESS_TOKEN_EXPIRE_HOURS = 2;
-    /** refresh_token 有效期：7 天 */
+    /**
+     * refresh_token 有效期：7 天
+     */
     private static final long REFRESH_TOKEN_EXPIRE_DAYS = 7;
 
     private final StringRedisTemplate redisTemplate;
@@ -57,11 +61,17 @@ public class TokenService {
     @Data
     @AllArgsConstructor
     public static class TokenPair {
-        /** 访问令牌 */
+        /**
+         * 访问令牌
+         */
         private String accessToken;
-        /** 刷新令牌 */
+        /**
+         * 刷新令牌
+         */
         private String refreshToken;
-        /** access_token 有效期（秒） */
+        /**
+         * access_token 有效期（秒）
+         */
         private long expiresIn;
     }
 
@@ -115,7 +125,9 @@ public class TokenService {
      * @return 新的令牌对；如果 refresh_token 无效则返回 null
      */
     public TokenPair refreshAccessToken(String refreshToken) {
-        TokenSession session = getRefreshTokenSession(refreshToken);
+        // Redis 原子取走刷新凭据，避免并发请求把同一会话分叉成多组有效令牌。
+        TokenSession session = deserializeSession(
+                redisTemplate.opsForValue().getAndDelete(REFRESH_TOKEN_PREFIX + refreshToken));
         if (session == null) {
             return null;
         }
@@ -129,7 +141,6 @@ public class TokenService {
         }
 
         // 只轮换当前 refresh_token 所属的会话，其他设备上的登录态保持有效
-        redisTemplate.delete(REFRESH_TOKEN_PREFIX + refreshToken);
         redisTemplate.delete(refreshAccessKey(refreshToken));
 
         return createToken(userId, session.getUsername(), session.getCurrentTeamId());
@@ -219,7 +230,7 @@ public class TokenService {
         return UUID.randomUUID().toString().replace("-", "");
     }
 
-    private TokenSession getRefreshTokenSession(String refreshToken) {
+    public TokenSession getRefreshTokenSession(String refreshToken) {
         return deserializeSession(redisTemplate.opsForValue().get(REFRESH_TOKEN_PREFIX + refreshToken));
     }
 

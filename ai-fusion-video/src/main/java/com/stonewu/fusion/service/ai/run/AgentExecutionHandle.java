@@ -12,7 +12,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -100,8 +99,10 @@ public final class AgentExecutionHandle implements AutoCloseable {
                         "completionAction returned null")))
                 .doFinally(ignored -> close());
         drainSubscription.update(drain.subscribe(
-                ignored -> { },
-                ignored -> { }));
+                ignored -> {
+                },
+                ignored -> {
+                }));
 
         Flux<AgentEventEnvelope> transformed = Objects.requireNonNull(
                 ingressTransform.apply(execution.events()),
@@ -111,8 +112,10 @@ public final class AgentExecutionHandle implements AutoCloseable {
                 this::sourceFailed,
                 this::sourceCompleted));
         controlSubscription.update(controlMonitor.subscribe(
-                ignored -> { },
-                ignored -> { }));
+                ignored -> {
+                },
+                ignored -> {
+                }));
         scheduleDeadline();
     }
 
@@ -162,10 +165,13 @@ public final class AgentExecutionHandle implements AutoCloseable {
         return value != null
                 ? value
                 : Outcome.journalFailure(new IllegalStateException(
-                        "Agent execution ended without a terminal outcome"));
+                "Agent execution ended without a terminal outcome"));
     }
 
     private void scheduleDeadline() {
+        if (AgentExecutionLimits.unlimited(deadline)) {
+            return;
+        }
         Duration delay = Duration.between(clock.instant(), deadline);
         if (delay.isNegative() || delay.isZero()) {
             interrupt(ExecutionStopReason.DEADLINE).subscribe();
@@ -173,7 +179,9 @@ public final class AgentExecutionHandle implements AutoCloseable {
         }
         deadlineSubscription.update(Mono.delay(delay, deadlineScheduler)
                 .flatMap(ignored -> interrupt(ExecutionStopReason.DEADLINE))
-                .subscribe(ignored -> { }, ignored -> { }));
+                .subscribe(ignored -> {
+                }, ignored -> {
+                }));
     }
 
     private void stopSource() {

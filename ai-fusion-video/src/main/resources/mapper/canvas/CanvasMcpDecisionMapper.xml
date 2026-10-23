@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasMcpDecisionMapper">
+    <select id="lockRequest" resultType="com.stonewu.fusion.entity.canvas.CanvasMcpDecisionEntity">
+        SELECT request_hash,receipt_json FROM afv_canvas_mcp_decision WHERE user_id=#{userId} AND request_id=#{requestId} FOR UPDATE
+    </select>
+    <insert id="create">
+        INSERT INTO afv_canvas_mcp_decision(id,job_id,user_id,request_id,request_hash,action,note,receipt_json,created_at)
+        VALUES(#{id},#{jobId},#{userId},#{requestId},#{requestHash},#{action},#{note},'{}',UTC_TIMESTAMP(6))
+    </insert>
+</mapper>

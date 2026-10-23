@@ -213,7 +213,8 @@ class AgentOwnedJournalTakeoverIT {
                 Duration.ofSeconds(30),
                 deadline,
                 "take over",
-                null)));
+                null,
+                null, null)));
     }
 
     private RunTerminalRequest completedRequest(StartedAgentRun started) {

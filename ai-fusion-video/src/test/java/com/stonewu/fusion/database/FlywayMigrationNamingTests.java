@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.BufferedReader;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
@@ -19,6 +20,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 import java.util.zip.CRC32;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.xpath.XPathFactory;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.Test;
 
 class FlywayMigrationNamingTests {
@@ -47,6 +51,7 @@ class FlywayMigrationNamingTests {
             "V1.0.6.1.5__agent_run_and_event.sql");
 
     private static final Map<String, Integer> IMMUTABLE_MIGRATION_CHECKSUMS = Map.ofEntries(
+            Map.entry("B1.1.0.0.8__baseline_1.0.0.sql", -1600873033),
             Map.entry("V1__init_mysql.sql", 218698920),
             Map.entry("V1.0.2.0.1__ai_model_unique_by_api_config.sql", -231554560),
             Map.entry("V1.0.2.0.2__ai_model_unique_with_deleted_id.sql", 1635232783),
@@ -63,7 +68,16 @@ class FlywayMigrationNamingTests {
             Map.entry("V1.0.6.1.4__storyboard_episode_script_link.sql", 209920478),
             Map.entry("V1.0.6.1.5__agent_run_and_event.sql", -1261062418),
             Map.entry("V1.1.0.0.0__api_config_protocol_defaults.sql", -941361809),
-            Map.entry("V1.1.0.0.1__replace_model_family_with_capability_preset.sql", -1320253802));
+            Map.entry("V1.1.0.0.1__replace_model_family_with_capability_preset.sql", -1320253802),
+            Map.entry("V1.1.0.0.2__extend_capability_preset_bindings.sql", 285781567),
+            Map.entry("V1.1.0.0.3__agent_workspace_and_user_mcp.sql", 1316054730),
+            Map.entry("V1.1.0.0.4__add_model_multimodal_input_capabilities.sql", 1419036004),
+            Map.entry("V1.1.0.0.5__split_public_resource_base_url.sql", -1604182868),
+            Map.entry("V1.1.0.0.6__add_model_reasoning_effort_levels.sql", -832936214),
+            Map.entry("V1.1.0.0.7__agent_state_store.sql", 1255028557),
+            Map.entry("V1.1.0.0.8__agent_state_retention.sql", 1567974926),
+            Map.entry("V1.1.1.0.0__comfyui_workflow_support.sql", 1507480516),
+            Map.entry("V1.1.2.0.0__add_episode_bgm_fields.sql", -1120549424));
 
     @Test
     void migrationsUseProductVersionAndContinuousSequence() throws Exception {
@@ -163,6 +177,42 @@ class FlywayMigrationNamingTests {
                     () -> "immutable migration must exist: " + entry.getKey());
             assertEquals(entry.getValue().intValue(), calculateFlywayChecksum(migration),
                     () -> "immutable migration checksum changed: " + entry.getKey());
+        }
+    }
+
+    @Test
+    void unreleasedMigrationsUseCurrentProductVersionAfterLatestRelease() throws Exception {
+        var factory = DocumentBuilderFactory.newInstance();
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        var pom = factory.newDocumentBuilder().parse(Path.of("pom.xml").toFile());
+        String productVersion = XPathFactory.newInstance().newXPath().evaluate("/project/version", pom);
+        assertTrue(productVersion.matches("\\d+\\.\\d+\\.\\d+"), "product version must have three numeric parts");
+        String webVersion = new ObjectMapper().readTree(Path.of("../ai-fusion-video-web/package.json").toFile())
+                .path("version").asText();
+        assertEquals(productVersion, webVersion, "frontend and backend must use the same product version");
+
+        // The immutable manifest above is taken from the formal v1.2.0 tag, including its baseline.
+        MigrationVersion latestReleasedVersion = IMMUTABLE_MIGRATION_CHECKSUMS.keySet().stream()
+                .map(VERSIONED_NAME::matcher)
+                .filter(Matcher::matches)
+                .map(matcher -> MigrationVersion.fromVersion(
+                        matcher.group(1) + "." + matcher.group(2) + "." + matcher.group(3)))
+                .max(MigrationVersion::compareTo)
+                .orElseThrow();
+        URL migrationResource = getClass().getClassLoader().getResource("db/migration");
+        assertNotNull(migrationResource, "db/migration resource must exist");
+        try (Stream<Path> paths = Files.list(Path.of(migrationResource.toURI()))) {
+            for (String name : paths.map(path -> path.getFileName().toString())
+                    .filter(name -> name.endsWith(".sql"))
+                    .filter(name -> !IMMUTABLE_MIGRATION_CHECKSUMS.containsKey(name)).toList()) {
+                assertTrue(MigrationVersion.fromVersion(productVersion).compareTo(latestReleasedVersion) > 0,
+                        "new migrations require a product version later than the latest formal release");
+                Matcher matcher = VERSIONED_NAME.matcher(name);
+                assertTrue(matcher.matches(), () -> "development migrations must use versioned migration names: " + name);
+                String migrationProductVersion = matcher.group(1) + "." + matcher.group(2) + "." + matcher.group(3);
+                assertEquals(productVersion, migrationProductVersion,
+                        () -> "new migrations must belong to the current unreleased product version: " + name);
+            }
         }
     }
 

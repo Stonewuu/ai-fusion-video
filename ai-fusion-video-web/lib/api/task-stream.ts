@@ -1,4 +1,4 @@
-import { API_BASE_URL, http } from "./client";
+import { getApiBaseUrl, http } from "./client";
 import { readApiResponseError } from "./api-error";
 import type { AgentConversation } from "./ai-assistant";
 import {
@@ -56,7 +56,7 @@ export function reconnectTaskStream(
   (async () => {
     try {
       const response = await authenticatedFetch(
-        `${API_BASE_URL}/api/task-stream/reconnect?taskId=${encodeURIComponent(taskId)}`,
+        `${getApiBaseUrl()}/api/task-stream/reconnect?taskId=${encodeURIComponent(taskId)}`,
         {
           signal: controller.signal,
         }

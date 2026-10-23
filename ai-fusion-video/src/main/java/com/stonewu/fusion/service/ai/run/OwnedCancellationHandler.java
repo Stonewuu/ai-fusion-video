@@ -8,7 +8,9 @@ import reactor.core.publisher.Mono;
 
 import java.util.Objects;
 
-/** Owner-side cancellation acknowledgement, interruption, and durable convergence. */
+/**
+ * Owner-side cancellation acknowledgement, interruption, and durable convergence.
+ */
 @Component
 public final class OwnedCancellationHandler {
 
@@ -43,15 +45,15 @@ public final class OwnedCancellationHandler {
                     "ownerEpoch must be positive"));
         }
         return journal(() -> runs.acknowledgeOwnedCancellation(
-                        safeRunId, safeOwnerInstanceId, ownerEpoch))
+                safeRunId, safeOwnerInstanceId, ownerEpoch))
                 .flatMap(acknowledged -> acknowledged
                         ? executions.interruptOwned(
-                                        safeRunId,
-                                        safeOwnerInstanceId,
-                                        ownerEpoch,
-                                        ExecutionStopReason.CANCEL_REQUESTED)
-                                .then(reconciliation.reconcileExpiredOwner(safeRunId))
-                                .thenReturn(true)
+                                safeRunId,
+                                safeOwnerInstanceId,
+                                ownerEpoch,
+                                ExecutionStopReason.CANCEL_REQUESTED)
+                        .then(reconciliation.reconcileExpiredOwner(safeRunId))
+                        .thenReturn(true)
                         : Mono.just(false));
     }
 

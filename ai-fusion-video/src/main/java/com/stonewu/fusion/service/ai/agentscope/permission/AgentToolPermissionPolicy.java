@@ -14,7 +14,9 @@ import io.agentscope.harness.agent.HarnessAgent;
 import java.util.Locale;
 import java.util.Objects;
 
-/** Builds and applies the platform's four user-facing AgentScope permission policies. */
+/**
+ * Builds and applies the platform's four user-facing AgentScope permission policies.
+ */
 public final class AgentToolPermissionPolicy {
 
     public static final String HIGH_RISK_RULE_CONTENT = "afv:risk:high";

@@ -7,8 +7,8 @@ import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -22,7 +22,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/** Claims committed outbox rows briefly and publishes Redis wake-up hints. */
+/**
+ * Claims committed outbox rows briefly and publishes Redis wake-up hints.
+ */
 @Service
 @RequiredArgsConstructor
 @Slf4j
@@ -66,7 +68,7 @@ public class AgentEventOutboxPublisher {
                         ? Mono.<Void>empty()
                         : Mono.error(new OutboxClaimLostException(event.getId())))
                 .onErrorResume(failure -> releaseForRetry(
-                                event, claimToken, failure)
+                        event, claimToken, failure)
                         .doOnNext(released -> logPublishFailure(
                                 event.getId(), failure, released))
                         .onErrorResume(releaseFailure -> {

@@ -13,15 +13,9 @@ import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
-import com.stonewu.fusion.service.storage.MediaStorageService;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
-import okhttp3.MediaType;
-import okhttp3.MultipartBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import okhttp3.*;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -31,13 +25,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.List;
-import java.util.function.UnaryOperator;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.function.UnaryOperator;
 
 /**
  * Shared mechanics for OpenAI-compatible image protocols.
@@ -58,34 +48,34 @@ public class OpenAiCompatibleImageProtocolSupport {
     private static final MediaType JSON_MEDIA_TYPE = MediaType.get("application/json");
 
     private final ModelPresetService modelPresetService;
-    private final MediaStorageService mediaStorageService;
     private final StorageConfigService storageConfigService;
     private final PresetArtStyleResourceResolver presetArtStyleResourceResolver;
     private final OkHttpClient okHttpClient;
 
     @Autowired
     public OpenAiCompatibleImageProtocolSupport(ModelPresetService modelPresetService,
-                                                MediaStorageService mediaStorageService,
                                                 StorageConfigService storageConfigService,
                                                 PresetArtStyleResourceResolver presetArtStyleResourceResolver) {
-        this(modelPresetService, mediaStorageService, storageConfigService,
+        this(modelPresetService, storageConfigService,
                 presetArtStyleResourceResolver, defaultHttpClient());
     }
 
-    /** Convenient constructor for protocol-level tests and embedded callers. */
+    /**
+     * Convenient constructor for protocol-level tests and embedded callers.
+     */
     public OpenAiCompatibleImageProtocolSupport(ModelPresetService modelPresetService,
-                                                MediaStorageService mediaStorageService,
                                                 StorageConfigService storageConfigService,
                                                 PresetArtStyleResourceResolver presetArtStyleResourceResolver,
                                                 OkHttpClient okHttpClient) {
         this.modelPresetService = modelPresetService;
-        this.mediaStorageService = mediaStorageService;
         this.storageConfigService = storageConfigService;
         this.presetArtStyleResourceResolver = presetArtStyleResourceResolver;
         this.okHttpClient = okHttpClient == null ? defaultHttpClient() : okHttpClient;
     }
 
-    /** Build a request containing only fields defined by the official OpenAI Images API. */
+    /**
+     * Build a request containing only fields defined by the official OpenAI Images API.
+     */
     public OpenAiCompatibleImageRequest buildOpenAiGenerationsRequest(OpenAiCompatibleImageProtocolContext context) {
         try {
             var root = OBJECT_MAPPER.createObjectNode();
@@ -96,7 +86,8 @@ public class OpenAiCompatibleImageProtocolSupport {
             appendOptionalString(root, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
             appendOptionalString(root, "background", getString(context.modelConfig(), "background"));
             appendOptionalString(root, "moderation", getString(context.modelConfig(), "moderation"));
-            appendOptionalString(root, "output_format", getString(context.modelConfig(), "outputFormat", "output_format"));
+            appendOptionalString(root, "output_format",
+                    getString(context.modelConfig(), "outputFormat", "output_format"));
             appendOptionalInteger(root, "output_compression",
                     getInteger(context.modelConfig(), "outputCompression", "output_compression"));
             appendOptionalString(root, "response_format",
@@ -109,7 +100,9 @@ public class OpenAiCompatibleImageProtocolSupport {
         }
     }
 
-    /** Build an OpenAI-shaped request with NewAPI-compatible extension fields. */
+    /**
+     * Build an OpenAI-shaped request with NewAPI-compatible extension fields.
+     */
     public OpenAiCompatibleImageRequest buildNewApiGenerationsRequest(OpenAiCompatibleImageProtocolContext context) {
         try {
             var root = OBJECT_MAPPER.createObjectNode();
@@ -125,10 +118,12 @@ public class OpenAiCompatibleImageProtocolSupport {
                         .forEach(imageUrlArray::add);
             }
             appendOptionalString(root, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
-            appendOptionalString(root, "resolution", getString(context.modelConfig(), "resolution", "defaultResolution"));
+            appendOptionalString(root, "resolution",
+                    getString(context.modelConfig(), "resolution", "defaultResolution"));
             appendOptionalString(root, "background", getString(context.modelConfig(), "background"));
             appendOptionalString(root, "moderation", getString(context.modelConfig(), "moderation"));
-            appendOptionalString(root, "output_format", getString(context.modelConfig(), "outputFormat", "output_format"));
+            appendOptionalString(root, "output_format",
+                    getString(context.modelConfig(), "outputFormat", "output_format"));
             appendOptionalInteger(root, "output_compression",
                     getInteger(context.modelConfig(), "outputCompression", "output_compression"));
             appendOptionalString(root, "response_format",
@@ -141,7 +136,9 @@ public class OpenAiCompatibleImageProtocolSupport {
         }
     }
 
-    /** Build the shared Agnes Image 2.0/2.1 generations protocol. */
+    /**
+     * Build the shared Agnes Image 2.0/2.1/2.5 generations protocol.
+     */
     public OpenAiCompatibleImageRequest buildAgnesGenerationsRequest(OpenAiCompatibleImageProtocolContext context) {
         try {
             var root = OBJECT_MAPPER.createObjectNode();
@@ -186,7 +183,9 @@ public class OpenAiCompatibleImageProtocolSupport {
         }
     }
 
-    /** Build an official OpenAI image edit request using the model's declared reference-image transports. */
+    /**
+     * Build an official OpenAI image edit request using the model's declared reference-image transports.
+     */
     public OpenAiCompatibleImageRequest buildOpenAiEditsRequest(OpenAiCompatibleImageProtocolContext context) {
         if (supportsReferenceImageUrlInput(context.modelConfig())) {
             return buildOpenAiJsonEditsRequest(context);
@@ -195,7 +194,8 @@ public class OpenAiCompatibleImageProtocolSupport {
         appendOptionalFormField(builder, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
         appendOptionalFormField(builder, "background", getString(context.modelConfig(), "background"));
         appendOptionalFormField(builder, "moderation", getString(context.modelConfig(), "moderation"));
-        appendOptionalFormField(builder, "output_format", getString(context.modelConfig(), "outputFormat", "output_format"));
+        appendOptionalFormField(builder, "output_format",
+                getString(context.modelConfig(), "outputFormat", "output_format"));
         appendOptionalFormField(builder, "output_compression",
                 getString(context.modelConfig(), "outputCompression", "output_compression"));
         if (!"gpt-image-2".equalsIgnoreCase(StrUtil.trim(context.modelCode()))) {
@@ -207,7 +207,9 @@ public class OpenAiCompatibleImageProtocolSupport {
         return new OpenAiCompatibleImageRequest(resolveImagesEditUrl(context.apiConfig()), builder.build());
     }
 
-    /** Build an image edit request with fields commonly accepted by NewAPI-compatible gateways. */
+    /**
+     * Build an image edit request with fields commonly accepted by NewAPI-compatible gateways.
+     */
     public OpenAiCompatibleImageRequest buildNewApiEditsRequest(OpenAiCompatibleImageProtocolContext context) {
         if (supportsReferenceImageUrlInput(context.modelConfig())) {
             return buildNewApiJsonEditsRequest(context);
@@ -215,10 +217,12 @@ public class OpenAiCompatibleImageProtocolSupport {
         MultipartBody.Builder builder = createEditsRequestBuilder(context);
 
         appendOptionalFormField(builder, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
-        appendOptionalFormField(builder, "resolution", getString(context.modelConfig(), "resolution", "defaultResolution"));
+        appendOptionalFormField(builder, "resolution",
+                getString(context.modelConfig(), "resolution", "defaultResolution"));
         appendOptionalFormField(builder, "background", getString(context.modelConfig(), "background"));
         appendOptionalFormField(builder, "moderation", getString(context.modelConfig(), "moderation"));
-        appendOptionalFormField(builder, "output_format", getString(context.modelConfig(), "outputFormat", "output_format"));
+        appendOptionalFormField(builder, "output_format",
+                getString(context.modelConfig(), "outputFormat", "output_format"));
         appendOptionalFormField(builder, "output_compression",
                 getString(context.modelConfig(), "outputCompression", "output_compression"));
         appendOptionalFormField(builder, "style", getString(context.modelConfig(), "style"));
@@ -295,7 +299,8 @@ public class OpenAiCompatibleImageProtocolSupport {
                 .addFormDataPart("model", StrUtil.blankToDefault(context.modelCode(), DEFAULT_IMAGE_MODEL))
                 .addFormDataPart("prompt", StrUtil.blankToDefault(context.prompt(), ""))
                 .addFormDataPart("n", String.valueOf(Math.max(context.count(), 1)))
-                .addFormDataPart("size", mapSize(context.modelCode(), context.width(), context.height(), context.modelConfig()));
+                .addFormDataPart("size",
+                        mapSize(context.modelCode(), context.width(), context.height(), context.modelConfig()));
         return builder;
     }
 
@@ -305,7 +310,10 @@ public class OpenAiCompatibleImageProtocolSupport {
             String imageUrl = context.imageUrls().get(i);
             try {
                 BinaryResource resource = loadBinaryResource(imageUrl, context.apiConfig());
-                builder.addFormDataPart("image[]", "reference-" + (i + 1) + "." + resource.extension(),
+                // 单图渠道按配置使用 image；OpenAI 默认使用 image[] 传递参考图。
+                String field = StrUtil.blankToDefault(
+                        getString(context.modelConfig(), "referenceImageFormField"), "image[]");
+                builder.addFormDataPart(field, "reference-" + (i + 1) + "." + resource.extension(),
                         RequestBody.create(resource.bytes(), mediaTypeOrDefault(resource.mimeType())));
             } catch (IOException e) {
                 throw new RuntimeException("加载 OpenAI 参考图失败: " + e.getMessage(), e);
@@ -317,7 +325,9 @@ public class OpenAiCompatibleImageProtocolSupport {
         return parseImageUrls(responseBody, true, "兼容图片", persistRemoteUrl);
     }
 
-    /** Parse only response fields documented by the official OpenAI Images API. */
+    /**
+     * Parse only response fields documented by the official OpenAI Images API.
+     */
     public List<String> parseOpenAiImageUrls(String responseBody, UnaryOperator<String> persistRemoteUrl) {
         return parseImageUrls(responseBody, false, "OpenAI", persistRemoteUrl);
     }
@@ -349,7 +359,7 @@ public class OpenAiCompatibleImageProtocolSupport {
                 }
                 String b64Json = textValue(item, "b64_json");
                 if (StrUtil.isNotBlank(b64Json)) {
-                    urls.add(storeBase64Image(b64Json, resolveImageExtension(root, item)));
+                    urls.add(persistRemoteUrl.apply(base64ImageDataUri(b64Json, resolveImageExtension(root, item))));
                 }
             }
             if (urls.isEmpty()) {
@@ -470,15 +480,27 @@ public class OpenAiCompatibleImageProtocolSupport {
         int height = task != null && task.getHeight() != null && task.getHeight() > 0 ? task.getHeight() : 0;
         int[] requestedSize = resolveTaskRequestedSize(task, modelConfig);
         if (requestedSize != null) {
-            if (width <= 0) width = requestedSize[0];
-            if (height <= 0) height = requestedSize[1];
+            if (width <= 0) {
+                width = requestedSize[0];
+            }
+            if (height <= 0) {
+                height = requestedSize[1];
+            }
         }
-        if (width <= 0) width = valueOrZero(getInteger(modelConfig, "defaultWidth", "width"));
-        if (height <= 0) height = valueOrZero(getInteger(modelConfig, "defaultHeight", "height"));
+        if (width <= 0) {
+            width = valueOrZero(getInteger(modelConfig, "defaultWidth", "width"));
+        }
+        if (height <= 0) {
+            height = valueOrZero(getInteger(modelConfig, "defaultHeight", "height"));
+        }
         if (width <= 0 || height <= 0) {
             int[] fallback = parseSizeText(resolveFallbackSize(modelConfig));
-            if (width <= 0) width = fallback[0];
-            if (height <= 0) height = fallback[1];
+            if (width <= 0) {
+                width = fallback[0];
+            }
+            if (height <= 0) {
+                height = fallback[1];
+            }
         }
         return new int[]{width > 0 ? width : 1024, height > 0 ? height : 1024};
     }
@@ -499,25 +521,39 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     public Boolean getBoolean(JSONObject config, String... keys) {
-        if (config == null) return null;
+        if (config == null) {
+            return null;
+        }
         for (String key : keys) {
-            if (!config.containsKey(key)) continue;
+            if (!config.containsKey(key)) {
+                continue;
+            }
             Object value = config.get(key);
-            if (value instanceof Boolean bool) return bool;
+            if (value instanceof Boolean bool) {
+                return bool;
+            }
             if (value != null) {
                 String text = value.toString().trim();
-                if ("true".equalsIgnoreCase(text) || "1".equals(text) || "yes".equalsIgnoreCase(text)) return true;
-                if ("false".equalsIgnoreCase(text) || "0".equals(text) || "no".equalsIgnoreCase(text)) return false;
+                if ("true".equalsIgnoreCase(text) || "1".equals(text) || "yes".equalsIgnoreCase(text)) {
+                    return true;
+                }
+                if ("false".equalsIgnoreCase(text) || "0".equals(text) || "no".equalsIgnoreCase(text)) {
+                    return false;
+                }
             }
         }
         return null;
     }
 
     public String getString(JSONObject config, String... keys) {
-        if (config == null) return null;
+        if (config == null) {
+            return null;
+        }
         for (String key : keys) {
             Object value = config.get(key);
-            if (value != null && StrUtil.isNotBlank(value.toString())) return value.toString().trim();
+            if (value != null && StrUtil.isNotBlank(value.toString())) {
+                return value.toString().trim();
+            }
         }
         return null;
     }
@@ -560,12 +596,16 @@ public class OpenAiCompatibleImageProtocolSupport {
 
     private boolean hasTierResolution(JSONObject config) {
         for (String resolution : getStringList(config, "supportedResolutions")) {
-            if (isTier(resolution)) return true;
+            if (isTier(resolution)) {
+                return true;
+            }
         }
         JSONObject supportedSizes = asJsonObject(config == null ? null : config.get("supportedSizes"));
         if (supportedSizes != null) {
             for (String key : supportedSizes.keySet()) {
-                if (isTier(key)) return true;
+                if (isTier(key)) {
+                    return true;
+                }
             }
         }
         return false;
@@ -593,14 +633,20 @@ public class OpenAiCompatibleImageProtocolSupport {
 
     private List<ConfiguredImageSize> collectConfiguredImageSizes(JSONObject config) {
         JSONObject supportedSizes = asJsonObject(config == null ? null : config.get("supportedSizes"));
-        if (supportedSizes == null || supportedSizes.isEmpty()) return List.of();
+        if (supportedSizes == null || supportedSizes.isEmpty()) {
+            return List.of();
+        }
         List<ConfiguredImageSize> result = new ArrayList<>();
         for (String tier : supportedSizes.keySet()) {
             JSONObject ratioSizes = asJsonObject(supportedSizes.get(tier));
-            if (ratioSizes == null) continue;
+            if (ratioSizes == null) {
+                continue;
+            }
             for (String ratio : ratioSizes.keySet()) {
                 String text = ratioSizes.getStr(ratio);
-                if (!isPixelSizeText(text)) continue;
+                if (!isPixelSizeText(text)) {
+                    continue;
+                }
                 int[] dimensions = parseSizeText(text);
                 result.add(new ConfiguredImageSize(tier, ratio, dimensions[0], dimensions[1]));
             }
@@ -609,16 +655,27 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private int[] resolveTaskRequestedSize(ImageTask task, JSONObject config) {
-        if (task == null) return null;
+        if (task == null) {
+            return null;
+        }
         String resolution = StrUtil.blankToDefault(task.getResolution(), "").trim();
-        if (isPixelSizeText(resolution)) return parseSizeText(resolution);
-        String tier = StrUtil.isNotBlank(resolution) ? resolution : getString(config, "defaultSizeTier", "defaultResolutionTier");
-        if (StrUtil.isBlank(tier)) return null;
+        if (isPixelSizeText(resolution)) {
+            return parseSizeText(resolution);
+        }
+        String tier = StrUtil.isNotBlank(resolution) ? resolution : getString(config, "defaultSizeTier",
+                "defaultResolutionTier");
+        if (StrUtil.isBlank(tier)) {
+            return null;
+        }
         String ratio = firstNonBlank(task.getRatio(), task.getAspectRatio(), getString(config, "defaultAspectRatio"));
         ConfiguredImageSize first = null;
         for (ConfiguredImageSize candidate : collectConfiguredImageSizes(config)) {
-            if (!candidate.tier().equalsIgnoreCase(tier.trim())) continue;
-            if (first == null) first = candidate;
+            if (!candidate.tier().equalsIgnoreCase(tier.trim())) {
+                continue;
+            }
+            if (first == null) {
+                first = candidate;
+            }
             if (StrUtil.isNotBlank(ratio) && candidate.ratio().equalsIgnoreCase(ratio.trim())) {
                 return new int[]{candidate.width(), candidate.height()};
             }
@@ -631,32 +688,56 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private boolean containsConfiguredSize(Object value, String size) {
-        if (value == null) return false;
+        if (value == null) {
+            return false;
+        }
         if (value instanceof JSONObject object) {
-            for (String key : object.keySet()) if (containsConfiguredSize(object.get(key), size)) return true;
+            for (String key : object.keySet()) {
+                if (containsConfiguredSize(object.get(key), size)) {
+                    return true;
+                }
+            }
             return false;
         }
         if (value instanceof Map<?, ?> map) {
-            for (Object item : map.values()) if (containsConfiguredSize(item, size)) return true;
+            for (Object item : map.values()) {
+                if (containsConfiguredSize(item, size)) {
+                    return true;
+                }
+            }
             return false;
         }
         if (value instanceof Iterable<?> iterable) {
-            for (Object item : iterable) if (containsConfiguredSize(item, size)) return true;
+            for (Object item : iterable) {
+                if (containsConfiguredSize(item, size)) {
+                    return true;
+                }
+            }
             return false;
         }
         return size.equalsIgnoreCase(normalizeSizeText(value.toString()));
     }
 
     private boolean isValidConfiguredCustomSize(int width, int height, JSONObject config) {
-        if (width <= 0 || height <= 0) return false;
+        if (width <= 0 || height <= 0) {
+            return false;
+        }
         Integer multiple = getInteger(config, "sizeMultiple", "imageSizeMultiple", "customSizeMultiple");
-        if (multiple != null && multiple > 1 && (width % multiple != 0 || height % multiple != 0)) return false;
+        if (multiple != null && multiple > 1 && (width % multiple != 0 || height % multiple != 0)) {
+            return false;
+        }
         Integer maxEdge = getInteger(config, "maxEdge", "maxImageEdge", "maxDimension");
-        if (maxEdge != null && maxEdge > 0 && Math.max(width, height) > maxEdge) return false;
+        if (maxEdge != null && maxEdge > 0 && Math.max(width, height) > maxEdge) {
+            return false;
+        }
         Integer minEdge = getInteger(config, "minEdge", "minImageEdge", "minDimension");
-        if (minEdge != null && minEdge > 0 && Math.min(width, height) < minEdge) return false;
+        if (minEdge != null && minEdge > 0 && Math.min(width, height) < minEdge) {
+            return false;
+        }
         Double maxRatio = getDouble(config, "maxAspectRatio", "maxRatio");
-        if (maxRatio != null && maxRatio > 0 && (double) Math.max(width, height) / Math.min(width, height) > maxRatio) return false;
+        if (maxRatio != null && maxRatio > 0 && (double) Math.max(width, height) / Math.min(width, height) > maxRatio) {
+            return false;
+        }
         long pixels = (long) width * height;
         Long minPixels = getLong(config, "minPixels");
         Long maxPixels = getLong(config, "maxPixels");
@@ -666,34 +747,46 @@ public class OpenAiCompatibleImageProtocolSupport {
 
     private String resolveFallbackSize(JSONObject config) {
         String defaultSize = getString(config, "defaultSize");
-        if (isPixelSizeText(defaultSize)) return normalizeSizeText(defaultSize);
+        if (isPixelSizeText(defaultSize)) {
+            return normalizeSizeText(defaultSize);
+        }
         Integer width = getInteger(config, "defaultWidth", "width");
         Integer height = getInteger(config, "defaultHeight", "height");
-        if (width != null && width > 0 && height != null && height > 0) return width + "x" + height;
+        if (width != null && width > 0 && height != null && height > 0) {
+            return width + "x" + height;
+        }
         String first = findFirstConfiguredSize(config == null ? null : config.get("supportedSizes"));
         return StrUtil.isNotBlank(first) ? first : "1024x1024";
     }
 
     private String findFirstConfiguredSize(Object value) {
-        if (value == null) return null;
+        if (value == null) {
+            return null;
+        }
         if (value instanceof JSONObject object) {
             for (String key : object.keySet()) {
                 String found = findFirstConfiguredSize(object.get(key));
-                if (StrUtil.isNotBlank(found)) return found;
+                if (StrUtil.isNotBlank(found)) {
+                    return found;
+                }
             }
             return null;
         }
         if (value instanceof Map<?, ?> map) {
             for (Object item : map.values()) {
                 String found = findFirstConfiguredSize(item);
-                if (StrUtil.isNotBlank(found)) return found;
+                if (StrUtil.isNotBlank(found)) {
+                    return found;
+                }
             }
             return null;
         }
         if (value instanceof Iterable<?> iterable) {
             for (Object item : iterable) {
                 String found = findFirstConfiguredSize(item);
-                if (StrUtil.isNotBlank(found)) return found;
+                if (StrUtil.isNotBlank(found)) {
+                    return found;
+                }
             }
             return null;
         }
@@ -710,15 +803,21 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private String deriveClosestAspectRatio(int width, int height, JSONObject config) {
-        if (width <= 0 || height <= 0) return StrUtil.blankToDefault(getString(config, "defaultAspectRatio"), "1:1");
+        if (width <= 0 || height <= 0) {
+            return StrUtil.blankToDefault(getString(config, "defaultAspectRatio"), "1:1");
+        }
         List<String> ratios = getStringList(config, "supportedAspectRatios");
-        if (ratios.isEmpty()) ratios = List.of("1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9");
+        if (ratios.isEmpty()) {
+            ratios = List.of("1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9");
+        }
         double requestedRatio = (double) width / height;
         String closest = null;
         double score = Double.MAX_VALUE;
         for (String ratio : ratios) {
             String[] parts = StrUtil.blankToDefault(ratio, "").split(":", 2);
-            if (parts.length != 2) continue;
+            if (parts.length != 2) {
+                continue;
+            }
             try {
                 double candidate = Double.parseDouble(parts[0]) / Double.parseDouble(parts[1]);
                 double current = Math.abs(Math.log(candidate / requestedRatio));
@@ -734,15 +833,24 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private BinaryResource loadBinaryResource(String sourceUrl, ApiConfig apiConfig) throws IOException {
-        if (StrUtil.isBlank(sourceUrl)) throw new BusinessException("OpenAI 参考图地址为空");
+        if (StrUtil.isBlank(sourceUrl)) {
+            throw new BusinessException("OpenAI 参考图地址为空");
+        }
         String trimmed = sourceUrl.trim();
-        if (StrUtil.startWithIgnoreCase(trimmed, "data:")) return parseDataUrl(trimmed);
-        if (trimmed.startsWith("/media/")) return loadLocalMedia(trimmed);
+        if (StrUtil.startWithIgnoreCase(trimmed, "data:")) {
+            return parseDataUrl(trimmed);
+        }
+        if (trimmed.startsWith("/media/")) {
+            return loadLocalMedia(trimmed);
+        }
         if (presetArtStyleResourceResolver != null && presetArtStyleResourceResolver.isPresetArtStylePath(trimmed)) {
             var resource = presetArtStyleResourceResolver.load(trimmed);
-            return new BinaryResource(resource.bytes(), resource.mimeType(), extensionFromMimeType(resource.mimeType()));
+            return new BinaryResource(resource.bytes(), resource.mimeType(),
+                    extensionFromMimeType(resource.mimeType()));
         }
-        if (trimmed.startsWith("file:")) return loadFile(Paths.get(URI.create(trimmed)));
+        if (trimmed.startsWith("file:")) {
+            return loadFile(Paths.get(URI.create(trimmed)));
+        }
         if (isHttpUrl(trimmed)) {
             Request request = new Request.Builder().url(trimmed).get()
                     .addHeader("Accept", "image/*,*/*;q=0.8").build();
@@ -756,7 +864,9 @@ public class OpenAiCompatibleImageProtocolSupport {
             }
         }
         Path localPath = Paths.get(trimmed);
-        if (Files.exists(localPath) && Files.isRegularFile(localPath)) return loadFile(localPath);
+        if (Files.exists(localPath) && Files.isRegularFile(localPath)) {
+            return loadFile(localPath);
+        }
         throw new BusinessException("参考图地址不可访问: " + trimmed);
     }
 
@@ -779,7 +889,9 @@ public class OpenAiCompatibleImageProtocolSupport {
 
     private BinaryResource parseDataUrl(String sourceUrl) {
         int commaIndex = sourceUrl.indexOf(',');
-        if (commaIndex <= 0) throw new BusinessException("OpenAI 参考图 data URL 格式非法");
+        if (commaIndex <= 0) {
+            throw new BusinessException("OpenAI 参考图 data URL 格式非法");
+        }
         String metadata = sourceUrl.substring(0, commaIndex);
         String payload = sourceUrl.substring(commaIndex + 1);
         String mimeType = normalizeMimeType(metadata.substring("data:".length()), sourceUrl);
@@ -800,7 +912,9 @@ public class OpenAiCompatibleImageProtocolSupport {
         }
         candidates.add(Paths.get(DEFAULT_LOCAL_MEDIA_BASE_PATH).resolve(relativePath));
         for (Path candidate : candidates) {
-            if (Files.exists(candidate) && Files.isRegularFile(candidate)) return loadFile(candidate);
+            if (Files.exists(candidate) && Files.isRegularFile(candidate)) {
+                return loadFile(candidate);
+            }
         }
         throw new BusinessException("本地参考图不存在: " + sourceUrl);
     }
@@ -810,19 +924,26 @@ public class OpenAiCompatibleImageProtocolSupport {
         return new BinaryResource(Files.readAllBytes(path), mimeType, extensionFromMimeType(mimeType));
     }
 
-    private String storeBase64Image(String base64Payload, String extension) {
+    private String base64ImageDataUri(String base64Payload, String extension) {
         String trimmed = StrUtil.trim(base64Payload);
         String actualExtension = extension;
         if (trimmed.startsWith("data:")) {
             int commaIndex = trimmed.indexOf(',');
             String metadata = commaIndex > 0 ? trimmed.substring(0, commaIndex) : trimmed;
-            if (commaIndex > 0) trimmed = trimmed.substring(commaIndex + 1);
+            if (commaIndex > 0) {
+                trimmed = trimmed.substring(commaIndex + 1);
+            }
             actualExtension = resolveExtensionFromMetadata(metadata, actualExtension);
         }
         try {
             byte[] bytes = Base64.getDecoder().decode(trimmed.getBytes(StandardCharsets.UTF_8));
-            if (mediaStorageService == null) throw new BusinessException("图片存储服务未配置");
-            return mediaStorageService.storeBytes(bytes, "images", actualExtension);
+            String mime = switch (actualExtension) {
+                case "png" -> "image/png";
+                case "jpg", "jpeg" -> "image/jpeg";
+                case "webp" -> "image/webp";
+                default -> throw new BusinessException("生成图片编码格式未登记");
+            };
+            return "data:" + mime + ";base64," + Base64.getEncoder().encodeToString(bytes);
         } catch (IllegalArgumentException e) {
             throw new RuntimeException("OpenAI 返回的图片 base64 数据无效", e);
         }
@@ -830,10 +951,16 @@ public class OpenAiCompatibleImageProtocolSupport {
 
     private String resolveImageExtension(JsonNode root, JsonNode item) {
         String outputFormat = firstText(root, "output_format");
-        if (StrUtil.isBlank(outputFormat)) outputFormat = firstText(item, "output_format", "mime_type");
-        if (StrUtil.isBlank(outputFormat)) return "png";
+        if (StrUtil.isBlank(outputFormat)) {
+            outputFormat = firstText(item, "output_format", "mime_type");
+        }
+        if (StrUtil.isBlank(outputFormat)) {
+            return "png";
+        }
         String normalized = outputFormat.trim().toLowerCase(Locale.ROOT);
-        if (normalized.startsWith("image/")) normalized = normalized.substring("image/".length());
+        if (normalized.startsWith("image/")) {
+            normalized = normalized.substring("image/".length());
+        }
         return switch (normalized) {
             case "png", "jpeg", "jpg", "webp", "gif" -> normalized;
             default -> "png";
@@ -848,21 +975,31 @@ public class OpenAiCompatibleImageProtocolSupport {
         collectAsyncImageUrls(taskNode.path("images"), urls);
         collectAsyncImageUrls(root.path("result").path("images"), urls);
         collectAsyncImageUrls(root.path("images"), urls);
-        if (urls.isEmpty() && data.isArray()) for (JsonNode item : data) collectUrlFields(item, urls);
+        if (urls.isEmpty() && data.isArray()) {
+            for (JsonNode item : data) {
+                collectUrlFields(item, urls);
+            }
+        }
         return urls;
     }
 
     private void collectAsyncImageUrls(JsonNode node, List<String> urls) {
-        if (node == null || node.isMissingNode() || node.isNull()) return;
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return;
+        }
         if (node.isArray()) {
-            for (JsonNode item : node) collectUrlFields(item, urls);
+            for (JsonNode item : node) {
+                collectUrlFields(item, urls);
+            }
         } else {
             collectUrlFields(node, urls);
         }
     }
 
     private void collectUrlFields(JsonNode node, List<String> urls) {
-        if (node == null || node.isMissingNode() || node.isNull()) return;
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return;
+        }
         collectUrlValue(node.path("url"), urls);
         collectUrlValue(node.path("urls"), urls);
         collectUrlValue(node.path("image_url"), urls);
@@ -870,64 +1007,103 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private void collectUrlValue(JsonNode value, List<String> urls) {
-        if (value == null || value.isMissingNode() || value.isNull()) return;
-        if (value.isArray()) for (JsonNode item : value) collectUrlValue(item, urls);
-        else if (value.isTextual() && StrUtil.isNotBlank(value.asText())) urls.add(value.asText().trim());
+        if (value == null || value.isMissingNode() || value.isNull()) {
+            return;
+        }
+        if (value.isArray()) {
+            for (JsonNode item : value) {
+                collectUrlValue(item, urls);
+            }
+        } else if (value.isTextual() && StrUtil.isNotBlank(value.asText())) {
+            urls.add(value.asText().trim());
+        }
     }
 
     private boolean isAsyncSuccessStatus(String status) {
-        return "completed".equals(status) || "succeeded".equals(status) || "success".equals(status) || "done".equals(status);
+        return "completed".equals(status) || "succeeded".equals(status) || "success".equals(status) || "done".equals(
+                status);
     }
 
     private boolean isAsyncFailureStatus(String status) {
-        return "failed".equals(status) || "error".equals(status) || "cancelled".equals(status) || "canceled".equals(status);
+        return "failed".equals(status) || "error".equals(status) || "cancelled".equals(status) || "canceled".equals(
+                status);
     }
 
     private String extractAsyncErrorMessage(JsonNode root, JsonNode taskNode) {
         String message = firstText(taskNode, "error", "error_message", "errorMessage", "message");
-        return StrUtil.blankToDefault(message, StrUtil.blankToDefault(extractErrorMessage(root), previewResponse(root.toString())));
+        return StrUtil.blankToDefault(message,
+                StrUtil.blankToDefault(extractErrorMessage(root), previewResponse(root.toString())));
     }
 
     private String extractErrorMessage(JsonNode root) {
-        if (root == null) return null;
+        if (root == null) {
+            return null;
+        }
         JsonNode error = root.path("error");
-        if (error.isMissingNode() || error.isNull()) return null;
+        if (error.isMissingNode() || error.isNull()) {
+            return null;
+        }
         String message = textValue(error, "message");
-        return StrUtil.isNotBlank(message) ? message : error.isTextual() ? error.asText() : previewResponse(error.toString());
+        return StrUtil.isNotBlank(message) ? message : error.isTextual() ? error.asText() : previewResponse(
+                error.toString());
     }
 
     private String firstText(JsonNode node, String... fields) {
-        if (node == null || node.isMissingNode() || node.isNull()) return null;
+        if (node == null || node.isMissingNode() || node.isNull()) {
+            return null;
+        }
         for (String field : fields) {
             String value = textValue(node, field);
-            if (StrUtil.isNotBlank(value)) return value;
+            if (StrUtil.isNotBlank(value)) {
+                return value;
+            }
         }
         return null;
     }
 
     private String textValue(JsonNode node, String field) {
-        if (node == null) return null;
+        if (node == null) {
+            return null;
+        }
         JsonNode value = node.path(field);
-        if (value.isMissingNode() || value.isNull()) return null;
+        if (value.isMissingNode() || value.isNull()) {
+            return null;
+        }
         String text = value.asText();
         return StrUtil.isBlank(text) ? null : text;
     }
 
     private String resolveExtensionFromMetadata(String metadata, String fallback) {
         String normalized = metadata == null ? "" : metadata.toLowerCase(Locale.ROOT);
-        if (normalized.contains("image/jpeg")) return "jpeg";
-        if (normalized.contains("image/jpg")) return "jpg";
-        if (normalized.contains("image/webp")) return "webp";
-        if (normalized.contains("image/gif")) return "gif";
+        if (normalized.contains("image/jpeg")) {
+            return "jpeg";
+        }
+        if (normalized.contains("image/jpg")) {
+            return "jpg";
+        }
+        if (normalized.contains("image/webp")) {
+            return "webp";
+        }
+        if (normalized.contains("image/gif")) {
+            return "gif";
+        }
         return normalized.contains("image/png") ? "png" : StrUtil.blankToDefault(fallback, "png");
     }
 
     private String normalizeMimeType(String contentType, String sourceUrl) {
-        if (StrUtil.isNotBlank(contentType)) return contentType.split(";", 2)[0].trim();
+        if (StrUtil.isNotBlank(contentType)) {
+            return contentType.split(";", 2)[0].trim();
+        }
         String lower = sourceUrl == null ? "" : sourceUrl.toLowerCase(Locale.ROOT);
-        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
-        if (lower.endsWith(".webp")) return "image/webp";
-        if (lower.endsWith(".gif")) return "image/gif";
+        if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) {
+            return "image/jpeg";
+        }
+        if (lower.endsWith(".webp")) {
+            return "image/webp";
+        }
+        if (lower.endsWith(".gif")) {
+            return "image/gif";
+        }
         return "image/png";
     }
 
@@ -950,8 +1126,12 @@ public class OpenAiCompatibleImageProtocolSupport {
 
     private String resolveImagesEditUrl(ApiConfig apiConfig) {
         String baseUrl = normalizeBaseUrl(apiConfig != null ? apiConfig.getApiUrl() : null);
-        if (endsWithIgnoreCase(baseUrl, "/images/edits")) return baseUrl;
-        if (endsWithIgnoreCase(baseUrl, "/v1")) return baseUrl + "/images/edits";
+        if (endsWithIgnoreCase(baseUrl, "/images/edits")) {
+            return baseUrl;
+        }
+        if (endsWithIgnoreCase(baseUrl, "/v1")) {
+            return baseUrl + "/images/edits";
+        }
         return baseUrl + (shouldAutoAppendV1Path(apiConfig) ? "/v1/images/edits" : "/images/edits");
     }
 
@@ -967,8 +1147,12 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private boolean shouldAutoAppendV1Path(ApiConfig apiConfig) {
-        if (apiConfig == null) return true;
-        if (!"openai_compatible".equalsIgnoreCase(apiConfig.getPlatform())) return true;
+        if (apiConfig == null) {
+            return true;
+        }
+        if (!"openai_compatible".equalsIgnoreCase(apiConfig.getPlatform())) {
+            return true;
+        }
         return !Boolean.FALSE.equals(apiConfig.getAutoAppendV1Path());
     }
 
@@ -977,7 +1161,8 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private boolean endsWithIgnoreCase(String text, String suffix) {
-        return text != null && suffix != null && text.toLowerCase(Locale.ROOT).endsWith(suffix.toLowerCase(Locale.ROOT));
+        return text != null && suffix != null && text.toLowerCase(Locale.ROOT)
+                .endsWith(suffix.toLowerCase(Locale.ROOT));
     }
 
     private boolean isHttpUrl(String value) {
@@ -985,7 +1170,9 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private JSONObject parseConfig(String configJson, String modelCode) {
-        if (StrUtil.isBlank(configJson)) return null;
+        if (StrUtil.isBlank(configJson)) {
+            return null;
+        }
         try {
             return JSONUtil.parseObj(configJson);
         } catch (Exception e) {
@@ -994,25 +1181,43 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private void mergeConfig(JSONObject target, JSONObject source) {
-        if (target == null || source == null || source.isEmpty()) return;
-        for (String key : source.keySet()) target.set(key, source.get(key));
+        if (target == null || source == null || source.isEmpty()) {
+            return;
+        }
+        for (String key : source.keySet()) {
+            target.set(key, source.get(key));
+        }
     }
 
     private JSONObject asJsonObject(Object value) {
-        if (value instanceof JSONObject object) return object;
-        if (value instanceof Map<?, ?> map) return JSONUtil.parseObj(map);
+        if (value instanceof JSONObject object) {
+            return object;
+        }
+        if (value instanceof Map<?, ?> map) {
+            return JSONUtil.parseObj(map);
+        }
         return null;
     }
 
     private List<String> getStringList(JSONObject config, String... keys) {
-        if (config == null) return List.of();
+        if (config == null) {
+            return List.of();
+        }
         for (String key : keys) {
-            if (!config.containsKey(key)) continue;
+            if (!config.containsKey(key)) {
+                continue;
+            }
             Object value = config.get(key);
             if (value instanceof Iterable<?> iterable) {
                 List<String> result = new ArrayList<>();
-                for (Object item : iterable) if (item != null && StrUtil.isNotBlank(item.toString())) result.add(item.toString().trim());
-                if (!result.isEmpty()) return result;
+                for (Object item : iterable) {
+                    if (item != null && StrUtil.isNotBlank(item.toString())) {
+                        result.add(item.toString().trim());
+                    }
+                }
+                if (!result.isEmpty()) {
+                    return result;
+                }
             } else if (value != null && StrUtil.isNotBlank(value.toString())) {
                 return List.of(value.toString().trim());
             }
@@ -1021,65 +1226,103 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private Integer getInteger(JSONObject config, String... keys) {
-        if (config == null) return null;
+        if (config == null) {
+            return null;
+        }
         for (String key : keys) {
-            if (!config.containsKey(key)) continue;
+            if (!config.containsKey(key)) {
+                continue;
+            }
             Object value = config.get(key);
-            if (value instanceof Number number) return number.intValue();
+            if (value instanceof Number number) {
+                return number.intValue();
+            }
             if (value != null) {
-                try { return Integer.parseInt(value.toString().trim()); }
-                catch (NumberFormatException ignored) { return null; }
+                try {
+                    return Integer.parseInt(value.toString().trim());
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
             }
         }
         return null;
     }
 
     private Long getLong(JSONObject config, String... keys) {
-        if (config == null) return null;
+        if (config == null) {
+            return null;
+        }
         for (String key : keys) {
-            if (!config.containsKey(key)) continue;
+            if (!config.containsKey(key)) {
+                continue;
+            }
             Object value = config.get(key);
-            if (value instanceof Number number) return number.longValue();
+            if (value instanceof Number number) {
+                return number.longValue();
+            }
             if (value != null) {
-                try { return Long.parseLong(value.toString().trim()); }
-                catch (NumberFormatException ignored) { return null; }
+                try {
+                    return Long.parseLong(value.toString().trim());
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
             }
         }
         return null;
     }
 
     private Double getDouble(JSONObject config, String... keys) {
-        if (config == null) return null;
+        if (config == null) {
+            return null;
+        }
         for (String key : keys) {
-            if (!config.containsKey(key)) continue;
+            if (!config.containsKey(key)) {
+                continue;
+            }
             Object value = config.get(key);
-            if (value instanceof Number number) return number.doubleValue();
+            if (value instanceof Number number) {
+                return number.doubleValue();
+            }
             if (value != null) {
-                try { return Double.parseDouble(value.toString().trim()); }
-                catch (NumberFormatException ignored) { return null; }
+                try {
+                    return Double.parseDouble(value.toString().trim());
+                } catch (NumberFormatException ignored) {
+                    return null;
+                }
             }
         }
         return null;
     }
 
     private void appendOptionalString(ObjectNode root, String field, String value) {
-        if (StrUtil.isNotBlank(value)) root.put(field, value.trim());
+        if (StrUtil.isNotBlank(value)) {
+            root.put(field, value.trim());
+        }
     }
 
     private void appendOptionalInteger(ObjectNode root, String field, Integer value) {
-        if (value != null) root.put(field, value);
+        if (value != null) {
+            root.put(field, value);
+        }
     }
 
     private void appendOptionalFormField(MultipartBody.Builder builder, String field, String value) {
-        if (StrUtil.isNotBlank(value)) builder.addFormDataPart(field, value.trim());
+        if (StrUtil.isNotBlank(value)) {
+            builder.addFormDataPart(field, value.trim());
+        }
     }
 
     private int[] parseSizeText(String sizeText) {
         String normalized = normalizeSizeText(sizeText);
-        if (!isPixelSizeText(normalized)) return new int[]{1024, 1024};
+        if (!isPixelSizeText(normalized)) {
+            return new int[]{1024, 1024};
+        }
         String[] parts = normalized.split("x", 2);
-        try { return new int[]{Integer.parseInt(parts[0]), Integer.parseInt(parts[1])}; }
-        catch (NumberFormatException ignored) { return new int[]{1024, 1024}; }
+        try {
+            return new int[]{Integer.parseInt(parts[0]), Integer.parseInt(parts[1])};
+        } catch (NumberFormatException ignored) {
+            return new int[]{1024, 1024};
+        }
     }
 
     private String normalizeSizeText(String sizeText) {
@@ -1104,12 +1347,18 @@ public class OpenAiCompatibleImageProtocolSupport {
     }
 
     private String firstNonBlank(String... values) {
-        for (String value : values) if (StrUtil.isNotBlank(value)) return value.trim();
+        for (String value : values) {
+            if (StrUtil.isNotBlank(value)) {
+                return value.trim();
+            }
+        }
         return null;
     }
 
     private String previewResponse(String responseBody) {
-        if (StrUtil.isBlank(responseBody)) return "<empty>";
+        if (StrUtil.isBlank(responseBody)) {
+            return "<empty>";
+        }
         String normalized = responseBody.replaceAll("\\s+", " ").trim();
         return normalized.length() <= RESPONSE_PREVIEW_LENGTH
                 ? normalized : normalized.substring(0, RESPONSE_PREVIEW_LENGTH) + "...";

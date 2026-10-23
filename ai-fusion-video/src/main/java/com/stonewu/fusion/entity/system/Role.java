@@ -21,24 +21,36 @@ import lombok.*;
 @AllArgsConstructor
 public class Role extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 角色名称 */
+    /**
+     * 角色名称
+     */
     private String name;
 
-    /** 角色代码标识，如 admin、user */
+    /**
+     * 角色代码标识，如 admin、user
+     */
     private String code;
 
-    /** 排列顺序 */
+    /**
+     * 排列顺序
+     */
     @Builder.Default
     private Integer sort = 0;
 
-    /** 状态：0-禁用 1-启用 */
+    /**
+     * 状态：0-禁用 1-启用
+     */
     @Builder.Default
     private Integer status = 1;
 
-    /** 备注说明 */
+    /**
+     * 备注说明
+     */
     private String remark;
 }

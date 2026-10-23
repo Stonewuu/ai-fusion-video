@@ -1,4 +1,7 @@
 "use client";
+import { useResourceInvalidation } from "@/hooks/use-resource-invalidation";
+
+import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 
 import { useEffect, useState, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
@@ -30,9 +33,10 @@ import { artStyleApi, type ArtStylePreset } from "@/lib/api/art-style";
 import { projectApi } from "@/lib/api/project";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { MainContentFrame } from "@/components/dashboard/main-content-frame";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import { Button } from "@/components/ui/button";
 import { useProject } from "./project-context";
+import { ScriptSummary } from "./_components/script-summary";
 import { ParseScriptDialog } from "@/components/dashboard/parse-script-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -84,7 +88,7 @@ export default function ProjectOverviewPage() {
   const params = useParams();
   const router = useRouter();
   const projectId = Number(params.id);
-  const { project } = useProject();
+  const { project, refresh: refreshProject } = useProject();
   const { confirm, alert } = useConfirm();
   const properties = (project?.properties as Record<string, string>) || {};
 
@@ -120,11 +124,10 @@ export default function ProjectOverviewPage() {
   const [loadingAssets, setLoadingAssets] = useState(true);
 
   // 串行加载概览数据：剧本 → 分镜统计 → 资产
-  const loadAllData = useCallback(async () => {
+  const loadAllData = useCallback(async (background = false) => {
     // 1. 加载固定剧本、分镜容器及真实内容统计
     try {
-      setLoading(true);
-      setLoadingStoryboard(true);
+      if (!background) { setLoading(true); setLoadingStoryboard(true); }
       const overview = await projectApi.getWorkspaceOverview(projectId);
       setScript(overview.script);
       setScriptEpisodeCount(overview.scriptEpisodeCount);
@@ -141,7 +144,7 @@ export default function ProjectOverviewPage() {
 
     // 2. 加载资产
     try {
-      setLoadingAssets(true);
+      if (!background) setLoadingAssets(true);
       const data = await assetApi.list(projectId);
       setAssets(data);
       // 统计各类型数量
@@ -161,6 +164,7 @@ export default function ProjectOverviewPage() {
   useEffect(() => {
     loadAllData();
   }, [loadAllData]);
+  useResourceInvalidation(["scripts", "storyboards", "assets"], () => loadAllData(true));
 
   // AI 生成剧本：创建成功后触发 pipeline
   const { addPipeline, setPanelExpanded, setExpandedTaskId } =
@@ -240,7 +244,10 @@ export default function ProjectOverviewPage() {
     }
   };
 
+  const initializeRequest = useCommandRequestKey();
   const handleInitializeWorkspace = async () => {
+    if (!project) return;
+    const version = project.version;
     const ok = await confirm({
       title: "初始化项目工作区",
       description: "将只补齐缺失的剧本或分镜工作区，不会删除或覆盖任何现有数据。确定继续？",
@@ -251,12 +258,14 @@ export default function ProjectOverviewPage() {
 
     try {
       setInitializingWorkspace(true);
-      const overview = await projectApi.initializeWorkspace(projectId);
+      const overview = await projectApi.initializeWorkspace(projectId, version, initializeRequest.forPayload({ projectId, version }));
+      initializeRequest.clear();
       setScript(overview.script);
       setScriptEpisodeCount(overview.scriptEpisodeCount);
       setScriptSceneCount(overview.scriptSceneCount);
       setStoryboard(overview.storyboard);
       setStoryboardStatistics(overview.storyboardStatistics);
+      await refreshProject();
       toast.success("项目工作区初始化完成");
     } catch (err) {
       console.error("初始化项目工作区失败:", err);
@@ -391,7 +400,7 @@ export default function ProjectOverviewPage() {
                     {project?.name || "未命名项目"}
                   </h3>
                   <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">
-                    {script.storySynopsis || script.genre || (scriptHasContent ? "剧本内容待完善" : "尚未添加剧本内容")}
+                    {script.storySynopsis || script.genre || (scriptHasContent ? "剧本内容待完善" : "尚未添加剧本原文")}
                   </p>
                 </div>
               </div>
@@ -404,6 +413,8 @@ export default function ProjectOverviewPage() {
                 {status?.label}
               </span>
             </div>
+
+            <ScriptSummary summary={script.summary} />
 
             {/* 元信息 */}
             <div className="flex items-center gap-4 text-xs text-muted-foreground">
@@ -446,6 +457,9 @@ export default function ProjectOverviewPage() {
           <ParseScriptDialog
             open={showParseDialog}
             scriptId={script.id}
+            scriptVersion={script.version}
+            episodeCount={scriptEpisodeCount}
+            sceneCount={scriptSceneCount}
             mode={scriptHasContent ? "reparse" : "create"}
             onClose={() => setShowParseDialog(false)}
             onCreated={handleAiScriptCreated}

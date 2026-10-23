@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.generation.AsyncOutboxMapper">
+    <insert id="enqueue">
+        INSERT INTO afv_async_outbox(event_key, event_type, aggregate_id, payload_json, next_attempt_at, created_at)
+        VALUES (#{key}, #{type}, #{aggregate}, #{payload}, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <select id="nextPending" resultType="com.stonewu.fusion.entity.generation.AsyncOutboxEntity">
+        SELECT o.id, o.event_type, o.aggregate_id, o.payload_json FROM afv_async_outbox o
+        WHERE o.state = 'PENDING' AND o.event_type IN ('GENERATION_ACCEPTED', 'GENERATION_CHANGED',
+            'COMFY_TEST_ACCEPTED', 'COMFY_TEST_CHANGED', 'COMFY_TEST_REVIEW', 'COMFY_TEST_RECEIPT',
+            'CANVAS_RUN_ACCEPTED', 'CANVAS_RUN_CHANGED', 'CANVAS_RUN_SELECTION', 'CANVAS_RUN_CANCELLED', 'CANVAS_RUN_BATCH_REVIEW', 'CANVAS_RUN_WRITEBACK',
+            'CANVAS_MEDIA_ACCEPTED', 'CANVAS_MEDIA_CHANGED', 'CANVAS_MEDIA_REVIEW', 'EPISODE_AUDIO_REVIEW',
+            'MEDIA_IMPORT_ACCEPTED', 'MEDIA_IMPORT_CHANGED', 'MEDIA_IMPORT_CANCELLED', 'MEDIA_IMPORT_RETRY', 'MEDIA_IMPORT_PLACED',
+            'MEDIA_PREVIEW_ACCEPTED', 'MEDIA_PREVIEW_CHANGED',
+            'CANVAS_TEXT_ACCEPTED', 'CANVAS_TEXT_CHANGED', 'CANVAS_TEXT_RECEIVED', 'CANVAS_TEXT_REVIEW')
+            AND o.next_attempt_at &lt;= UTC_TIMESTAMP(6)
+            AND NOT EXISTS (SELECT 1 FROM afv_async_outbox prior WHERE prior.aggregate_id = o.aggregate_id
+                AND prior.state = 'PENDING' AND prior.id &lt; o.id)
+        ORDER BY o.id LIMIT 1 FOR UPDATE
+    </select>
+    <update id="backoff">
+        UPDATE afv_async_outbox
+        SET next_attempt_at = TIMESTAMPADD(SECOND, LEAST(60, POW(2, LEAST(attempts + 1, 6))), UTC_TIMESTAMP(6)),
+            attempts = attempts + 1, last_error = #{error} WHERE id = #{id} AND state = 'PENDING'
+    </update>
+    <update id="delivered">
+        UPDATE afv_async_outbox SET state = 'DELIVERED', attempts = attempts + 1, last_error = NULL,
+            delivered_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <insert id="appendEvent">
+        INSERT INTO
+        <choose>
+            <when test="stream == 'CANVAS_TEXT'">afv_canvas_text_event(outbox_id, job_id,</when>
+            <when test="stream == 'CANVAS_RUN'">afv_canvas_run_event(outbox_id, run_id,</when>
+            <when test="stream == 'MEDIA'">afv_media_job_event(outbox_id, job_id,</when>
+            <otherwise>afv_generation_event(outbox_id, submission_id,</otherwise>
+        </choose>
+        revision, event_type, payload_json, created_at)
+        VALUES (#{outboxId}, #{aggregate}, #{revision}, #{type}, #{payload}, UTC_TIMESTAMP(6))
+    </insert>
+</mapper>

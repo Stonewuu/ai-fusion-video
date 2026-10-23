@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.generation.GenerationAttemptMapper">
+    <select id="nextNumber" resultType="int">
+        SELECT COALESCE(MAX(attempt_no), 0) + 1 FROM afv_generation_attempt WHERE job_id = #{jobId}
+    </select>
+    <insert id="insertPrepared">
+        INSERT INTO afv_generation_attempt(id, job_id, attempt_no, created_at)
+        VALUES (#{id}, #{jobId}, #{number}, UTC_TIMESTAMP(6))
+    </insert>
+    <update id="beginSubmission">
+        UPDATE afv_generation_attempt SET request_json = #{request}, provider_task_id = #{providerTaskId}, submitted_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND submitted_at IS NULL AND acknowledged_at IS NULL
+    </update>
+    <select id="lockRetriedAcknowledgements" resultType="java.time.LocalDateTime">
+        SELECT acknowledged_at FROM afv_generation_attempt WHERE job_id = #{jobId}
+            AND resolution = 'CONFIRM_NOT_ACCEPTED_AND_RETRY' ORDER BY attempt_no FOR UPDATE
+    </select>
+    <select id="lock" resultType="string">
+        SELECT id FROM afv_generation_attempt WHERE id = #{id} FOR UPDATE
+    </select>
+    <update id="acknowledge">
+        UPDATE afv_generation_attempt SET provider_task_id = #{providerTaskId}, result_json = #{result}, acknowledged_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id}
+    </update>
+    <select id="lockHistory" resultType="String">
+        SELECT id FROM afv_generation_attempt WHERE job_id = #{jobId} ORDER BY attempt_no FOR UPDATE
+    </select>
+    <update id="resolve">
+        UPDATE afv_generation_attempt SET resolution = #{action}, resolution_note = #{note}, resolved_by = #{userId}, resolved_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id}
+    </update>
+    <update id="adminResolve">
+        UPDATE afv_generation_attempt SET resolution = 'ADMIN_CONFIRM_FINISHED', resolution_note = #{note}, resolved_by = #{admin}, resolved_at = UTC_TIMESTAMP(6)
+        WHERE job_id = #{id} AND resolution IS NULL
+    </update>
+</mapper>

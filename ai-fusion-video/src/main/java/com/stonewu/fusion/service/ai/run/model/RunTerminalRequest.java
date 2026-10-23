@@ -8,7 +8,9 @@ import com.stonewu.fusion.service.ai.agentscope.state.StateStoreSlot;
 import java.util.Objects;
 import java.util.Set;
 
-/** Immutable terminal compare-and-set request. */
+/**
+ * Immutable terminal compare-and-set request.
+ */
 public record RunTerminalRequest(
         String runId,
         StateStoreSlot stateStoreSlot,

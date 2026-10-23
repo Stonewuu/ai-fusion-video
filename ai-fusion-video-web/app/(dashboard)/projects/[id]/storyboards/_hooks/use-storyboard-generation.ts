@@ -1,4 +1,5 @@
 "use client";
+import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import { useCallback } from "react";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
@@ -21,6 +22,7 @@ interface StoryboardGenerationOptions {
 
 export function useStoryboardGeneration({ projectId, projectName, storyboard, scriptEpisodes, currentEpisode, sceneGroups, refreshStoryboardItems }: StoryboardGenerationOptions) {
   const { confirm, alert } = useConfirm();
+  const requests = useCommandRequestKey();
   const addPipeline = usePipelineStore((state) => state.addPipeline);
   const setPanelExpanded = usePipelineStore((state) => state.setPanelExpanded);
   const setExpandedTaskId = usePipelineStore((state) => state.setExpandedTaskId);
@@ -86,7 +88,8 @@ const handleGenerateEpisodeStoryboard = useCallback(async (episode: StoryboardEp
     if (!confirmed) return;
 
     try {
-      await storyboardApi.clearEpisodeContent(episode.id);
+      await storyboardApi.clearEpisodeContent(episode.id, episode.version, requests.forPayload({ clearEpisode: episode.id, version: episode.version }));
+      requests.clear();
       const pipelineId = addPipeline({
         label: `AI 分镜 · 第 ${displayNumber} 集`,
         projectId,
@@ -120,6 +123,7 @@ const handleGenerateEpisodeStoryboard = useCallback(async (episode: StoryboardEp
     setExpandedTaskId,
     setPanelExpanded,
     storyboard,
+  requests,
   ]);
 
 const handleGenerateItemFrame = useCallback(

@@ -1,11 +1,11 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Sparkles, X, ImageIcon, Check, Loader2 } from "lucide-react";
+import { Sparkles, X, ImageIcon, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { AssetItem } from "@/lib/api/asset";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 
 /** 带主资产信息的子资产 */
 export interface AssetItemWithInfo {

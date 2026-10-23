@@ -1,5 +1,6 @@
-import { triggerToolInvalidation, usePipelineStore } from "./pipeline-store";
 import type { StoreApi } from "zustand";
+import { getApiErrorStatus } from "@/lib/api/api-error";
+import { receiveCanvasAssistantResult } from "@/lib/canvas/assistant-session";
 import {
   getPipelineStatus,
   pipelineStream,
@@ -16,6 +17,7 @@ import type {
 import {
   hasLiveTranscript,
   hasTerminal,
+  pendingPipelineForNextRun,
   reduceAssistantEvent,
   statusFromPipeline,
   statusIsRunning,
@@ -45,7 +47,6 @@ export function createAssistantConnectionCoordinator(
   let ensureGeneration = 0;
   let pendingEnsure: { conversationId: string; generation: number } | null = null;
   let ensureRetryTimer: ReturnType<typeof setTimeout> | null = null;
-  const eventKeysByRun = new Map<string, Set<string>>();
   const metadataGenerations = new Map<string, number>();
 
   const beginMetadataRequest = (conversationId: string) => {
@@ -95,7 +96,11 @@ export function createAssistantConnectionCoordinator(
       return;
     }
     const runtime = state.conversationStates[conversationId];
-    if (!runtime || hasLiveTranscript(runtime)) return;
+    if (!runtime) return;
+    const transcriptCaughtUp = runtime.pipeline.runId === runtime.knownRunId
+      && runtime.remoteLastSequence !== undefined
+      && runtime.pipeline.lastSequence >= runtime.remoteLastSequence;
+    if (hasLiveTranscript(runtime) && transcriptCaughtUp) return;
     void state.loadMessagesIfNeeded(conversationId);
   };
 
@@ -285,14 +290,8 @@ export function createAssistantConnectionCoordinator(
             pipeline: cursorUnchanged
               ? runtime.pipeline
               : {
-                  ...runtime.pipeline,
+                  ...pendingPipelineForNextRun(conversationId),
                   runId,
-                  conversationId,
-                  lastSequence: afterSequence,
-                  reasoningText: "",
-                  reasoningStartTime: undefined,
-                  reasoningDurationMs: undefined,
-                  error: undefined,
                 },
           },
         },
@@ -330,13 +329,6 @@ export function createAssistantConnectionCoordinator(
         if (current.runId && event.runId !== current.runId) return;
         invalidateMetadataRequests(conversationId);
 
-        const runKey = `${conversationId}:${event.runId}`;
-        const eventSet = eventKeysByRun.get(runKey) ?? new Set<string>();
-        eventKeysByRun.set(runKey, eventSet);
-        const eventKey = `${event.sequence}:${event.messageId ?? event.outputType}`;
-        if (eventSet.has(eventKey)) return;
-        eventSet.add(eventKey);
-
         const currentRuntime = get().conversationStates[conversationId];
         if (!currentRuntime
           || (currentRuntime.pipeline.runId && currentRuntime.pipeline.runId !== event.runId)
@@ -344,6 +336,7 @@ export function createAssistantConnectionCoordinator(
 
         try {
           const nextPipeline = reduceAssistantEvent(currentRuntime.pipeline, event);
+          receiveCanvasAssistantResult(conversationId, event);
           const terminal = hasTerminal(event);
           const nextStatus = terminal
             ? terminalStatusForEvent(event)
@@ -354,15 +347,6 @@ export function createAssistantConnectionCoordinator(
                 : event.outputType === "EXTERNAL_EXECUTION_REQUIRED"
                   ? "WAITING_EXTERNAL"
                   : "running";
-          if (event.outputType === "TOOL_FINISHED" && event.toolName && event.toolStatus !== "error") {
-            triggerToolInvalidation(event.toolName);
-          } else if (terminal) {
-            const pStore = usePipelineStore.getState();
-            pStore.triggerInvalidation("scripts");
-            pStore.triggerInvalidation("storyboards");
-            pStore.triggerInvalidation("assets");
-          }
-
           updateRuntime(conversationId, (runtimeValue) => ({
             ...runtimeValue,
             pipeline: {
@@ -401,6 +385,8 @@ export function createAssistantConnectionCoordinator(
             ...runtimeValue,
             connectionError: error instanceof Error ? error.message : "无法处理助手事件",
           }));
+          // 处理失败不能确认读取位置，否则重连会永久跳过这条事件。
+          throw error;
         }
       },
       onError: (error: Error) => {
@@ -408,7 +394,10 @@ export function createAssistantConnectionCoordinator(
         if (!current
           || current.connectionGeneration !== generation
           || current.conversationId !== conversationId) return;
-        const startRejected = current.connectionMode === "start" && !current.runId;
+        const status = getApiErrorStatus(error);
+        const startRejected = current.connectionMode === "start" && !current.runId
+          && (("requestRejected" in error && error.requestRejected === true)
+            || (status !== null && status >= 400 && status < 500));
         updateRuntime(conversationId, (runtimeValue) => ({
           ...runtimeValue,
           connectionError: error.message,
@@ -428,7 +417,10 @@ export function createAssistantConnectionCoordinator(
         }
         clearConnection(generation);
         if (startRejected) return;
-        scheduleEnsureRetry();
+        if (!current.runId) {
+          updateRuntime(conversationId, (value) => ({ ...value, statusConfirmed: false }));
+        }
+        scheduleEnsureRetry(500);
         scheduleStatusPolling();
       },
       onComplete: () => {
@@ -584,7 +576,6 @@ export function createAssistantConnectionCoordinator(
       clearPolling();
       pollInFlightGeneration = null;
       pollFailureCount = 0;
-      eventKeysByRun.clear();
       metadataGenerations.clear();
     },
     scheduleStatusPolling,

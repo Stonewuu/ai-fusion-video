@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   ImagePlus,
@@ -17,7 +17,7 @@ import { uploadFile } from "@/lib/api/storage";
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { getAppearance, getAppearanceHints } from "./asset-types";
@@ -26,8 +26,10 @@ interface AssetItemWorkspaceProps {
   mode: "create" | "edit";
   item: AssetItem | null;
   assetType: string;
+  parentVersion: number;
   saving: boolean;
   onCreate: (
+    parentVersion: number,
     name: string,
     appearance: string,
     imageUrl: string,
@@ -38,8 +40,8 @@ interface AssetItemWorkspaceProps {
     name: string,
     appearance: string,
     imageUrl: string,
-  ) => Promise<void>;
-  onDelete: () => void;
+  ) => Promise<AssetItem>;
+  onDelete: (item: AssetItem) => void;
   onCancelCreate: () => void;
   onGenerate: () => void;
 }
@@ -48,6 +50,7 @@ export function AssetItemWorkspace({
   mode,
   item,
   assetType,
+  parentVersion,
   saving,
   onCreate,
   onSave,
@@ -55,9 +58,11 @@ export function AssetItemWorkspace({
   onCancelCreate,
   onGenerate,
 }: AssetItemWorkspaceProps) {
-  const initialName = item?.name || "";
-  const initialAppearance = getAppearance(item);
-  const initialImageUrl = item?.imageUrl || "";
+  const [base, setBase] = useState(item);
+  const [creationVersion] = useState(parentVersion);
+  const initialName = base?.name || "";
+  const initialAppearance = getAppearance(base);
+  const initialImageUrl = base?.imageUrl || "";
   const [name, setName] = useState(initialName);
   const [appearance, setAppearance] = useState(initialAppearance);
   const [imageUrl, setImageUrl] = useState(initialImageUrl);
@@ -84,7 +89,17 @@ export function AssetItemWorkspace({
     imageUrl !== initialImageUrl;
   const disabled = saving || uploading || !name.trim();
 
+  useEffect(() => {
+    if (!item || !base || dirty || saving || uploading ||
+      (item.version <= base.version && item.assetVersion <= base.assetVersion)) return;
+    setBase(item);
+    setName(item.name || "");
+    setAppearance(getAppearance(item));
+    setImageUrl(item.imageUrl || "");
+  }, [item, base, dirty, saving, uploading]);
+
   const upload = async (file: File) => {
+    if (saving || uploading) return;
     if (!file.type.startsWith("image/")) {
       setError("请选择图片文件");
       return;
@@ -111,13 +126,18 @@ export function AssetItemWorkspace({
   };
 
   const save = async () => {
-    if (!item || disabled) return;
-    await onSave(item, name, appearance, imageUrl);
+    if (!base || disabled) return;
+    setError("");
+    const updated = await onSave(base, name, appearance, imageUrl);
+    setBase(updated);
+    setName(updated.name || "");
+    setAppearance(getAppearance(updated));
+    setImageUrl(updated.imageUrl || "");
   };
 
   const create = async (generateAfterCreate: boolean) => {
     if (disabled) return;
-    await onCreate(name, appearance, imageUrl, generateAfterCreate);
+    await onCreate(creationVersion, name, appearance, imageUrl, generateAfterCreate);
   };
 
   const generate = async () => {
@@ -125,7 +145,7 @@ export function AssetItemWorkspace({
       await create(true);
       return;
     }
-    if (item && dirty) await onSave(item, name, appearance, imageUrl);
+    if (base && dirty) await save();
     onGenerate();
   };
 
@@ -180,7 +200,7 @@ export function AssetItemWorkspace({
             if (file) void upload(file);
           }}
           className={cn(
-            "group relative mx-auto aspect-[16/10] w-full max-w-[480px] overflow-hidden rounded-2xl border bg-muted/15 outline-none transition-all focus-visible:ring-2 focus-visible:ring-ring/50",
+            "group relative mx-auto aspect-[16/10] w-full max-w-[480px] overflow-hidden rounded-2xl border bg-muted/15 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
             dragging
               ? "border-primary bg-primary/5 ring-2 ring-primary/15"
               : "border-border/50",
@@ -217,7 +237,7 @@ export function AssetItemWorkspace({
             size="sm"
             variant="outline"
             onClick={() => inputRef.current?.click()}
-            disabled={uploading}
+            disabled={saving || uploading}
           >
             {uploading ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -230,7 +250,7 @@ export function AssetItemWorkspace({
             size="sm"
             variant="image"
             disabled={disabled}
-            onClick={() => void generate()}
+            onClick={() => void generate().catch(failure => setError(getApiErrorMessage(failure)))}
           >
             {saving ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -275,7 +295,8 @@ export function AssetItemWorkspace({
           <Button
             variant={mode === "create" ? "ghost" : "destructive-ghost"}
             size="icon-sm"
-            onClick={mode === "create" ? onCancelCreate : onDelete}
+            disabled={saving || uploading}
+            onClick={mode === "create" ? onCancelCreate : () => { if (base) onDelete(base); }}
             title={mode === "create" ? "取消新建" : "删除子资产"}
             aria-label={mode === "create" ? "取消新建" : "删除子资产"}
           >
@@ -290,7 +311,7 @@ export function AssetItemWorkspace({
         <div className="mt-4 space-y-3.5">
           <div className="space-y-1.5">
             <label className="text-xs font-medium text-muted-foreground">名称</label>
-            <Input
+            <Input disabled={saving || uploading}
               value={name}
               onChange={(event) => setName(event.target.value)}
               placeholder="子资产名称"
@@ -308,7 +329,7 @@ export function AssetItemWorkspace({
                 {appearance.length} 字
               </span>
             </div>
-            <Textarea
+            <Textarea disabled={saving || uploading}
               ref={textareaRef}
               value={appearance}
               onChange={(event) => setAppearance(event.target.value)}
@@ -327,6 +348,7 @@ export function AssetItemWorkspace({
                 <button
                   key={hint}
                   type="button"
+                  disabled={saving || uploading}
                   onClick={() => appendHint(hint)}
                   className="h-6 rounded-md border border-border/50 bg-background/65 px-2 text-[10px] text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
                 >
@@ -350,7 +372,7 @@ export function AssetItemWorkspace({
             <Button
               size="sm"
               disabled={disabled || (mode === "edit" && !dirty)}
-              onClick={() => void (mode === "create" ? create(false) : save())}
+              onClick={() => void (mode === "create" ? create(false) : save()).catch(failure => setError(getApiErrorMessage(failure)))}
             >
               {saving ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />

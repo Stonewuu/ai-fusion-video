@@ -8,7 +8,15 @@ import com.stonewu.fusion.convert.generation.GenerationConvert;
 import com.stonewu.fusion.entity.generation.ImageItem;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.service.generation.image.ImageGenerationService;
-import com.stonewu.fusion.service.generation.image.consumer.ImageGenerationConsumer;
+import com.stonewu.fusion.service.generation.job.GenerationSubmissionService;
+import com.stonewu.fusion.service.generation.job.GenerationJobCommands;
+import com.stonewu.fusion.service.generation.job.GenerationJobQueries;
+import com.stonewu.fusion.service.canvas.CanvasActorResolver;
+import com.stonewu.fusion.service.generation.GenerationExecutionContexts;
+import com.stonewu.fusion.service.generation.GenerationKind;
+import com.stonewu.fusion.service.generation.GenerationItemViews;
+import com.stonewu.fusion.service.generation.GenerationTaskViews;
+import com.stonewu.fusion.service.resource.model.ResourceCommandContext;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -29,49 +37,67 @@ import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 public class ImageGenerationController {
 
     private final ImageGenerationService imageGenerationService;
-    private final ImageGenerationConsumer imageGenerationConsumer;
+    private final GenerationSubmissionService submissions;
+    private final GenerationJobCommands commands;
+    private final GenerationJobQueries jobs;
+    private final CanvasActorResolver actors;
+    private final GenerationExecutionContexts executions;
+    private final GenerationTaskViews views;
 
     @Operation(summary = "提交生图任务")
     @PostMapping("/submit")
     public CommonResult<String> submit(@Valid @RequestBody ImageTaskSubmitReqVO reqVO) {
+        var actor = actors.current();
+        reqVO.getScope().require(actor);
         ImageTask task = GenerationConvert.INSTANCE.convert(reqVO);
         task.setUserId(requireCurrentUserId());
-        String taskId = imageGenerationConsumer.submitTask(task);
+        String taskId = submissions.image(task, reqVO.getRequestId(), ResourceCommandContext.user(actor, null), null).publicTaskId();
         return CommonResult.success(taskId);
     }
 
     @Operation(summary = "查询生图任务")
     @GetMapping("/{taskId}")
-    public CommonResult<ImageTask> get(@PathVariable String taskId) {
-        return CommonResult.success(imageGenerationService.getByTaskId(taskId));
+    public CommonResult<GenerationTaskViews.View<ImageTask>> get(@PathVariable String taskId) {
+        var task = imageGenerationService.getByTaskId(taskId);
+        var actor = actors.current();
+        executions.requireRead(GenerationKind.IMAGE, task.getId(), actor);
+        return CommonResult.success(views.image(task, actor));
     }
 
     @Operation(summary = "查询生图任务的图片条目")
     @GetMapping("/{id}/items")
     public CommonResult<List<ImageItem>> listItems(@PathVariable Long id) {
-        return CommonResult.success(imageGenerationService.listItems(id));
+        executions.requireRead(GenerationKind.IMAGE, id, actors.current());
+        var task = imageGenerationService.getById(id);
+        return CommonResult.success(imageGenerationService.listItems(id).stream()
+                .map(item -> GenerationItemViews.project(item, task.getExecutionContextJson() != null, task.getStatus())).toList());
     }
 
     @Operation(summary = "分页查询当前用户的生图任务")
     @GetMapping("/page")
-    public CommonResult<PageResult<ImageTask>> page(PageParam pageParam) {
-        Long userId = requireCurrentUserId();
-        return CommonResult.success(imageGenerationService.pageByUser(userId,
-                pageParam.getPageNo(), pageParam.getPageSize()));
+    public CommonResult<PageResult<GenerationTaskViews.View<ImageTask>>> page(PageParam pageParam) {
+        var actor = actors.current();
+        return CommonResult.success(views.images(imageGenerationService.pageByUser(actor, executions.readableProjects(actor),
+                pageParam.getPageNo(), pageParam.getPageSize()), actor));
     }
 
     @Operation(summary = "取消图片生成任务")
     @PostMapping("/{taskId}/cancel")
     public CommonResult<Boolean> cancel(@PathVariable String taskId) {
-        return CommonResult.success(imageGenerationConsumer.cancelTask(
-                taskId, requireCurrentUserId()));
+        var task = imageGenerationService.getByTaskId(taskId);
+        return CommonResult.success(commands.cancel(GenerationKind.IMAGE, task.getId(), actors.current()));
+    }
+
+    @GetMapping("/{taskId}/execution")
+    public CommonResult<GenerationJobQueries.View> execution(@PathVariable String taskId) {
+        var task = imageGenerationService.getByTaskId(taskId);
+        return CommonResult.success(jobs.task(GenerationKind.IMAGE, task.getId(), actors.current()));
     }
 
     @Operation(summary = "删除图片生成任务")
     @DeleteMapping("/{id}")
     public CommonResult<Boolean> deleteImageTask(@PathVariable Long id) {
-        Long userId = requireCurrentUserId();
-        imageGenerationService.delete(id, userId);
+        imageGenerationService.delete(id, actors.current());
         return CommonResult.success(true);
     }
 }

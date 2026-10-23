@@ -21,6 +21,7 @@ public class ComfyUiWorkflowVersionRespVO {
     private Integer testStatus;
     private String testMessage;
     private LocalDateTime lastTestTime;
+    private String lastTestRunId;
     private Boolean published;
     private LocalDateTime createTime;
     private LocalDateTime updateTime;

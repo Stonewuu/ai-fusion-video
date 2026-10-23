@@ -21,13 +21,19 @@ import lombok.*;
 @AllArgsConstructor
 public class UserRole extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 用户ID */
+    /**
+     * 用户ID
+     */
     private Long userId;
 
-    /** 角色ID */
+    /**
+     * 角色ID
+     */
     private Long roleId;
 }

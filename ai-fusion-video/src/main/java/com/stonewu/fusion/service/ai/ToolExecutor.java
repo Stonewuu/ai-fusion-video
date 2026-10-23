@@ -1,7 +1,7 @@
 package com.stonewu.fusion.service.ai;
 
-import java.util.Map;
 import java.util.Locale;
+import java.util.Map;
 
 /**
  * 工具执行器接口
@@ -72,12 +72,16 @@ public interface ToolExecutor {
         return true;
     }
 
-    /** Whether the tool is guaranteed not to mutate platform state. */
+    /**
+     * Whether the tool is guaranteed not to mutate platform state.
+     */
     default boolean isReadOnly() {
         return false;
     }
 
-    /** Whether separate invocations may safely execute concurrently. */
+    /**
+     * Whether separate invocations may safely execute concurrently.
+     */
     default boolean isConcurrencySafe() {
         return false;
     }
@@ -102,7 +106,9 @@ public interface ToolExecutor {
         return ToolPermissionRisk.EDIT;
     }
 
-    /** Whether this tool can produce a high-risk invocation for some input. */
+    /**
+     * Whether this tool can produce a high-risk invocation for some input.
+     */
     default boolean mayRequireHighRiskApproval() {
         return getPermissionRisk(Map.of()) == ToolPermissionRisk.HIGH_RISK;
     }

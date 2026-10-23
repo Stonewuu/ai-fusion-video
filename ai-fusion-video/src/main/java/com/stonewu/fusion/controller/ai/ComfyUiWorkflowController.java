@@ -1,35 +1,29 @@
 package com.stonewu.fusion.controller.ai;
 
-import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.common.PageResult;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowCreateReqVO;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowPageReqVO;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowRespVO;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowUpdateReqVO;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowVersionRespVO;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowVersionSaveReqVO;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowValidationRespVO;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowTestReqVO;
-import com.stonewu.fusion.controller.ai.vo.comfyui.ComfyUiWorkflowTestRespVO;
+import com.stonewu.fusion.controller.ai.vo.comfyui.*;
+import com.stonewu.fusion.controller.generation.vo.GenerationScopeReqVO;
 import com.stonewu.fusion.convert.ai.ComfyUiWorkflowConvert;
 import com.stonewu.fusion.entity.ai.ComfyUiWorkflow;
 import com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowValidationService;
+import com.stonewu.fusion.service.ai.comfyui.test.ComfyUiTestService;
+import com.stonewu.fusion.service.ai.comfyui.test.ComfyUiTestView;
+import com.stonewu.fusion.service.canvas.CanvasActorResolver;
+import com.stonewu.fusion.service.generation.job.GenerationClientScope;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.PutMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -44,6 +38,8 @@ public class ComfyUiWorkflowController {
 
     private final ComfyUiWorkflowService workflowService;
     private final ComfyUiWorkflowValidationService validationService;
+    private final CanvasActorResolver actors;
+    private final ComfyUiTestService tests;
 
     @PostMapping("/create")
     @Operation(summary = "创建 ComfyUI 工作流")
@@ -158,9 +154,49 @@ public class ComfyUiWorkflowController {
 
     @PostMapping("/version/test")
     @Operation(summary = "在目标 ComfyUI 实例试运行工作流版本")
-    public CommonResult<ComfyUiWorkflowTestRespVO> testVersion(
+    public CommonResult<ComfyUiTestView> testVersion(
             @Valid @RequestBody ComfyUiWorkflowTestReqVO request) {
-        return success(validationService.testVersion(
-                request.getVersionId(), request.getInputs()));
+        var actor = actors.current();
+        request.getScope().require(actor);
+        return success(tests.submit(request.getRequestId(), request.getVersionId(), request.getWorkflowHash(),
+                request.getInputs(), actor));
+    }
+
+    @GetMapping("/version/tests")
+    public CommonResult<List<ComfyUiTestView>> testHistory(@RequestParam("versionId") Long versionId) {
+        return success(tests.list(versionId, actors.current()));
+    }
+
+    @GetMapping("/tests/{id}")
+    public CommonResult<ComfyUiTestView> testRun(@PathVariable String id) {
+        return success(tests.get(id, actors.current()));
+    }
+
+    @PostMapping("/test-requests/{requestId}/withdraw")
+    public CommonResult<Boolean> withdrawTest(@PathVariable String requestId,
+                                              @Valid @RequestBody GenerationScopeReqVO request) {
+        var actor = actors.current();
+        request.getScope().require(actor);
+        tests.withdraw(requestId, actor);
+        return success(true);
+    }
+
+    @PostMapping("/tests/{id}/cancel")
+    public CommonResult<ComfyUiTestView> cancelTest(@PathVariable String id,
+                                                    @Valid @RequestBody GenerationScopeReqVO request) {
+        var actor = actors.current();
+        request.getScope().require(actor);
+        return success(tests.cancel(id, actor));
+    }
+
+    @PostMapping("/tests/{id}/review")
+    public CommonResult<ComfyUiTestView> reviewTest(@PathVariable String id, @Valid @RequestBody TestReview request) {
+        var actor = actors.current();
+        request.scope().require(actor);
+        return success(tests.review(id, request.expectedRevision(), request.action(), request.note(), actor));
+    }
+
+    public record TestReview(@NotNull @Min(0) Long expectedRevision, @NotNull @Valid GenerationClientScope scope,
+                             @NotBlank String action, @NotBlank @Size(max = 2000) String note) {
     }
 }

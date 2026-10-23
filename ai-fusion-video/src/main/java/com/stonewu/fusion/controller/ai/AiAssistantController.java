@@ -1,9 +1,9 @@
 package com.stonewu.fusion.controller.ai;
 
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.common.PageParam;
 import com.stonewu.fusion.common.PageResult;
-import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.AssistantReferenceOptionsRespVO;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.entity.ai.AgentMessage;
@@ -19,10 +19,10 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
 import reactor.core.publisher.Mono;
 
-import java.util.List;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 
@@ -47,7 +47,11 @@ public class AiAssistantController {
 
     @Operation(summary = "获取助手可主动引用的 Skill 与 MCP 工具")
     @GetMapping("/reference-options")
-    public CommonResult<AssistantReferenceOptionsRespVO> referenceOptions() {
+    public CommonResult<AssistantReferenceOptionsRespVO> referenceOptions(
+            @RequestParam(defaultValue = AgentKernelSpecFactory.DEFAULT_AGENT_KEY) String agentType) {
+        if (!AgentKernelSpecFactory.DEFAULT_AGENT_KEY.equals(agentType) && !"canvas_assistant".equals(agentType)) {
+            throw new BusinessException(400, "助手类型不可用");
+        }
         long userId = requireCurrentUserId();
         Map<String, AssistantReferenceOptionsRespVO.SkillOption> skillOptions = new LinkedHashMap<>();
         skillRegistry.catalog().forEach(skill -> skillOptions.put(skill.name(),
@@ -63,7 +67,7 @@ public class AiAssistantController {
                         AssistantReferenceOptionsRespVO.SkillOption::displayName))
                 .toList();
         List<AssistantReferenceOptionsRespVO.McpToolOption> mcpTools = mcpRegistry
-                .catalogForAgent(AgentKernelSpecFactory.DEFAULT_AGENT_KEY, userId)
+                .catalogForAgent(agentType, userId)
                 .stream()
                 .map(tool -> new AssistantReferenceOptionsRespVO.McpToolOption(
                         tool.serverName(),
@@ -89,6 +93,17 @@ public class AiAssistantController {
                     pageParam.getPageNo(), pageParam.getPageSize());
         }
         return CommonResult.success(result);
+    }
+
+    @Operation(summary = "恢复当前用户指定的对话")
+    @GetMapping("/conversations/{conversationId}")
+    public CommonResult<AgentConversation> getConversation(@PathVariable String conversationId) {
+        AgentConversation conversation = conversationService.getOwnedByConversationId(conversationId,
+                requireCurrentUserId());
+        if (conversation == null) {
+            throw new BusinessException(404, "对话不存在");
+        }
+        return CommonResult.success(conversation);
     }
 
     @Operation(summary = "获取对话消息列表")

@@ -1,4 +1,9 @@
 "use client";
+import { ManagedMediaLink } from "@/components/media/managed-media-link";
+
+import { ManagedVideo } from "@/components/media/managed-video";
+import { ManagedAudio } from "@/components/media/managed-audio";
+
 
 import { memo, useEffect, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
@@ -10,10 +15,11 @@ import {
   PlugZap,
   Sparkles,
   User,
+  Workflow,
   X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { AgentMessage } from "@/lib/api/ai-assistant";
 import {
@@ -29,7 +35,7 @@ export const UserMessageBubble = memo(function UserMessageBubble({
   const references = parseAssistantMessageReferences(message.referencesJson);
   const hasReferenceSummary = references.projectId !== null
     || references.skills.length > 0
-    || references.mcpTools.length > 0;
+    || references.mcpTools.length > 0 || !!references.canvas;
 
   return (
     <div className="flex flex-col items-end gap-1.5">
@@ -43,6 +49,11 @@ export const UserMessageBubble = memo(function UserMessageBubble({
 
       {hasReferenceSummary ? (
         <div className="mr-8 flex max-w-[85%] flex-wrap justify-end gap-1">
+          {references.canvas ? (
+            <ReferenceBadge icon={<Workflow />}>
+              {references.canvas.title} · {references.canvas.selectedNodeIds.length ? `选中 ${references.canvas.selectedNodeIds.length} 个节点` : "画布"}
+            </ReferenceBadge>
+          ) : null}
           {references.projectId !== null ? (
             <ReferenceBadge icon={<FolderKanban />}>
               {references.project?.name ?? `项目 #${references.projectId}`}
@@ -121,7 +132,7 @@ function AttachmentThumbnail({ attachment }: { attachment: AssistantMessageAttac
           {label}
         </button>
       ) : source ? (
-        <a
+        <ManagedMediaLink
           href={source}
           target="_blank"
           rel="noreferrer"
@@ -131,7 +142,7 @@ function AttachmentThumbnail({ attachment }: { attachment: AssistantMessageAttac
         >
           {preview}
           {label}
-        </a>
+        </ManagedMediaLink>
       ) : (
         <div className={tileClassName} title={`${attachment.name}（旧消息无预览地址）`}>
           {preview}
@@ -211,7 +222,7 @@ function AttachmentPreviewDialog({
             fallbackType="image"
           />
         ) : attachment.inputType === "video" ? (
-          <video
+          <ManagedVideo
             src={source}
             controls
             className="max-h-[calc(100vh-7rem)] max-w-[calc(100vw-2rem)] rounded-xl bg-black shadow-2xl"
@@ -220,7 +231,7 @@ function AttachmentPreviewDialog({
         ) : (
           <div className="w-[min(32rem,calc(100vw-2rem))] rounded-2xl border border-border/40 bg-popover/90 p-4 shadow-2xl backdrop-blur-xl">
             <p className="mb-3 truncate pr-10 text-sm text-foreground">{attachment.name}</p>
-            <audio src={source} controls className="w-full" aria-label={attachment.name} />
+            <ManagedAudio src={source} controls className="w-full" aria-label={attachment.name} />
           </div>
         )}
 

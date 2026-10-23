@@ -55,7 +55,6 @@ export function ScriptInfoResult({ data }: { data: unknown }) {
         <span>
           总集数: <span className="font-medium text-foreground">{totalEpisodes ?? 0}</span>
         </span>
-        {obj.scriptId != null && <span>剧本ID: {String(obj.scriptId)}</span>}
       </div>
       {episodes && Array.isArray(episodes) && episodes.length > 0 && (
         <div className="space-y-0.5">
@@ -165,11 +164,6 @@ export function EpisodeDetailResult({ data }: { data: unknown }) {
         {totalScenes !== undefined && (
           <span className="px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-400 text-[10px]">
             {totalScenes} 个场次
-          </span>
-        )}
-        {obj.episode_version !== undefined && (
-          <span className="text-[10px] text-muted-foreground/50">
-            v{String(obj.episode_version)}
           </span>
         )}
       </div>

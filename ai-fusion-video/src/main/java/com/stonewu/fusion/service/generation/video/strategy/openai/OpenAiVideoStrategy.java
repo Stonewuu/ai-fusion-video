@@ -7,7 +7,6 @@ import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.generation.video.VideoGenerationService;
 import com.stonewu.fusion.service.generation.video.strategy.support.AbstractOpenAiCompatibleVideoStrategy;
 import com.stonewu.fusion.service.generation.video.strategy.support.OpenAiCompatibleVideoProtocolSupport;
-import com.stonewu.fusion.service.storage.MediaStorageService;
 import org.springframework.stereotype.Component;
 
 /** Strict implementation of the official OpenAI/Sora Videos API. */
@@ -20,12 +19,11 @@ public class OpenAiVideoStrategy extends AbstractOpenAiCompatibleVideoStrategy {
                                ApiConfigService apiConfigService,
                                VideoGenerationService videoGenerationService,
                                ModelPresetService modelPresetService,
-                               MediaStorageService mediaStorageService,
                                AiModelMetadataResolver aiModelMetadataResolver,
                                OpenAiCompatibleVideoProtocolSupport protocolSupport,
                                OpenAiVideoProtocolAdapter protocolAdapter) {
         super(aiModelService, apiConfigService, videoGenerationService, modelPresetService,
-                mediaStorageService, aiModelMetadataResolver, protocolSupport, protocolAdapter);
+                aiModelMetadataResolver, protocolSupport, protocolAdapter);
     }
 
     @Override

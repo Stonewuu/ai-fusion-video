@@ -17,7 +17,7 @@ import { getApiErrorMessage } from "@/lib/api/api-error";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 
 type ReferenceMediaType = "image" | "video" | "audio";
 
@@ -111,7 +111,7 @@ export function GenerationReferenceField({
           )}
         </div>
         <span className="text-[10px] tabular-nums text-muted-foreground">
-          {values.length}/{maxCount}
+          {Number.isFinite(maxCount) ? `${values.length}/${maxCount}` : `已添加 ${values.length} 项`}
         </span>
       </div>
 

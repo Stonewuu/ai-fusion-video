@@ -38,7 +38,7 @@ function itemPresentation(item: AssistantReferencePickerItem) {
   if (item.kind === "project") {
     return {
       icon: <FolderKanban className="size-4" />,
-      eyebrow: `项目 #${item.value.id}`,
+      eyebrow: "项目",
       label: item.value.name,
       description: item.value.description || "将项目作为本轮对话上下文",
     };
@@ -136,7 +136,7 @@ export function AssistantReferencePicker({
         </span>
       </div>
 
-      <div className="min-h-0 overflow-y-auto pt-1">
+      <div className="min-h-0 min-w-0 overflow-y-auto scroll-p-1 p-1">
         {loading ? (
           <div className="flex h-20 items-center justify-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="size-4 animate-spin motion-reduce:animate-none" /> 加载引用项

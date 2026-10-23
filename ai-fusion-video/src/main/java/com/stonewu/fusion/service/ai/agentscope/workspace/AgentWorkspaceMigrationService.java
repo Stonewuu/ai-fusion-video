@@ -1,5 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope.workspace;
 
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AgentWorkspaceConfig;
@@ -98,9 +100,8 @@ public class AgentWorkspaceMigrationService {
     }
 
     public AgentWorkspaceMigration latest() {
-        return migrationMapper.selectOne(new LambdaQueryWrapper<AgentWorkspaceMigration>()
-                .orderByDesc(AgentWorkspaceMigration::getId)
-                .last("LIMIT 1"));
+        return migrationMapper.selectPage(new Page<>(1, 1, false), new LambdaQueryWrapper<AgentWorkspaceMigration>()
+                .orderByDesc(AgentWorkspaceMigration::getId)).getRecords().stream().findFirst().orElse(null);
     }
 
     @CacheEvict(value = "agentWorkspaceMigration", allEntries = true)

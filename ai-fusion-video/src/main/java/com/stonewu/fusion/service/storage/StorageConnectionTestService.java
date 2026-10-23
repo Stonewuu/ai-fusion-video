@@ -103,14 +103,16 @@ public class StorageConnectionTestService {
         }
     }
 
-    private StorageConnectionTestResult verifyPublicUrl(ResolvedS3StorageConfig config, String publicUrl) throws IOException {
+    private StorageConnectionTestResult verifyPublicUrl(ResolvedS3StorageConfig config,
+                                                        String publicUrl) throws IOException {
         Request head = new Request.Builder().url(publicUrl).head().build();
         try (Response response = httpClient.newCall(head).execute()) {
             if (response.isSuccessful()) {
                 return StorageConnectionTestResult.success("公开访问正常", publicUrl);
             }
             if (response.code() != 405) {
-                return StorageConnectionTestResult.failure(publicAccessFailureMessage(config, response.code()), publicUrl);
+                return StorageConnectionTestResult.failure(publicAccessFailureMessage(config, response.code()),
+                        publicUrl);
             }
         }
 

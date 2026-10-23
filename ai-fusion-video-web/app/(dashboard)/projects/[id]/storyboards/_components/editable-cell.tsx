@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useState, useRef } from "react";
-import { Pencil } from "lucide-react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { Check, Loader2, Pencil, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { cn } from "@/lib/utils";
 
 export function EditableCell({
@@ -14,127 +16,184 @@ export function EditableCell({
 }: {
   value: string;
   placeholder?: string;
-  onSave: (val: string) => void;
+  onSave: (value: string) => Promise<void>;
   onCellClick?: () => void;
   className?: string;
   multiline?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
-  const ref = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const control = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+  const pending = useRef(false);
+  // 回调同时捕获开始编辑时的业务对象版本；刷新不能替换本次草稿的前置条件。
+  const session = useRef<{ value: string; save: typeof onSave } | null>(null);
 
-  useEffect(() => {
-    setDraft(value);
-  }, [value]);
-
-  // 使用 useLayoutEffect 在浏览器绘制前同步聚焦，消除“慢半拍”的延迟感，并强制将光标移至文本末尾
   useLayoutEffect(() => {
-    if (editing && ref.current) {
-      const el = ref.current;
-      el.focus();
-      const len = el.value.length;
-      el.setSelectionRange(len, len);
-    }
+    if (!editing || !control.current) return;
+    control.current.focus();
+    control.current.scrollIntoView({ block: "nearest", inline: "nearest" });
+    control.current.setSelectionRange(
+      control.current.value.length,
+      control.current.value.length,
+    );
   }, [editing]);
 
-  // 动态调整 textarea 的高度，使其与内容高度完全一致，从而在 flex 容器中垂直居中，且不撑高/缩水单元格
   useLayoutEffect(() => {
-    if (editing && multiline && ref.current) {
-      const textarea = ref.current as HTMLTextAreaElement;
-      textarea.style.height = "auto";
-      textarea.style.height = `${textarea.scrollHeight}px`;
-    }
+    if (!editing || !multiline || !control.current) return;
+    const textarea = control.current as HTMLTextAreaElement;
+    textarea.style.height = "auto";
+    textarea.style.height = String(Math.min(textarea.scrollHeight, 320)) + "px";
   }, [editing, multiline, draft]);
 
-  const handleSave = () => {
+  const begin = () => {
+    onCellClick?.();
+    session.current = { value, save: onSave };
+    setDraft(value);
+    setError("");
+    setEditing(true);
+  };
+  const cancel = () => {
+    if (pending.current) return;
+    session.current = null;
     setEditing(false);
-    if (draft !== value) {
-      onSave(draft);
+    setError("");
+  };
+  const commit = async () => {
+    const current = session.current;
+    if (!current || pending.current) return;
+    if (draft === current.value) {
+      cancel();
+      return;
+    }
+    pending.current = true;
+    setSaving(true);
+    setError("");
+    try {
+      await current.save(draft);
+      session.current = null;
+      setEditing(false);
+    } catch (failure) {
+      setError(getApiErrorMessage(failure));
+    } finally {
+      pending.current = false;
+      setSaving(false);
     }
   };
 
-  const handleCancel = () => {
-    setEditing(false);
-    setDraft(value);
-  };
-
-  if (editing) {
-    const inputClassName = cn(
-      "w-full bg-transparent border-0 outline-none p-0 m-0",
-      "text-xs leading-relaxed focus:ring-0 focus:outline-none",
-      "text-foreground placeholder:text-muted-foreground/30",
-      className
-    );
-
+  if (!editing)
     return (
-      <div
+      <button
+        type="button"
+        title="点击编辑"
+        onClick={(event) => {
+          event.stopPropagation();
+          begin();
+        }}
         className={cn(
-          "relative w-full h-full min-h-[32px] flex items-center",
-          "px-2 py-1.5 rounded-md",
-          "border border-primary/40 bg-background shadow-sm",
-          "focus-within:ring-2 focus-within:ring-primary/30",
-          "transition-[box-shadow] duration-150 motion-reduce:transition-none",
-          "text-xs leading-relaxed",
-          className
+          "group/cell flex min-h-9 w-full items-center gap-2 rounded-xl border border-transparent px-2 py-1.5 text-left outline-none transition-colors hover:border-border/40 hover:bg-muted/40 focus-visible:ring-2 focus-visible:ring-ring",
+          className,
         )}
       >
-        {multiline ? (
-          <textarea
-            ref={ref as React.RefObject<HTMLTextAreaElement>}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Escape") handleCancel();
-            }}
-            placeholder={placeholder}
-            className={cn(inputClassName, "resize-none overflow-hidden")}
-          />
-        ) : (
-          <input
-            ref={ref as React.RefObject<HTMLInputElement>}
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={handleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleSave();
-              if (e.key === "Escape") handleCancel();
-            }}
-            placeholder={placeholder}
-            className={inputClassName}
-          />
-        )}
-      </div>
+        <span className="flex-1 whitespace-pre-wrap break-words">
+          {value || placeholder || "\u00a0"}
+        </span>
+        <Pencil className="size-3 shrink-0 text-muted-foreground opacity-0 group-hover/cell:opacity-100 group-focus-visible/cell:opacity-100" />
+      </button>
     );
-  }
 
+  const inputClass = cn(
+    "min-h-9 w-full scroll-m-1 rounded-lg border border-border/40 bg-background p-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
+    className,
+  );
+  const changed = session.current !== null && value !== session.current.value;
   return (
     <div
-      onClick={(e) => {
-        onCellClick?.();
-        e.stopPropagation();
-        setEditing(true);
-      }}
-      className={cn(
-        // 撑满整个单元格
-        "relative w-full h-full min-h-[32px] flex items-center",
-        // hover 效果
-        "px-2 py-1.5 rounded-md cursor-pointer",
-        "border border-transparent",
-        "hover:bg-muted/40 hover:border-border/40",
-        "group/cell transition-all duration-150",
-        // 字体
-        "text-xs leading-relaxed",
-        !value && "text-muted-foreground/30 italic",
-        className
-      )}
-      title="点击编辑"
+      className="w-full space-y-2"
+      onClick={(event) => event.stopPropagation()}
     >
-      <span className="flex-1 whitespace-pre-wrap break-words">{value || placeholder || "\u00a0"}</span>
-      <div className="absolute right-1 top-1/2 -translate-y-1/2 h-6 w-6 rounded-lg flex items-center justify-center invisible group-hover/cell:visible backdrop-blur-xl bg-white/70 shadow-sm z-10">
-        <Pencil className="h-3.5 w-3.5 text-primary" />
-      </div>
+      {multiline ? (
+        <textarea
+          ref={control as React.RefObject<HTMLTextAreaElement>}
+          value={draft}
+          disabled={saving}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => {
+            if (!error) void commit();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancel();
+            }
+            if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+              event.preventDefault();
+              void commit();
+            }
+          }}
+          placeholder={placeholder}
+          aria-label="编辑内容"
+          className={cn(inputClass, "resize-none overflow-y-auto")}
+        />
+      ) : (
+        <input
+          ref={control as React.RefObject<HTMLInputElement>}
+          value={draft}
+          disabled={saving}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => {
+            if (!error) void commit();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") {
+              event.preventDefault();
+              void commit();
+            }
+            if (event.key === "Escape") {
+              event.preventDefault();
+              cancel();
+            }
+          }}
+          placeholder={placeholder}
+          aria-label="编辑内容"
+          className={inputClass}
+        />
+      )}
+      {changed && (
+        <p className="text-xs text-muted-foreground">
+          内容已更新，本地草稿已保留。
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
+      {(error || saving) && (
+        <div className="flex gap-2">
+          <Button
+            size="icon-xs"
+            variant="outline"
+            disabled={saving}
+            title="重试保存"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={() => void commit()}
+          >
+            {saving ? <Loader2 className="animate-spin" /> : <Check />}
+          </Button>
+          <Button
+            size="icon-xs"
+            variant="ghost"
+            disabled={saving}
+            title="放弃本地修改"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={cancel}
+          >
+            <X />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

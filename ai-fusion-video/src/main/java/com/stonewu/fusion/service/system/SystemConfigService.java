@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.system.SystemConfig;
 import com.stonewu.fusion.mapper.system.SystemConfigMapper;
+import com.stonewu.fusion.service.media.MediaReference;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
@@ -36,8 +37,7 @@ public class SystemConfigService {
     public String getValue(String key) {
         SystemConfig config = systemConfigMapper.selectOne(
                 new LambdaQueryWrapper<SystemConfig>()
-                        .eq(SystemConfig::getConfigKey, key)
-                        .last("LIMIT 1"));
+                        .eq(SystemConfig::getConfigKey, key));
         return config != null ? config.getConfigValue() : null;
     }
 
@@ -49,8 +49,7 @@ public class SystemConfigService {
         String normalizedValue = normalizeConfigValue(key, value);
         SystemConfig existing = systemConfigMapper.selectOne(
                 new LambdaQueryWrapper<SystemConfig>()
-                        .eq(SystemConfig::getConfigKey, key)
-                        .last("LIMIT 1"));
+                        .eq(SystemConfig::getConfigKey, key));
         if (existing != null) {
             existing.setConfigValue(normalizedValue);
             systemConfigMapper.updateById(existing);
@@ -120,7 +119,7 @@ public class SystemConfigService {
      * 4. 没有资源公网地址时，相对路径无法解析为公网 URL，返回 null
      */
     public String resolvePublicUrl(String relativePath) {
-        if (StrUtil.isBlank(relativePath)) {
+        if (StrUtil.isBlank(relativePath) || MediaReference.managed(relativePath)) {
             return null;
         }
         // 已经是完整 URL（如 OSS 直链）

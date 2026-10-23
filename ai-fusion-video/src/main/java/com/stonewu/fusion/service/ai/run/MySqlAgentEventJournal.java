@@ -9,11 +9,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Optional;
-import java.time.Duration;
 
-/** Reactive adapter for owner-fenced MySQL event appends. */
+/**
+ * Reactive adapter for owner-fenced MySQL event appends.
+ */
 @Service
 @RequiredArgsConstructor
 public class MySqlAgentEventJournal implements AgentEventJournal {

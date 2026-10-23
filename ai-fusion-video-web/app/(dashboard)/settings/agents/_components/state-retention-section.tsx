@@ -64,9 +64,9 @@ export function StateRetentionSection({
         retentionDays,
       });
       onSaved(saved);
-      toast.success("AgentState 清理配置已保存");
+      toast.success("会话状态清理配置已保存");
     } catch (error) {
-      toastApiError(error, "保存 AgentState 清理配置失败");
+      toastApiError(error, "保存 会话状态清理配置失败");
     } finally {
       setSaving(false);
     }
@@ -80,14 +80,14 @@ export function StateRetentionSection({
             <Database className="size-5" />
           </div>
           <div>
-            <h2 className={settingsTypography.sectionTitle}>AgentState 生命周期</h2>
+            <h2 className={settingsTypography.sectionTitle}>会话状态保留</h2>
             <p className={settingsTypography.sectionDescription}>
               定期删除长期未活动的模型会话状态；消息记录仍会保留，但过期会话不能继续执行。
             </p>
           </div>
         </div>
         {isAdmin && (
-          <Button type="button" onClick={save} disabled={saving}>
+          <Button type="button" onClick={save} disabled={saving || cleanupIntervalDays === policy.cleanupIntervalDays && retentionDays === policy.retentionDays}>
             <Save />
             {saving ? "保存中…" : "保存"}
           </Button>
@@ -124,7 +124,7 @@ export function StateRetentionSection({
             onChange={(event) => setRetentionDays(Number(event.target.value))}
           />
           <p className="text-xs text-muted-foreground">
-            清理超过 {retentionDays || "—"} 天未活动的 AgentState。
+            清理超过 {retentionDays || "—"} 天未活动的模型会话状态。
           </p>
         </div>
       </div>

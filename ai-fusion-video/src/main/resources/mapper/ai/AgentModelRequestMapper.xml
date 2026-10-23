@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.ai.AgentModelRequestMapper">
+    <select id="uncertainForConversation" resultType="long">
+        SELECT COUNT(*) FROM afv_agent_model_request m JOIN afv_agent_run r ON r.run_id = m.run_id
+        WHERE r.conversation_id = #{conversationId} AND m.status = 'UNKNOWN_SUBMISSION' AND m.permit_held = TRUE
+    </select>
+    <select id="countHeldForModel" resultType="long">
+        SELECT (SELECT COUNT(*) FROM afv_agent_model_request WHERE model_id = #{modelId} AND permit_held = TRUE)
+            + (SELECT COUNT(*) FROM afv_canvas_text_job WHERE model_id = #{modelId} AND permit_held = TRUE)
+    </select>
+    <insert id="admit">
+        INSERT INTO afv_agent_model_request(id, run_id, model_id, request_owner, request_epoch, status, created_at, updated_at)
+        VALUES (#{id}, #{runId}, #{modelId}, #{owner}, #{epoch}, 'RUNNING', UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <update id="completed">
+        UPDATE afv_agent_model_request SET status = 'COMPLETED', permit_held = FALSE, response_received_at = UTC_TIMESTAMP(6),
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="uncertain">
+        UPDATE afv_agent_model_request SET status = 'UNKNOWN_SUBMISSION', revision = revision + 1,
+            updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <select id="lockRequest" resultType="String">
+        SELECT status FROM afv_agent_model_request WHERE id = #{id} AND run_id = #{runId} AND request_owner = #{owner} AND request_epoch = #{epoch} FOR UPDATE
+    </select>
+    <update id="reconcile">
+        UPDATE afv_agent_model_request m JOIN afv_agent_run r ON r.run_id = m.run_id
+        SET m.status = 'UNKNOWN_SUBMISSION', m.revision = m.revision + 1, m.updated_at = UTC_TIMESTAMP(6)
+        WHERE m.status = 'RUNNING' AND (r.status &lt;&gt; 'RUNNING' OR r.owner_instance_id IS NULL
+            OR r.owner_instance_id &lt;&gt; m.request_owner OR r.owner_epoch &lt;&gt; m.request_epoch
+            OR r.lease_until &lt;= UTC_TIMESTAMP(6) OR r.deadline_at &lt;= UTC_TIMESTAMP(6))
+    </update>
+    <update id="adminCancel">
+        UPDATE afv_agent_model_request SET status = 'CANCELLED', permit_held = FALSE,
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+</mapper>

@@ -16,12 +16,7 @@ import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import okhttp3.MediaType;
-import okhttp3.MultipartBody;
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.RequestBody;
-import okhttp3.Response;
+import okhttp3.*;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
@@ -31,13 +26,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Base64;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -63,7 +52,11 @@ public class OpenAiCompatibleVideoProtocolSupport {
             .writeTimeout(60, TimeUnit.SECONDS)
             .build();
 
-    public RequestBody buildSoraSubmitBody(OpenAiCompatibleVideoProtocolContext context) {
+    public RequestBody buildMultipartVideosBody(OpenAiCompatibleVideoProtocolContext context) {
+        return buildMultipartVideosBody(context, true);
+    }
+
+    public RequestBody buildMultipartVideosBody(OpenAiCompatibleVideoProtocolContext context, boolean includeSize) {
         MultipartBody.Builder builder = new MultipartBody.Builder().setType(MultipartBody.FORM)
                 .addFormDataPart("model", resolveModelCode(context.model()));
 
@@ -77,7 +70,7 @@ public class OpenAiCompatibleVideoProtocolSupport {
             builder.addFormDataPart("seconds", seconds);
         }
 
-        String size = resolveSize(context.task(), context.modelConfig());
+        String size = includeSize ? resolveSize(context.task(), context.modelConfig()) : null;
         if (StrUtil.isNotBlank(size)) {
             builder.addFormDataPart("size", size);
         }
@@ -457,8 +450,10 @@ public class OpenAiCompatibleVideoProtocolSupport {
             return loadLocalMedia(trimmed);
         }
         if (presetArtStyleResourceResolver.isPresetArtStylePath(trimmed)) {
-            PresetArtStyleResourceResolver.PresetArtStyleResource resource = presetArtStyleResourceResolver.load(trimmed);
-            return new BinaryResource(resource.bytes(), resource.mimeType(), extensionFromImageMimeType(resource.mimeType()));
+            PresetArtStyleResourceResolver.PresetArtStyleResource resource = presetArtStyleResourceResolver.load(
+                    trimmed);
+            return new BinaryResource(resource.bytes(), resource.mimeType(),
+                    extensionFromImageMimeType(resource.mimeType()));
         }
         if (trimmed.startsWith("file:")) {
             return loadFile(Paths.get(URI.create(trimmed)));
@@ -539,6 +534,17 @@ public class OpenAiCompatibleVideoProtocolSupport {
     }
 
     private String resolveSize(VideoTask task, JSONObject modelConfig) {
+        JSONObject sizes = modelConfig.getJSONObject("supportedSizes");
+        if (sizes != null) {
+            String tier = StrUtil.blankToDefault(task.getResolution(), modelConfig.getStr("defaultResolution"));
+            JSONObject ratioSizes = sizes.getJSONObject(tier);
+            String configured = ratioSizes == null ? null : ratioSizes.getStr(task.getRatio());
+            String size = normalizeSize(configured);
+            if (size == null) {
+                throw new BusinessException("当前模型未配置此分辨率与比例对应的视频尺寸");
+            }
+            return size;
+        }
         String resolution = normalizeSize(task.getResolution());
         if (StrUtil.isNotBlank(resolution)) {
             return resolution;

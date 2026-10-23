@@ -190,6 +190,8 @@ BACKEND_PORT=18080
 
 `PUBLIC_API_URL` 应填写后端根地址，末尾不要添加 `/api`。后端默认全局允许跨域；生产环境建议像示例一样将 `CORS_ALLOWED_ORIGIN_PATTERNS` 限制为实际前端来源，多个来源使用英文逗号分隔。
 
+部署时需要区分三类地址：Nginx 的 `http://backend:18080` 供容器之间通信；`PUBLIC_API_URL` 供浏览器请求后端，统一入口模式应留空；系统设置中的“后端资源地址”`resource_base_url` 存储在数据库中，用于后端生成图片、视频等资源的完整访问地址。云端模型需要 URL 输入时，该资源地址必须能从公网访问，不能使用 Compose 服务名或仅宿主机可访问的地址。
+
 使用预构建镜像：
 
 ```bash
@@ -263,7 +265,7 @@ Docker Compose 会自动读取仓库根目录的 `.env`。不同启动方式使�
 | 本地构建统一入口 | `docker-compose.build.yml` | 与默认统一入口相同，仅镜像改为本地构建 |
 | 前后端独立部署 | 基础 Compose 文件 + `docker-compose.separated.yml` | 必须填写 `PUBLIC_API_URL`；生产环境建议填写 `CORS_ALLOWED_ORIGIN_PATTERNS`；可按需修改 `FRONTEND_PORT`、`BACKEND_PORT`；`APP_PORT` 不生效 |
 
-公网部署前必须修改 MySQL root 密码和 Redis 密码；如启用 MySQL 应用账号，也必须设置独立密码。`FRONTEND_PORT`、`BACKEND_PORT` 和 `PUBLIC_API_URL` 仅在组合使用 `docker-compose.separated.yml` 时生效；`CORS_ALLOWED_ORIGIN_PATTERNS` 对所有部署方式生效。
+公网部署前必须修改 MySQL root 密码和 Redis 密码；如启用 MySQL 应用账号，也必须设置独立密码。`FRONTEND_PORT`、`BACKEND_PORT` 仅在组合使用 `docker-compose.separated.yml` 时生效；`PUBLIC_API_URL` 和 `CORS_ALLOWED_ORIGIN_PATTERNS` 对所有部署方式生效，统一入口部署的 `PUBLIC_API_URL` 应留空。
 
 | 变量 | 默认值 | 用途 |
 | --- | --- | --- |

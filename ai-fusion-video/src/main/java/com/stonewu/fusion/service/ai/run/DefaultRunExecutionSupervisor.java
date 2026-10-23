@@ -15,17 +15,11 @@ import com.stonewu.fusion.service.ai.agentscope.state.StateStoreSlot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.kernel.RunConfigUnavailableException;
-import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
-import com.stonewu.fusion.service.ai.run.model.CommittedAgentEvent;
-import com.stonewu.fusion.service.ai.run.model.ExecutionStopReason;
-import com.stonewu.fusion.service.ai.run.model.ResumeAgentExecutionCommand;
-import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
-import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
-import com.stonewu.fusion.service.ai.run.model.WaitingCheckpoint;
-import com.stonewu.fusion.service.ai.run.model.PendingConfirmation;
+import com.stonewu.fusion.service.ai.run.model.*;
+import com.stonewu.fusion.service.canvas.agent.node.CanvasAgentNodeTypes;
 import io.agentscope.core.message.Msg;
-import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -33,12 +27,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeParseException;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.List;
-import java.util.LinkedHashSet;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -117,10 +106,10 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                     safeCommand.run().ownerEpoch(),
                     safeCommand.run().agentStateSessionId(),
                     safeCommand.run().deadline(),
-                     safeCommand.messages(),
-                     safeCommand.kernelSpec(),
-                     safeCommand.runtimeContextRequest(),
-                     safeCommand.kernelSnapshot());
+                    safeCommand.messages(),
+                    safeCommand.kernelSpec(),
+                    safeCommand.runtimeContextRequest(),
+                    safeCommand.kernelSnapshot());
         });
     }
 
@@ -138,10 +127,10 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                             safeCommand.run().newOwnerEpoch(),
                             safeCommand.run().sessionId(),
                             safeCommand.run().deadline(),
-                             safeCommand.messages(),
-                             spec,
-                             safeCommand.runtimeContextRequest(),
-                             safeCommand.kernelSnapshot()))
+                            safeCommand.messages(),
+                            spec,
+                            safeCommand.runtimeContextRequest(),
+                            safeCommand.kernelSnapshot()))
                     .onErrorResume(RunConfigUnavailableException.class, failure ->
                             terminalFailure(
                                     safeCommand.run().runId(),
@@ -160,14 +149,15 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             long ownerEpoch,
             String stateSessionId,
             Instant deadline,
-             List<Msg> messages,
-             AgentKernelSpec spec,
-             AgentScopeRuntimeContextRequest runtimeRequest,
-             AgentKernelSnapshot kernelSnapshot) {
+            List<Msg> messages,
+            AgentKernelSpec spec,
+            AgentScopeRuntimeContextRequest runtimeRequest,
+            AgentKernelSnapshot kernelSnapshot) {
         requireRuntimeIdentity(
                 runId, ownerInstanceId, ownerEpoch,
                 stateSessionId, deadline, runtimeRequest);
         AtomicReference<String> pauseType = new AtomicReference<>();
+        AtomicReference<PendingExternalExecution> externalWait = new AtomicReference<>();
         AtomicLong lastCommittedSequence = new AtomicLong(-1);
         return executionFactory.start(
                         runId,
@@ -181,16 +171,18 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                 .flatMap(execution -> executions.registerAndLaunch(
                         execution,
                         deadline,
-                         chunks::coalesce,
-                         events -> events.concatMap(
-                                         event -> appendOwned(execution, event)
-                                                 .flatMap(committed -> afterAppend(
-                                                         execution,
-                                                         event,
-                                                         committed,
-                                                         pauseType,
-                                                         lastCommittedSequence)), 1)
-                                 .then(),
+                        chunks::coalesce,
+                        events -> events.concatMap(
+                                        event -> appendOwned(execution, event)
+                                                .flatMap(committed -> afterAppend(
+                                                        execution,
+                                                        event,
+                                                        committed,
+                                                        pauseType,
+                                                        externalWait,
+                                                        lastCommittedSequence,
+                                                        deadline)), 1)
+                                .then(),
                         ignored -> signals.cancellations(runId)
                                 .next()
                                 .flatMap(cancelledRunId ->
@@ -199,35 +191,36 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                                                 ownerInstanceId,
                                                 ownerEpoch))
                                 .onErrorResume(failure -> Mono.empty()),
-                         outcome -> completeExecution(
-                                 execution,
-                                 outcome,
-                                 kernelSnapshot,
-                                 pauseType.get(),
-                                 lastCommittedSequence.get())))
+                        outcome -> completeExecution(
+                                execution,
+                                outcome,
+                                kernelSnapshot,
+                                pauseType.get(),
+                                externalWait.get(),
+                                lastCommittedSequence.get())))
                 .onErrorResume(
                         OwnedExecutionRegistry.ExecutionAlreadyOwnedException.class,
                         Mono::error)
                 .onErrorResume(failure -> terminalFailure(
-                                runId,
-                                ownerInstanceId,
-                                ownerEpoch,
-                                runtimeRequest,
-                                stateSessionId,
-                                classifyStartFailure(failure),
-                                failure.getMessage())
+                        runId,
+                        ownerInstanceId,
+                        ownerEpoch,
+                        runtimeRequest,
+                        stateSessionId,
+                        classifyStartFailure(failure),
+                        failure.getMessage())
                         .then(Mono.error(failure)));
     }
 
     private Mono<CommittedAgentEvent> appendOwned(
-             AgentExecution execution,
-             AgentEventEnvelope event) {
+            AgentExecution execution,
+            AgentEventEnvelope event) {
         return appendRequired(
-                        execution.runId(),
-                        execution.ownerInstanceId(),
-                        execution.ownerEpoch(),
-                        event,
-                        false)
+                execution.runId(),
+                execution.ownerInstanceId(),
+                execution.ownerEpoch(),
+                event,
+                false)
                 .flatMap(committed -> mirrorToParent(execution, committed)
                         .thenReturn(committed));
     }
@@ -237,8 +230,39 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             AgentEventEnvelope event,
             CommittedAgentEvent committed,
             AtomicReference<String> pauseType,
-            AtomicLong lastCommittedSequence) {
+            AtomicReference<PendingExternalExecution> externalWait,
+            AtomicLong lastCommittedSequence,
+            Instant deadline) {
         lastCommittedSequence.set(committed.sequence());
+        if ("REQUIRE_EXTERNAL_EXECUTION".equals(event.rawEventType())) {
+            JsonNode calls = event.payload().path("toolCalls");
+            if (!calls.isArray() || calls.isEmpty() || calls.size() > 16) {
+                return Mono.error(new IllegalStateException("外部等待缺少有效工具调用"));
+            }
+            for (JsonNode call : calls) {
+                if (CanvasAgentNodeTypes.CHILD_TOOLS.contains(call.path("name").asText())) {
+                    requiredText(call, "id");
+                    continue;
+                }
+                if (!Set.of("await_canvas_run", "inspect_canvas_media", "await_generation_task", "await_canvas_import")
+                        .contains(call.path("name").asText())) {
+                    return Mono.error(new IllegalStateException("工具未登记可恢复的外部等待协议"));
+                }
+                requiredText(call, "id");
+                String reference = switch (call.path("name").asText()) {
+                    case "await_canvas_run" -> "canvasRunId";
+                    case "await_generation_task" -> "submissionId";
+                    case "await_canvas_import" -> "importId";
+                    default -> "nodeId";
+                };
+                requiredText(call.path("input"), reference);
+            }
+            externalWait.set(new PendingExternalExecution(requiredText(event.payload(), "replyId"), "await_canvas_run",
+                    event.payload().toString(), AgentExecutionLimits.unlimited(deadline)
+                    ? AgentExecutionLimits.UNLIMITED_DEADLINE : Instant.now().plus(Duration.ofHours(4))));
+            pauseType.set(event.rawEventType());
+            return Mono.just(committed);
+        }
         if (!"REQUIRE_USER_CONFIRM".equals(event.rawEventType())) {
             return Mono.just(committed);
         }
@@ -294,30 +318,29 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             AgentEventEnvelope event,
             boolean parentWrite) {
         return journal.appendOwned(runId, ownerInstanceId, ownerEpoch, event)
-                .flatMap(committed -> committed
-                        .map(c -> c.publishRequired()
-                                ? signals.publishWakeup(runId, c.sequence())
-                                        .onErrorResume(failure -> Mono.empty())
-                                        .thenReturn(c)
-                                : Mono.just(c))
-                        .orElseGet(() -> Mono.error(parentWrite
-                                ? new ParentOwnerLostException(runId)
-                                : new OwnerLostException(runId))));
+                .map(committed -> committed.orElseThrow(() -> parentWrite
+                        ? new ParentOwnerLostException(runId)
+                        : new OwnerLostException(runId)))
+                .doOnNext(committed -> {
+                    if (committed.publishRequired()) {
+                        signals.notifyCommitted(runId, committed.sequence());
+                    }
+                });
     }
 
     private Mono<Void> mirrorToParent(
             AgentExecution execution,
             CommittedAgentEvent childEvent) {
         ParentAgentRunContext parent = execution.parentRun();
-        if (parent == null) {
+        if (parent == null || parent.independentlyObserved()) {
             return Mono.empty();
         }
         return appendRequired(
-                        parent.runId(),
-                        parent.ownerInstanceId(),
-                        parent.ownerEpoch(),
-                        mirroredChildEvent(parent, childEvent),
-                        true)
+                parent.runId(),
+                parent.ownerInstanceId(),
+                parent.ownerEpoch(),
+                mirroredChildEvent(parent, childEvent),
+                true)
                 .then();
     }
 
@@ -359,6 +382,7 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             AgentExecutionHandle.Outcome outcome,
             AgentKernelSnapshot kernelSnapshot,
             String pauseType,
+            PendingExternalExecution externalWait,
             long lastCommittedSequence) {
         metrics.providerClosed();
         AgentRunStatus providerStatus = switch (outcome.kind()) {
@@ -372,7 +396,9 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
         return switch (outcome.kind()) {
             case COMPLETED -> "REQUIRE_USER_CONFIRM".equals(pauseType)
                     ? enterWaitingConfirmation(
-                            execution, kernelSnapshot, lastCommittedSequence)
+                    execution, kernelSnapshot, lastCommittedSequence)
+                    : "REQUIRE_EXTERNAL_EXECUTION".equals(pauseType)
+                    ? enterWaitingExternal(execution, kernelSnapshot, lastCommittedSequence, externalWait)
                     : terminalCompleted(execution);
             case OVERFLOW -> terminalFailure(
                     execution,
@@ -385,14 +411,14 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
             case JOURNAL_FAILURE -> outcome.failure() instanceof OwnerLostException
                     ? Mono.empty()
                     : terminalFailure(
-                            execution,
-                            AgentRuntimeErrorCode.EVENT_PERSIST_FAILED,
-                            outcome.failure().getMessage());
+                    execution,
+                    AgentRuntimeErrorCode.EVENT_PERSIST_FAILED,
+                    outcome.failure().getMessage());
             case INTERRUPTED -> outcome.stopReason() == ExecutionStopReason.DEADLINE
                     ? terminalFailure(
-                            execution,
-                            AgentRuntimeErrorCode.MODEL_TIMEOUT,
-                            "Agent run deadline expired")
+                    execution,
+                    AgentRuntimeErrorCode.MODEL_TIMEOUT,
+                    "Agent run deadline expired")
                     : Mono.empty();
         };
     }
@@ -419,6 +445,19 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                         execution,
                         AgentRuntimeErrorCode.EVENT_PERSIST_FAILED,
                         failure.getMessage()));
+    }
+
+    private Mono<Void> enterWaitingExternal(AgentExecution execution, AgentKernelSnapshot snapshot,
+                                            long sequence, PendingExternalExecution pending) {
+        if (sequence < 0 || pending == null) {
+            return terminalFailure(execution,
+                    AgentRuntimeErrorCode.AGENTSCOPE_INTERNAL_ERROR, "外部等待缺少持久化检查点");
+        }
+        return waitingState.enterWaitingExternal(execution.runId(), execution.ownerEpoch(),
+                        new WaitingCheckpoint(execution.stateSessionId(), snapshot.fingerprint(), snapshot.snapshotJson(),
+                                sequence), pending)
+                .then().onErrorResume(failure -> terminalFailure(execution,
+                        AgentRuntimeErrorCode.EVENT_PERSIST_FAILED, failure.getMessage()));
     }
 
     @Override
@@ -614,9 +653,9 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
 
     private void requireResumeSnapshot(ResumeAgentExecutionCommand command) {
         if (!Objects.equals(command.run().kernelFingerprint(),
-                    command.kernelSnapshot().fingerprint())
+                command.kernelSnapshot().fingerprint())
                 || !Objects.equals(command.run().agentDefinitionSnapshotJson(),
-                    command.kernelSnapshot().snapshotJson())) {
+                command.kernelSnapshot().snapshotJson())) {
             throw new IllegalArgumentException(
                     "Resume execution snapshot does not match the persisted run snapshot");
         }
@@ -648,8 +687,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                 || !Objects.equals(ownerInstanceId, run.ownerInstanceId())
                 || ownerEpoch != run.ownerEpoch()
                 || !Objects.equals(
-                        stateSessionId,
-                        runtimeRequest.conversation().agentStateSessionId())
+                stateSessionId,
+                runtimeRequest.conversation().agentStateSessionId())
                 || !Objects.equals(deadline, run.deadline())) {
             throw new IllegalArgumentException(
                     "RuntimeContext run identity does not match the execution command");

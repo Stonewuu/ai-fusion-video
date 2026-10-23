@@ -1,6 +1,8 @@
 package com.stonewu.fusion.service.ai.run.model;
 
-/** Raised when a durable call id is retried with a different immutable identity. */
+/**
+ * Raised when a durable call id is retried with a different immutable identity.
+ */
 public final class ModelCallIdentityConflictException extends IllegalStateException {
 
     private final String runId;

@@ -611,6 +611,7 @@ export function reducePipelineEvent(
           if (existingToolCall && (
             existingToolCall.toolName !== toolCall.toolName
             || existingToolCall.argumentsPreview !== toolCall.argumentsPreview
+            || JSON.stringify(existingToolCall.review) !== JSON.stringify(toolCall.review)
           )) {
             throw new Error(`Pending tool call changed within its batch: ${toolCall.toolCallId}`);
           }

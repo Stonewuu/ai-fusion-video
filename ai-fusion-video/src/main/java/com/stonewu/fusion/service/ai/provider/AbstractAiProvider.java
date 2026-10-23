@@ -15,11 +15,7 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -358,7 +354,7 @@ public abstract class AbstractAiProvider implements AiProvider {
                 }
                 result.add(RemoteModelVO.builder()
                         .id(id)
-                    .displayName(id)
+                        .displayName(id)
                         .ownedBy("ollama")
                         .build());
             }
@@ -396,7 +392,7 @@ public abstract class AbstractAiProvider implements AiProvider {
                 String displayName = item.getStr("displayName");
                 deduplicated.putIfAbsent(id, RemoteModelVO.builder()
                         .id(id)
-                    .displayName(StrUtil.blankToDefault(displayName, id))
+                        .displayName(StrUtil.blankToDefault(displayName, id))
                         .ownedBy(StrUtil.blankToDefault(displayName, "google"))
                         .modelType(1)
                         .build());

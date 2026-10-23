@@ -1,13 +1,18 @@
 package com.stonewu.fusion.controller.ai;
 
 import cn.hutool.json.JSONObject;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.common.CommonResult;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.controller.ai.vo.*;
 import com.stonewu.fusion.convert.ai.AiModelConvert;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.ModelPresetService;
+import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -17,6 +22,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 import static com.stonewu.fusion.common.CommonResult.success;
 
@@ -28,6 +34,8 @@ public class AiModelController {
 
     private final AiModelService aiModelService;
     private final ModelPresetService modelPresetService;
+    private final GenerationModelCapabilityService capabilities;
+    private final ObjectMapper json;
 
     @PostMapping("/create")
     @Operation(summary = "创建AI模型")
@@ -42,16 +50,16 @@ public class AiModelController {
                 .icon(reqVO.getIcon()).description(reqVO.getDescription())
                 .sort(reqVO.getSort() != null ? reqVO.getSort() : 0)
                 .config(reqVO.getConfig())
-            .maxConcurrency(reqVO.getMaxConcurrency() != null && reqVO.getMaxConcurrency() > 0
-                ? reqVO.getMaxConcurrency() : 5)
+                .maxConcurrency(reqVO.getMaxConcurrency() != null && reqVO.getMaxConcurrency() > 0
+                        ? reqVO.getMaxConcurrency() : 5)
                 .defaultModel(reqVO.getDefaultModel() != null ? reqVO.getDefaultModel() : false)
-            .supportVision(Boolean.TRUE.equals(reqVO.getSupportVision()))
-            .multimodalInputTypes(reqVO.getMultimodalInputTypes())
-            .multimodalInputTransports(reqVO.getMultimodalInputTransports())
-            .supportReasoning(Boolean.TRUE.equals(reqVO.getSupportReasoning()))
-            .reasoningEffortLevels(reqVO.getReasoningEffortLevels())
-            .contextWindow(reqVO.getContextWindow() != null && reqVO.getContextWindow() > 0
-                ? reqVO.getContextWindow() : null)
+                .supportVision(Boolean.TRUE.equals(reqVO.getSupportVision()))
+                .multimodalInputTypes(reqVO.getMultimodalInputTypes())
+                .multimodalInputTransports(reqVO.getMultimodalInputTransports())
+                .supportReasoning(Boolean.TRUE.equals(reqVO.getSupportReasoning()))
+                .reasoningEffortLevels(reqVO.getReasoningEffortLevels())
+                .contextWindow(reqVO.getContextWindow() != null && reqVO.getContextWindow() > 0
+                        ? reqVO.getContextWindow() : null)
                 .apiConfigId(reqVO.getApiConfigId())
                 .comfyuiWorkflowId(reqVO.getComfyuiWorkflowId())
                 .build();
@@ -86,7 +94,7 @@ public class AiModelController {
     @Parameter(name = "id", description = "模型ID", required = true)
     public CommonResult<AiModelRespVO> get(@RequestParam("id") Long id) {
         AiModel model = aiModelService.getById(id);
-        return success(model == null ? null : AiModelConvert.INSTANCE.convert(model));
+        return success(model == null ? null : response(model));
     }
 
     @GetMapping("/page")
@@ -94,21 +102,53 @@ public class AiModelController {
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<PageResult<AiModelRespVO>> page(@Valid AiModelPageReqVO reqVO) {
         return success(aiModelService.getPage(reqVO.getName(), reqVO.getCode(),
-                reqVO.getModelType(), reqVO.getStatus(), reqVO.getPageNo(), reqVO.getPageSize())
-                .map(AiModelConvert.INSTANCE::convert));
+                        reqVO.getModelType(), reqVO.getStatus(), reqVO.getPageNo(), reqVO.getPageSize())
+                .map(this::response));
     }
 
     @GetMapping("/list")
     @Operation(summary = "获取启用的AI模型列表")
     public CommonResult<List<AiModelRespVO>> list() {
-        return success(AiModelConvert.INSTANCE.convertList(aiModelService.getEnabledList()));
+        return success(aiModelService.getEnabledList().stream().map(this::response).toList());
     }
 
     @GetMapping("/list-by-type")
     @Operation(summary = "按类型获取AI模型列表")
     @Parameter(name = "type", description = "模型类型", required = true)
     public CommonResult<List<AiModelRespVO>> listByType(@RequestParam("type") Integer type) {
-        return success(AiModelConvert.INSTANCE.convertList(aiModelService.getListByType(type)));
+        return success(aiModelService.getListByType(type).stream().map(this::response).toList());
+    }
+
+    @PostMapping("/comfyui-capabilities")
+    @Operation(summary = "解析已发布 ComfyUI 工作流的模型能力与使用限制")
+    @PreAuthorize("hasRole('ADMIN')")
+    public CommonResult<Map<String, Object>> comfyUiCapabilities(@Valid @RequestBody ComfyUiCapabilityReqVO request) {
+        var model = AiModel.builder().apiConfigId(request.getApiConfigId()).modelType(request.getModelType())
+                .modelProtocol("comfyui").comfyuiWorkflowId(request.getComfyuiWorkflowId())
+                .capabilityPresetCode(request.getCapabilityPresetCode()).config(request.getConfig()).build();
+        return success(generationConfig(model));
+    }
+
+    private AiModelRespVO response(AiModel model) {
+        var result = AiModelConvert.INSTANCE.convert(model);
+        if (Integer.valueOf(2).equals(model.getModelType()) || Integer.valueOf(3).equals(model.getModelType())) {
+            try {
+                result.setGenerationConfig(generationConfig(model));
+            } catch (BusinessException unavailable) {
+                result.setGenerationConfig(Map.of());
+                result.setCapabilityError(unavailable.getMessage());
+            }
+        }
+        return result;
+    }
+
+    private Map<String, Object> generationConfig(AiModel model) {
+        try {
+            // JSONNull 不能直接交给 Jackson；跨 JSON 库的响应边界保留真实 null。
+            return json.readValue(capabilities.getMergedModelConfig(model).toString(), new TypeReference<>() {});
+        } catch (JsonProcessingException failure) {
+            throw new IllegalStateException("无法序列化已解析的模型能力", failure);
+        }
     }
 
     @GetMapping("/presets")

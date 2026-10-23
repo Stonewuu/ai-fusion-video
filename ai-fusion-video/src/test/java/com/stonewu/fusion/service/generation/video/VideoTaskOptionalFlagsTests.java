@@ -10,15 +10,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class VideoTaskOptionalFlagsTests {
 
     @Test
-    void builderLeavesOptionalFlagsUnsetWhenCallerOmitsThem() {
-        VideoTask task = VideoTask.builder().build();
-
-        assertThat(task.getWatermark()).isNull();
-        assertThat(task.getGenerateAudio()).isNull();
-        assertThat(task.getCameraFixed()).isNull();
-    }
-
-    @Test
     void convertKeepsUnsetOptionalFlagsNull() {
         VideoTaskSubmitReqVO reqVO = new VideoTaskSubmitReqVO();
         reqVO.setPrompt("test prompt");

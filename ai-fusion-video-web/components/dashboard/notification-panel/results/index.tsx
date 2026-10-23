@@ -24,20 +24,27 @@ import {
 } from "./scripts";
 import { GenericResult } from "./shared";
 import { StoryboardResult } from "./storyboard";
+import { CanvasToolResult } from "./canvas";
+import { isCanvasTool } from "@/lib/canvas/tool-presentation";
+import { userFacingError } from "@/lib/user-facing-error";
 
 export function ToolResultDisplay({
   toolName,
   content,
   expanded = false,
+  failed = false,
 }: {
   toolName: string;
   content: string;
   expanded?: boolean;
+  failed?: boolean;
 }) {
   let parsed: unknown;
   try {
     parsed = JSON.parse(content);
   } catch {
+    if (failed) return <p className="text-sm text-destructive">{userFacingError(content)}</p>;
+    if (isCanvasTool(toolName)) return <p className="text-sm text-muted-foreground">这一步未返回可显示的结果，请查看助手的后续说明。</p>;
     const isLong = content.length > 300;
     return (
       <div className="text-xs text-foreground/70 whitespace-pre-wrap leading-relaxed">
@@ -49,13 +56,13 @@ export function ToolResultDisplay({
   if (
     typeof parsed === "object" &&
     parsed !== null &&
-    (parsed as Record<string, unknown>).status === "error"
+    (failed || (parsed as Record<string, unknown>).status === "error")
   ) {
     const message = (parsed as Record<string, unknown>).message;
     return (
       <p className="text-xs text-destructive inline-flex items-center gap-1">
         <XCircle className="h-3.5 w-3.5 shrink-0" />
-        {typeof message === "string" ? message : "操作失败"}
+        {userFacingError(typeof message === "string" ? message : null)}
       </p>
     );
   }
@@ -67,6 +74,8 @@ export function ToolResultDisplay({
       </p>
     );
   }
+
+  if (isCanvasTool(toolName)) return <CanvasToolResult toolName={toolName} data={parsed} />;
 
   switch (toolName) {
     case "get_generation_model_capabilities":

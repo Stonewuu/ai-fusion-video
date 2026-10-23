@@ -13,17 +13,21 @@ import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
 import com.stonewu.fusion.service.ai.run.model.ExecutionStopReason;
 import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
 import com.stonewu.fusion.service.ai.run.model.SystemTerminalActor;
-import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** Converges expired owner leases without ever re-executing a run. */
+/**
+ * Converges expired owner leases without ever re-executing a run.
+ */
 @Service
 public final class AgentRunReconciliationService {
 
@@ -77,6 +81,16 @@ public final class AgentRunReconciliationService {
 
     private Mono<Void> reconcile(AgentRun run) {
         AgentRunStatus status = status(run);
+        if (status == AgentRunStatus.RUNNING && runs.hasPendingCanvasNode(run.getRunId())) {
+            return Mono.empty();
+        }
+        // 尚未产生任何执行事件的外部恢复，由恢复发件箱接管；已启动的模型调用仍使用既有故障终结规则。
+        if (status == AgentRunStatus.RUNNING && run.getExternalResumeJson() != null
+                && run.getExternalResumeSequence() != null
+                && Objects.equals(run.getNextSequence(), run.getExternalResumeSequence() + 1)
+                && run.getDeadlineAt().isAfter(LocalDateTime.now(ZoneOffset.UTC))) {
+            return Mono.empty();
+        }
         RunTerminalRequest request;
         ExecutionStopReason stopReason;
         if (status == AgentRunStatus.RUNNING) {
@@ -94,13 +108,13 @@ public final class AgentRunReconciliationService {
                         metrics.ownerLost();
                     }
                     Mono<Void> interrupt = committed.isPresent() && hasOwner(run)
-                        ? executions.interruptOwned(
-                                        run.getRunId(),
-                                        run.getOwnerInstanceId(),
-                                        run.getOwnerEpoch(),
-                                        stopReason)
-                                .then()
-                        : Mono.empty();
+                            ? executions.interruptOwned(
+                                    run.getRunId(),
+                                    run.getOwnerInstanceId(),
+                                    run.getOwnerEpoch(),
+                                    stopReason)
+                            .then()
+                            : Mono.empty();
                     Mono<Void> projection = committed
                             .map(event -> projections.projectThrough(
                                     event.runId(), event.sequence()))

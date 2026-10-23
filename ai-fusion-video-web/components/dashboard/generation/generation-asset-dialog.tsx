@@ -1,4 +1,8 @@
 "use client";
+import { ManagedVideo } from "@/components/media/managed-video";
+
+
+import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 
 import { useEffect, useState } from "react";
 import { ImageIcon, Loader2, PackagePlus, Video } from "lucide-react";
@@ -17,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -120,6 +124,8 @@ export function GenerationAssetDialog({
     if (nextProjectId !== null) void loadAssets(nextProjectId);
   };
 
+  const requests = useCommandRequestKey();
+
   const save = async () => {
     if (!projectId || !itemName.trim()) return;
     if (attachMode === "existing" && !assetId) return;
@@ -127,39 +133,36 @@ export function GenerationAssetDialog({
 
     setSaving(true);
     try {
-      let targetAssetId = assetId;
-      let sortOrder = 0;
-
-      if (attachMode === "new") {
-        const created = await assetApi.create({
-          projectId,
-          type: assetType,
-          name: masterName.trim(),
-          description: setting.trim(),
-          properties: JSON.stringify({ setting: setting.trim() }),
-        });
-        targetAssetId = created.id;
-      } else {
-        sortOrder = assets.find((asset) => asset.id === assetId)?.items.length || 0;
-      }
-
-      if (!targetAssetId) return;
-      await assetApi.createItem({
-        assetId: targetAssetId,
+      const media = {
         itemType: target.mode === "image" ? "generated_image" : "generated_video",
         name: itemName.trim(),
-        imageUrl:
-          target.mode === "image"
-            ? sourceMediaUrl || undefined
-            : previewUrl || undefined,
-        properties: JSON.stringify({
+        imageUrl: target.mode === "image" ? sourceMediaUrl || null : previewUrl || null,
+        sourceType: 2 as const,
+        properties: {
           appearanceDescription: appearance.trim(),
           sourceGenerationMode: target.mode,
           sourceMediaUrl,
           sourceGenerationItemId: target.item.id,
-        }),
-        sortOrder,
-      });
+        },
+      };
+      if (attachMode === "new") {
+        const payload = {
+          projectId,
+          type: assetType,
+          name: masterName.trim(),
+          description: setting.trim(),
+          sourceType: 2 as const,
+          properties: { setting: setting.trim() },
+          initialItem: media,
+        };
+        await assetApi.create(payload, requests.forPayload({ operation: "create", ...payload }));
+      } else {
+        const asset = assets.find(candidate => candidate.id === assetId);
+        if (!asset) throw new Error("目标资产已变化，请重新选择");
+        const payload = { assetId: asset.id, parentVersion: asset.version, ...media };
+        await assetApi.createItem(payload, requests.forPayload({ operation: "createItem", ...payload }));
+      }
+      requests.clear();
 
       toast.success(attachMode === "new" ? "资产已创建" : "已添加到资产");
       onAttached();
@@ -197,7 +200,7 @@ export function GenerationAssetDialog({
                   fallbackType="image"
                 />
               ) : sourceMediaUrl ? (
-                <video
+                <ManagedVideo
                   controls
                   preload="metadata"
                   poster={resolveMediaUrl(previewUrl) || undefined}

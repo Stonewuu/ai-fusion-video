@@ -124,6 +124,7 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
           </button>
           <button
             onClick={() => setNotificationOpen(false)}
+            aria-label="关闭任务中心"
             className="p-1 rounded-lg hover:bg-muted transition-colors"
           >
             <X className="h-3.5 w-3.5 text-muted-foreground" />

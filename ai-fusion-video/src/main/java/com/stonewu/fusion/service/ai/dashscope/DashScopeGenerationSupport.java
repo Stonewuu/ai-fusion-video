@@ -253,7 +253,8 @@ public class DashScopeGenerationSupport {
             if (!response.isSuccessful() || response.body() == null) {
                 throw new BusinessException("下载参考媒体失败: HTTP " + response.code() + " url=" + sourceUrl);
             }
-            return new BinaryResource(response.body().bytes(), normalizeMimeType(response.header("Content-Type"), sourceUrl));
+            return new BinaryResource(response.body().bytes(),
+                    normalizeMimeType(response.header("Content-Type"), sourceUrl));
         }
     }
 

@@ -1,0 +1,183 @@
+.fusion-canvas,
+.canvas-node-menu {
+  --canvas-text: oklch(0.5 0.19 290);
+  --canvas-image: oklch(0.46 0.1 210);
+  --canvas-video: oklch(0.5 0.19 330);
+  --canvas-audio: oklch(0.5 0.14 55);
+  --canvas-business: oklch(0.5 0.16 250);
+  --canvas-flow: oklch(0.46 0.12 155);
+  --canvas-note: oklch(0.5 0.12 85);
+  --canvas-neutral: var(--muted-foreground);
+  color-scheme: inherit;
+  --xy-background-color: var(--background);
+  --xy-background-pattern-dots-color: color-mix(
+    in srgb,
+    var(--muted-foreground) 30%,
+    transparent
+  );
+  --xy-edge-stroke: var(--primary);
+  --xy-edge-stroke-width: 1.5;
+  --xy-edge-stroke-selected: var(--primary);
+  --xy-connectionline-stroke: var(--primary);
+  --xy-edge-label-background-color: var(--card);
+  --xy-edge-label-color: var(--foreground);
+  --xy-selection-background-color: color-mix(
+    in srgb,
+    var(--primary) 10%,
+    transparent
+  );
+  --xy-selection-border: 1px dashed var(--primary);
+  --xy-handle-background-color: var(--background);
+  --xy-handle-border-color: var(--primary);
+  --xy-controls-button-background-color: var(--card);
+  --xy-controls-button-background-color-hover: var(--muted);
+  --xy-controls-button-color: var(--foreground);
+  --xy-controls-button-color-hover: var(--foreground);
+  --xy-controls-button-border-color: var(--border);
+  --xy-minimap-background-color: var(--card);
+  --xy-minimap-node-background-color: var(--muted-foreground);
+  --xy-minimap-mask-background-color: color-mix(
+    in srgb,
+    var(--background) 55%,
+    transparent
+  );
+  --xy-attribution-background-color: var(--card);
+}
+
+.fusion-canvas .react-flow__node.canvas-agent-changed {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+  border-radius: var(--radius-2xl);
+}
+.fusion-canvas.dark,
+.dark .canvas-node-menu {
+  --canvas-text: oklch(0.78 0.13 290);
+  --canvas-image: oklch(0.8 0.12 210);
+  --canvas-video: oklch(0.79 0.14 330);
+  --canvas-audio: oklch(0.81 0.13 55);
+  --canvas-business: oklch(0.78 0.12 250);
+  --canvas-flow: oklch(0.8 0.14 155);
+  --canvas-note: oklch(0.84 0.13 85);
+}
+.fusion-canvas .canvas-node-surface {
+  border-color: color-mix(in srgb, var(--canvas-tone) 30%, var(--border));
+  --xy-handle-border-color: var(--canvas-tone);
+  --xy-handle-background-color: var(--card);
+}
+.fusion-canvas .canvas-node-surface[data-selected] {
+  border-color: var(--canvas-tone);
+  outline: 2px solid color-mix(in srgb, var(--canvas-tone) 20%, transparent);
+}
+.fusion-canvas .canvas-node-heading {
+  background: color-mix(in srgb, var(--canvas-tone) 9%, var(--card));
+}
+.fusion-canvas .canvas-node-surface[data-invalid] {
+  border-color: var(--destructive);
+}
+.fusion-canvas .canvas-node-surface[data-invalid][data-selected] {
+  outline-color: color-mix(in srgb, var(--destructive) 25%, transparent);
+}
+.fusion-canvas .canvas-node-icon {
+  color: var(--canvas-tone);
+  background: color-mix(in srgb, var(--canvas-tone) 14%, var(--card));
+}
+.fusion-canvas .canvas-node-kind {
+  color: var(--canvas-tone);
+}
+.fusion-canvas .canvas-node-run[data-run-state="SUCCEEDED"] {
+  color: var(--canvas-flow);
+  background: color-mix(in srgb, var(--canvas-flow) 6%, var(--card));
+}
+.fusion-canvas
+  .canvas-node-run:is(
+    [data-run-state="RUNNING"],
+    [data-run-state="READY"],
+    [data-run-state="QUEUED"]
+  ) {
+  color: var(--canvas-business);
+  background: color-mix(in srgb, var(--canvas-business) 6%, var(--card));
+}
+.fusion-canvas
+  .canvas-node-run:is(
+    [data-run-state="WAITING_SELECTION"],
+    [data-run-state="WAITING_CONFIRMATION"],
+    [data-run-state="CANCEL_REQUESTED"]
+  ) {
+  color: var(--canvas-audio);
+  background: color-mix(in srgb, var(--canvas-audio) 6%, var(--card));
+}
+.fusion-canvas .react-flow__node-canvas {
+  border-radius: var(--radius-xl);
+}
+.fusion-canvas .react-flow__node-canvas:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 4px;
+}
+.fusion-canvas .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  border-width: 1px;
+}
+.fusion-canvas .react-flow__handle.connectingto {
+  background: var(--primary);
+}
+.fusion-canvas .react-flow__edge.selected .react-flow__edge-path {
+  stroke-width: 3;
+}
+.fusion-canvas .react-flow__edge-textbg {
+  fill: var(--card);
+}
+.fusion-canvas .react-flow__edge-text {
+  fill: var(--foreground);
+}
+.fusion-canvas .react-flow__connection-path {
+  stroke: var(--primary);
+}
+.fusion-canvas .react-flow__controls {
+  bottom: 56px;
+  left: 12px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  box-shadow: none;
+}
+.fusion-canvas .react-flow__controls-button {
+  width: 32px;
+  height: 32px;
+}
+.fusion-canvas .react-flow__controls-button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: -2px;
+}
+.fusion-canvas .react-flow__minimap {
+  bottom: 56px;
+  right: 12px;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.fusion-canvas .react-flow__attribution {
+  bottom: 2px;
+  right: 12px;
+  padding: 0;
+  font-size: 10px;
+  line-height: 10px;
+  color: var(--muted-foreground);
+}
+.fusion-canvas .react-flow__attribution a {
+  color: inherit;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fusion-canvas * {
+    animation-duration: 0s !important;
+    transition-duration: 0s !important;
+  }
+}
+@media (max-width: 767px) {
+  .fusion-canvas .react-flow__handle {
+    width: 16px;
+    height: 16px;
+  }
+}

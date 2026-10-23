@@ -1,96 +1,71 @@
 package com.stonewu.fusion.service.generation.video.consumer;
 
 import com.stonewu.fusion.entity.ai.ApiConfig;
-import com.stonewu.fusion.entity.generation.VideoItem;
-import com.stonewu.fusion.entity.generation.VideoTask;
-import com.stonewu.fusion.infrastructure.queue.RedisTaskQueue;
-import com.stonewu.fusion.service.ai.AiModelService;
-import com.stonewu.fusion.service.ai.ApiConfigService;
-import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
-import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
-import com.stonewu.fusion.service.generation.ReferenceImageTransportService;
-import com.stonewu.fusion.service.generation.video.VideoFrameExtractor;
-import com.stonewu.fusion.service.generation.video.VideoGenerationService;
-import com.stonewu.fusion.service.generation.video.strategy.VideoGenerationStrategyRouter;
-import com.stonewu.fusion.service.storage.MediaStorageService;
+import com.stonewu.fusion.service.media.ProviderMediaFetcher;
+import com.stonewu.fusion.service.media.MediaRemoteAddressPolicy;
+import com.stonewu.fusion.service.media.model.MediaException;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
-
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
-import java.util.List;
+import java.nio.file.Files;
 import java.util.concurrent.atomic.AtomicReference;
-
+import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/** 供应商下载已移入统一媒体接收器，此处保留真实 HTTP 的凭据边界验证。 */
 class ProtectedVideoPersistenceTests {
+    private final ProviderMediaFetcher fetcher = new ProviderMediaFetcher(new MediaRemoteAddressPolicy());
 
     @Test
-    void persistsSameOriginProtectedVideoWithProviderBearerToken() throws Exception {
-        byte[] videoBytes = "protected-video-bytes".getBytes(StandardCharsets.UTF_8);
-        AtomicReference<String> authorization = new AtomicReference<>();
+    void downloadsProtectedVideoContentWithProviderBearerToken() throws Exception {
+        byte[] payload = "protected-video-bytes".getBytes(StandardCharsets.UTF_8);
+        var authorization = new AtomicReference<String>();
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
-        server.createContext("/v1/videos/task_123/content", exchange -> {
+        server.createContext("/v1/videos/task/content", exchange -> {
             authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
-            exchange.getResponseHeaders().add("Content-Type", "video/mp4");
-            exchange.sendResponseHeaders(200, videoBytes.length);
-            try (var output = exchange.getResponseBody()) {
-                output.write(videoBytes);
-            }
+            exchange.sendResponseHeaders(200, payload.length);
+            try (var output = exchange.getResponseBody()) { output.write(payload); }
         });
         server.start();
-
-        VideoGenerationService videoGenerationService = mock(VideoGenerationService.class);
-        MediaStorageService mediaStorageService = mock(MediaStorageService.class);
-        VideoFrameExtractor videoFrameExtractor = mock(VideoFrameExtractor.class);
-        VideoTask task = VideoTask.builder().id(201L).build();
-        String remoteUrl = "http://localhost:" + server.getAddress().getPort()
-                + "/v1/videos/task_123/content";
-        VideoItem item = VideoItem.builder()
-                .id(301L)
-                .taskId(201L)
-                .videoUrl(remoteUrl)
-                .build();
-        ApiConfig apiConfig = ApiConfig.builder()
-                .apiUrl("http://localhost:" + server.getAddress().getPort() + "/v1/video/generations")
-                .apiKey("test-key")
-                .build();
-
-        when(videoGenerationService.listItems(201L)).thenReturn(List.of(item));
-        when(mediaStorageService.storeFile(any(Path.class), eq("videos"), eq("mp4")))
-                .thenReturn("/media/videos/generated.mp4");
-        when(videoFrameExtractor.extract("/media/videos/generated.mp4", true, true))
-                .thenReturn(new VideoFrameExtractor.ExtractedFrames(null, null));
-
-        VideoGenerationConsumer consumer = new VideoGenerationConsumer(
-                mock(RedisTaskQueue.class),
-                videoGenerationService,
-                mock(AiModelService.class),
-                mock(ApiConfigService.class),
-                mock(GenerationModelCapabilityService.class),
-                mock(ReferenceImageTransportService.class),
-                mock(VideoGenerationStrategyRouter.class),
-                mediaStorageService,
-                videoFrameExtractor,
-                mock(ComfyUiWorkflowService.class)
-        );
-
+        var file = Files.createTempFile("provider-auth-", ".media");
         try {
-            consumer.persistVideoItems(task, apiConfig);
-
+            String base = "http://localhost:" + server.getAddress().getPort();
+            fetcher.copy(base + "/v1/videos/task/content", ApiConfig.builder().apiUrl(base).apiKey("test-key").build(), file);
             assertThat(authorization.get()).isEqualTo("Bearer test-key");
-            assertThat(item.getVideoUrl()).isEqualTo("/media/videos/generated.mp4");
-            verify(mediaStorageService).storeFile(any(Path.class), eq("videos"), eq("mp4"));
-            verify(videoGenerationService).updateItem(item);
-        } finally {
-            consumer.shutdownWorkerExecutor();
-            server.stop(0);
-        }
+            assertThat(Files.readAllBytes(file)).isEqualTo(payload);
+        } finally { Files.deleteIfExists(file); server.stop(0); }
+    }
+
+    @Test
+    void redirectCannotForwardCredentialToAnotherPrivateOrigin() throws Exception {
+        var reached = new AtomicInteger();
+        HttpServer target = HttpServer.create(new InetSocketAddress(0), 0);
+        target.createContext("/secret", exchange -> { reached.incrementAndGet(); exchange.sendResponseHeaders(200, -1); exchange.close(); });
+        target.start();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/redirect", exchange -> {
+            exchange.getResponseHeaders().add("Location", "http://localhost:" + target.getAddress().getPort() + "/secret");
+            exchange.sendResponseHeaders(302, -1); exchange.close();
+        });
+        server.start();
+        var file = Files.createTempFile("provider-redirect-", ".media");
+        try {
+            String base = "http://localhost:" + server.getAddress().getPort();
+            assertThatThrownBy(() -> fetcher.copy(base + "/redirect", ApiConfig.builder().apiUrl(base).apiKey("secret").build(), file))
+                    .isInstanceOf(MediaException.class);
+            assertThat(reached).hasValue(0);
+        } finally { Files.deleteIfExists(file); server.stop(0); target.stop(0); }
+    }
+
+    @Test
+    void invalidBinaryDataAndLocalProviderPathsAreRejected() throws Exception {
+        var file = Files.createTempFile("provider-invalid-", ".media");
+        try {
+            for (String uri : new String[]{"file:///etc/passwd", "/media/another-user.png", "data:image/png;base64,%%%", "data:text/html;base64,SGk="}) {
+                assertThatThrownBy(() -> fetcher.copy(uri, null, file)).isInstanceOf(MediaException.class);
+            }
+        } finally { Files.deleteIfExists(file); }
     }
 }

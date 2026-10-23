@@ -1,0 +1,264 @@
+[
+  {
+    "code": "metaso:MiniMax-H3",
+    "modelCode": "MiniMax-H3",
+    "name": "MiniMax-H3",
+    "providerId": "metaso",
+    "platform": "openai_compatible",
+    "modelProtocol": "metaso_video",
+    "modelType": 3,
+    "description": "秘塔 H3：4–30 秒，2K 最长 15 秒，支持首尾帧与参考图混合；Context IR 和优先通道单独设置。",
+    "capabilities": [
+      "文生视频",
+      "首尾帧",
+      "多模态参考",
+      "首尾帧与参考图混合",
+      "音画同生"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": true,
+      "minImageInputs": 0,
+      "maxImageInputs": 9,
+      "maxReferenceImages": 9,
+      "maxReferenceVideos": 3,
+      "maxReferenceAudios": 3,
+      "exclusiveInputModes": false,
+      "framesWithReferenceVideos": false,
+      "supportedResolutions": [
+        "480p",
+        "768P",
+        "1080p",
+        "2K"
+      ],
+      "maxDurationByResolution": {
+        "480p": 30,
+        "768P": 30,
+        "1080p": 30,
+        "2K": 15
+      },
+      "defaultResolution": "768P",
+      "supportedAspectRatios": [
+        "adaptive",
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "minDuration": 4,
+      "maxDuration": 30,
+      "defaultDuration": 5,
+      "supportGenerateAudio": false,
+      "supportWatermark": true,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "supportContextIr": true,
+      "contextIrEnabled": false,
+      "fastMode": false,
+      "videoRules": {
+        "version": 1,
+        "profile": "metaso_video",
+        "lastFrameRequiresFirst": true,
+        "frameRatioMode": "inferred",
+        "promptRequired": true,
+        "promptMaxLength": 10000,
+        "defaultRatio": "16:9",
+        "frameRatio": "adaptive",
+        "textRequiresFixedRatio": true,
+        "fixedGenerateAudio": true,
+        "referenceVideoLimits": {
+          "maxSeconds": 15.5,
+          "maxTotalSeconds": 15,
+          "maxBytes": 52428800,
+          "singleItemMaxTotalSeconds": 15.5
+        },
+        "referenceAudioLimits": {
+          "maxSeconds": 15,
+          "maxTotalSeconds": 15
+        }
+      },
+      "supportPriorityChannel": true
+    }
+  },
+  {
+    "code": "metaso:seedance-2.0-mini",
+    "modelCode": "seedance-2.0-mini",
+    "name": "Seedance 2.0 Mini",
+    "providerId": "metaso",
+    "platform": "openai_compatible",
+    "modelProtocol": "metaso_video",
+    "modelType": 3,
+    "description": "秘塔 Seedance：4–15 秒，支持首尾帧或多模态参考；不支持 Context IR、优先通道和再生成。",
+    "capabilities": [
+      "文生视频",
+      "首尾帧",
+      "多模态参考",
+      "音画同生"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": true,
+      "minImageInputs": 0,
+      "maxImageInputs": 9,
+      "maxReferenceImages": 9,
+      "maxReferenceVideos": 3,
+      "maxReferenceAudios": 3,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedResolutions": [
+        "480p",
+        "720p"
+      ],
+      "maxDurationByResolution": {
+        "480p": 15,
+        "720p": 15
+      },
+      "defaultResolution": "720p",
+      "supportedAspectRatios": [
+        "adaptive",
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "minDuration": 4,
+      "maxDuration": 15,
+      "defaultDuration": 5,
+      "supportGenerateAudio": false,
+      "supportWatermark": false,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "supportContextIr": false,
+      "contextIrEnabled": false,
+      "fastMode": false,
+      "videoRules": {
+        "version": 1,
+        "profile": "metaso_video",
+        "lastFrameRequiresFirst": true,
+        "frameRatioMode": "inferred",
+        "promptRequired": true,
+        "promptMaxLength": 10000,
+        "defaultRatio": "16:9",
+        "frameRatio": "adaptive",
+        "textRequiresFixedRatio": true,
+        "fixedGenerateAudio": true,
+        "referenceVideoLimits": {
+          "maxSeconds": 15,
+          "maxTotalSeconds": 15,
+          "maxBytes": 52428800
+        },
+        "referenceAudioLimits": {
+          "maxSeconds": 15,
+          "maxTotalSeconds": 15
+        }
+      },
+      "supportPriorityChannel": false
+    }
+  },
+  {
+    "code": "metaso:seedance-2.0",
+    "modelCode": "seedance-2.0",
+    "name": "Seedance 2.0 标准版",
+    "providerId": "metaso",
+    "platform": "openai_compatible",
+    "modelProtocol": "metaso_video",
+    "modelType": 3,
+    "description": "秘塔 Seedance：4–15 秒，支持首尾帧或多模态参考；不支持 Context IR、优先通道和再生成。",
+    "capabilities": [
+      "文生视频",
+      "首尾帧",
+      "多模态参考",
+      "音画同生"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": true,
+      "minImageInputs": 0,
+      "maxImageInputs": 9,
+      "maxReferenceImages": 9,
+      "maxReferenceVideos": 3,
+      "maxReferenceAudios": 3,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedResolutions": [
+        "480p",
+        "720p",
+        "1080p",
+        "4k"
+      ],
+      "maxDurationByResolution": {
+        "480p": 15,
+        "720p": 15,
+        "1080p": 15,
+        "4k": 15
+      },
+      "defaultResolution": "720p",
+      "supportedAspectRatios": [
+        "adaptive",
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "minDuration": 4,
+      "maxDuration": 15,
+      "defaultDuration": 5,
+      "supportGenerateAudio": false,
+      "supportWatermark": false,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "supportContextIr": false,
+      "contextIrEnabled": false,
+      "fastMode": false,
+      "videoRules": {
+        "version": 1,
+        "profile": "metaso_video",
+        "lastFrameRequiresFirst": true,
+        "frameRatioMode": "inferred",
+        "promptRequired": true,
+        "promptMaxLength": 10000,
+        "defaultRatio": "16:9",
+        "frameRatio": "adaptive",
+        "textRequiresFixedRatio": true,
+        "fixedGenerateAudio": true,
+        "referenceVideoLimits": {
+          "maxSeconds": 15,
+          "maxTotalSeconds": 15,
+          "maxBytes": 52428800
+        },
+        "referenceAudioLimits": {
+          "maxSeconds": 15,
+          "maxTotalSeconds": 15
+        }
+      },
+      "supportPriorityChannel": false
+    }
+  }
+]

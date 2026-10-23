@@ -290,7 +290,8 @@ public class NewApiVideoProtocolSupport {
                 continue;
             }
             try {
-                int parsed = value instanceof Number number ? number.intValue() : Integer.parseInt(value.toString().trim());
+                int parsed = value instanceof Number number ? number.intValue() : Integer.parseInt(
+                        value.toString().trim());
                 if (parsed > 0) {
                     return parsed;
                 }

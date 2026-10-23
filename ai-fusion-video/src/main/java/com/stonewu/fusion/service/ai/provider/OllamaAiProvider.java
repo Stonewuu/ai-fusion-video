@@ -7,11 +7,10 @@ import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.transport.HttpTransport;
 import io.agentscope.extensions.model.ollama.OllamaChatModel;
 import io.agentscope.extensions.model.ollama.options.OllamaOptions;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.ollama.OllamaChatModel.Builder;
 import org.springframework.ai.ollama.api.OllamaApi;
 import org.springframework.ai.ollama.api.OllamaChatOptions;
-import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -62,6 +61,9 @@ public class OllamaAiProvider extends AbstractAiProvider {
         OllamaChatModel.Builder builder = OllamaChatModel.builder()
                 .modelName(context.getModelName())
                 .baseUrl(baseUrl);
+        if (context.isSingleRequest()) {
+            return new SingleRequestOllamaModel(context, baseUrl, buildGeminiGenerateOptions(context));
+        }
         Double temperature = getConfigDouble(context.getConfig(), "temperature");
         Double topP = getConfigDouble(context.getConfig(), "topP", "top_p");
         if (temperature != null || topP != null) {
@@ -74,11 +76,12 @@ public class OllamaAiProvider extends AbstractAiProvider {
             }
             builder.defaultOptions(options.build());
         }
-        HttpTransport proxyTransport = AiProxySupport.agentScopeHttpTransport(context.getApiConfig());
+        HttpTransport proxyTransport = SingleRequestModelSupport.transport(context);
         if (proxyTransport != null) {
             builder.httpTransport(proxyTransport);
         }
-        return builder.build();
+        var model = builder.build();
+        return context.isSingleRequest() ? SingleRequestModelSupport.own(model, proxyTransport) : model;
     }
 
     @Override

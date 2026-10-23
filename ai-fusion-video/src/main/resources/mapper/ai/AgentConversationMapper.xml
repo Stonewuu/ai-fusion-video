@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.ai.AgentConversationMapper">
+    <select id="selectByConversationIdForUpdate" resultType="com.stonewu.fusion.entity.ai.AgentConversation">
+        SELECT *
+        FROM afv_agent_conversation
+        WHERE conversation_id = #{conversationId}
+          AND deleted = 0
+        LIMIT 1
+        FOR UPDATE
+    </select>
+    <select id="selectDatabaseNow" resultType="java.time.LocalDateTime">
+        SELECT UTC_TIMESTAMP(3)
+    </select>
+    <select id="selectAgentStateCleanupCandidates" resultType="com.stonewu.fusion.entity.ai.AgentConversation">
+        SELECT conversation.*
+        FROM afv_agent_conversation conversation
+            FORCE INDEX (idx_agent_conversation_state_retention)
+        WHERE conversation.deleted = 0
+          AND conversation.agent_state_expired_at IS NULL
+          AND conversation.agent_state_last_active_at IS NOT NULL
+          AND conversation.agent_state_last_active_at &lt;= #{cutoff}
+          AND NOT EXISTS (
+              SELECT 1
+              FROM afv_agent_run active_run
+              WHERE active_run.conversation_id = conversation.conversation_id
+                AND active_run.parent_run_id IS NULL
+                AND active_run.status IN (
+                    'RUNNING',
+                    'WAITING_CONFIRMATION',
+                    'WAITING_EXTERNAL',
+                    'CANCEL_REQUESTED'
+                )
+          )
+        ORDER BY conversation.agent_state_last_active_at, conversation.id
+        LIMIT #{limit}
+    </select>
+    <update id="markAgentStateExpired">
+        UPDATE afv_agent_conversation conversation
+        SET conversation.agent_state_expired_at = #{expiredAt},
+            conversation.update_time = conversation.update_time
+        WHERE conversation.id = #{id}
+          AND conversation.deleted = 0
+          AND conversation.agent_state_expired_at IS NULL
+          AND conversation.agent_state_last_active_at = #{expectedLastActiveAt}
+          AND NOT EXISTS (
+              SELECT 1
+              FROM afv_agent_run active_run
+              WHERE active_run.conversation_id = conversation.conversation_id
+                AND active_run.parent_run_id IS NULL
+                AND active_run.status IN (
+                    'RUNNING',
+                    'WAITING_CONFIRMATION',
+                    'WAITING_EXTERNAL',
+                    'CANCEL_REQUESTED'
+                )
+          )
+    </update>
+</mapper>

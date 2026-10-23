@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.ai.AgentEventMapper">
+    <select id="selectByRunAndSequence" resultType="com.stonewu.fusion.entity.ai.AgentEvent">
+        SELECT *
+        FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+        WHERE run_id = #{runId}
+          AND sequence_no = #{sequenceNo}
+        LIMIT 1
+    </select>
+    <select id="selectPendingPublishCandidatesForUpdate" resultType="com.stonewu.fusion.entity.ai.AgentEvent">
+        SELECT *
+        FROM afv_agent_event FORCE INDEX (idx_agent_event_publish)
+        WHERE publish_required = 1
+          AND publish_status = 'PENDING'
+          AND (next_publish_attempt_at IS NULL
+               OR next_publish_attempt_at &lt;= #{now})
+        ORDER BY next_publish_attempt_at, id
+        LIMIT #{limit}
+        FOR UPDATE SKIP LOCKED
+    </select>
+    <select id="selectExpiredPublishCandidatesForUpdate" resultType="com.stonewu.fusion.entity.ai.AgentEvent">
+        SELECT *
+        FROM afv_agent_event FORCE INDEX (idx_agent_event_publish)
+        WHERE publish_required = 1
+          AND publish_status = 'CLAIMED'
+          AND publish_claim_until &lt;= #{now}
+        ORDER BY id
+        LIMIT #{limit}
+        FOR UPDATE SKIP LOCKED
+    </select>
+    <update id="claimPublishCandidate">
+        UPDATE afv_agent_event
+        SET publish_status = 'CLAIMED',
+            publish_claim_owner = #{claimOwner},
+            publish_claim_until = #{claimUntil},
+            publish_attempts = publish_attempts + 1,
+            next_publish_attempt_at = NULL
+        WHERE id = #{eventId}
+          AND publish_required = 1
+          AND (
+                (publish_status = 'PENDING'
+                 AND (next_publish_attempt_at IS NULL
+                      OR next_publish_attempt_at &lt;= #{now}))
+             OR (publish_status = 'CLAIMED'
+                 AND publish_claim_until &lt;= #{now})
+          )
+    </update>
+    <update id="markPublished">
+        UPDATE afv_agent_event
+        SET publish_status = 'PUBLISHED',
+            redis_published_at = UTC_TIMESTAMP(3),
+            publish_claim_owner = NULL,
+            publish_claim_until = NULL,
+            next_publish_attempt_at = NULL,
+            last_publish_error = NULL
+        WHERE id = #{eventId}
+          AND publish_status = 'CLAIMED'
+          AND publish_claim_owner = #{claimOwner}
+          AND publish_claim_until &gt; UTC_TIMESTAMP(3)
+    </update>
+    <update id="releasePublishForRetry">
+        UPDATE afv_agent_event
+        SET publish_status = 'PENDING',
+            publish_claim_owner = NULL,
+            publish_claim_until = NULL,
+            next_publish_attempt_at = GREATEST(
+                    #{nextAttemptAt}, UTC_TIMESTAMP(3)),
+            last_publish_error = #{lastPublishError}
+        WHERE id = #{eventId}
+          AND publish_status = 'CLAIMED'
+          AND publish_claim_owner = #{claimOwner}
+          AND publish_claim_until &gt; UTC_TIMESTAMP(3)
+    </update>
+    <select id="countOutstandingPublish" resultType="long">
+        SELECT COUNT(*)
+        FROM afv_agent_event FORCE INDEX (idx_agent_event_publish)
+        WHERE publish_required = 1
+          AND publish_status &lt;&gt; 'PUBLISHED'
+    </select>
+    <select id="selectProjectionRange" resultType="com.stonewu.fusion.entity.ai.AgentEvent">
+        SELECT *
+        FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+        WHERE run_id = #{runId}
+          AND sequence_no &gt; #{afterSequence}
+          AND sequence_no &lt;= #{throughSequence}
+        ORDER BY sequence_no
+        LIMIT #{limit}
+    </select>
+    <select id="selectReplayRange" resultType="com.stonewu.fusion.entity.ai.AgentEvent">
+        SELECT *
+        FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+        WHERE run_id = #{runId}
+          AND sequence_no &gt; #{afterSequence}
+          AND sequence_no &lt;= #{throughSequence}
+        ORDER BY sequence_no
+        LIMIT #{limit}
+    </select>
+    <select id="selectLastContextBoundarySequence" resultType="long">
+        SELECT COALESCE(MAX(sequence_no), 0)
+        FROM afv_agent_event FORCE INDEX (idx_agent_event_projection)
+        WHERE run_id = #{runId}
+          AND sequence_no &lt; #{beforeSequence}
+          AND output_type IS NOT NULL
+          AND output_type NOT IN ('CONTENT', 'REASONING')
+          AND (
+                parent_tool_call_id = #{parentToolCallId}
+             OR (parent_tool_call_id IS NULL AND #{parentToolCallId} IS NULL)
+          )
+    </select>
+    <select id="selectContextDeltas" resultType="com.stonewu.fusion.entity.ai.AgentEvent">
+        SELECT *
+        FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+        WHERE run_id = #{runId}
+          AND sequence_no &gt; #{afterSequence}
+          AND sequence_no &lt; #{beforeSequence}
+          AND output_type IN ('CONTENT', 'REASONING')
+          AND (
+                parent_tool_call_id = #{parentToolCallId}
+             OR (parent_tool_call_id IS NULL AND #{parentToolCallId} IS NULL)
+          )
+        ORDER BY sequence_no
+    </select>
+    <select id="selectToolDeltas" resultType="com.stonewu.fusion.entity.ai.AgentEvent">
+        SELECT *
+        FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+        WHERE run_id = #{runId}
+          AND tool_call_id = #{toolCallId}
+          AND sequence_no &lt;= #{throughSequence}
+          AND raw_event_type IN (
+                'TOOL_CALL_DELTA',
+                'TOOL_RESULT_TEXT_DELTA',
+                'TOOL_RESULT_DATA_DELTA')
+        ORDER BY sequence_no
+    </select>
+    <select id="selectConfirmationCandidate" resultType="com.stonewu.fusion.entity.ai.AgentEvent">
+        SELECT *
+        FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+        WHERE run_id = #{runId}
+          AND reply_id = #{replyId}
+          AND raw_event_type = 'REQUIRE_USER_CONFIRM'
+          AND source = 'platform/waiting-candidate'
+        ORDER BY sequence_no DESC
+        LIMIT 1
+    </select>
+    <select id="selectLatestConfirmationCandidate" resultType="com.stonewu.fusion.entity.ai.AgentEvent">
+        SELECT *
+        FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+        WHERE run_id = #{runId}
+          AND raw_event_type = 'REQUIRE_USER_CONFIRM'
+          AND source = 'platform/waiting-candidate'
+        ORDER BY sequence_no DESC
+        LIMIT 1
+    </select>
+    <select id="selectPendingExternalExecution" resultType="com.stonewu.fusion.entity.ai.AgentEvent">
+        SELECT *
+        FROM afv_agent_event FORCE INDEX (uk_agent_event_sequence)
+        WHERE run_id = #{runId}
+          AND tool_call_id = #{toolCallId}
+          AND raw_event_type = 'PLATFORM_REQUIRE_EXTERNAL_EXECUTION'
+          AND source = 'platform/waiting'
+        ORDER BY sequence_no DESC
+        LIMIT 1
+    </select>
+</mapper>

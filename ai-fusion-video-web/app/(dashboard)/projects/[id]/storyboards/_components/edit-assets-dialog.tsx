@@ -5,9 +5,9 @@ import { X, Users, MapPin, Package, Check, Loader2, ZoomIn } from "lucide-react"
 import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { toastApiError } from "@/lib/api/toast-api-error";
-import type { AssetWithItems, AssetItem } from "@/lib/api/asset";
+import type { AssetWithItems } from "@/lib/api/asset";
 import type { StoryboardItem } from "@/lib/api/storyboard";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 
 interface EditItemAssetsDialogProps {
   open: boolean;
@@ -22,18 +22,8 @@ interface EditItemAssetsDialogProps {
 }
 
 /** 安全解析 ID 数组 */
-function parseIds(raw: number[] | string | null | undefined): number[] {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
-  if (typeof raw === "string") {
-    try {
-      const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch {
-      return [];
-    }
-  }
-  return [];
+function parseIds(raw: number[] | null | undefined): number[] {
+  return raw ?? [];
 }
 
 export function EditItemAssetsDialog({
@@ -61,7 +51,7 @@ export function EditItemAssetsDialog({
       setSelectedSceneAssetItemId(initialSceneAssetItemId);
       setSelectedPropIds(new Set(initialPropIds));
     }
-  }, [open, item?.id, initialCharacterIds, initialSceneAssetItemId, initialPropIds]);
+  }, [open, item, initialCharacterIds, initialSceneAssetItemId, initialPropIds]);
   const characterAssets = useMemo(() => assetsList.filter((a) => a.type === "character"), [assetsList]);
   const sceneAssets = useMemo(() => assetsList.filter((a) => a.type === "scene"), [assetsList]);
   const propAssets = useMemo(() => assetsList.filter((a) => a.type === "prop"), [assetsList]);

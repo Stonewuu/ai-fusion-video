@@ -16,15 +16,21 @@ import java.time.LocalDateTime;
 @Data
 public abstract class BaseEntity {
 
-    /** 创建时间，插入时自动填充 */
+    /**
+     * 创建时间，插入时自动填充
+     */
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
 
-    /** 更新时间，插入和更新时自动填充 */
+    /**
+     * 更新时间，插入和更新时自动填充
+     */
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 
-    /** 逻辑删除标志：false-未删除 true-已删除 */
+    /**
+     * 逻辑删除标志：false-未删除 true-已删除
+     */
     @TableLogic
     @TableField("deleted")
     private Boolean deleted;

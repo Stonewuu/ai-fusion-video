@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.execution.ExecutionRecoveryDecisionMapper">
+    <select id="lockRequest" resultType="com.stonewu.fusion.entity.execution.ExecutionRecoveryDecisionEntity">
+        SELECT request_hash, receipt_json FROM afv_execution_recovery_decision WHERE admin_user_id = #{admin} AND request_id = #{requestId} FOR UPDATE
+    </select>
+    <insert id="record">
+        INSERT INTO afv_execution_recovery_decision(id, admin_user_id, request_id, request_hash, execution_kind, job_id,
+            expected_revision, actor_user_id, actor_team_id, project_id, canvas_id, facts_json, note, receipt_json, created_at)
+        VALUES (#{row.id}, #{row.adminUserId}, #{row.requestId}, #{row.requestHash}, #{row.executionKind}, #{row.jobId}, #{row.expectedRevision}, #{row.actorUserId}, #{row.actorTeamId}, #{row.projectId}, #{row.canvasId}, #{row.factsJson}, #{row.note}, #{row.receiptJson}, UTC_TIMESTAMP(6))
+    </insert>
+</mapper>

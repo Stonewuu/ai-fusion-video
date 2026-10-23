@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
@@ -14,11 +15,13 @@ import io.agentscope.core.message.ToolResultState;
 import io.agentscope.core.message.ToolUseBlock;
 import io.agentscope.core.tool.ToolCallParam;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -26,6 +29,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 class AgentScopeToolAdapterTests {
 
@@ -47,7 +51,7 @@ class AgentScopeToolAdapterTests {
                         "asset_query"),
                 Schedulers.immediate(),
                 leaseGuard,
-                new ObjectMapper());
+                new ObjectMapper(), mock(AiModel.class), List.of());
 
         ToolUseBlock toolUseBlock = ToolUseBlock.builder()
                 .id("call-123")
@@ -61,7 +65,7 @@ class AgentScopeToolAdapterTests {
                 .put(CancellationContext.class, CancellationContext.noop())
                 .put(com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext.class,
                         new com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext(
-                                42L, 1, 42L))
+                                42L, 2, 77L, null))
                 .build();
         ToolCallParam param = ToolCallParam.builder()
                 .toolUseBlock(toolUseBlock)
@@ -73,6 +77,12 @@ class AgentScopeToolAdapterTests {
 
         assertEquals("call-123", result.getId());
         assertEquals("asset_query", result.getName());
+        ArgumentCaptor<ToolExecutionContext> captured = ArgumentCaptor.forClass(ToolExecutionContext.class);
+        verify(toolExecutor).execute(eq("{\"keyword\":\"cat\"}"), captured.capture());
+        assertEquals(77L, captured.getValue().requireMutationContext().actor().teamId());
+        assertEquals("run-1", captured.getValue().requireMutationContext().agentRunId());
+        assertEquals("call-123", captured.getValue().requireMutationContext().toolCallId());
+        assertEquals(1L, captured.getValue().requireMutationContext().ownerEpoch());
                 TextBlock output = assertInstanceOf(TextBlock.class, result.getOutput().getFirst());
                 assertEquals("ok", output.getText());
     }
@@ -94,7 +104,7 @@ class AgentScopeToolAdapterTests {
                         "asset_query"),
                 Schedulers.immediate(),
                 leaseGuard,
-                new ObjectMapper());
+                new ObjectMapper(), mock(AiModel.class), List.of());
         ToolUseBlock toolUseBlock = ToolUseBlock.builder()
                 .id("call-error")
                 .name("asset_query")
@@ -106,7 +116,7 @@ class AgentScopeToolAdapterTests {
                 .put(CancellationContext.class, CancellationContext.noop())
                 .put(com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext.class,
                         new com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext(
-                                42L, 1, 42L))
+                                42L, 1, 42L, null))
                 .build();
 
         ToolResultBlock result = adapter.callAsync(ToolCallParam.builder()

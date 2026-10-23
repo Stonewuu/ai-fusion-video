@@ -156,10 +156,10 @@ class AgentUserSkillDirectoryTests {
                 .isolationScope(IsolationScope.USER)
                 .toFilesystem(temporaryDirectory, "ai_assistant_agent", ignored -> List.of("local"));
         WorkspaceSkillRepository repository = new WorkspaceSkillRepository(
-                filesystem, "skills", () -> context);
+                filesystem, "skills");
         SkillResources resources = repository.resourcesFor("binary-skill", context);
 
-        assertThat(repository.getSkill("binary-skill")).isNotNull();
+        assertThat(repository.skillExists("binary-skill", context)).isTrue();
         assertThat(resources.read("references/guide.md")).contains("reference body");
         assertThat(resources.readBinary("assets/template.bin")).hasValueSatisfying(value ->
                 assertThat(value).containsExactly(binary));

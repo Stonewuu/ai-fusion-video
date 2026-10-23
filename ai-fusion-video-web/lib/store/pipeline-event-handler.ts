@@ -8,7 +8,6 @@ import {
   type ToolTimelineStatus,
 } from "@/lib/store/pipeline-timeline";
 import type {
-  InvalidationType,
   PipelineTask,
   PipelineState,
   PipelineStoreState,
@@ -23,42 +22,6 @@ export interface PipelineEventLifecycle {
   ) => void;
   scheduleStatusSync: () => void;
 }
-
-export const TOOL_INVALIDATION_MAP: Record<string, InvalidationType> = {
-  // assets 相关的工具
-  create_asset: "assets",
-  add_asset_item: "assets",
-  update_asset: "assets",
-  update_asset_item: "assets",
-  batch_create_assets: "assets",
-  batch_create_asset_items: "assets",
-  delete_asset_resource: "assets",
-  update_asset_image: "assets",
-  generate_image: "assets",
-
-  // scripts 相关的工具
-  save_script_episode: "scripts",
-  save_script_scene_items: "scripts",
-  update_script: "scripts",
-  update_script_info: "scripts",
-  manage_script_scenes: "scripts",
-  update_script_scene: "scripts",
-  update_script_scene_item: "scripts",
-  manage_script_scene_items: "scripts",
-  delete_script_child_resource: "scripts",
-
-  // storyboards 相关的工具
-  save_storyboard_episode: "storyboards",
-  save_storyboard_scene_shots: "storyboards",
-  insert_storyboard_item: "storyboards",
-  update_storyboard_item: "storyboards",
-  update_storyboard_item_video: "storyboards",
-  update_storyboard_item_frame: "storyboards",
-  update_storyboard_scene: "storyboards",
-  delete_storyboard_child_resource: "storyboards",
-  generate_video: "storyboards",
-  script_to_storyboard: "storyboards",
-};
 
 function isMainAgentTerminalEvent(event: GenericStreamEvent): boolean {
   return !event.parentToolCallId && !event.agentName && (
@@ -265,16 +228,6 @@ export function createPipelineEventHandler(
     rafScheduled = false;
     const batch = eventQueue.splice(0);
     if (batch.length === 0) return;
-
-    // 收集本批次需要触发的 invalidation 类型
-    const invalidations: InvalidationType[] = [];
-    let hasTerminalEvent = false;
-    for (const event of batch) {
-      if (isMainAgentTerminalEvent(event)) {
-        hasTerminalEvent = true;
-      }
-    }
-
 
     set((s) => {
       const tasks = s.tasks.map((t) => {
@@ -592,14 +545,6 @@ export function createPipelineEventHandler(
                   }
                 }
               }
-              // 收集 invalidation
-              if (
-                event.toolName &&
-                event.toolStatus !== "error" &&
-                TOOL_INVALIDATION_MAP[event.toolName]
-              ) {
-                invalidations.push(TOOL_INVALIDATION_MAP[event.toolName]);
-              }
               break;
 
             case "SUB_AGENT_FINISHED":
@@ -700,18 +645,7 @@ export function createPipelineEventHandler(
         };
       });
 
-      // 合并 invalidation 到同一次 set
-      const newInvalidation = { ...s.invalidation };
-      if (hasTerminalEvent) {
-        newInvalidation.assets = (newInvalidation.assets || 0) + 1;
-        newInvalidation.scripts = (newInvalidation.scripts || 0) + 1;
-        newInvalidation.storyboards = (newInvalidation.storyboards || 0) + 1;
-      }
-      for (const inv of invalidations) {
-        newInvalidation[inv] = (newInvalidation[inv] || 0) + 1;
-      }
-
-      return { tasks, invalidation: newInvalidation };
+      return { tasks };
     });
 
     // 完成/错误/取消时触发后续回调

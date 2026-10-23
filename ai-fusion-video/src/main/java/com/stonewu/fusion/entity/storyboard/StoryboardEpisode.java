@@ -23,30 +23,51 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class StoryboardEpisode extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 所属分镜ID */
+    /**
+     * 业务内容与子集合版本
+     */
+    private Integer version;
+
+    /**
+     * 所属分镜ID
+     */
     private Long storyboardId;
 
-    /** 关联的剧本分集ID */
+    /**
+     * 关联的剧本分集ID
+     */
     private Long scriptEpisodeId;
 
-    /** 集号（从1开始） */
+    /**
+     * 集号（从1开始）
+     */
     private Integer episodeNumber;
 
-    /** 本集标题 */
+    /**
+     * 本集标题
+     */
     private String title;
 
-    /** 本集梗概 */
+    /**
+     * 本集梗概
+     */
     private String synopsis;
 
-    /** 排列顺序 */
+    /**
+     * 排列顺序
+     */
     @Builder.Default
     private Integer sortOrder = 0;
 
-    /** 状态：0-草稿 1-正常 */
+    /**
+     * 状态：0-草稿 1-正常
+     */
     @Builder.Default
     private Integer status = 0;
 
@@ -57,28 +78,44 @@ public class StoryboardEpisode extends BaseEntity {
     @Builder.Default
     private Long deletedId = 0L;
 
-    /** 本集合成视频URL */
+    /**
+     * 本集合成视频URL
+     */
     private String composedVideoUrl;
 
-    /** 合成状态: 0未开始 1合成中 2已完成 3失败 */
+    /**
+     * 合成状态: 0未开始 1合成中 2已完成 3失败
+     */
     @Builder.Default
     private Integer composeStatus = 0;
 
-    /** 合成失败原因 */
+    /**
+     * 合成失败原因
+     */
     private String composeErrorMsg;
 
-    /** 合成完成时间 */
+    /**
+     * 合成完成时间
+     */
     private LocalDateTime composedAt;
 
-    /** Sonilo 配乐任务ID（如需查询该音轨的授权记录，凭此ID向 Sonilo 查询） */
+    /**
+     * Sonilo 配乐任务ID（如需查询该音轨的授权记录，凭此ID向 Sonilo 查询）
+     */
     private String bgmTaskId;
 
-    /** 配乐音轨URL（持久化存档） */
+    /**
+     * 配乐音轨URL（持久化存档）
+     */
     private String bgmAudioUrl;
 
-    /** 音效音轨URL（持久化存档） */
+    /**
+     * 音效音轨URL（持久化存档）
+     */
     private String bgmSfxAudioUrl;
 
-    /** 配乐失败原因（配乐失败不影响本集合成结果） */
+    /**
+     * 配乐失败原因（配乐失败不影响本集合成结果）
+     */
     private String bgmErrorMsg;
 }

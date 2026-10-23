@@ -5,11 +5,7 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
 import com.stonewu.fusion.service.ai.run.kernel.ToolManifestSnapshot;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 public record AgentKernelSpec(
         AgentKernelKey key,

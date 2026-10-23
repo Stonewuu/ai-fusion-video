@@ -8,6 +8,7 @@ import {
   listToolArgumentEntries,
   parseEmbeddedJsonArgument,
   parseToolArguments,
+  inspectToolArguments,
 } from "./tool-call-argument-model";
 
 test("parses query tool arguments into friendly entries", () => {
@@ -117,6 +118,16 @@ test("rejects malformed JSON and non-object roots explicitly", () => {
   assert.throws(() => parseToolArguments("{invalid"), /not valid JSON/);
   assert.throws(() => parseToolArguments("[]"), /root must be a JSON object/);
   assert.throws(() => parseToolArguments(""), /must contain a JSON object/);
+});
+
+test("invalid model arguments stay an explicit error instead of crashing or becoming an empty object", () => {
+  for (const text of ['{"operations":[{"node":{"config":{"content":"雨夜', "[]", "null", ""]) {
+    assert.deepEqual(inspectToolArguments(text), {
+      valid: false,
+      message: "工具参数不完整或格式错误，无法执行。请停止本轮并重新提交要求。",
+    });
+  }
+  assert.deepEqual(inspectToolArguments("{}"), { valid: true, value: {} });
 });
 
 test("turns runtime MCP field names into readable labels", () => {

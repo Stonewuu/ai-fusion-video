@@ -311,7 +311,8 @@ class AgentFencingCancellationIT {
                 Duration.ofSeconds(30),
                 deadline,
                 "run",
-                null)));
+                null,
+                null, null)));
     }
 
     private StartedAgentRun startChild(

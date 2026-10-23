@@ -11,20 +11,15 @@ import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiDownloadedFile;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiJobResult;
 import com.stonewu.fusion.service.ai.comfyui.client.ComfyUiNativeClient;
-import com.stonewu.fusion.service.storage.MediaStorageService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
 
-/** Shared execution orchestration for ComfyUI image and video strategies. */
+/**
+ * Shared execution orchestration for ComfyUI image and video strategies.
+ */
 @Service
 @RequiredArgsConstructor
 public class ComfyUiGenerationExecutor {
@@ -36,7 +31,6 @@ public class ComfyUiGenerationExecutor {
     private final ComfyUiInputResourceService inputResourceService;
     private final ComfyUiOutputResolver outputResolver;
     private final ComfyUiNativeClient nativeClient;
-    private final MediaStorageService mediaStorageService;
 
     public ComfyUiExecutionContext resolveActiveContext(AiModel model) {
         if (model == null || model.getComfyuiWorkflowId() == null) {
@@ -50,6 +44,11 @@ public class ComfyUiGenerationExecutor {
     }
 
     public ComfyUiExecutionContext resolveContext(AiModel model, Long versionId) {
+        return resolveContext(model, versionId,
+                model == null ? null : apiConfigService.getById(model.getApiConfigId()));
+    }
+
+    public ComfyUiExecutionContext resolveContext(AiModel model, Long versionId, ApiConfig apiConfig) {
         if (model == null || model.getComfyuiWorkflowId() == null) {
             throw new BusinessException(400, "ComfyUI 模型未绑定工作流");
         }
@@ -64,7 +63,6 @@ public class ComfyUiGenerationExecutor {
         if (!Boolean.TRUE.equals(version.getPublished())) {
             throw new BusinessException(400, "任务不能执行未发布的 ComfyUI 工作流版本");
         }
-        ApiConfig apiConfig = apiConfigService.getById(model.getApiConfigId());
         if (apiConfig == null || !ComfyUiWorkflowService.PLATFORM.equalsIgnoreCase(apiConfig.getPlatform())) {
             throw new BusinessException(400, "ComfyUI API 配置不存在或平台不匹配");
         }
@@ -74,33 +72,9 @@ public class ComfyUiGenerationExecutor {
         return new ComfyUiExecutionContext(model, apiConfig, workflow, version);
     }
 
-    public ComfyUiExecutionContext resolveTestContext(Long versionId) {
-        ComfyUiWorkflowVersion version = workflowService.requireVersion(versionId);
-        if (!Integer.valueOf(ComfyUiWorkflowVersion.VALIDATION_VALID)
-                .equals(version.getValidationStatus())) {
-            throw new BusinessException(400, "请先完成目标 ComfyUI 在线依赖校验");
-        }
-        ComfyUiWorkflow workflow = workflowService.requireWorkflow(version.getWorkflowId());
-        ApiConfig apiConfig = apiConfigService.getById(workflow.getApiConfigId());
-        if (apiConfig == null || !Integer.valueOf(1).equals(apiConfig.getStatus())
-                || !ComfyUiWorkflowService.PLATFORM.equalsIgnoreCase(apiConfig.getPlatform())) {
-            throw new BusinessException(400, "ComfyUI API 配置不存在、已禁用或平台不匹配");
-        }
-        AiModel syntheticModel = AiModel.builder()
-                .name(workflow.getName())
-                .code(workflow.getCode())
-                .modelType(workflow.getModelType())
-                .apiConfigId(workflow.getApiConfigId())
-                .comfyuiWorkflowId(workflow.getId())
-                .modelProtocol(ComfyUiWorkflowService.PLATFORM)
-                .status(1)
-                .build();
-        return new ComfyUiExecutionContext(syntheticModel, apiConfig, workflow, version);
-    }
-
     public ComfyUiPreparedSubmission prepare(ComfyUiExecutionContext context,
-                                              String taskKey,
-                                              Map<String, Object> rawValues) {
+                                             String taskKey,
+                                             Map<String, Object> rawValues) {
         Map<String, Object> values = new LinkedHashMap<>(rawValues == null ? Map.of() : rawValues);
         uploadBoundImages(context, taskKey, values);
         ObjectNode prompt = renderer.render(context.model().getModelType(), context.version(), values);
@@ -112,45 +86,35 @@ public class ComfyUiGenerationExecutor {
                 submission.context().apiConfig(), submission.prompt(), submission.promptId());
     }
 
-    public ComfyUiJobResult waitForJob(ComfyUiExecutionContext context,
-                                       String promptId,
-                                       long pollIntervalMillis,
-                                       long timeoutMillis) {
-        long interval = Math.max(500L, pollIntervalMillis);
-        long deadline = System.currentTimeMillis() + Math.max(10_000L, timeoutMillis);
-        while (System.currentTimeMillis() <= deadline) {
-            ComfyUiJobResult job = nativeClient.getJob(context.apiConfig(), promptId);
-            if (job.completed()) return job;
-            if (job.failed()) {
-                String error = job.executionError() == null
-                        ? "未知错误" : job.executionError().toString();
-                throw new BusinessException(502, "ComfyUI 工作流执行失败: " + error);
-            }
-            sleep(interval);
-        }
-        throw new BusinessException(504, "ComfyUI 工作流轮询超时: " + promptId);
+    public ComfyUiJobResult query(ComfyUiExecutionContext context, String promptId) {
+        return nativeClient.getJob(context.apiConfig(), promptId);
     }
 
     public List<ComfyUiStoredOutput> storeOutputs(ComfyUiExecutionContext context,
-                                                   ComfyUiJobResult job) {
+                                                  ComfyUiJobResult job, OutputWriter writer) {
         List<ComfyUiOutputBinding> bindings = documentService.parseOutputBindings(
                 context.model().getModelType(), context.version().getApiWorkflowJson(),
                 context.version().getOutputBindingsJson());
         List<ComfyUiRemoteOutput> remoteOutputs = outputResolver.resolve(job, bindings);
         List<ComfyUiStoredOutput> stored = new ArrayList<>();
-        for (ComfyUiRemoteOutput output : remoteOutputs) {
+        for (int index = 0; index < remoteOutputs.size(); index++) {
+            ComfyUiRemoteOutput output = remoteOutputs.get(index);
             try (ComfyUiDownloadedFile file = nativeClient.downloadOutput(
                     context.apiConfig(), output.filename(), output.subfolder(), output.type())) {
-                String url = mediaStorageService.storeFile(
-                        file.path(), storageDirectory(output), file.extension());
+                String url = writer.store(output, file, index);
                 stored.add(new ComfyUiStoredOutput(
                         output.mediaType(), output.role(), url, file.size()));
             } catch (IOException e) {
                 throw new BusinessException(500,
-                        "清理 ComfyUI 临时输出失败: " + StrUtil.blankToDefault(e.getMessage(), "I/O error"));
+                        "接收或清理 ComfyUI 输出失败: " + StrUtil.blankToDefault(e.getMessage(), "I/O error"));
             }
         }
         return List.copyOf(stored);
+    }
+
+    @FunctionalInterface
+    public interface OutputWriter {
+        String store(ComfyUiRemoteOutput output, ComfyUiDownloadedFile file, int index) throws IOException;
     }
 
     public boolean cancel(ComfyUiExecutionContext context, String promptId) {
@@ -163,6 +127,7 @@ public class ComfyUiGenerationExecutor {
         List<ComfyUiInputBinding> bindings = documentService.parseInputBindings(
                 context.model().getModelType(), context.version().getApiWorkflowJson(),
                 context.version().getInputBindingsJson());
+        validateMediaCoverage(bindings, values);
         Set<String> imageFields = new LinkedHashSet<>();
         for (ComfyUiInputBinding binding : bindings) {
             if ("uploaded_video".equals(binding.valueType())
@@ -176,10 +141,51 @@ public class ComfyUiGenerationExecutor {
         }
         for (String field : imageFields) {
             Object raw = values.get(field);
-            if (raw == null) continue;
+            if (raw == null) {
+                continue;
+            }
             List<String> sources = toStringList(raw, field);
             values.put(field, inputResourceService.uploadImages(
                     context.apiConfig(), taskKey, field, sources));
+        }
+    }
+
+    private void validateMediaCoverage(List<ComfyUiInputBinding> bindings, Map<String, Object> values) {
+        for (String field : List.of("referenceImages", "firstFrame", "lastFrame",
+                "referenceVideos", "referenceAudios")) {
+            Object raw = values.get(field);
+            if (raw == null) {
+                continue;
+            }
+            int count = raw instanceof List<?> items ? items.size() : 1;
+            Set<Integer> covered = new HashSet<>();
+            boolean wholeList = false;
+            for (ComfyUiInputBinding binding : bindings) {
+                if (!field.equals(binding.businessField())) {
+                    continue;
+                }
+                if (binding.index() == null) {
+                    if ("string_list".equals(binding.valueType())) {
+                        wholeList = true;
+                    } else {
+                        covered.add(0);
+                    }
+                } else {
+                    if (binding.index() >= count) {
+                        throw new BusinessException(400, "工作流输入 " + field + " 缺少索引 " + binding.index());
+                    }
+                    covered.add(binding.index());
+                }
+            }
+            if (wholeList) {
+                continue;
+            }
+            for (int index = 0; index < count; index++) {
+                if (!covered.contains(index)) {
+                    throw new BusinessException(400, "ComfyUI 工作流输入 " + field + " 的索引 " + index
+                            + "（第 " + (index + 1) + " 项）未绑定，不能忽略素材；请扩展工作流绑定或减少输入");
+                }
+            }
         }
     }
 
@@ -198,21 +204,4 @@ public class ComfyUiGenerationExecutor {
         return List.of(raw.toString());
     }
 
-    private String storageDirectory(ComfyUiRemoteOutput output) {
-        return switch (output.mediaType()) {
-            case "image" -> "images";
-            case "video" -> "videos";
-            case "audio" -> "audio";
-            default -> "files/comfyui";
-        };
-    }
-
-    private void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException(500, "ComfyUI 工作流轮询被中断");
-        }
-    }
 }

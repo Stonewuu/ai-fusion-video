@@ -1,11 +1,7 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.script.Script;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -18,7 +14,8 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class ScriptQueryToolExecutor implements ToolExecutor {
 
-    private final ToolResourceAccessGuard accessGuard;
+    private final ScriptToolQueries queries;
+
 
     @Override
     public String getToolName() {
@@ -55,27 +52,6 @@ public class ScriptQueryToolExecutor implements ToolExecutor {
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long scriptId = params.getLong("scriptId");
-            if (scriptId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "缺少 scriptId").toString();
-            }
-
-            Script script = accessGuard.requireScript(scriptId, context.getUserId());
-            return JSONUtil.createObj()
-                    .set("scriptId", script.getId())
-                    .set("projectId", script.getProjectId())
-                    .set("title", script.getTitle())
-                    .set("content", script.getContent())
-                    .set("storySynopsis", script.getStorySynopsis())
-                    .set("charactersJson", script.getCharactersJson())
-                    .set("totalEpisodes", script.getTotalEpisodes())
-                    .set("parsingStatus", script.getParsingStatus())
-                    .toString();
-        } catch (Exception e) {
-            log.error("查询剧本失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "查询失败: " + e.getMessage()).toString();
-        }
+        return queries.execute(getToolName(), toolInput, context);
     }
 }

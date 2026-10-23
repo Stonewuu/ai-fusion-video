@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasCommentMapper">
+    <select id="history" resultType="com.stonewu.fusion.entity.canvas.CanvasCommentEntity">
+        SELECT c.*,COALESCE(NULLIF(u.nickname,''),u.username,'已删除账号') AS author_name FROM afv_canvas_comment c LEFT JOIN sys_user u ON u.id=c.created_by WHERE c.canvas_id = #{canvasId} ORDER BY c.create_time, c.id LIMIT #{limit} OFFSET #{offset}
+    </select>
+    <select id="detail" resultType="com.stonewu.fusion.entity.canvas.CanvasCommentEntity">
+        SELECT c.*,COALESCE(NULLIF(u.nickname,''),u.username,'已删除账号') AS author_name FROM afv_canvas_comment c LEFT JOIN sys_user u ON u.id=c.created_by WHERE c.canvas_id = #{canvasId} AND c.id = #{id}
+    </select>
+    <insert id="create">
+        INSERT INTO afv_canvas_comment(id, canvas_id, node_id, parent_id, resource_version, content, created_by, create_time, update_time)
+        VALUES (#{id}, #{canvasId}, #{nodeId}, #{parentId}, #{resourceVersion}, #{content}, #{actor}, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <update id="patch">
+        UPDATE afv_canvas_comment SET content = #{content}, resolved = #{resolved}, deleted = #{deleted}, version = version + 1, update_time = UTC_TIMESTAMP(6)
+        WHERE canvas_id = #{canvasId} AND id = #{id} AND version = #{version} AND deleted = FALSE
+    </update>
+</mapper>

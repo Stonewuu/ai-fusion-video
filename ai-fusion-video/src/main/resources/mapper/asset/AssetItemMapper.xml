@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.asset.AssetItemMapper">
+    <select id="parentAssetId" resultType="long">
+        SELECT asset_id FROM afv_asset_item WHERE id = #{id}
+    </select>
+    <select id="lockNamed" resultType="Long">
+        SELECT id FROM afv_asset_item WHERE asset_id = #{assetId} AND name = #{name} AND deleted = FALSE ORDER BY id FOR UPDATE
+    </select>
+    <select id="lockChildren" resultType="Long">
+        SELECT id FROM afv_asset_item WHERE asset_id = #{assetId} AND deleted = FALSE ORDER BY sort_order, id FOR UPDATE
+    </select>
+</mapper>

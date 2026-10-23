@@ -1,51 +1,38 @@
 package com.stonewu.fusion.service.generation.video.strategy;
 
+import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.VideoTask;
+import com.stonewu.fusion.service.generation.job.PreparedGenerationCall;
+import com.stonewu.fusion.service.generation.job.RemoteGenerationResult;
 
 import java.util.Set;
 
 /**
- * 视频生成策略接口
- * <p>
- * 不同平台实现此接口
+ * 供应商协议只做一次请求；重试、租约、额度和结果发布由持久化执行层负责。
  */
 public interface VideoGenerationStrategy {
-
-    /**
-     * 策略名称
-     */
     String getName();
 
-    /**
-     * 当前策略支持的显式协议键。大多数策略只有一个协议；聚合协议可暴露多个子协议。
-     */
+    default int batchSize(VideoTask task, AiModel model, ApiConfig apiConfig) {
+        return 1;
+    }
+
     default Set<String> getSupportedProtocols() {
         return Set.of(getName());
     }
 
     /**
-     * 提交生视频任务到平台
-     *
-     * @param task 生视频任务
-     * @return 平台任务ID
+     * 素材与请求体全部就绪后再返回，不发送生成请求。
      */
-    String submit(VideoTask task);
+    PreparedGenerationCall prepare(VideoTask task, AiModel model, ApiConfig apiConfig);
+
+    RemoteGenerationResult query(String platformTaskId, VideoTask task, AiModel model, ApiConfig apiConfig);
 
     /**
-     * 轮询平台任务状态
-     *
-     * @param platformTaskId 平台任务ID
-     * @param task 生视频任务
+     * true 只代表已发出取消请求，不能据此提前释放模型额度。
      */
-    void poll(String platformTaskId, VideoTask task);
-
-    /** Cancel a submitted remote task when the platform supports cancellation. */
-    default boolean cancel(String platformTaskId, VideoTask task) {
-        return false;
-    }
-
-    /** Whether result URLs have already been copied into platform-controlled storage. */
-    default boolean persistsResults() {
+    default boolean cancel(String platformTaskId, VideoTask task, AiModel model, ApiConfig apiConfig) {
         return false;
     }
 }

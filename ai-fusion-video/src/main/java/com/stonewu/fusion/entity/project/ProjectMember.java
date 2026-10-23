@@ -21,17 +21,25 @@ import lombok.*;
 @AllArgsConstructor
 public class ProjectMember extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 所属项目ID */
+    /**
+     * 所属项目ID
+     */
     private Long projectId;
 
-    /** 成员用户ID */
+    /**
+     * 成员用户ID
+     */
     private Long userId;
 
-    /** 成员角色：1-项目拥有者 2-管理员 3-普通成员 */
+    /**
+     * 成员角色：1-项目拥有者 2-管理员 3-编辑成员 4-只读成员
+     */
     @Builder.Default
     private Integer role = 3;
 }

@@ -1,5 +1,6 @@
 package com.stonewu.fusion.service.ai.comfyui;
 
+
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -13,6 +14,8 @@ import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.mapper.ai.ComfyUiWorkflowMapper;
 import com.stonewu.fusion.mapper.ai.ComfyUiWorkflowVersionMapper;
 import com.stonewu.fusion.service.ai.ApiConfigService;
+import com.stonewu.fusion.service.ai.ProviderConfigurationFingerprint;
+import com.stonewu.fusion.service.canvas.CanvasJson;
 import lombok.RequiredArgsConstructor;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.Cacheable;
@@ -20,11 +23,13 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Locale;
+import java.util.Objects;
 
-/** CRUD, immutable versioning and publication rules for ComfyUI workflows. */
+/**
+ * CRUD, immutable versioning and publication rules for ComfyUI workflows.
+ */
 @Service
 @RequiredArgsConstructor
 public class ComfyUiWorkflowService {
@@ -38,6 +43,7 @@ public class ComfyUiWorkflowService {
     private final AiModelMapper aiModelMapper;
     private final ApiConfigService apiConfigService;
     private final ComfyUiWorkflowDocumentService documentService;
+    private final CanvasJson json;
 
     @Transactional
     @CacheEvict(value = {"comfyUiWorkflow", "comfyUiWorkflowVersion"}, allEntries = true)
@@ -76,7 +82,7 @@ public class ComfyUiWorkflowService {
                                Integer modelType,
                                String description,
                                Integer status) {
-        ComfyUiWorkflow workflow = requireWorkflow(id);
+        ComfyUiWorkflow workflow = lockWorkflow(id);
         if (apiConfigId != null && !apiConfigId.equals(workflow.getApiConfigId())) {
             throw new BusinessException(400, "ComfyUI 工作流创建后不能更换所属供应商");
         }
@@ -85,22 +91,33 @@ public class ComfyUiWorkflowService {
         Integer nextModelType = modelType != null ? modelType : workflow.getModelType();
         requireComfyUiApiConfig(nextApiConfigId);
         requireModelType(nextModelType);
-        if (workflow.getActiveVersionId() != null
-                && !nextModelType.equals(workflow.getModelType())) {
-            throw new BusinessException(400, "已发布工作流不能更换模型类型");
+        if (!nextModelType.equals(workflow.getModelType()) && (workflow.getActiveVersionId() != null
+                || versionMapper.exists(new LambdaQueryWrapper<ComfyUiWorkflowVersion>()
+                .eq(ComfyUiWorkflowVersion::getWorkflowId, id)))) {
+            throw new BusinessException(400, "已有版本的工作流不能更换模型类型，请创建新的工作流");
         }
         validateUniqueCode(id, nextApiConfigId, nextCode);
         if (name != null) {
-            if (name.isBlank()) throw new BusinessException(400, "工作流名称不能为空");
+            if (name.isBlank()) {
+                throw new BusinessException(400, "工作流名称不能为空");
+            }
             workflow.setName(name.trim());
         }
         if (code != null) {
-            if (code.isBlank()) throw new BusinessException(400, "工作流标识不能为空");
+            if (code.isBlank()) {
+                throw new BusinessException(400, "工作流标识不能为空");
+            }
             workflow.setCode(normalizeCode(code));
         }
-        if (modelType != null) workflow.setModelType(modelType);
-        if (description != null) workflow.setDescription(StrUtil.trim(description));
-        if (status != null) workflow.setStatus(status);
+        if (modelType != null) {
+            workflow.setModelType(modelType);
+        }
+        if (description != null) {
+            workflow.setDescription(StrUtil.trim(description));
+        }
+        if (status != null) {
+            workflow.setStatus(status);
+        }
         workflowMapper.updateById(workflow);
     }
 
@@ -159,11 +176,11 @@ public class ComfyUiWorkflowService {
         ComfyUiWorkflowDefinition definition = documentService.normalize(
                 workflow.getModelType(), uiWorkflowJson, apiWorkflowJson,
                 inputBindingsJson, outputBindingsJson);
-        ComfyUiWorkflowVersion latest = versionMapper.selectOne(
-                new LambdaQueryWrapper<ComfyUiWorkflowVersion>()
-                        .eq(ComfyUiWorkflowVersion::getWorkflowId, workflowId)
-                        .orderByDesc(ComfyUiWorkflowVersion::getVersionNo)
-                        .last("LIMIT 1"));
+        ComfyUiWorkflowVersion latest = versionMapper.selectPage(new Page<>(1, 1, false),
+                        new LambdaQueryWrapper<ComfyUiWorkflowVersion>()
+                                .eq(ComfyUiWorkflowVersion::getWorkflowId, workflowId)
+                                .orderByDesc(ComfyUiWorkflowVersion::getVersionNo)).getRecords().stream().findFirst()
+                .orElse(null);
         int nextVersion = latest == null ? 1 : latest.getVersionNo() + 1;
         ComfyUiWorkflowVersion version = buildVersion(workflowId, nextVersion, definition);
         versionMapper.insert(version);
@@ -177,11 +194,15 @@ public class ComfyUiWorkflowService {
                                    String apiWorkflowJson,
                                    String inputBindingsJson,
                                    String outputBindingsJson) {
-        ComfyUiWorkflowVersion version = requireVersion(versionId);
+        ComfyUiWorkflowVersion observed = requireVersion(versionId);
+        ComfyUiWorkflow workflow = lockWorkflow(observed.getWorkflowId());
+        ComfyUiWorkflowVersion version = versionMapper.selectById(versionId);
+        if (version == null) {
+            throw new BusinessException(404, "ComfyUI 工作流版本不存在");
+        }
         if (Boolean.TRUE.equals(version.getPublished())) {
             throw new BusinessException(400, "已发布版本不可修改，请创建新版本");
         }
-        ComfyUiWorkflow workflow = requireWorkflow(version.getWorkflowId());
         ComfyUiWorkflowDefinition definition = documentService.normalize(
                 workflow.getModelType(), uiWorkflowJson, apiWorkflowJson,
                 inputBindingsJson, outputBindingsJson);
@@ -191,14 +212,20 @@ public class ComfyUiWorkflowService {
         version.setTestStatus(ComfyUiWorkflowVersion.TEST_PENDING);
         version.setTestMessage(null);
         version.setLastTestTime(null);
+        version.setLastTestRunId(null);
+        version.setTestApiConfigHash(null);
         versionMapper.updateById(version);
     }
 
     @Transactional
     @CacheEvict(value = {"comfyUiWorkflow", "comfyUiWorkflowVersion"}, allEntries = true)
     public void deleteDraftVersion(Long versionId) {
-        ComfyUiWorkflowVersion version = requireVersion(versionId);
-        ComfyUiWorkflow workflow = requireWorkflow(version.getWorkflowId());
+        ComfyUiWorkflowVersion observed = requireVersion(versionId);
+        ComfyUiWorkflow workflow = lockWorkflow(observed.getWorkflowId());
+        ComfyUiWorkflowVersion version = versionMapper.selectById(versionId);
+        if (version == null) {
+            throw new BusinessException(404, "ComfyUI 工作流版本不存在");
+        }
         if (Boolean.TRUE.equals(version.getPublished())
                 || versionId.equals(workflow.getActiveVersionId())) {
             throw new BusinessException(400, "已发布版本不可删除");
@@ -229,8 +256,15 @@ public class ComfyUiWorkflowService {
 
     @Transactional
     @CacheEvict(value = {"comfyUiWorkflow", "comfyUiWorkflowVersion"}, allEntries = true)
-    public void recordValidation(Long versionId, boolean valid, String message) {
-        ComfyUiWorkflowVersion version = requireVersion(versionId);
+    public void recordValidation(Long versionId, String expectedHash, String apiHash, boolean valid, String message) {
+        ComfyUiWorkflowVersion observed = requireVersion(versionId);
+        ComfyUiWorkflow workflow = lockWorkflow(observed.getWorkflowId());
+        ComfyUiWorkflowVersion version = versionMapper.selectById(versionId);
+        if (version == null || !Objects.equals(expectedHash, version.getWorkflowHash())
+                || !Objects.equals(apiHash,
+                ProviderConfigurationFingerprint.of(requireComfyUiApiConfig(workflow.getApiConfigId()), json))) {
+            throw new BusinessException(409, "工作流或供应商连接在校验期间已变化，请重新校验");
+        }
         version.setValidationStatus(valid
                 ? ComfyUiWorkflowVersion.VALIDATION_VALID
                 : ComfyUiWorkflowVersion.VALIDATION_INVALID);
@@ -240,21 +274,12 @@ public class ComfyUiWorkflowService {
 
     @Transactional
     @CacheEvict(value = {"comfyUiWorkflow", "comfyUiWorkflowVersion"}, allEntries = true)
-    public void recordExecutionTest(Long versionId, boolean passed, String message) {
-        ComfyUiWorkflowVersion version = requireVersion(versionId);
-        version.setTestStatus(passed
-                ? ComfyUiWorkflowVersion.TEST_PASSED
-                : ComfyUiWorkflowVersion.TEST_FAILED);
-        version.setTestMessage(StrUtil.trim(message));
-        version.setLastTestTime(LocalDateTime.now());
-        versionMapper.updateById(version);
-    }
-
-    @Transactional
-    @CacheEvict(value = {"comfyUiWorkflow", "comfyUiWorkflowVersion"}, allEntries = true)
     public void publishVersion(Long workflowId, Long versionId) {
         ComfyUiWorkflow workflow = lockWorkflow(workflowId);
-        ComfyUiWorkflowVersion version = requireVersion(versionId);
+        ComfyUiWorkflowVersion version = versionMapper.selectById(versionId);
+        if (version == null) {
+            throw new BusinessException(404, "ComfyUI 工作流版本不存在");
+        }
         if (!workflowId.equals(version.getWorkflowId())) {
             throw new BusinessException(400, "工作流版本不属于指定工作流");
         }
@@ -264,6 +289,11 @@ public class ComfyUiWorkflowService {
         }
         if (!Integer.valueOf(ComfyUiWorkflowVersion.TEST_PASSED).equals(version.getTestStatus())) {
             throw new BusinessException(400, "工作流版本必须在目标 ComfyUI 试运行成功后才能发布");
+        }
+        ApiConfig api = requireComfyUiApiConfig(workflow.getApiConfigId());
+        if (!Integer.valueOf(1).equals(api.getStatus()) || !Objects.equals(version.getTestApiConfigHash(),
+                ProviderConfigurationFingerprint.of(api, json))) {
+            throw new BusinessException(400, "请在当前供应商连接下重新完成持久化试运行后发布");
         }
         version.setPublished(true);
         versionMapper.updateById(version);
@@ -319,10 +349,7 @@ public class ComfyUiWorkflowService {
     }
 
     private ComfyUiWorkflow lockWorkflow(Long id) {
-        ComfyUiWorkflow workflow = workflowMapper.selectOne(
-                new LambdaQueryWrapper<ComfyUiWorkflow>()
-                        .eq(ComfyUiWorkflow::getId, id)
-                        .last("FOR UPDATE"));
+        ComfyUiWorkflow workflow = workflowMapper.selectForUpdate(id);
         if (workflow == null) {
             throw new BusinessException(404, "ComfyUI 工作流不存在");
         }
@@ -350,7 +377,7 @@ public class ComfyUiWorkflowService {
         version.setWorkflowHash(definition.workflowHash());
     }
 
-    private void requireComfyUiApiConfig(Long apiConfigId) {
+    private ApiConfig requireComfyUiApiConfig(Long apiConfigId) {
         if (apiConfigId == null) {
             throw new BusinessException(400, "请选择 ComfyUI API 配置");
         }
@@ -361,11 +388,16 @@ public class ComfyUiWorkflowService {
         if (!PLATFORM.equals(normalize(apiConfig.getPlatform()))) {
             throw new BusinessException(400, "工作流只能关联 platform=comfyui 的 API 配置");
         }
+        return apiConfig;
     }
 
     private void requireNameAndCode(String name, String code) {
-        if (StrUtil.isBlank(name)) throw new BusinessException(400, "工作流名称不能为空");
-        if (StrUtil.isBlank(code)) throw new BusinessException(400, "工作流标识不能为空");
+        if (StrUtil.isBlank(name)) {
+            throw new BusinessException(400, "工作流名称不能为空");
+        }
+        if (StrUtil.isBlank(code)) {
+            throw new BusinessException(400, "工作流标识不能为空");
+        }
     }
 
     private void requireModelType(Integer modelType) {
@@ -378,7 +410,9 @@ public class ComfyUiWorkflowService {
         LambdaQueryWrapper<ComfyUiWorkflow> query = new LambdaQueryWrapper<ComfyUiWorkflow>()
                 .eq(ComfyUiWorkflow::getApiConfigId, apiConfigId)
                 .eq(ComfyUiWorkflow::getCode, normalizeCode(code));
-        if (currentId != null) query.ne(ComfyUiWorkflow::getId, currentId);
+        if (currentId != null) {
+            query.ne(ComfyUiWorkflow::getId, currentId);
+        }
         if (workflowMapper.exists(query)) {
             throw new BusinessException(400, "同一 ComfyUI 配置下工作流标识已存在");
         }

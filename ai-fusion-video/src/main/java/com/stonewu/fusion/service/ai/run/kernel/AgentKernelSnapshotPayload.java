@@ -1,14 +1,9 @@
 package com.stonewu.fusion.service.ai.run.kernel;
 
 import com.fasterxml.jackson.databind.JsonNode;
-
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
-
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentPromptVariables;
+
+import java.util.*;
 
 public record AgentKernelSnapshotPayload(
         int schemaVersion,

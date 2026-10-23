@@ -3,6 +3,7 @@ package com.stonewu.fusion.controller.task;
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.ai.vo.AiChatStreamRespVO;
 import com.stonewu.fusion.entity.ai.AgentConversation;
+import com.stonewu.fusion.service.canvas.CanvasActorResolver;
 import com.stonewu.fusion.service.task.TaskStreamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,23 +29,24 @@ import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 public class TaskStreamController {
 
     private final TaskStreamService taskStreamService;
+    private final CanvasActorResolver actors;
 
     @Operation(summary = "重连任务流（页面刷新后恢复 SSE）")
     @GetMapping(value = "/reconnect", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public Flux<AiChatStreamRespVO> reconnect(@RequestParam String taskId) {
-        return taskStreamService.reconnect(taskId);
+        return taskStreamService.reconnect(taskId, actors.current());
     }
 
     @Operation(summary = "查询任务流状态")
     @GetMapping("/status")
     public CommonResult<String> getStatus(@RequestParam String taskId) {
-        return CommonResult.success(taskStreamService.getStatus(taskId));
+        return CommonResult.success(taskStreamService.getStatus(taskId, actors.current()));
     }
 
     @Operation(summary = "查询运行中的任务流列表")
     @GetMapping("/running")
     public CommonResult<List<AgentConversation>> listRunning() {
         Long userId = requireCurrentUserId();
-        return CommonResult.success(taskStreamService.listRunning(userId));
+        return CommonResult.success(taskStreamService.listRunning(actors.current()));
     }
 }

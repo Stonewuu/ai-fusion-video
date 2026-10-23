@@ -2,7 +2,7 @@
 
 import { Images } from "lucide-react";
 import { resolveMediaUrl } from "@/lib/api/client";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import type { GenerationTask } from "./generation-types";
 import type { GenerationMediaPreview } from "./generation-media-preview-dialog";
 

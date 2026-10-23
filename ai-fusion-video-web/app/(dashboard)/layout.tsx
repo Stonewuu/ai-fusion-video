@@ -17,6 +17,8 @@ import { ClientErrorBoundary } from "@/components/client-error-boundary";
 import { ErrorRecoveryPanel } from "@/components/error-recovery-panel";
 import { ErrorRegionFallback } from "@/components/error-region-fallback";
 import { getClientErrorMessage } from "@/lib/client-error";
+import { ResourceSyncBridge } from "@/components/dashboard/resource-sync-bridge";
+import { useResourceChangeStore } from "@/lib/store/resource-change-store";
 
 const GLOBAL_SIDEBAR_COLLAPSED_STORAGE_KEY = "fusion-dashboard-sidebar-collapsed";
 
@@ -27,7 +29,9 @@ export default function DashboardLayout({
 }) {
   const router = useRouter();
   const pathname = usePathname();
+  const isCanvasWorkspace = /\/canvases\/[^/]+$/.test(pathname);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
+  const projectRevision = useResourceChangeStore((state) => state.revisions.projects);
   const authHydrated = useSyncExternalStore(
     (onStoreChange) => {
       const unsubStart = useAuthStore.persist.onHydrate(onStoreChange);
@@ -80,20 +84,21 @@ export default function DashboardLayout({
     return () => {
       cancelled = true;
     };
-  }, [currentProjectId]);
+  }, [currentProjectId, projectRevision]);
 
-  // 运行时登出检测：用户主动登出后跳转到登录页
-  // 初始进入时的认证保护由 middleware 处理
+  // Cookie 只是路由提示；本地会话丢失时同步清除，避免 proxy 将登录页再次重定向回来。
   useEffect(() => {
     if (authHydrated && !isAuthenticated) {
-      router.replace("/login");
+      document.cookie = "auth-token=; path=/; max-age=0; SameSite=Lax";
+      router.replace(`/login?${new URLSearchParams({ redirect: pathname })}`);
     }
-  }, [authHydrated, isAuthenticated, router]);
+  }, [authHydrated, isAuthenticated, pathname, router]);
 
   const ready = authHydrated && isAuthenticated;
 
   return (
     <div className="h-screen overflow-hidden flex flex-col bg-background">
+        <ResourceSyncBridge enabled={ready} />
         <ClientErrorBoundary context="版本更新检查异常">
           <VersionUpdateNotifier />
         </ClientErrorBoundary>
@@ -123,7 +128,7 @@ export default function DashboardLayout({
         >
           {/* 桌面端：浮动侧边栏卡片 */}
           {/* lg(1024px): ~240px card | xl(1280px): ~270px card | 2xl+(1440px): 300px card */}
-          {ready && (
+          {ready && !isCanvasWorkspace && (
             <div
               className={cn(
                 "hidden lg:block shrink-0 pt-1.5 self-start transition-[width,padding] duration-200 ease-out",
@@ -144,7 +149,7 @@ export default function DashboardLayout({
 
           {/* 移动端：浮动抽屉 */}
           <AnimatePresence>
-            {ready && sidebarOpen && (
+            {ready && !isCanvasWorkspace && sidebarOpen && (
               <>
                 <motion.div
                   initial={{ opacity: 0 }}
@@ -173,7 +178,7 @@ export default function DashboardLayout({
           </AnimatePresence>
 
           {/* 移动端菜单按钮 */}
-          {ready && (
+          {ready && !isCanvasWorkspace && (
             <button
               onClick={() => setSidebarRoute(sidebarOpen ? null : pathname)}
               className={cn(
@@ -194,8 +199,8 @@ export default function DashboardLayout({
 
           {/* 主内容区 */}
           <main className="dashboard-scroll flex flex-1 min-w-0 min-h-0 flex-col overflow-hidden">
-            <OverlayScrollArea key={pathname} className="min-h-0 flex-1">
-              <div className="dashboard-content flex min-h-full w-full shrink-0 flex-col pt-4">
+            <OverlayScrollArea key={pathname} className="min-h-0 flex-1" viewportClassName={isCanvasWorkspace ? "flex flex-col" : undefined}>
+              <div className={cn("dashboard-content flex min-h-full w-full shrink-0 flex-col pt-4", isCanvasWorkspace && "h-full min-h-0 grow basis-0 shrink")}>
                 <ClientErrorBoundary
                   key={pathname}
                   context="当前页面运行异常"

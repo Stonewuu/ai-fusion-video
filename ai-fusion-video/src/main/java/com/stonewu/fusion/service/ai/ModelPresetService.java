@@ -41,10 +41,14 @@ import java.util.Map;
 @Slf4j
 public class ModelPresetService {
 
-    /** code → 预设 JSON 对象 */
+    /**
+     * code → 预设 JSON 对象
+     */
     private final Map<String, JSONObject> presets = new LinkedHashMap<>();
 
-    /** 实际模型代码 + 类型 → 能力预设代码；用于同一上游代码跨图片/视频复用的场景。 */
+    /**
+     * 实际模型代码 + 类型 → 能力预设代码；用于同一上游代码跨图片/视频复用的场景。
+     */
     private final Map<String, String> presetCodesByModelKey = new LinkedHashMap<>();
 
     @PostConstruct
@@ -79,7 +83,7 @@ public class ModelPresetService {
                     presets.put(code, obj);
                     String modelCode = StrUtil.blankToDefault(obj.getStr("modelCode"), code);
                     Integer modelType = obj.getInt("modelType");
-                    if (modelType != null && StrUtil.isNotBlank(modelCode)) {
+                    if (modelType != null && StrUtil.isNotBlank(modelCode) && StrUtil.isBlank(obj.getStr("providerId"))) {
                         presetCodesByModelKey.put(modelKey(modelCode, modelType), code);
                     }
                 }
@@ -128,6 +132,16 @@ public class ModelPresetService {
             return modelCode;
         }
         return presetCodesByModelKey.get(modelKey(modelCode, modelType));
+    }
+
+    /** 提供商预设只按显式绑定匹配，不继承同名原厂模型的协议能力。 */
+    public String findProviderPresetCode(String providerId, String modelCode, int modelType) {
+        return presets.values().stream()
+                .filter(preset -> providerId.equals(preset.getStr("providerId"))
+                        && modelCode.equals(preset.getStr("modelCode"))
+                        && Integer.valueOf(modelType).equals(preset.getInt("modelType")))
+                .map(preset -> preset.getStr("code"))
+                .findFirst().orElse(null);
     }
 
     /**

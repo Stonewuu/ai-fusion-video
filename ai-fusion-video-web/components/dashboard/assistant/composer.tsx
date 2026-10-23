@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  startTransition,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -12,7 +11,6 @@ import { Loader2, Send, Square, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { aiModelApi, type AiModel } from "@/lib/api/ai-model";
 import { useAssistantStore } from "@/lib/store/assistant-store";
 import { AssistantReferenceContext } from "./reference-context";
 import { AssistantReferencePicker } from "./reference-picker";
@@ -21,6 +19,9 @@ import { AssistantAttachmentStrip } from "./attachment-strip";
 import { useAssistantAttachments } from "./use-assistant-attachments";
 import { AssistantModelControls } from "./model-controls";
 import { AssistantToolPermissionControl } from "./tool-permission-control";
+import { useCanvasAssistantSession } from "@/lib/canvas/assistant-session";
+import { AssistantCanvasContext } from "./canvas-context";
+import { useAssistantModels } from "./use-assistant-models";
 
 interface AssistantComposerProps {
   active: boolean;
@@ -30,33 +31,9 @@ interface AssistantComposerProps {
   onHeightChange: (height: number) => void;
 }
 
-let cachedAssistantModels: AiModel[] | null = null;
-let cachedAssistantModelsAt = 0;
-let assistantModelsRequest: Promise<AiModel[]> | null = null;
-const ASSISTANT_MODELS_CACHE_TTL_MS = 30_000;
-
-function loadAssistantModels(): Promise<AiModel[]> {
-  const cached = cachedAssistantModels;
-  if (cached && Date.now() - cachedAssistantModelsAt < ASSISTANT_MODELS_CACHE_TTL_MS) {
-    return Promise.resolve(cached);
-  }
-  if (!assistantModelsRequest) {
-    assistantModelsRequest = aiModelApi.listByType(1)
-      .then((result) => {
-        cachedAssistantModels = result;
-        cachedAssistantModelsAt = Date.now();
-        assistantModelsRequest = null;
-        return result;
-      })
-      .catch((error: unknown) => {
-        assistantModelsRequest = null;
-        throw error;
-      });
-  }
-  return assistantModelsRequest;
-}
-
 export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef, onHeightChange }: AssistantComposerProps) {
+  const userId = useAssistantStore((state) => state.hydratedUserId);
+  const canvasBinding = useCanvasAssistantSession((state) => state.binding);
   const selectedConversationId = useAssistantStore((state) => state.selectedConversationId);
   const text = useAssistantStore((state) => {
     const conversationId = state.selectedConversationId;
@@ -103,10 +80,8 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
   const sendMessage = useAssistantStore((state) => state.sendMessage);
   const stopGeneration = useAssistantStore((state) => state.stopGeneration);
   const connectionConversationId = useAssistantStore((state) => state.connection?.conversationId);
-  const [models, setModels] = useState<AiModel[]>([]);
-  const [modelsLoading, setModelsLoading] = useState(true);
-  const [modelsError, setModelsError] = useState<string | null>(null);
   const [modelLoadAttempt, setModelLoadAttempt] = useState(0);
+  const { models, modelsLoading, modelsError } = useAssistantModels(userId, active, modelLoadAttempt);
   const [selectedReasoningEffort, setSelectedReasoningEffort] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -118,10 +93,12 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
   const cancelling = runtimeStatus === "CANCEL_REQUESTED";
   const running = !!runtimeStatus && ["running", "pending", "RUNNING", "WAITING_CONFIRMATION", "WAITING_EXTERNAL", "CANCEL_REQUESTED"].includes(runtimeStatus);
   const currentConnection = connectionConversationId === selectedConversationId;
-  const effectiveProjectId = selectedConversationId ? conversationProjectId : projectId;
+  const effectiveProjectId = canvasBinding ? canvasBinding.projectId : selectedConversationId ? conversationProjectId : projectId;
   const selectedModel = models.find((model) => model.id === selectedModelId) ?? null;
   const updateText = (value: string) => setDraft(selectedConversationId, value);
   const references = useAssistantReferences({
+    userId,
+    agentType: canvasBinding ? "canvas_assistant" : "ai_assistant_agent",
     active,
     text,
     selectedConversationId,
@@ -157,49 +134,6 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
     setSelectedReasoningEffort(firstLevel);
   }, [selectedModel?.id, selectedModel?.supportReasoning, selectedModel?.reasoningEffortLevels]);
 
-  useEffect(() => {
-    if (!active) return;
-    let cancelled = false;
-    let idleHandle: number | null = null;
-    let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const beginLoad = () => {
-      if (cancelled) return;
-      void loadAssistantModels()
-        .then((result) => {
-          if (cancelled) return;
-          startTransition(() => {
-            setModels(result);
-            const currentSelectedModelId = useAssistantStore.getState().selectedModelId;
-            const preferred = currentSelectedModelId && result.some((model) => model.id === currentSelectedModelId)
-              ? currentSelectedModelId
-              : result.find((model) => model.defaultModel)?.id ?? result[0]?.id ?? null;
-            if (preferred !== currentSelectedModelId) setSelectedModelId(preferred);
-            setModelsLoading(false);
-          });
-        })
-        .catch((requestError: unknown) => {
-          if (cancelled) return;
-          setModelsError(requestError instanceof Error ? requestError.message : "模型加载失败");
-          setModelsLoading(false);
-        });
-    };
-
-    if (modelLoadAttempt > 0 || cachedAssistantModels) {
-      beginLoad();
-    } else if ("requestIdleCallback" in window) {
-      idleHandle = window.requestIdleCallback(beginLoad, { timeout: 1200 });
-    } else {
-      fallbackTimer = setTimeout(beginLoad, 250);
-    }
-
-    return () => {
-      cancelled = true;
-      if (idleHandle !== null) window.cancelIdleCallback(idleHandle);
-      if (fallbackTimer !== null) clearTimeout(fallbackTimer);
-    };
-  }, [active, modelLoadAttempt, setSelectedModelId]);
-
   useLayoutEffect(() => {
     const element = containerRef.current;
     if (!element) return;
@@ -229,7 +163,10 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
     setSubmitting(true);
     setError(null);
     try {
-      const referencedProjectId = references.selectedProject?.id ?? null;
+      const canvas = canvasBinding ? await canvasBinding.prepare() : undefined;
+      if (canvas && references.selectedProject && references.selectedProject.id !== canvas.projectId)
+        throw new Error("引用项目与当前画布不一致，请移除该项目引用或切换到对应画布。");
+      const referencedProjectId = canvas ? canvas.projectId : references.selectedProject?.id ?? null;
       if (selectedConversationId
         && referencedProjectId !== (conversationProjectId ?? null)) {
         setDraft(null, text);
@@ -244,6 +181,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
           project: references.selectedProject,
           skills: references.selectedSkills,
           mcpTools: references.selectedMcpTools,
+          canvas,
           multimodalInputs: attachments.attachments.map((attachment) => ({
             id: attachment.id,
             name: attachment.name,
@@ -274,7 +212,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
           <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-2.5 py-1.5 text-[11px] text-destructive">
             <span className="min-w-0 flex-1 truncate">{visibleAlertMessage}</span>
             <div className="flex shrink-0 items-center gap-2">
-              {modelsError ? <Button type="button" variant="destructive-ghost" size="xs" onClick={() => { setModels([]); setModelsLoading(true); setModelsError(null); setModelLoadAttempt((attempt) => attempt + 1); }}>重试</Button> : null}
+              {modelsError ? <Button type="button" variant="destructive-ghost" size="xs" onClick={() => setModelLoadAttempt((attempt) => attempt + 1)}>重试</Button> : null}
               <Button
                 type="button"
                 variant="destructive-ghost"
@@ -295,13 +233,15 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
           data-assistant-interactive="true"
         >
           <AssistantReferenceContext
-            project={references.selectedProject}
+            project={canvasBinding && references.selectedProject?.id === canvasBinding.projectId ? null : references.selectedProject}
             skills={references.selectedSkills}
             mcpTools={references.selectedMcpTools}
             onRemoveProject={references.removeProject}
             onRemoveSkill={references.removeSkill}
             onRemoveMcpTool={references.removeMcpTool}
-          />
+          >
+            {canvasBinding ? <AssistantCanvasContext /> : null}
+          </AssistantReferenceContext>
           <AssistantAttachmentStrip
             attachments={attachments.attachments}
             disabled={submitting || running}
@@ -314,7 +254,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
             }}
             value={text}
             rows={3}
-            placeholder={"发挥想象…\n使用 '@' 引用项目、'/' 引用 Skill"}
+            placeholder={canvasBinding ? "例如：整理选中的镜头，或把这段故事改成分镜…" : "发挥想象…\n使用 '@' 引用项目、'/' 引用 Skill"}
             disabled={!models.length || modelsLoading || submitting || running}
             data-assistant-interactive="true"
             aria-expanded={!!references.picker}

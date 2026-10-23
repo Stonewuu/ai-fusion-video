@@ -6,6 +6,8 @@ import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.ImageTask;
+import com.stonewu.fusion.service.generation.job.PreparedGenerationCall;
+import com.stonewu.fusion.service.generation.job.RemoteGenerationResult;
 
 import java.util.List;
 
@@ -22,60 +24,26 @@ public interface ImageGenerationStrategy {
     String getName();
 
     /**
-     * 纯平台 API 调用：生成图片并返回 URL 列表
-     * <p>
-     * 此方法不涉及数据库操作，可被 AI 工具调用和异步队列共同复用。
-     *
-     * @param prompt    生图提示词
-     * @param modelCode 模型代码（如 doubao-seedream-5-0-260128、dall-e-3）
-     * @param width     图片宽度
-     * @param height    图片高度
-     * @param count     生成数量
-     * @param imageUrls 参考图片 URL 列表（图生图时传入，文生图传 null 或空列表）
-     * @param apiConfig API 配置（包含密钥、地址等）
-     * @return 生成的图片 URL 列表
+     * 一个意图对应一个远端请求；未声明原生批量的协议每次只请求一个输出。
      */
-    List<String> generate(String prompt, String modelCode, int width, int height, int count,
-                          List<String> imageUrls, ApiConfig apiConfig);
-
-    /**
-     * 使用完整模型配置直接调用平台 API。
-     * <p>
-     * 需要模型能力预设或自定义高级配置时应使用此重载，避免通过模型代码猜测能力。
-     */
-    default List<String> generate(String prompt, AiModel model, int width, int height, int count,
-                                  List<String> imageUrls, ApiConfig apiConfig) {
-        String modelCode = model != null ? model.getCode() : null;
-        return generate(prompt, modelCode, width, height, count, imageUrls, apiConfig);
+    default int batchSize(ImageTask task, AiModel model, ApiConfig apiConfig) {
+        return 1;
     }
 
     /**
-     * 提交生图任务到平台（含数据库更新）
-     *
-     * @param task      生图任务
-     * @param apiConfig API 配置（包含密钥、地址等）
-     * @return 平台任务ID（同步平台可返回自定义标识）
+     * 准备所有素材与请求体，不发送生成请求；返回只能提交一次的调用。
      */
-    String submit(ImageTask task, ApiConfig apiConfig);
+    PreparedGenerationCall prepare(ImageTask task, AiModel model, ApiConfig apiConfig);
 
     /**
-     * 轮询平台任务状态（异步平台使用）
-     * <p>
-     * 同步 API 可在 submit 中直接完成，poll 置空实现即可
-     *
-     * @param platformTaskId 平台任务ID
-     * @param task           生图任务
-     * @param apiConfig      API 配置
+     * 每次调度只查询一次，等待由持久化调度器负责。
      */
-    void poll(String platformTaskId, ImageTask task, ApiConfig apiConfig);
+    RemoteGenerationResult query(String platformTaskId, ImageTask task, AiModel model, ApiConfig apiConfig);
 
-    /** Cancel a submitted remote task when the platform supports cancellation. */
-    default boolean cancel(String platformTaskId, ImageTask task, ApiConfig apiConfig) {
-        return false;
-    }
-
-    /** Whether result URLs have already been copied into platform-controlled storage. */
-    default boolean persistsResults() {
+    /**
+     * true 仅表示远端接收取消请求，终态仍需查询确认。
+     */
+    default boolean cancel(String platformTaskId, ImageTask task, AiModel model, ApiConfig apiConfig) {
         return false;
     }
 
@@ -109,8 +77,12 @@ public interface ImageGenerationStrategy {
         }
 
         // 最终兜底
-        if (width <= 0) width = 1024;
-        if (height <= 0) height = 1024;
+        if (width <= 0) {
+            width = 1024;
+        }
+        if (height <= 0) {
+            height = 1024;
+        }
         return new int[]{width, height};
     }
 

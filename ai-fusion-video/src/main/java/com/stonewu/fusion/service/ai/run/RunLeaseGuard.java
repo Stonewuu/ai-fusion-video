@@ -1,6 +1,5 @@
 package com.stonewu.fusion.service.ai.run;
 
-import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.repository.ai.AgentRunRepository;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
@@ -11,7 +10,9 @@ import reactor.core.publisher.Mono;
 import java.time.Duration;
 import java.util.Objects;
 
-/** Database-time owner fencing for heartbeats and side-effect guards. */
+/**
+ * Database-time owner fencing for heartbeats and side-effect guards.
+ */
 @Service
 public final class RunLeaseGuard {
 
@@ -38,7 +39,7 @@ public final class RunLeaseGuard {
             String runId, String ownerInstanceId, long ownerEpoch) {
         OwnerIdentity owner = owner(runId, ownerInstanceId, ownerEpoch);
         return journal(() -> runs.hasValidOwnedLease(
-                        owner.runId(), owner.ownerInstanceId(), owner.ownerEpoch()))
+                owner.runId(), owner.ownerInstanceId(), owner.ownerEpoch()))
                 .flatMap(valid -> valid
                         ? Mono.empty()
                         : Mono.error(new OwnerFencedException(owner.runId())));
@@ -52,10 +53,10 @@ public final class RunLeaseGuard {
         OwnerIdentity owner = owner(runId, ownerInstanceId, ownerEpoch);
         requirePositive(ownerLease, "ownerLease");
         return journal(() -> runs.renewOwnedLease(
-                        owner.runId(),
-                        owner.ownerInstanceId(),
-                        owner.ownerEpoch(),
-                        ownerLease))
+                owner.runId(),
+                owner.ownerInstanceId(),
+                owner.ownerEpoch(),
+                ownerLease))
                 .flatMap(renewed -> renewed
                         ? Mono.empty()
                         : classifyLostHeartbeat(owner))
@@ -77,26 +78,26 @@ public final class RunLeaseGuard {
 
     private Mono<Void> classifyLostHeartbeat(OwnerIdentity owner) {
         return journal(() -> java.util.Optional.ofNullable(
-                        runs.findRun(owner.runId())))
+                runs.findRun(owner.runId())))
                 .flatMap(current -> current.isPresent()
-                                && AgentRunStatus.CANCEL_REQUESTED.name()
-                                        .equals(current.get().getStatus())
-                                && Objects.equals(
-                                        current.get().getOwnerInstanceId(),
-                                        owner.ownerInstanceId())
-                                && Objects.equals(
-                                        current.get().getOwnerEpoch(), owner.ownerEpoch())
+                        && AgentRunStatus.CANCEL_REQUESTED.name()
+                        .equals(current.get().getStatus())
+                        && Objects.equals(
+                        current.get().getOwnerInstanceId(),
+                        owner.ownerInstanceId())
+                        && Objects.equals(
+                        current.get().getOwnerEpoch(), owner.ownerEpoch())
                         ? ownedCancellations.acknowledgeAndFinalize(
-                                        owner.runId(),
-                                        owner.ownerInstanceId(),
-                                        owner.ownerEpoch())
-                                .then()
+                                owner.runId(),
+                                owner.ownerInstanceId(),
+                                owner.ownerEpoch())
+                        .then()
                         : executions.interruptOwned(
-                                        owner.runId(),
-                                        owner.ownerInstanceId(),
-                                        owner.ownerEpoch(),
-                                        ExecutionStopReason.OWNER_FENCED)
-                                .then());
+                                owner.runId(),
+                                owner.ownerInstanceId(),
+                                owner.ownerEpoch(),
+                                ExecutionStopReason.OWNER_FENCED)
+                        .then());
     }
 
     private <T> Mono<T> journal(java.util.concurrent.Callable<T> operation) {

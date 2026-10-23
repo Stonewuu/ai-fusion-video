@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.ai.AiModelMapper">
+    <update id="softDeleteById">
+        UPDATE afv_ai_model
+        SET deleted = 1,
+            deleted_id = id,
+            update_time = NOW()
+        WHERE id = #{id}
+          AND deleted = 0
+    </update>
+</mapper>

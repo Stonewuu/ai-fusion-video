@@ -13,20 +13,22 @@ import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.tool.AgentScopeToolSchema;
+import com.stonewu.fusion.service.ai.configuration.AgentDefinitionConfiguration;
+import com.stonewu.fusion.service.ai.configuration.AgentKernelSkills;
+import com.stonewu.fusion.service.ai.run.AgentExecutionLimits;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
 import com.stonewu.fusion.service.ai.run.kernel.ToolManifestSnapshot;
+import com.stonewu.fusion.service.canvas.agent.CanvasAgentToolNames;
+import com.stonewu.fusion.service.canvas.agent.node.CanvasAgentNodeTypes;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
+import java.util.stream.Collectors;
 
-/** Creates immutable root and platform-child Harness kernel specifications. */
+/**
+ * Creates immutable root and platform-child Harness kernel specifications.
+ */
 @Component
 public final class AgentKernelSpecFactory {
 
@@ -41,6 +43,7 @@ public final class AgentKernelSpecFactory {
     private final AgentScopeV2Properties properties;
     private final ObjectMapper objectMapper;
     private final AgentScopeMcpRegistry mcpRegistry;
+    private final AgentKernelSkills skills;
 
     @Autowired
     public AgentKernelSpecFactory(
@@ -49,7 +52,8 @@ public final class AgentKernelSpecFactory {
             AgentScopeModelFactory modelFactory,
             AgentScopeV2Properties properties,
             ObjectMapper objectMapper,
-            AgentScopeMcpRegistry mcpRegistry) {
+            AgentScopeMcpRegistry mcpRegistry,
+            AgentKernelSkills skills) {
         this.agentService = Objects.requireNonNull(agentService, "agentService must not be null");
         this.toolConfigService = Objects.requireNonNull(
                 toolConfigService, "toolConfigService must not be null");
@@ -57,6 +61,7 @@ public final class AgentKernelSpecFactory {
         this.properties = Objects.requireNonNull(properties, "properties must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.mcpRegistry = Objects.requireNonNull(mcpRegistry, "mcpRegistry must not be null");
+        this.skills = Objects.requireNonNull(skills, "skills must not be null");
     }
 
     public AgentKernelSpecFactory(
@@ -64,14 +69,15 @@ public final class AgentKernelSpecFactory {
             AiToolConfigService toolConfigService,
             AgentScopeModelFactory modelFactory,
             AgentScopeV2Properties properties,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper,
+            AgentKernelSkills skills) {
         this(
                 agentService,
                 toolConfigService,
                 modelFactory,
                 properties,
                 objectMapper,
-                new AgentScopeMcpRegistry(properties, objectMapper));
+                new AgentScopeMcpRegistry(properties, objectMapper), skills);
     }
 
     public AgentKernelSpec createRoot(AiChatReqVO request, AiModel model, String systemPrompt) {
@@ -83,22 +89,68 @@ public final class AgentKernelSpecFactory {
             AiModel model,
             String systemPrompt,
             Long ownerUserId) {
+        return createRoot(request, model, systemPrompt, ownerUserId, false);
+    }
+
+    /**
+     * 仅由已受理的专业画布节点使用；HTTP 请求没有开启此工具范围的字段。
+     */
+    public AgentKernelSpec createCanvasNode(AiChatReqVO request, AiModel model, String systemPrompt, Long ownerUserId) {
+        if (!CanvasAgentNodeTypes.TYPES.contains(request.getAgentType()) || request.getCanvasContext() == null) {
+            throw new IllegalArgumentException("专业节点缺少可信的智能体类型或画布上下文");
+        }
+        return createRoot(request, model, systemPrompt, ownerUserId, true);
+    }
+
+    private AgentKernelSpec createRoot(AiChatReqVO request, AiModel model, String systemPrompt, Long ownerUserId,
+                                       boolean canvasNode) {
         Objects.requireNonNull(request, "request must not be null");
         String requestedType = normalize(request.getAgentType());
         String definitionKey = requestedType == null ? DEFAULT_AGENT_KEY : requestedType;
+        Map<String, String> promptVariables = new LinkedHashMap<>(AgentPromptVariables.fromRequest(request));
+        String configuration = request.getAgentConfigurationSnapshot() == null
+                ? agentService.snapshot(requestedType, ownerUserId) : request.getAgentConfigurationSnapshot();
+        promptVariables.put(AgentDefinitionConfiguration.SNAPSHOT_VARIABLE, configuration);
         AiAgentDefinition definition = requestedType == null
                 ? null
-                : agentService.getRequiredByType(requestedType);
+                : agentService.fromSnapshot(requestedType, promptVariables);
         String agentName = definition == null
                 ? DEFAULT_AGENT_KEY
                 : requireText(definition.getName(), "agent.name");
         ToolSelection tools = selectTools(
                 requestedType,
                 request.getEnabledTools(),
-                request.getEnabledMcpTools(),
-                ownerUserId);
-        Map<String, String> promptVariables = new LinkedHashMap<>(
-                AgentPromptVariables.fromRequest(request));
+                canvasNode && Integer.valueOf(1)
+                        .equals(definition.getEnableTools()) ? List.of() : request.getEnabledMcpTools(),
+                ownerUserId, promptVariables);
+        if (canvasNode) {
+            tools = nodeTools(tools);
+        } else if (request.getCanvasContext() != null) {
+            // 绑定画布的根助手只能使用能验证该作用域的工具，不能借旧项目工具绕开画布边界。
+            Set<String> permitted = new LinkedHashSet<>(CanvasAgentToolNames.NAMES);
+            if (request.getEnabledMcpTools() != null) {
+                permitted.addAll(request.getEnabledMcpTools());
+            }
+            tools = new ToolSelection(
+                    tools.manifest().stream().filter(item -> permitted.contains(item.toolName())).toList(),
+                    tools.whitelist().stream().filter(permitted::contains)
+                            .collect(Collectors.toCollection(LinkedHashSet::new)));
+        } else {
+            tools = new ToolSelection(
+                    tools.manifest().stream().filter(item -> !CanvasAgentToolNames.requiresCanvas(item.toolName()))
+                            .toList(),
+                    tools.whitelist().stream().filter(name -> !CanvasAgentToolNames.requiresCanvas(name))
+                            .collect(Collectors.toCollection(LinkedHashSet::new)));
+        }
+        String skillPrompt = skills.root(definition, request, promptVariables, ownerUserId);
+        promptVariables.remove("canvasNodeExecution");
+        promptVariables.remove("canvasBound");
+        if (request.getCanvasContext() != null) {
+            promptVariables.put("canvasBound", "true");
+        }
+        if (canvasNode) {
+            promptVariables.put("canvasNodeExecution", "true");
+        }
         promptVariables.put(
                 TOOL_EXECUTION_MODE_VARIABLE,
                 ToolExecutionMode.parse(request.getToolExecutionMode()).name());
@@ -114,10 +166,10 @@ public final class AgentKernelSpecFactory {
                 definitionKey,
                 agentName,
                 "AgentScope Harness kernel for " + agentName,
-                systemPrompt,
+                skillPrompt.isEmpty() ? systemPrompt : systemPrompt + "\n\n" + skillPrompt,
                 promptVariables,
                 tools,
-                modelFactory.modelConfigFingerprint(model));
+                modelFactory.modelConfigFingerprint(model), definition == null ? null : definition.getMaxIters());
     }
 
     public AgentKernelSpec createChild(
@@ -128,23 +180,45 @@ public final class AgentKernelSpecFactory {
         Objects.requireNonNull(parent, "parent must not be null");
         Objects.requireNonNull(subAgent, "subAgent must not be null");
         String childType = requireText(subAgent.getRefAgentType(), "subAgent.refAgentType");
-        AiAgentDefinition definition = agentService.getRequiredByType(childType);
-        String prompt = normalize(subAgent.getSystemPromptOverride());
+        AiAgentDefinition definition = agentService.fromSnapshot(childType, parent.promptVariables());
+        var overrides = agentService.snapshotOverride(childType, parent.promptVariables());
+        String prompt = overrides.systemPrompt() == null ? normalize(
+                subAgent.getSystemPromptOverride()) : definition.getSystemPrompt();
         if (prompt == null) {
             prompt = requireText(definition.getSystemPrompt(), "subAgent.systemPrompt");
         }
-        String instruction = normalize(subAgent.getInstructionOverride());
-        if (instruction == null) {
+        String instruction = overrides.instructionTemplate() == null ? normalize(
+                subAgent.getInstructionOverride()) : normalize(definition.getInstructionTemplate());
+        if (instruction == null && overrides.instructionTemplate() == null) {
             instruction = normalize(definition.getInstructionTemplate());
         }
-        Map<String, String> variables = AgentPromptVariables.forChild(
-                parent.promptVariables(), project, input);
+        Map<String, String> variables = new LinkedHashMap<>(AgentPromptVariables.forChild(
+                parent.promptVariables(), project, input));
+        if (parent.promptVariables().containsKey(AgentDefinitionConfiguration.SNAPSHOT_VARIABLE)) {
+            variables.put(AgentDefinitionConfiguration.SNAPSHOT_VARIABLE,
+                    parent.promptVariables().get(AgentDefinitionConfiguration.SNAPSHOT_VARIABLE));
+        }
         prompt = AgentPromptVariables.render(prompt, variables);
         if (instruction != null) {
             prompt = prompt + "\n\n" + AgentPromptVariables.render(instruction, variables);
         }
-        ToolSelection tools = selectTools(childType, null, null, ownerUserId(parent));
-        String agentName = normalize(subAgent.getToolName());
+        String skillPrompt = skills.child(definition, variables, parent.promptVariables());
+        if (!skillPrompt.isEmpty()) {
+            prompt += "\n\n" + skillPrompt;
+        }
+        boolean canvasNode = "true".equals(parent.promptVariables().get("canvasNodeExecution"));
+        if (canvasNode) {
+            var trustedVariables = new LinkedHashMap<>(variables);
+            trustedVariables.put("canvasNodeExecution", "true");
+            variables = Map.copyOf(trustedVariables);
+        }
+        ToolSelection tools = selectTools(childType, null,
+                canvasNode && Integer.valueOf(1).equals(definition.getEnableTools()) ? List.of() : null,
+                ownerUserId(parent), variables);
+        if (canvasNode) {
+            tools = nodeTools(tools);
+        }
+        String agentName = overrides.name() == null ? normalize(subAgent.getToolName()) : definition.getName();
         if (agentName == null) {
             agentName = requireText(definition.getName(), "subAgent.name");
         }
@@ -156,10 +230,12 @@ public final class AgentKernelSpecFactory {
                 prompt,
                 variables,
                 tools,
-                parent.key().modelConfigFingerprint());
+                parent.key().modelConfigFingerprint(), definition.getMaxIters());
     }
 
-    /** Rebuilds the exact persisted whitelist after verifying every live tool contract. */
+    /**
+     * Rebuilds the exact persisted whitelist after verifying every live tool contract.
+     */
     public AgentKernelSpec restore(
             AgentKernelSnapshotPayload payload,
             AiModel model,
@@ -169,7 +245,7 @@ public final class AgentKernelSpecFactory {
         String definitionKey = payload.agentDefinitionStableKey();
         String agentType = DEFAULT_AGENT_KEY.equals(definitionKey) ? null : definitionKey;
         Long ownerUserId = ownerUserId(payload.promptVariables());
-        ToolSelection available = selectTools(agentType, null, null, ownerUserId);
+        ToolSelection available = selectTools(agentType, null, null, ownerUserId, payload.promptVariables());
         Map<String, AgentKernelToolManifest> availableByName = new LinkedHashMap<>();
         for (AgentKernelToolManifest tool : available.manifest()) {
             availableByName.put(tool.toolName(), tool);
@@ -218,7 +294,8 @@ public final class AgentKernelSpecFactory {
             String systemPrompt,
             Map<String, String> promptVariables,
             ToolSelection tools,
-            String modelFingerprint) {
+            String modelFingerprint,
+            Integer maxIters) {
         String safePrompt = requireText(systemPrompt, "systemPrompt");
         AgentKernelKey key = AgentKernelKey.create(
                 definitionKey,
@@ -234,24 +311,34 @@ public final class AgentKernelSpecFactory {
                 description,
                 safePrompt,
                 promptVariables,
-                properties.getExecution().getMaxIters(),
+                AgentExecutionLimits.frameworkSteps(
+                        maxIters == null ? properties.getExecution().getMaxIters() : maxIters),
                 tools.manifest(),
                 tools.whitelist(),
                 TOOL_WHITELIST_VERSION);
+    }
+
+    private ToolSelection nodeTools(ToolSelection tools) {
+        // 专业节点只产生输入范围内的业务结果；图编辑和嵌套工作流由画布助手负责。
+        return new ToolSelection(
+                tools.manifest().stream().filter(item -> CanvasAgentNodeTypes.permittedTool(item.toolName())).toList(),
+                tools.whitelist().stream().filter(CanvasAgentNodeTypes::permittedTool)
+                        .collect(Collectors.toCollection(LinkedHashSet::new)));
     }
 
     private ToolSelection selectTools(
             String agentType,
             List<String> requestedTools,
             List<String> requestedMcpTools,
-            Long ownerUserId) {
+            Long ownerUserId,
+            Map<String, String> variables) {
         Set<String> requested = requestedTools == null || requestedTools.isEmpty()
                 ? null
                 : Set.copyOf(requestedTools);
         Set<String> requestedMcp = requestedMcpTools == null
                 ? null
                 : Set.copyOf(requestedMcpTools);
-        AiAgentDefinition definition = agentType == null ? null : agentService.getRequiredByType(agentType);
+        AiAgentDefinition definition = agentType == null ? null : agentService.fromSnapshot(agentType, variables);
         if (definition != null && !Integer.valueOf(1).equals(definition.getEnableTools())) {
             if (requested != null || requestedMcp != null) {
                 throw new IllegalArgumentException("Agent does not enable the requested tools");
@@ -262,7 +349,7 @@ public final class AgentKernelSpecFactory {
         Set<String> whitelist = new LinkedHashSet<>();
         List<ToolExecutor> directTools = agentType == null
                 ? toolConfigService.getEnabledTools()
-                : toolConfigService.getEnabledToolsByAgent(agentType);
+                : toolConfigService.getEnabledToolsByDefinition(definition);
         for (ToolExecutor tool : directTools) {
             if (requested != null && !requested.contains(tool.getToolName())) {
                 continue;
@@ -277,7 +364,7 @@ public final class AgentKernelSpecFactory {
         }
         List<AiAgentDefinition.SubAgentToolDef> subAgents = agentType == null
                 ? List.of()
-                : toolConfigService.getSubAgentTools(agentType);
+                : definition.getSubAgentTools();
         for (AiAgentDefinition.SubAgentToolDef subAgent : subAgents) {
             if (requested != null && !requested.contains(subAgent.getToolName())) {
                 continue;
@@ -300,6 +387,16 @@ public final class AgentKernelSpecFactory {
         List<AgentKernelToolManifest> availableMcpTools = ownerUserId == null
                 ? mcpRegistry.manifestsForAgent(definitionKey)
                 : mcpRegistry.manifestsForAgent(definitionKey, ownerUserId);
+        if (definition != null && definition.getMcpToolNames() != null) {
+            Set<String> configured = Set.copyOf(definition.getMcpToolNames());
+            availableMcpTools = availableMcpTools.stream().filter(tool -> configured.contains(tool.toolName()))
+                    .toList();
+            Set<String> discovered = availableMcpTools.stream().map(AgentKernelToolManifest::toolName)
+                    .collect(Collectors.toSet());
+            if (!discovered.equals(configured)) {
+                throw new IllegalArgumentException("智能体配置中的 MCP 工具已不可用，请更新配置");
+            }
+        }
         if (requestedMcp != null) {
             Set<String> availableMcpNames = new LinkedHashSet<>();
             availableMcpTools.forEach(tool -> availableMcpNames.add(tool.toolName()));

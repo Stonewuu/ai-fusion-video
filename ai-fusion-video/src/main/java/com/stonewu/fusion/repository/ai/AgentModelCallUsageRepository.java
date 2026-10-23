@@ -8,7 +8,9 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 
-/** Synchronous transactional boundary for the durable model-call usage ledger. */
+/**
+ * Synchronous transactional boundary for the durable model-call usage ledger.
+ */
 public interface AgentModelCallUsageRepository {
 
     void startCall(String runId, String modelCallId, String provider, String modelCode);

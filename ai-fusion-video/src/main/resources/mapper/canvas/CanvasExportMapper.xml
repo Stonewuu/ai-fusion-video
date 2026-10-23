@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasExportMapper">
+    <select id="lock" resultType="com.stonewu.fusion.entity.canvas.CanvasExportEntity">
+        SELECT * FROM afv_canvas_export WHERE id = #{id} FOR UPDATE
+    </select>
+    <insert id="create">
+        INSERT INTO afv_canvas_export(id,canvas_id,node_run_id,actor_user_id,actor_team_id,request_id,request_hash,format,status,
+            context_json,manifest_json,manifest_hash,filename,mime_type,create_time,update_time)
+        VALUES(#{row.id},#{row.canvasId},#{row.nodeRunId},#{row.actorUserId},#{row.actorTeamId},#{row.requestId},#{row.requestHash},#{row.format},'QUEUED',#{row.contextJson},#{row.manifestJson},#{row.manifestHash},#{row.filename},#{row.mimeType},UTC_TIMESTAMP(6),UTC_TIMESTAMP(6))
+    </insert>
+    <select id="pending" resultType="String">
+        SELECT id FROM afv_canvas_export WHERE status='QUEUED' OR (status='RUNNING' AND lease_until&lt;UTC_TIMESTAMP(6)) ORDER BY create_time LIMIT 4
+    </select>
+    <update id="claim">
+        UPDATE afv_canvas_export SET status='RUNNING',worker_id=#{worker},owner_epoch=owner_epoch+1,attempts=attempts+1,revision=revision+1,lease_until=TIMESTAMPADD(SECOND,90,UTC_TIMESTAMP(6)),update_time=UTC_TIMESTAMP(6) WHERE id=#{id}
+    </update>
+    <update id="heartbeat">
+        UPDATE afv_canvas_export SET lease_until=TIMESTAMPADD(SECOND,90,UTC_TIMESTAMP(6)) WHERE id=#{id} AND worker_id=#{worker} AND owner_epoch=#{epoch} AND status='RUNNING' AND cancel_requested=FALSE AND lease_until&gt;UTC_TIMESTAMP(6)
+    </update>
+    <update id="complete">
+        UPDATE afv_canvas_export SET status='SUCCEEDED',blob_id=#{blobId},byte_size=#{bytes},content_hash=#{hash},revision=revision+1,worker_id=NULL,lease_until=NULL,last_error=NULL,update_time=UTC_TIMESTAMP(6) WHERE id=#{id}
+    </update>
+    <update id="cancel">
+        UPDATE afv_canvas_export SET cancel_requested=TRUE,revision=revision+1,update_time=UTC_TIMESTAMP(6) WHERE id=#{id}
+    </update>
+    <update id="finish">
+        UPDATE afv_canvas_export SET status=#{status},last_error=#{error},revision=revision+1,worker_id=NULL,lease_until=NULL,update_time=UTC_TIMESTAMP(6) WHERE id=#{id}
+    </update>
+    <insert id="event">
+        INSERT INTO afv_canvas_export_event(export_id,revision,actor_user_id,event_type,detail_json,create_time) SELECT id,revision,#{actor},#{type},#{detail},UTC_TIMESTAMP(6) FROM afv_canvas_export WHERE id=#{id}
+    </insert>
+    <select id="activeNodeRun" resultType="int">
+        SELECT COUNT(*) FROM afv_canvas_node_run n JOIN afv_canvas_run r ON r.id=n.run_id WHERE n.id=#{id} AND r.cancel_requested=FALSE AND r.status NOT IN ('FAILED','CANCELLED','BLOCKED')
+    </select>
+</mapper>

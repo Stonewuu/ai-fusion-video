@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope.permission;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.ToolExecutor;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolPermissionRisk;
@@ -18,6 +19,7 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.Map;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -146,7 +148,7 @@ class AgentToolPermissionPolicyTests {
                 schema,
                 Schedulers.immediate(),
                 mock(RunLeaseGuard.class),
-                new ObjectMapper());
+                new ObjectMapper(), mock(AiModel.class), List.of());
     }
 
     private static final class StubTool extends ToolBase {

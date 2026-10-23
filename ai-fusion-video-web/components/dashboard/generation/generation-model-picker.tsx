@@ -33,7 +33,7 @@ export function GenerationModelPicker({
   className,
   onChange,
 }: GenerationModelPickerProps) {
-  const selectedModel = models.find((model) => model.id === modelId) ?? models[0];
+  const selectedModel = models.find((model) => model.id === modelId);
   const shellClass = compact
     ? "h-8 max-w-[min(15rem,42vw)] rounded-xl px-2.5 text-xs"
     : "h-10 w-full rounded-xl px-3 text-sm";
@@ -54,7 +54,7 @@ export function GenerationModelPicker({
     );
   }
 
-  if (!selectedModel) {
+  if (!models.length) {
     return (
       <div
         className={cn(
@@ -71,8 +71,10 @@ export function GenerationModelPicker({
 
   return (
     <Select
-      value={selectedModel.id}
-      onValueChange={(value) => onChange(Number(value))}
+      value={selectedModel?.id ?? null}
+      onValueChange={(value) => {
+        if (value !== null) onChange(Number(value));
+      }}
       items={models.map((model) => ({
         value: model.id,
         label: getModelDisplayParts(model).name,
@@ -86,7 +88,11 @@ export function GenerationModelPicker({
           className,
         )}
       >
-        <ModelVendorIcon source={selectedModel} className="size-3.5" />
+        {selectedModel ? (
+          <ModelVendorIcon source={selectedModel} className="size-3.5" />
+        ) : (
+          <Cpu className="size-3.5" />
+        )}
         <SelectValue placeholder="选择模型" />
       </SelectTrigger>
       <SelectContent

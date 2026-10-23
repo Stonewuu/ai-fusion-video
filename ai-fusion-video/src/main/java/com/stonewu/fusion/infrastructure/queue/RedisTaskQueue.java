@@ -38,7 +38,9 @@ public class RedisTaskQueue {
         log.debug("[push] 任务入队，queue:{}, task:{}", queueName, taskData);
     }
 
-    /** Remove one pending occurrence without affecting a running lease. */
+    /**
+     * Remove one pending occurrence without affecting a running lease.
+     */
     public boolean remove(String queueName, String taskData) {
         Long removed = stringRedisTemplate.opsForList()
                 .remove(getQueueKey(queueName), 1, taskData);
@@ -97,8 +99,8 @@ public class RedisTaskQueue {
      * 与 {@link #acquireAndPop} 共享同一个并发计数器，
      * 确保两条路径（Agent 生图 + Consumer 异步生图）的总并发不超限。
      *
-     * @param queueName    队列名（用于定位并发计数器 key）
-     * @param timeoutMs    最大等待时间（毫秒）
+     * @param queueName      队列名（用于定位并发计数器 key）
+     * @param timeoutMs      最大等待时间（毫秒）
      * @param pollIntervalMs 轮询间隔（毫秒）
      * @return 是否成功获取许可
      * @throws InterruptedException 如果等待过程中线程被中断
@@ -126,7 +128,9 @@ public class RedisTaskQueue {
 
             // 等待后重试
             long remaining = deadline - System.currentTimeMillis();
-            if (remaining <= 0) break;
+            if (remaining <= 0) {
+                break;
+            }
             Thread.sleep(Math.min(pollIntervalMs, remaining));
         }
 
@@ -230,7 +234,9 @@ public class RedisTaskQueue {
         stringRedisTemplate.delete(getRunningKey(queueName, taskId));
     }
 
-    /** 终态已写入时，后台 worker 可能仍在收尾；删除记录前必须等待租约释放。 */
+    /**
+     * 终态已写入时，后台 worker 可能仍在收尾；删除记录前必须等待租约释放。
+     */
     public boolean isRunning(String queueName, String taskId) {
         return Boolean.TRUE.equals(stringRedisTemplate.hasKey(getRunningKey(queueName, taskId)));
     }

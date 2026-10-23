@@ -1,4 +1,8 @@
 "use client";
+import { ManagedMediaLink } from "@/components/media/managed-media-link";
+
+import { ManagedVideo } from "@/components/media/managed-video";
+
 
 import { Download, PlayCircle } from "lucide-react";
 import { resolveMediaUrl } from "@/lib/api/client";
@@ -37,7 +41,7 @@ export function VideoPreviewDialog({
             {title}
           </h3>
           <div className="flex items-center gap-2">
-            <a
+            <ManagedMediaLink
               href={resolvedVideoUrl}
               target="_blank"
               rel="noreferrer"
@@ -46,7 +50,7 @@ export function VideoPreviewDialog({
             >
               <Download className="h-3.5 w-3.5" />
               下载视频
-            </a>
+            </ManagedMediaLink>
             <button
               type="button"
               onClick={onClose}
@@ -56,7 +60,7 @@ export function VideoPreviewDialog({
             </button>
           </div>
         </div>
-        <video
+        <ManagedVideo
           src={resolvedVideoUrl}
           controls
           autoPlay

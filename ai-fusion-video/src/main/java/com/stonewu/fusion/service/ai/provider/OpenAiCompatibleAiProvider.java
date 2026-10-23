@@ -8,14 +8,12 @@ import io.agentscope.core.model.ChatModelBase;
 import io.agentscope.core.model.GenerateOptions;
 import io.agentscope.core.model.transport.HttpTransport;
 import io.agentscope.extensions.model.openai.OpenAIChatModel;
-import org.springframework.ai.chat.model.ChatModel;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.openai.api.OpenAiApi;
 import org.springframework.stereotype.Component;
-import org.springframework.web.client.RestClient;
-import org.springframework.web.reactive.function.client.WebClient;
 
 import java.time.Duration;
 import java.util.List;
@@ -50,15 +48,16 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         requireApiKey(apiKey, "OpenAI Compatible (" + platform + ")");
 
         if (shouldUseResponsesApi(context)) {
-            log.warn("[OpenAiCompatibleAiProvider] Responses API 目前仅接入 AgentScope 主链路，Spring AI ChatModel 仍回退到 chat/completions: model={}",
+            log.warn(
+                    "[OpenAiCompatibleAiProvider] Responses API 目前仅接入 AgentScope 主链路，Spring AI ChatModel 仍回退到 chat/completions: model={}",
                     context.getModelName());
         }
 
         OpenAiApi.Builder apiBuilder = OpenAiApi.builder().apiKey(apiKey);
         apiBuilder.restClientBuilder(AiProxySupport.restClientBuilder(
-            context.getApiConfig(), 60 * 1000, 25 * 60 * 1000));
+                context.getApiConfig(), 60 * 1000, 25 * 60 * 1000));
         apiBuilder.webClientBuilder(AiProxySupport.webClientBuilder(
-            context.getApiConfig(), "openai-compatible-provider", Duration.ofMinutes(25)));
+                context.getApiConfig(), "openai-compatible-provider", Duration.ofMinutes(25)));
         if (StrUtil.isNotBlank(baseUrl)) {
             apiBuilder.baseUrl(baseUrl);
         }
@@ -92,13 +91,20 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
                     apiKey,
                     baseUrl,
                     context.getModelName(),
-                    generateOptions);
+                    generateOptions,
+                    context.isSingleRequest());
         }
 
         OpenAIChatModel.Builder builder = OpenAIChatModel.builder()
                 .apiKey(apiKey)
                 .modelName(context.getModelName())
                 .stream(true);
+        if (context.isSingleRequest()) {
+            builder.formatter(new StreamingOpenAiFormatter());
+        }
+        if (context.isSingleRequest()) {
+            generateOptions = SingleRequestModelSupport.options(generateOptions);
+        }
         if (generateOptions != null) {
             builder.generateOptions(generateOptions);
         }
@@ -106,11 +112,12 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
             builder.baseUrl(baseUrl);
         }
         builder.endpointPath(endpointPath);
-        HttpTransport proxyTransport = AiProxySupport.agentScopeHttpTransport(context.getApiConfig());
+        HttpTransport proxyTransport = SingleRequestModelSupport.transport(context);
         if (proxyTransport != null) {
             builder.httpTransport(proxyTransport);
         }
-        return builder.build();
+        var model = builder.build();
+        return context.isSingleRequest() ? SingleRequestModelSupport.own(model, proxyTransport) : model;
     }
 
     @Override
@@ -121,7 +128,7 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
         log.info("[OpenAiCompatibleAiProvider] 获取远程模型列表: {}", url);
         String response = executeGet(url, context.getApiKey() == null
                 ? Map.of()
-            : Map.of("Authorization", "Bearer " + context.getApiKey()), context.getApiConfig());
+                : Map.of("Authorization", "Bearer " + context.getApiKey()), context.getApiConfig());
         return parseDataArrayModels(response, context.getPlatform());
     }
 

@@ -1,5 +1,7 @@
 package com.stonewu.fusion.repository.ai;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,7 +31,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
-/** MySQL implementation of the call-level usage and settlement claim ledger. */
+/**
+ * MySQL implementation of the call-level usage and settlement claim ledger.
+ */
 @Repository
 @RequiredArgsConstructor
 public class MybatisAgentModelCallUsageRepository
@@ -118,15 +122,18 @@ public class MybatisAgentModelCallUsageRepository
                 usage, "usage must not be null");
         String safeUsageJson = sanitizeUsageJson(safeUsage.usageJson());
         LocalDateTime databaseNow = runMapper.selectDatabaseNow();
-        return usageMapper.completeStarted(
-                safeRunId,
-                safeCallId,
-                safeUsage.inputTokens(),
-                safeUsage.outputTokens(),
-                safeUsage.reasoningTokens(),
-                safeUsage.cacheTokens(),
-                safeUsageJson,
-                databaseNow) == 1;
+        return usageMapper.update(new LambdaUpdateWrapper<AgentModelCallUsage>()
+                .eq(AgentModelCallUsage::getRunId, safeRunId)
+                .eq(AgentModelCallUsage::getModelCallId, safeCallId)
+                .eq(AgentModelCallUsage::getStatus, AgentModelCallStatus.STARTED.name())
+                .set(AgentModelCallUsage::getStatus, AgentModelCallStatus.COMPLETED.name())
+                .set(AgentModelCallUsage::getInputTokens, safeUsage.inputTokens())
+                .set(AgentModelCallUsage::getOutputTokens, safeUsage.outputTokens())
+                .set(AgentModelCallUsage::getReasoningTokens, safeUsage.reasoningTokens())
+                .set(AgentModelCallUsage::getCacheTokens, safeUsage.cacheTokens())
+                .set(AgentModelCallUsage::getUsageJson, safeUsageJson)
+                .set(AgentModelCallUsage::getFinishedAt, databaseNow)
+                .set(AgentModelCallUsage::getUpdateTime, databaseNow)) == 1;
     }
 
     @Override
@@ -143,11 +150,14 @@ public class MybatisAgentModelCallUsageRepository
             throw new IllegalArgumentException(
                     "failCall only accepts FAILED or CANCELLED");
         }
-        return usageMapper.finishStarted(
-                safeRunId,
-                safeCallId,
-                terminal.name(),
-                runMapper.selectDatabaseNow()) == 1;
+        LocalDateTime databaseNow = runMapper.selectDatabaseNow();
+        return usageMapper.update(new LambdaUpdateWrapper<AgentModelCallUsage>()
+                .eq(AgentModelCallUsage::getRunId, safeRunId)
+                .eq(AgentModelCallUsage::getModelCallId, safeCallId)
+                .eq(AgentModelCallUsage::getStatus, AgentModelCallStatus.STARTED.name())
+                .set(AgentModelCallUsage::getStatus, terminal.name())
+                .set(AgentModelCallUsage::getFinishedAt, databaseNow)
+                .set(AgentModelCallUsage::getUpdateTime, databaseNow)) == 1;
     }
 
     @Override

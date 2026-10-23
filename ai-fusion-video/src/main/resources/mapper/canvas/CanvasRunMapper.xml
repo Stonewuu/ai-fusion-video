@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasRunMapper">
+    <select id="lock" resultType="com.stonewu.fusion.entity.canvas.CanvasRunEntity">
+        SELECT * FROM afv_canvas_run WHERE id = #{id} FOR UPDATE
+    </select>
+    <select id="withdrawn" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM afv_canvas_run_withdrawal WHERE scope_key = #{scope} AND request_id = #{request})
+    </select>
+    <insert id="withdraw">
+        INSERT INTO afv_canvas_run_withdrawal(scope_key, request_id, canvas_id, created_at) VALUES (#{scope}, #{request}, #{canvasId}, UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE scope_key = scope_key
+    </insert>
+    <insert id="insertAccepted">
+        INSERT INTO afv_canvas_run(id, canvas_id, plan_id, actor_user_id, actor_team_id, scope_key,
+            request_id, request_hash, context_json, snapshot_json, deadline_at, created_at, updated_at)
+        VALUES (#{row.id}, #{row.canvasId}, #{row.planId}, #{row.actorUserId}, #{row.actorTeamId}, #{row.scopeKey}, #{row.requestId}, #{row.requestHash}, #{row.contextJson}, #{row.snapshotJson}, #{row.deadlineAt}, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <update id="changeState">
+        UPDATE afv_canvas_run SET status = #{status}, error_msg = #{error}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+</mapper>

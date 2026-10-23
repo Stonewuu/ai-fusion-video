@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.asset.AssetMapper">
+    <select id="selectOwnerRecord" resultType="com.stonewu.fusion.entity.asset.Asset">
+        SELECT id, owner_type, owner_id FROM afv_asset WHERE id = #{id}
+        <if test="!includeDeleted">AND deleted = FALSE</if>
+    </select>
+    <sql id="accessScope">
+        a.deleted = FALSE AND (
+            <choose>
+                <when test="!filter.projects.isEmpty()">
+                    a.project_id IN <foreach collection="filter.projects" item="id" open="(" separator="," close=")">#{id}</foreach>
+                </when>
+                <otherwise>FALSE</otherwise>
+            </choose>
+            OR (a.project_id IS NULL AND (
+                (a.owner_type = 1 AND a.owner_id = #{filter.userId})
+                <if test="filter.teamId != null">
+                    OR (a.owner_type = 2 AND a.owner_id = #{filter.teamId})
+                    OR (a.owner_type = 1 AND EXISTS (
+                        SELECT 1 FROM afv_team_member m WHERE m.team_id = #{filter.teamId}
+                        AND m.user_id = a.owner_id AND m.status = 1 AND m.deleted = FALSE
+                    ))
+                </if>
+            ))
+        )
+        <if test="filter.projectId != null">AND a.project_id = #{filter.projectId}</if>
+        <if test="filter.type != null">AND a.type = #{filter.type}</if>
+        <if test="filter.keyword != null">AND a.name LIKE #{filter.keyword} ESCAPE '!'</if>
+    </sql>
+    <select id="accessibleIds" resultType="Long">
+        SELECT a.id FROM afv_asset a WHERE <include refid="accessScope"/> ORDER BY a.update_time DESC, a.id DESC
+    </select>
+    <select id="countAccessible" resultType="long">
+        SELECT COUNT(*) FROM afv_asset a WHERE <include refid="accessScope"/>
+    </select>
+    <select id="countAccessibleTypes" resultType="com.stonewu.fusion.mapper.asset.AssetMapper$TypeCount">
+        SELECT a.type, COUNT(*) AS total FROM afv_asset a
+        WHERE <include refid="accessScope"/> AND a.type IS NOT NULL GROUP BY a.type
+    </select>
+    <select id="lockNamed" resultType="Long">
+        SELECT id FROM afv_asset WHERE
+        <choose>
+            <when test="projectId != null">project_id = #{projectId}</when>
+            <otherwise>project_id IS NULL AND owner_type = #{ownerType} AND owner_id = #{ownerId}</otherwise>
+        </choose>
+        AND type = #{type} AND name = #{name} AND deleted = FALSE ORDER BY id FOR UPDATE
+    </select>
+</mapper>

@@ -1,9 +1,9 @@
 "use client";
 
 import { create } from "zustand";
+import { rememberCanvasAssistantCapture } from "@/lib/canvas/assistant-session";
 import {
   listConversations,
-  listMessages,
   type AgentConversation,
   type AgentMessage,
   type ToolExecutionMode,
@@ -25,20 +25,21 @@ import {
 } from "@/components/dashboard/assistant/geometry";
 import {
   makeRuntime,
-  mergeMessages,
   normalizeTitle,
   pendingPipelineForNextRun,
   statusIsRunning,
-  timelineForMessages,
   uniqueConversations,
 } from "./assistant-runtime";
 import {
   clearAssistantPersistTimer,
   commitAssistantPersist,
   defaultPersistedState,
+  forgetAssistantConversation,
   scheduleAssistantPersist,
 } from "./assistant-persistence";
 import { createAssistantConnectionCoordinator } from "./assistant-connection-coordinator";
+import { loadInitialAssistantConversations } from "./assistant-conversations";
+import { createAssistantHistoryLoader } from "./assistant-history";
 import {
   ASSISTANT_CATEGORY,
   NEW_ASSISTANT_DRAFT_KEY,
@@ -78,6 +79,7 @@ function initialConversationToolExecutionMode(
 
 export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
   const connectionCoordinator = createAssistantConnectionCoordinator(set, get);
+  let initializationGeneration = 0;
 
   const updateRuntime = (
     conversationId: string,
@@ -216,6 +218,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
   return {
     hydratedUserId: null,
     initialized: false,
+    restorationPending: false,
     mode: "collapsed",
     lastOpenMode: "floating",
     restoreMode: "floating",
@@ -237,9 +240,10 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
 
     initializeForUser: (userId: number) => {
       if (!Number.isSafeInteger(userId) || userId <= 0) return;
-      if (get().initialized && get().hydratedUserId === userId) return;
+      if (get().initialized && get().hydratedUserId === userId && !get().conversationsError) return;
 
       if (get().hydratedUserId) commitAssistantPersist(get);
+      const generation = ++initializationGeneration;
       connectionCoordinator.reset();
       clearAssistantPersistTimer();
       const persisted = defaultPersistedState(userId);
@@ -254,6 +258,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       set({
         hydratedUserId: userId,
         initialized: true,
+        restorationPending: true,
         mode: initialMode,
         lastOpenMode: persisted.lastOpenMode,
         restoreMode: persisted.restoreMode,
@@ -273,15 +278,16 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         conversationPage: 0,
       });
 
-      void listConversations({ pageNo: 1, pageSize: PAGE_SIZE, category: ASSISTANT_CATEGORY })
+      void loadInitialAssistantConversations(restoredSelectedConversationId, PAGE_SIZE)
         .then((result) => {
-          if (get().hydratedUserId !== userId) return;
+          if (generation !== initializationGeneration || get().hydratedUserId !== userId) return;
           const filtered = result.list.filter((conversation) =>
             !conversation.category || conversation.category === ASSISTANT_CATEGORY,
           );
-          set(() => {
-            const conversationStates: Record<string, AssistantConversationRuntime> = {};
+          set((current) => {
+            const conversationStates = { ...current.conversationStates };
             for (const conversation of filtered) {
+              if (conversationStates[conversation.conversationId]) continue;
               conversationStates[conversation.conversationId] = makeRuntime(
                 conversation,
                 drafts,
@@ -298,15 +304,17 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
               ? restoredSelectedConversationId
               : null;
             return {
-              conversations: filtered,
+              conversations: uniqueConversations(current.conversations, filtered),
               conversationStates,
-              selectedConversationId: selected,
+              selectedConversationId: current.restorationPending ? selected : current.selectedConversationId,
+              restorationPending: false,
               conversationsLoading: false,
               conversationPage: 1,
               hasMoreConversations: filtered.length < result.total,
               conversationsError: undefined,
             };
           });
+          persist();
           connectionCoordinator.scheduleStatusPolling();
           const selectedId = get().selectedConversationId;
           if (get().mode !== "collapsed" && selectedId) {
@@ -315,7 +323,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
           }
         })
         .catch((error: unknown) => {
-          if (get().hydratedUserId !== userId) return;
+          if (generation !== initializationGeneration || get().hydratedUserId !== userId) return;
           set({
             conversationsLoading: false,
             conversationsError: error instanceof Error ? error.message : "加载助手会话失败",
@@ -325,11 +333,13 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
 
     resetForUser: () => {
       if (get().hydratedUserId) commitAssistantPersist(get);
+      initializationGeneration++;
       connectionCoordinator.reset();
       clearAssistantPersistTimer();
       set({
         hydratedUserId: null,
         initialized: false,
+        restorationPending: false,
         mode: "collapsed",
         lastOpenMode: "floating",
         restoreMode: "floating",
@@ -356,10 +366,11 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       if (state.conversationsLoading || !state.hasMoreConversations || !state.hydratedUserId) return;
       const page = state.conversationPage + 1;
       const userId = state.hydratedUserId;
+      const generation = initializationGeneration;
       set({ conversationsLoading: true });
       void listConversations({ pageNo: page, pageSize: PAGE_SIZE, category: ASSISTANT_CATEGORY })
         .then((result) => {
-          if (get().hydratedUserId !== userId) return;
+          if (generation !== initializationGeneration || get().hydratedUserId !== userId) return;
           const filtered = result.list.filter((conversation) =>
             !conversation.category || conversation.category === ASSISTANT_CATEGORY,
           );
@@ -396,7 +407,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
           connectionCoordinator.scheduleStatusPolling();
         })
         .catch((error: unknown) => {
-          if (get().hydratedUserId !== userId) return;
+          if (generation !== initializationGeneration || get().hydratedUserId !== userId) return;
           set({
             conversationsLoading: false,
             conversationsError: error instanceof Error ? error.message : "加载更多会话失败",
@@ -413,13 +424,14 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         connectionCoordinator.invalidateConnection();
       }
       set((current) => {
-        if (!conversationId) return { selectedConversationId: null, drawerOpen: false };
+        if (!conversationId) return { selectedConversationId: null, restorationPending: false, drawerOpen: false };
         const runtime = current.conversationStates[conversationId];
         if (!runtime) {
           throw new Error(`Conversation runtime disappeared during selection: ${conversationId}`);
         }
         return {
           selectedConversationId: conversationId,
+          restorationPending: false,
           drawerOpen: false,
           conversationStates: {
             ...current.conversationStates,
@@ -437,7 +449,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
 
     startNewConversation: () => {
       if (get().connection || get().selectedConversationId) connectionCoordinator.invalidateConnection();
-      set({ selectedConversationId: null, drawerOpen: false });
+      set({ selectedConversationId: null, restorationPending: false, drawerOpen: false });
       persist();
     },
 
@@ -504,6 +516,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
           conversations: [conversation, ...current.conversations],
           conversationStates: { ...current.conversationStates, [conversationId!]: runtime },
           selectedConversationId: conversationId,
+          restorationPending: false,
           newDraft: "",
         }));
       }
@@ -534,11 +547,17 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         && (conversationProjectId !== null
           || references.skills.length > 0
           || references.mcpTools.length > 0
-          || multimodalInputs.length > 0)
+          || multimodalInputs.length > 0
+          || references.canvas)
         ? JSON.stringify({
             version: 2,
             projectId: conversationProjectId,
             project: references.project ?? null,
+            canvas: references.canvas ? {
+              id: references.canvas.context.canvasId,
+              title: references.canvas.title,
+              selectedNodeIds: references.canvas.context.selectedNodeIds,
+            } : undefined,
             skills: references.skills,
             mcpTools: references.mcpTools,
             attachments: multimodalInputs.map(({
@@ -607,6 +626,8 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         category: ASSISTANT_CATEGORY,
         title: shouldSetTitle ? title : undefined,
         projectId: conversationProjectId ?? undefined,
+        agentType: references?.canvas ? "canvas_assistant" : undefined,
+        canvasContext: references?.canvas?.context,
         context: Object.keys(activeContext).length ? activeContext : undefined,
         enabledSkills: references?.skills.map((skill) => skill.name),
         enabledMcpTools: references?.mcpTools.map((tool) => tool.toolName),
@@ -614,12 +635,14 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
         referencesJson: serializedReferences,
         toolExecutionMode: runtime.toolExecutionMode,
       };
+      if (references?.canvas) rememberCanvasAssistantCapture(conversationId, references.canvas);
       connectionCoordinator.startConnection(conversationId, request);
       connectionCoordinator.scheduleStatusPolling();
     },
 
     stopGeneration: async () => {
       const state = get();
+      const generation = initializationGeneration;
       const conversationId = state.selectedConversationId;
       const runtime = conversationId ? state.conversationStates[conversationId] : undefined;
       const connectionRunId = state.connection?.conversationId === conversationId
@@ -650,6 +673,14 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       }));
       try {
         await cancelPipeline(runId ? { runId } : { conversationId });
+        if (generation !== initializationGeneration) return;
+        // The original request stream can remain open while a tool is suspended.
+        // Resume the durable journal so the committed cancellation is observed.
+        const currentConnection = get().connection;
+        if (currentConnection?.conversationId === conversationId && currentConnection.runId === runId) {
+          connectionCoordinator.invalidateConnection();
+        }
+        connectionCoordinator.ensureConnection();
         connectionCoordinator.scheduleStatusPolling();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
@@ -721,6 +752,9 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
     ),
 
     deleteConversation: async (conversationId, id) => {
+      const userId = get().hydratedUserId;
+      const generation = initializationGeneration;
+      if (!userId) throw new Error("请先登录");
       const runtime = get().conversationStates[conversationId];
       if (runtime && statusIsRunning(runtime.status)) throw new Error("运行中的会话不能删除");
       const assistantApi = await import("@/lib/api/ai-assistant");
@@ -729,6 +763,8 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       } else {
         await assistantApi.deleteConversation(id);
       }
+      forgetAssistantConversation(userId, conversationId);
+      if (generation !== initializationGeneration || get().hydratedUserId !== userId) return;
       if (get().selectedConversationId === conversationId) connectionCoordinator.invalidateConnection();
       set((state) => {
         const conversationStates = { ...state.conversationStates };
@@ -836,52 +872,7 @@ export const useAssistantStore = create<AssistantStoreState>()((set, get) => {
       if (changed) persist();
     },
 
-    loadMessagesIfNeeded: async (conversationId) => {
-      if (!conversationId) return;
-      const userId = get().hydratedUserId;
-      const runtime = get().conversationStates[conversationId];
-      if (!runtime || runtime.messagesLoaded || runtime.messagesLoading) return;
-      updateRuntime(conversationId, (current) => ({
-        ...current,
-        messagesLoading: true,
-        messagesError: undefined,
-      }));
-      try {
-        const incoming = await listMessages(conversationId);
-        if (get().hydratedUserId !== userId) return;
-        set((state) => {
-          const current = state.conversationStates[conversationId];
-          if (!current) return state;
-          const messages = mergeMessages(current.messages, incoming);
-          const shouldBuildTimeline = !state.connection && !statusIsRunning(current.status);
-          return {
-            conversationStates: {
-              ...state.conversationStates,
-              [conversationId]: {
-                ...current,
-                messages,
-                messagesLoaded: true,
-                messagesLoading: false,
-                messagesError: undefined,
-                pipeline: shouldBuildTimeline
-                  ? {
-                      ...current.pipeline,
-                      timeline: timelineForMessages(messages),
-                      conversationId,
-                    }
-                  : current.pipeline,
-              },
-            },
-          };
-        });
-      } catch (error: unknown) {
-        updateRuntime(conversationId, (current) => ({
-          ...current,
-          messagesLoading: false,
-          messagesError: error instanceof Error ? error.message : "加载消息失败",
-        }));
-      }
-    },
+    loadMessagesIfNeeded: createAssistantHistoryLoader(set, get, () => initializationGeneration, updateRuntime),
 
     ensureContentConnection: connectionCoordinator.ensureConnection,
   };

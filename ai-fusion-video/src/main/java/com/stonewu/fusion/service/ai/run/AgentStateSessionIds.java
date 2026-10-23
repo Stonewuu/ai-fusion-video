@@ -5,7 +5,9 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.HexFormat;
 
-/** Assigns immutable AgentState identities to conversation and execution generations. */
+/**
+ * Assigns immutable AgentState identities to conversation and execution generations.
+ */
 public final class AgentStateSessionIds {
 
     private static final String CONVERSATION_PREFIX = "afv:v2:";

@@ -5,7 +5,7 @@ import { ImageIcon, Images, Plus } from "lucide-react";
 import type { AssetItem } from "@/lib/api/asset";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import { cn } from "@/lib/utils";
 import { getAppearance, getAssetType } from "./asset-types";
 

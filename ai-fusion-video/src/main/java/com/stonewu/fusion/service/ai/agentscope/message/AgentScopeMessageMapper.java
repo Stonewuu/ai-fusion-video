@@ -2,18 +2,7 @@ package com.stonewu.fusion.service.ai.agentscope.message;
 
 import com.stonewu.fusion.controller.ai.vo.AiMultimodalInputVO;
 import com.stonewu.fusion.entity.ai.AgentMessage;
-import io.agentscope.core.message.AudioBlock;
-import io.agentscope.core.message.Base64Source;
-import io.agentscope.core.message.ContentBlock;
-import io.agentscope.core.message.DataBlock;
-import io.agentscope.core.message.ImageBlock;
-import io.agentscope.core.message.Msg;
-import io.agentscope.core.message.MsgRole;
-import io.agentscope.core.message.Source;
-import io.agentscope.core.message.TextBlock;
-import io.agentscope.core.message.URLSource;
-import io.agentscope.core.message.UserMessage;
-import io.agentscope.core.message.VideoBlock;
+import io.agentscope.core.message.*;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -57,6 +46,10 @@ public final class AgentScopeMessageMapper {
      */
     public List<Msg> toRecoveredContinuationMessages(
             List<AgentMessage> persistedMessages, String continuationText) {
+        return toRecoveredMessages(persistedMessages, toUserMessages(continuationText));
+    }
+
+    public List<Msg> toRecoveredMessages(List<AgentMessage> persistedMessages, List<Msg> currentMessages) {
         List<Msg> recovered = new ArrayList<>();
         Map<String, AgentMessage> pendingToolCalls = new LinkedHashMap<>();
         for (AgentMessage message : List.copyOf(persistedMessages)) {
@@ -87,7 +80,7 @@ public final class AgentScopeMessageMapper {
                     toolSummary(call, message, false));
         }
         flushPendingToolCalls(recovered, pendingToolCalls);
-        recovered.add(toUserMessage(continuationText));
+        recovered.addAll(List.copyOf(currentMessages));
         return List.copyOf(recovered);
     }
 

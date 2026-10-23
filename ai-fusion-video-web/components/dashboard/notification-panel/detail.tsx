@@ -317,10 +317,10 @@ function HistoryDetailPanel({
   }, [conversation.conversationId]);
 
   const isPipeline =
-    conversation.category === "task" ||
-    conversation.category === "pipeline" ||
+    conversation.category !== "task" &&
+    (conversation.category === "pipeline" ||
     (conversation.agentType != null &&
-      (PIPELINE_AGENT_TYPES as readonly string[]).includes(conversation.agentType));
+      (PIPELINE_AGENT_TYPES as readonly string[]).includes(conversation.agentType)));
   const displayMessages = useMemo(
     () =>
       isPipeline
@@ -939,6 +939,7 @@ export function ExpandedPanel({ onClose }: { onClose: () => void }) {
                 )}
                 <button
                   onClick={handleClose}
+                  aria-label="关闭任务详情"
                   className="p-1.5 rounded-lg hover:bg-muted transition-colors"
                 >
                   <X className="h-4 w-4 text-muted-foreground" />

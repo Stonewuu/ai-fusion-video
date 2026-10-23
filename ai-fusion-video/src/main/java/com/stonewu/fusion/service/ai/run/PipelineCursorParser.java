@@ -4,7 +4,9 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.service.ai.run.model.RunCursor;
 import org.springframework.stereotype.Component;
 
-/** Strictly reconciles query and standard Last-Event-ID cursors. */
+/**
+ * Strictly reconciles query and standard Last-Event-ID cursors.
+ */
 @Component
 public final class PipelineCursorParser {
 

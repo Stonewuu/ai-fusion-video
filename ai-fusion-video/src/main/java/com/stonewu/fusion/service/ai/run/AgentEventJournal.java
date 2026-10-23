@@ -6,7 +6,9 @@ import reactor.core.publisher.Mono;
 
 import java.util.Optional;
 
-/** Owner-fenced reactive event journal. */
+/**
+ * Owner-fenced reactive event journal.
+ */
 public interface AgentEventJournal {
 
     Mono<Optional<CommittedAgentEvent>> appendOwned(

@@ -3,35 +3,8 @@ package com.stonewu.fusion.service.ai.run;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
-import io.agentscope.core.event.AgentEndEvent;
-import io.agentscope.core.event.AgentEvent;
-import io.agentscope.core.event.AgentResultEvent;
-import io.agentscope.core.event.AgentStartEvent;
-import io.agentscope.core.event.DataBlockDeltaEvent;
-import io.agentscope.core.event.DataBlockEndEvent;
-import io.agentscope.core.event.DataBlockStartEvent;
-import io.agentscope.core.event.ExceedMaxItersEvent;
-import io.agentscope.core.event.ExternalExecutionResultEvent;
-import io.agentscope.core.event.HintBlockEvent;
-import io.agentscope.core.event.ModelCallEndEvent;
-import io.agentscope.core.event.ModelCallStartEvent;
-import io.agentscope.core.event.RequireExternalExecutionEvent;
-import io.agentscope.core.event.RequireUserConfirmEvent;
-import io.agentscope.core.event.SubagentExposedEvent;
-import io.agentscope.core.event.TextBlockDeltaEvent;
-import io.agentscope.core.event.TextBlockEndEvent;
-import io.agentscope.core.event.TextBlockStartEvent;
-import io.agentscope.core.event.ThinkingBlockDeltaEvent;
-import io.agentscope.core.event.ThinkingBlockEndEvent;
-import io.agentscope.core.event.ThinkingBlockStartEvent;
-import io.agentscope.core.event.ToolCallDeltaEvent;
-import io.agentscope.core.event.ToolCallEndEvent;
-import io.agentscope.core.event.ToolCallStartEvent;
-import io.agentscope.core.event.ToolResultDataDeltaEvent;
-import io.agentscope.core.event.ToolResultEndEvent;
-import io.agentscope.core.event.ToolResultStartEvent;
-import io.agentscope.core.event.ToolResultTextDeltaEvent;
-import io.agentscope.core.event.UserConfirmResultEvent;
+import io.agentscope.core.event.*;
+import io.agentscope.core.message.ToolResultState;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -103,7 +76,7 @@ public final class AgentScopeEventMapper {
                 yield isMainSource(event.getSource())
                         ? new Identity(null, null, null, null, null)
                         : base.withAgent(
-                                base.agentName() != null ? base.agentName() : resultAgentName);
+                        base.agentName() != null ? base.agentName() : resultAgentName);
             }
             case MODEL_CALL_START -> base.withReply(((ModelCallStartEvent) event).getReplyId());
             case MODEL_CALL_END -> base.withReply(((ModelCallEndEvent) event).getReplyId());
@@ -182,39 +155,40 @@ public final class AgentScopeEventMapper {
             case THINKING_BLOCK_DELTA -> "REASONING";
             case TOOL_CALL_START -> "TOOL_CALL_STARTED";
             case TOOL_CALL_END -> "TOOL_CALL";
-            case TOOL_RESULT_END -> "TOOL_FINISHED";
+            case TOOL_RESULT_END ->
+                    ((ToolResultEndEvent) event).getState() == ToolResultState.RUNNING ? null : "TOOL_FINISHED";
             case SUBAGENT_EXPOSED -> "SUB_AGENT_STARTED";
             case AGENT_END -> isMainSource(event.getSource()) ? null : "SUB_AGENT_FINISHED";
             // The raw pause event is journaled as an internal checkpoint. The
             // durable waiting-state service publishes the actionable event only
             // after the RUNNING -> WAITING_CONFIRMATION transition commits.
             case REQUIRE_USER_CONFIRM -> null;
-            case REQUIRE_EXTERNAL_EXECUTION -> "EXTERNAL_EXECUTION_REQUIRED";
+            case REQUIRE_EXTERNAL_EXECUTION -> null;
             // The durable waiting-state transition publishes the authoritative
             // decision event before execution resumes. The AgentScope echo is
             // journaled only and must not produce a second frontend decision.
             case USER_CONFIRM_RESULT -> null;
             case EXTERNAL_EXECUTION_RESULT -> "EXTERNAL_EXECUTION_RESULT";
             case AGENT_START,
-                    AGENT_RESULT,
-                    MODEL_CALL_START,
-                    MODEL_CALL_END,
-                    TEXT_BLOCK_START,
-                    TEXT_BLOCK_END,
-                    THINKING_BLOCK_START,
-                    THINKING_BLOCK_END,
-                    DATA_BLOCK_START,
-                    DATA_BLOCK_DELTA,
-                    DATA_BLOCK_END,
-                    TOOL_CALL_DELTA,
-                    TOOL_RESULT_START,
-                    TOOL_RESULT_TEXT_DELTA,
-                    TOOL_RESULT_DATA_DELTA,
-                    EXCEED_MAX_ITERS,
-                    REQUEST_STOP,
-                    HINT_BLOCK,
-                    ALL_TOOLS_DENIED,
-                    CUSTOM -> null;
+                 AGENT_RESULT,
+                 MODEL_CALL_START,
+                 MODEL_CALL_END,
+                 TEXT_BLOCK_START,
+                 TEXT_BLOCK_END,
+                 THINKING_BLOCK_START,
+                 THINKING_BLOCK_END,
+                 DATA_BLOCK_START,
+                 DATA_BLOCK_DELTA,
+                 DATA_BLOCK_END,
+                 TOOL_CALL_DELTA,
+                 TOOL_RESULT_START,
+                 TOOL_RESULT_TEXT_DELTA,
+                 TOOL_RESULT_DATA_DELTA,
+                 EXCEED_MAX_ITERS,
+                 REQUEST_STOP,
+                 HINT_BLOCK,
+                 ALL_TOOLS_DENIED,
+                 CUSTOM -> null;
         };
     }
 

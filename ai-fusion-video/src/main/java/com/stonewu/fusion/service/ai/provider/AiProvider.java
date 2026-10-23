@@ -8,7 +8,7 @@ import java.util.List;
 
 /**
  * 统一的 AI 提供商接口。
- *
+ * <p>
  * 每个提供商负责自身的平台能力：
  * - 创建 Spring AI ChatModel
  * - 创建 AgentScope Model

@@ -1,7 +1,8 @@
 package com.stonewu.fusion.controller.project.vo;
 
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.swagger.v3.oas.annotations.media.Schema;
-import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.*;
 import lombok.Data;
 
 /**
@@ -12,23 +13,18 @@ import lombok.Data;
 public class ProjectUpdateReqVO {
 
     @NotNull(message = "项目ID不能为空")
+    @Positive
     private Long id;
 
-    private String name;
+    @NotNull
+    @PositiveOrZero
+    private Integer version;
 
-    private String description;
+    @NotBlank
+    @Size(max = 128)
+    @Pattern(regexp = "[A-Za-z0-9._:-]+")
+    private String requestId;
 
-    private String coverUrl;
-
-    private Integer status;
-
-    private String properties;
-
-    private String artStyle;
-
-    private String artStyleDescription;
-
-    private String artStyleImagePrompt;
-
-    private String artStyleImageUrl;
+    @NotNull
+    private ObjectNode patch;
 }

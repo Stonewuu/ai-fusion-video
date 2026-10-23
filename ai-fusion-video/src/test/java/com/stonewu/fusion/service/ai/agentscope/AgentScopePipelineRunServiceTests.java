@@ -1,5 +1,10 @@
 package com.stonewu.fusion.service.ai.agentscope;
 
+import com.stonewu.fusion.security.SecurityUserDetails;
+import com.stonewu.fusion.service.canvas.agent.CanvasAgentScopeService;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.stonewu.fusion.config.AgentScopeRuntimeProperties;
@@ -7,6 +12,7 @@ import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.controller.ai.vo.AiChatReqVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.AgentRun;
+import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.service.ai.AgentConversationService;
 import com.stonewu.fusion.service.ai.AgentMessageService;
@@ -18,8 +24,6 @@ import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
 import com.stonewu.fusion.service.ai.agentscope.message.AgentScopeMessageMapper;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
-import com.stonewu.fusion.service.ai.agentscope.skill.AgentScopeSkillRegistry;
-import com.stonewu.fusion.service.ai.agentscope.skill.AgentUserSkillService;
 import com.stonewu.fusion.service.ai.run.AgentExecutionRuntimeContextRequests;
 import com.stonewu.fusion.service.ai.run.AgentExecutionFactory;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
@@ -27,6 +31,7 @@ import com.stonewu.fusion.service.ai.run.AgentRunQueryService;
 import com.stonewu.fusion.service.ai.run.AgentRunReplayService;
 import com.stonewu.fusion.service.ai.run.AgentRuntimeInstanceIdentity;
 import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
+import com.stonewu.fusion.service.ai.run.AgentStateSessionIds;
 import com.stonewu.fusion.service.ai.run.RunExecutionSupervisor;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
@@ -46,6 +51,7 @@ import reactor.test.StepVerifier;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
@@ -63,14 +69,14 @@ class AgentScopePipelineRunServiceTests {
     @AfterEach
     void closeSchedulers() {
         schedulers.close();
+        SecurityContextHolder.clearContext();
     }
 
-    @Test
-    void startsOnlyTheDurableHarnessExecutionWithStrongMessages() {
+    @ParameterizedTest
+    @ValueSource(strings = {"initial", "new_generation", "existing_generation"})
+    void startsOnlyTheDurableHarnessExecutionWithStrongMessages(String generation) {
         AiModelService models = mock(AiModelService.class);
         AiAgentService agents = mock(AiAgentService.class);
-        AgentScopeSkillRegistry skillRegistry = mock(AgentScopeSkillRegistry.class);
-        AgentUserSkillService userSkillService = mock(AgentUserSkillService.class);
         AgentConversationService conversations = mock(AgentConversationService.class);
         AgentMessageService persistedMessages = mock(AgentMessageService.class);
         AgentKernelSpecFactory specs = mock(AgentKernelSpecFactory.class);
@@ -96,27 +102,29 @@ class AgentScopePipelineRunServiceTests {
         AgentKernelSnapshot snapshot = snapshot();
 
         when(models.getDefaultByType(1)).thenReturn(model);
-        when(skillRegistry.skills()).thenReturn(List.of());
-        when(userSkillService.list(42L)).thenReturn(List.of(
-                new AgentUserSkillService.UserSkill(
-                        "story-review_workspace:user",
-                        "story-review",
-                        "故事结构检查",
-                        "检查故事结构",
-                        "# 工作方式\n\n先检查冲突与节奏。",
-                        "workspace:user")));
         when(specs.createRoot(any(AiChatReqVO.class), any(AiModel.class), any(String.class), eq(42L)))
                 .thenReturn(spec);
         when(spec.agentDefinitionStableKey()).thenReturn("ai_assistant_agent");
         when(snapshots.build(spec)).thenReturn(snapshot);
         when(identity.value()).thenReturn("node-1");
+        when(persistedMessages.listRootHistory("conversation-1")).thenReturn(List.of(
+                AgentMessage.builder().role("user").content("已经要求创建灯塔节点").build(),
+                AgentMessage.builder().role("tool").toolCallId("created-node").toolName("apply_canvas_operations")
+                        .toolStatus("success").content("{\"nodeId\":\"actual-node\"}").build()));
         when(coordinator.start(any(StartAgentRunCommand.class)))
                 .thenAnswer(invocation -> {
                     StartAgentRunCommand command = invocation.getArgument(0);
+                    String stateSession = switch (generation) {
+                        case "new_generation" -> AgentStateSessionIds.recoveryGeneration(
+                                command.conversationId(), command.agentType(), command.runId());
+                        case "existing_generation" -> AgentStateSessionIds.recoveryGeneration(
+                                command.conversationId(), command.agentType(), "previous-completed-run");
+                        default -> command.stateSessionCandidate();
+                    };
                     return Mono.just(new StartedAgentRun(
                             command.runId(),
                             command.conversationId(),
-                            command.stateSessionCandidate(),
+                            stateSession,
                             command.ownerInstanceId(),
                             1L,
                             command.deadline().minusSeconds(1),
@@ -147,8 +155,7 @@ class AgentScopePipelineRunServiceTests {
                 properties,
                 schedulers,
                 new ObjectMapper(),
-                skillRegistry,
-                userSkillService);
+                mock(CanvasAgentScopeService.class));
         AiChatReqVO request = new AiChatReqVO()
                 .setConversationId("conversation-1")
                 .setMessage("hello harness")
@@ -156,7 +163,11 @@ class AgentScopePipelineRunServiceTests {
                 .setToolExecutionMode(ToolExecutionMode.DEFAULT.name())
                 .setEnabledSkills(List.of("story-review"));
 
-        StepVerifier.create(service.start(request, 42L))
+        SecurityUserDetails principal = new SecurityUserDetails(42L, "creator", "test-only", 1, 77L, List.of());
+        SecurityContextHolder.getContext().setAuthentication(new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities()));
+        Mono<StartedAgentRun> starting = service.start(request, 42L);
+        SecurityContextHolder.clearContext();
+        StepVerifier.create(starting)
                 .assertNext(started -> assertThat(started.runId()).isNotBlank())
                 .verifyComplete();
 
@@ -164,6 +175,7 @@ class AgentScopePipelineRunServiceTests {
                 ArgumentCaptor.forClass(StartAgentRunCommand.class);
         verify(coordinator).start(admission.capture());
         assertThat(admission.getValue().agentType()).isEqualTo("ai_assistant_agent");
+        assertThat(admission.getValue().actorTeamId()).isEqualTo(77L);
         assertThat(admission.getValue().stateSessionCandidate())
                 .isEqualTo("afv:v2:conversation-1:ai_assistant_agent");
         assertThat(admission.getValue().userContent()).isEqualTo("hello harness");
@@ -174,16 +186,19 @@ class AgentScopePipelineRunServiceTests {
                 any(AiChatReqVO.class), effectiveModel.capture(), systemPrompt.capture(), eq(42L));
         assertThat(effectiveModel.getValue().getConfig()).contains("\"reasoningEffort\":\"high\"");
         assertThat(model.getConfig()).isNull();
-        assertThat(systemPrompt.getValue())
-                .contains("已主动激活的 Skills", "story-review", "先检查冲突与节奏")
-                .doesNotContain("故事结构检查");
+        assertThat(request.getEnabledSkills()).containsExactly("story-review");
+        verify(specs).createRoot(eq(request), any(AiModel.class), any(String.class), eq(42L));
 
         ArgumentCaptor<StartAgentExecutionCommand> execution =
                 ArgumentCaptor.forClass(StartAgentExecutionCommand.class);
         verify(supervisor).start(execution.capture());
-        assertThat(execution.getValue().messages()).singleElement()
-                .isInstanceOfSatisfying(UserMessage.class, message ->
-                        assertThat(message.getTextContent()).isEqualTo("hello harness"));
+        assertThat(execution.getValue().messages()).hasSize(generation.equals("new_generation") ? 3 : 1);
+        assertThat(execution.getValue().messages().getLast()).isInstanceOfSatisfying(UserMessage.class,
+                message -> assertThat(message.getTextContent()).isEqualTo("hello harness"));
+        if (generation.equals("new_generation")) {
+            assertThat(execution.getValue().messages().getFirst().getTextContent()).isEqualTo("已经要求创建灯塔节点");
+            assertThat(execution.getValue().messages().get(1).getTextContent()).contains("actual-node", "状态：success");
+        }
         assertThat(execution.getValue().kernelSpec()).isSameAs(spec);
         assertThat(execution.getValue().runtimeContextRequest()).isSameAs(runtime);
     }
@@ -193,8 +208,6 @@ class AgentScopePipelineRunServiceTests {
     void continuesRetryableRunFromPersistedKernelAfterProcessRestart(String status) {
         AiModelService models = mock(AiModelService.class);
         AiAgentService agents = mock(AiAgentService.class);
-        AgentScopeSkillRegistry skillRegistry = mock(AgentScopeSkillRegistry.class);
-        AgentUserSkillService userSkillService = mock(AgentUserSkillService.class);
         AgentConversationService conversations = mock(AgentConversationService.class);
         AgentMessageService persistedMessages = mock(AgentMessageService.class);
         AgentKernelSpecFactory specs = mock(AgentKernelSpecFactory.class);
@@ -227,7 +240,7 @@ class AgentScopePipelineRunServiceTests {
         when(queries.resolveAuthorizedTarget(isNull(), eq("conversation-1"), eq(42L)))
                 .thenReturn(Mono.just(previous));
         when(executionFactory.resolve(any(AgentKernelSnapshot.class))).thenReturn(Mono.just(spec));
-        when(persistedMessages.listByConversation("conversation-1")).thenReturn(List.of());
+        when(persistedMessages.listRootHistory("conversation-1")).thenReturn(List.of());
         when(spec.agentDefinitionStableKey()).thenReturn("ai_assistant_agent");
         when(identity.value()).thenReturn("node-2");
         when(coordinator.start(any(StartAgentRunCommand.class)))
@@ -246,7 +259,7 @@ class AgentScopePipelineRunServiceTests {
                 });
         when(runtimeContexts.forRoot(
                 any(), eq("ai_assistant_agent"), any(),
-                eq(ToolExecutionMode.FULL_ACCESS)))
+                eq(ToolExecutionMode.ALWAYS_ASK)))
                 .thenReturn(Mono.just(runtime));
         when(supervisor.start(any(StartAgentExecutionCommand.class))).thenReturn(Mono.empty());
 
@@ -268,8 +281,7 @@ class AgentScopePipelineRunServiceTests {
                 properties,
                 schedulers,
                 new ObjectMapper(),
-                skillRegistry,
-                userSkillService);
+                mock(CanvasAgentScopeService.class));
 
         StepVerifier.create(service.startContinuation("conversation-1", 42L))
                 .assertNext(started -> assertThat(started.conversationId())
@@ -294,10 +306,10 @@ class AgentScopePipelineRunServiceTests {
                 .isInstanceOfSatisfying(UserMessage.class, message ->
                         assertThat(message.getTextContent()).isEqualTo("继续"));
         assertThat(execution.getValue().kernelSpec()).isSameAs(spec);
-        verify(persistedMessages).listByConversation("conversation-1");
+        verify(persistedMessages).listRootHistory("conversation-1");
         verify(runtimeContexts).forRoot(
                 any(), eq("ai_assistant_agent"), any(),
-                eq(ToolExecutionMode.FULL_ACCESS));
+                eq(ToolExecutionMode.ALWAYS_ASK));
     }
 
     @Test
@@ -332,8 +344,7 @@ class AgentScopePipelineRunServiceTests {
                 new AgentScopeV2Properties(),
                 schedulers,
                 new ObjectMapper(),
-                mock(AgentScopeSkillRegistry.class),
-                mock(AgentUserSkillService.class));
+                mock(CanvasAgentScopeService.class));
 
         StepVerifier.create(service.startContinuation("conversation-1", 42L))
                 .expectErrorSatisfies(error -> assertThat(error)
@@ -351,6 +362,7 @@ class AgentScopePipelineRunServiceTests {
                         "assistant",
                         "test",
                         "system",
+                        Map.of(AgentKernelSpecFactory.TOOL_EXECUTION_MODE_VARIABLE, "ALWAYS_ASK"),
                         5,
                         "7",
                         1,

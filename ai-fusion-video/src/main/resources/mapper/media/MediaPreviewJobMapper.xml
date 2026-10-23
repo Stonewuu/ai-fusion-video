@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.media.MediaPreviewJobMapper">
+    <select id="current" resultType="String">
+        SELECT job_id FROM afv_media_preview_current WHERE source_resource_id = #{sourceId} AND source_version = #{version} AND profile = #{profile}
+        <if test="lock">FOR UPDATE</if>
+    </select>
+    <select id="source" resultType="com.stonewu.fusion.mapper.media.MediaPreviewJobMapper$Source">
+        SELECT p.source_resource_id, p.source_version, j.project_id FROM afv_media_preview_job p
+            JOIN afv_media_job j ON j.id = p.job_id
+            JOIN afv_media_preview_current c ON c.job_id = p.job_id AND c.source_resource_id = p.source_resource_id
+                AND c.source_version = p.source_version AND c.profile = p.profile
+        WHERE p.job_id = #{jobId} AND j.kind = 'MEDIA_PREVIEW' AND p.profile = #{profile}
+    </select>
+    <insert id="setCurrent">
+        INSERT INTO afv_media_preview_current(source_resource_id, source_version, profile, job_id, updated_at)
+        VALUES (#{sourceId}, #{version}, #{profile}, #{jobId}, UTC_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE job_id = VALUES(job_id), updated_at = UTC_TIMESTAMP(6)
+    </insert>
+</mapper>

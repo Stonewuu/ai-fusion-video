@@ -18,13 +18,17 @@ import {
   type ComfyUiWorkflowModelType,
 } from "@/lib/api/comfyui-workflow";
 import { parseConfigJson, stringifyConfigObject } from "./model-config-support";
+import { ComfyUiInputLimits } from "./comfyui-input-limits";
 
 interface ComfyUiModelWorkflowFieldProps {
   apiConfigId: number;
   modelType: ComfyUiWorkflowModelType;
   value?: number;
   configJson?: string;
+  capabilityPresetCode?: string;
+  configuredLimits?: Record<string, unknown>;
   onChange: (workflowId: number, configJson: string) => void;
+  onValidityChange: (valid: boolean) => void;
 }
 
 function positiveConfigNumber(value: unknown, fallback: number): number {
@@ -37,7 +41,10 @@ export function ComfyUiModelWorkflowField({
   modelType,
   value,
   configJson,
+  capabilityPresetCode,
+  configuredLimits,
   onChange,
+  onValidityChange,
 }: ComfyUiModelWorkflowFieldProps) {
   const [workflows, setWorkflows] = useState<ComfyUiWorkflow[]>([]);
   const [loadedKey, setLoadedKey] = useState("");
@@ -57,7 +64,9 @@ export function ComfyUiModelWorkflowField({
   ) / 60_000;
 
   const updateRuntimeConfig = (key: "comfyuiPollIntervalMillis" | "comfyuiTimeoutMillis", nextValue: number) => {
-    if (!value) return;
+    if (!value) {
+      return;
+    }
     const next = parseConfigJson(configJson);
     next[key] = Math.round(nextValue);
     onChange(value, stringifyConfigObject(next));
@@ -67,7 +76,9 @@ export function ComfyUiModelWorkflowField({
     let cancelled = false;
     comfyUiWorkflowApi.list(apiConfigId, modelType)
       .then(items => {
-        if (!cancelled) setWorkflows(items);
+        if (!cancelled) {
+          setWorkflows(items);
+        }
       })
       .catch(error => {
         if (!cancelled) {
@@ -76,54 +87,21 @@ export function ComfyUiModelWorkflowField({
         }
       })
       .finally(() => {
-        if (!cancelled) setLoadedKey(requestKey);
+        if (!cancelled) {
+          setLoadedKey(requestKey);
+        }
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [apiConfigId, modelType, requestKey]);
 
-  const selectWorkflow = async (workflowId: number) => {
+  const selectWorkflow = (workflowId: number) => {
     const workflow = visibleWorkflows.find(item => item.id === workflowId);
-    if (!workflow?.activeVersionId) return;
-    try {
-      const version = await comfyUiWorkflowApi.getVersion(workflow.activeVersionId);
-      const bindings = JSON.parse(version.inputBindingsJson) as Record<string, Array<{ index?: number }>>;
-      const hasField = (field: string) => Array.isArray(bindings[field]) && bindings[field].length > 0;
-      const maxInputs = (field: string) => Math.max(
-        1,
-        ...(bindings[field] || []).map(item => (item.index ?? 0) + 1),
-      );
-      const config = parseConfigJson(configJson);
-      if (modelType === 2) {
-        const supportsReferences = hasField("referenceImages");
-        Object.assign(config, {
-          supportReferenceImages: supportsReferences,
-          minReferenceImages: 0,
-          maxReferenceImages: supportsReferences ? maxInputs("referenceImages") : 0,
-          referenceImageInputFormats: supportsReferences ? ["url", "data_uri"] : [],
-          supportDataUriInput: supportsReferences,
-        });
-      } else {
-        const supportsFirstFrame = hasField("firstFrame");
-        const supportsLastFrame = hasField("lastFrame");
-        const supportsReferenceImages = hasField("referenceImages");
-        const supportsAnyImage = supportsFirstFrame || supportsLastFrame || supportsReferenceImages;
-        Object.assign(config, {
-          supportFirstFrame: supportsFirstFrame,
-          supportLastFrame: supportsLastFrame,
-          supportReferenceImages: supportsReferenceImages,
-          maxReferenceImages: supportsReferenceImages ? maxInputs("referenceImages") : 0,
-          supportReferenceVideos: false,
-          maxReferenceVideos: 0,
-          supportReferenceAudios: false,
-          maxReferenceAudios: 0,
-          referenceImageInputFormats: supportsAnyImage ? ["url", "data_uri"] : [],
-          supportDataUriInput: supportsAnyImage,
-        });
-      }
-      onChange(workflowId, stringifyConfigObject(config));
-    } catch (error) {
-      toastApiError(error, "读取 ComfyUI 工作流能力失败");
+    if (!workflow?.activeVersionId) {
+      return;
     }
+    onChange(workflowId, configJson || "");
   };
 
   return (
@@ -137,7 +115,9 @@ export function ComfyUiModelWorkflowField({
       <Select
         value={value ?? null}
         onValueChange={next => {
-          if (next !== null) void selectWorkflow(Number(next));
+          if (next !== null) {
+            selectWorkflow(Number(next));
+          }
         }}
         items={visibleWorkflows.map(workflow => ({ value: workflow.id, label: `${workflow.name} (${workflow.code})` }))}
       >
@@ -158,6 +138,18 @@ export function ComfyUiModelWorkflowField({
         <p className="text-[10px] leading-4 text-destructive">
           当前实例没有同类型且已发布的工作流，请先在工作流管理中完成验证、试运行和发布。
         </p>
+      )}
+      {value && (
+        <ComfyUiInputLimits
+          apiConfigId={apiConfigId}
+          modelType={modelType}
+          workflowId={value}
+          configJson={configJson}
+          capabilityPresetCode={capabilityPresetCode}
+          configuredLimits={configuredLimits}
+          onValidityChange={onValidityChange}
+          onChange={(next) => onChange(value, next)}
+        />
       )}
       {value && (
         <div className="space-y-3 border-t border-primary/10 pt-3">
@@ -182,10 +174,14 @@ export function ComfyUiModelWorkflowField({
                   const parsed = Number(event.currentTarget.value);
                   const seconds = Number.isFinite(parsed) ? Math.max(0.5, parsed) : pollIntervalSeconds;
                   event.currentTarget.value = String(seconds);
-                  updateRuntimeConfig("comfyuiPollIntervalMillis", seconds * 1_000);
+                  if (seconds !== pollIntervalSeconds) {
+                    updateRuntimeConfig("comfyuiPollIntervalMillis", seconds * 1_000);
+                  }
                 }}
                 onKeyDown={event => {
-                  if (event.key === "Enter") event.currentTarget.blur();
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  }
                 }}
               />
               <p className="text-[10px] leading-4 text-muted-foreground">查询 ComfyUI 任务状态的频率，最短 0.5 秒。</p>
@@ -204,10 +200,14 @@ export function ComfyUiModelWorkflowField({
                   const parsed = Number(event.currentTarget.value);
                   const minutes = Number.isFinite(parsed) ? Math.max(1, parsed) : timeoutMinutes;
                   event.currentTarget.value = String(minutes);
-                  updateRuntimeConfig("comfyuiTimeoutMillis", minutes * 60_000);
+                  if (minutes !== timeoutMinutes) {
+                    updateRuntimeConfig("comfyuiTimeoutMillis", minutes * 60_000);
+                  }
                 }}
                 onKeyDown={event => {
-                  if (event.key === "Enter") event.currentTarget.blur();
+                  if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                  }
                 }}
               />
               <p className="text-[10px] leading-4 text-muted-foreground">超过该时长仍未完成时，将任务标记为超时。</p>

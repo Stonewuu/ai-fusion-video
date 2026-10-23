@@ -1,13 +1,14 @@
 package com.stonewu.fusion.service.ai;
 
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import cn.hutool.core.util.StrUtil;
-import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.mapper.ai.ApiConfigMapper;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import com.stonewu.fusion.service.ai.catalog.ProviderCatalogService;
 import com.stonewu.fusion.service.ai.sonilo.SoniloAudioClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.ObjectProvider;
@@ -23,10 +24,12 @@ public class ApiConfigService {
 
     private final ApiConfigMapper apiConfigMapper;
     private final ObjectProvider<ChatModelFactory> chatModelFactoryProvider;
+    private final ProviderCatalogService providerCatalog;
 
     @CacheEvict(value = "episodeBgmConfig", allEntries = true)
     @Transactional
     public Long createApiConfig(ApiConfig apiConfig) {
+        normalizeProviderBinding(apiConfig);
         applyPlatformDefaults(apiConfig);
         if (apiConfig.getAutoAppendV1Path() == null) {
             apiConfig.setAutoAppendV1Path(true);
@@ -42,36 +45,78 @@ public class ApiConfigService {
 
     @CacheEvict(value = "episodeBgmConfig", allEntries = true)
     @Transactional
-    public void updateApiConfig(Long id, String name, String platform,
-                                 String textProtocol, String imageProtocol, String videoProtocol,
-                                 String apiUrl,
-                                 Boolean autoAppendV1Path,
-                                 String proxyType, String proxyHost, Integer proxyPort,
-                                 String proxyUsername, String proxyPassword,
-                                 String apiKey, String appId, String appSecret,
-                                 Long modelId, Integer status, String remark) {
+    public void updateApiConfig(Long id, String name, String platform, String providerId,
+                                String textProtocol, String imageProtocol, String videoProtocol,
+                                String apiUrl,
+                                Boolean autoAppendV1Path,
+                                String proxyType, String proxyHost, Integer proxyPort,
+                                String proxyUsername, String proxyPassword,
+                                String apiKey, String appId, String appSecret,
+                                Long modelId, Integer status, String remark) {
         ApiConfig config = apiConfigMapper.selectById(id);
-        if (config == null) throw new BusinessException(404, "API配置不存在");
+        if (config == null) {
+            throw new BusinessException(404, "API配置不存在");
+        }
         String effectivePlatform = platform != null ? platform : config.getPlatform();
-        if (name != null) config.setName(name);
-        if (platform != null) config.setPlatform(platform);
-        if (textProtocol != null) config.setTextProtocol(normalizeProtocol(textProtocol));
-        if (imageProtocol != null) config.setImageProtocol(normalizeProtocol(imageProtocol));
-        if (videoProtocol != null) config.setVideoProtocol(normalizeProtocol(videoProtocol));
-        if (apiUrl != null) config.setApiUrl(normalizeApiUrl(effectivePlatform, apiUrl));
-        if (autoAppendV1Path != null) config.setAutoAppendV1Path(autoAppendV1Path);
-        if (proxyType != null) config.setProxyType(proxyType);
-        if (proxyHost != null) config.setProxyHost(proxyHost);
-        if (proxyPort != null) config.setProxyPort(proxyPort);
-        if (proxyUsername != null) config.setProxyUsername(proxyUsername);
-        if (proxyPassword != null) config.setProxyPassword(proxyPassword);
-        if (apiKey != null) config.setApiKey(apiKey);
-        if (appId != null) config.setAppId(appId);
-        if (appSecret != null) config.setAppSecret(appSecret);
-        if (modelId != null) config.setModelId(modelId);
-        if (status != null) config.setStatus(status);
-        if (remark != null) config.setRemark(remark);
+        if (name != null) {
+            config.setName(name);
+        }
+        if (platform != null) {
+            config.setPlatform(platform);
+        }
+        if (providerId != null) {
+            config.setProviderId(providerId);
+        }
+        if (textProtocol != null) {
+            config.setTextProtocol(normalizeProtocol(textProtocol));
+        }
+        if (imageProtocol != null) {
+            config.setImageProtocol(normalizeProtocol(imageProtocol));
+        }
+        if (videoProtocol != null) {
+            config.setVideoProtocol(normalizeProtocol(videoProtocol));
+        }
+        if (apiUrl != null) {
+            config.setApiUrl(normalizeApiUrl(effectivePlatform, apiUrl));
+        }
+        if (autoAppendV1Path != null) {
+            config.setAutoAppendV1Path(autoAppendV1Path);
+        }
+        if (proxyType != null) {
+            config.setProxyType(proxyType);
+        }
+        if (proxyHost != null) {
+            config.setProxyHost(proxyHost);
+        }
+        if (proxyPort != null) {
+            config.setProxyPort(proxyPort);
+        }
+        if (proxyUsername != null) {
+            config.setProxyUsername(proxyUsername);
+        }
+        if (proxyPassword != null) {
+            config.setProxyPassword(proxyPassword);
+        }
+        if (apiKey != null) {
+            config.setApiKey(apiKey);
+        }
+        if (appId != null) {
+            config.setAppId(appId);
+        }
+        if (appSecret != null) {
+            config.setAppSecret(appSecret);
+        }
+        if (modelId != null) {
+            config.setModelId(modelId);
+        }
+        if (status != null) {
+            config.setStatus(status);
+        }
+        if (remark != null) {
+            config.setRemark(remark);
+        }
         applyPlatformDefaults(config);
+        normalizeProviderBinding(config);
         normalizeProxyConfig(config);
         apiConfigMapper.updateById(config);
         evictModelCaches();
@@ -86,6 +131,13 @@ public class ApiConfigService {
 
     public ApiConfig getById(Long id) {
         return apiConfigMapper.selectById(id);
+    }
+
+    public void validateModelType(ApiConfig config, Integer modelType) {
+        if (config != null && config.getProviderId() != null
+                && !providerCatalog.require(config.getProviderId()).supportedModelTypes().contains(modelType)) {
+            throw new BusinessException(400, "当前提供商不支持所选模型类型");
+        }
     }
 
     public PageResult<ApiConfig> getPage(String name, String platform, Integer status, int pageNo, int pageSize) {
@@ -238,5 +290,10 @@ public class ApiConfigService {
         if (chatModelFactory != null) {
             chatModelFactory.evictAll();
         }
+    }
+
+    private void normalizeProviderBinding(ApiConfig config) {
+        config.setProviderId(StrUtil.isBlank(config.getProviderId()) ? null : config.getProviderId().trim());
+        providerCatalog.validateBinding(config);
     }
 }

@@ -11,7 +11,7 @@ import java.util.Map;
  * 提供商执行时需要的统一上下文。
  */
 @Value
-@Builder
+@Builder(toBuilder = true)
 public class AiProviderContext {
 
     AiModel model;
@@ -28,4 +28,9 @@ public class AiProviderContext {
     String baseUrl;
 
     String modelName;
+
+    /**
+     * 持久化任务的一次提交；HTTP 与 SDK 均不得自行重复发送。
+     */
+    boolean singleRequest;
 }

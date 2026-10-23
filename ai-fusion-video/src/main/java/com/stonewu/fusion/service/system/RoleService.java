@@ -5,6 +5,7 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.system.Role;
 import com.stonewu.fusion.mapper.system.RoleMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -17,6 +18,7 @@ public class RoleService {
     private final RoleMapper roleMapper;
 
     @Transactional
+    @CacheEvict(value = "userRoles", allEntries = true)
     public Role createRole(String name, String code, Integer sort, String remark) {
         boolean exists = roleMapper.exists(new LambdaQueryWrapper<Role>().eq(Role::getCode, code));
         if (exists) {
@@ -30,17 +32,29 @@ public class RoleService {
     }
 
     @Transactional
+    @CacheEvict(value = "userRoles", allEntries = true)
     public void updateRole(Long id, String name, Integer sort, Integer status, String remark) {
         Role role = roleMapper.selectById(id);
-        if (role == null) throw new BusinessException(404, "角色不存在");
-        if (name != null) role.setName(name);
-        if (sort != null) role.setSort(sort);
-        if (status != null) role.setStatus(status);
-        if (remark != null) role.setRemark(remark);
+        if (role == null) {
+            throw new BusinessException(404, "角色不存在");
+        }
+        if (name != null) {
+            role.setName(name);
+        }
+        if (sort != null) {
+            role.setSort(sort);
+        }
+        if (status != null) {
+            role.setStatus(status);
+        }
+        if (remark != null) {
+            role.setRemark(remark);
+        }
         roleMapper.updateById(role);
     }
 
     @Transactional
+    @CacheEvict(value = "userRoles", allEntries = true)
     public void deleteRole(Long id) {
         roleMapper.deleteById(id);
     }

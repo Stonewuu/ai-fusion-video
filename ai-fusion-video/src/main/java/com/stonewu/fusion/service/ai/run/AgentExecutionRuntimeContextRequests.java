@@ -2,20 +2,12 @@ package com.stonewu.fusion.service.ai.run;
 
 import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.repository.ai.AgentRunRepository;
-import com.stonewu.fusion.service.ai.agentscope.context.AgentConversationContext;
-import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
-import com.stonewu.fusion.service.ai.agentscope.context.AgentScopeRuntimeContextRequest;
-import com.stonewu.fusion.service.ai.agentscope.context.AuthenticatedUserContext;
-import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
-import com.stonewu.fusion.service.ai.agentscope.context.PipelineRequestContext;
-import com.stonewu.fusion.service.ai.agentscope.context.ParentAgentRunContext;
-import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
-import com.stonewu.fusion.service.ai.agentscope.context.ToolExecutionContext;
-import com.stonewu.fusion.service.ai.agentscope.context.ToolPermissionContext;
+import com.stonewu.fusion.service.ai.agentscope.context.*;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.run.model.ResumedAgentRun;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
+import com.stonewu.fusion.service.canvas.agent.CanvasAgentScopeService;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
@@ -28,13 +20,16 @@ public final class AgentExecutionRuntimeContextRequests {
 
     private final AgentRunRepository runRepository;
     private final AgentRuntimeSchedulers schedulers;
+    private final CanvasAgentScopeService canvasScopes;
 
     public AgentExecutionRuntimeContextRequests(
             AgentRunRepository runRepository,
-            AgentRuntimeSchedulers schedulers) {
+            AgentRuntimeSchedulers schedulers,
+            CanvasAgentScopeService canvasScopes) {
         this.runRepository = Objects.requireNonNull(
                 runRepository, "runRepository must not be null");
         this.schedulers = Objects.requireNonNull(schedulers, "schedulers must not be null");
+        this.canvasScopes = Objects.requireNonNull(canvasScopes, "canvasScopes must not be null");
     }
 
     public Mono<AgentScopeRuntimeContextRequest> forChild(
@@ -141,6 +136,10 @@ public final class AgentExecutionRuntimeContextRequests {
         }
         validateParent(persisted, parentRun);
         long userId = persisted.getUserId();
+        var canvasScope = canvasScopes.decode(persisted.getCanvasScopeJson());
+        // A resumed canvas node executes the same admitted workflow, including its automatic approval policy.
+        var effectiveMode = canvasScope != null && canvasScope.nodeRunId() != null
+                ? ToolExecutionMode.FULL_ACCESS : toolExecutionMode;
         return new AgentScopeRuntimeContextRequest(
                 new AuthenticatedUserContext(userId),
                 new AgentConversationContext(
@@ -158,9 +157,11 @@ public final class AgentExecutionRuntimeContextRequests {
                 project,
                 new PipelineRequestContext(
                         persisted.getRunId(), requestKind),
-                new ToolExecutionContext(userId, 1, userId),
+                new ToolExecutionContext(userId, persisted.getActorTeamId() == null ? 1 : 2,
+                        persisted.getActorTeamId() == null ? userId : persisted.getActorTeamId(),
+                        canvasScope),
                 CancellationContext.noop(),
-                new ToolPermissionContext(toolExecutionMode));
+                new ToolPermissionContext(effectiveMode));
     }
 
     private ParentAgentRunContext parentForResume(AgentRun child) {
@@ -168,9 +169,10 @@ public final class AgentExecutionRuntimeContextRequests {
             return null;
         }
         AgentRun parent = runRepository.findRun(child.getParentRunId());
+        var canvasScope = canvasScopes.decode(child.getCanvasScopeJson());
+        boolean independent = canvasScope != null && canvasScope.nodeRunId() != null;
         if (parent == null
-                || parent.getOwnerInstanceId() == null
-                || parent.getOwnerInstanceId().isBlank()
+                || (!independent && (parent.getOwnerInstanceId() == null || parent.getOwnerInstanceId().isBlank()))
                 || parent.getOwnerEpoch() == null
                 || parent.getOwnerEpoch() <= 0) {
             throw new IllegalStateException(
@@ -182,7 +184,7 @@ public final class AgentExecutionRuntimeContextRequests {
                 parent.getOwnerInstanceId(),
                 parent.getOwnerEpoch(),
                 child.getParentToolCallId(),
-                child.getAgentName());
+                child.getAgentName(), independent);
     }
 
     private void validateParent(
@@ -197,7 +199,7 @@ public final class AgentExecutionRuntimeContextRequests {
         if (parentRun == null
                 || !Objects.equals(persisted.getParentRunId(), parentRun.runId())
                 || !Objects.equals(
-                        persisted.getParentToolCallId(), parentRun.toolCallId())
+                persisted.getParentToolCallId(), parentRun.toolCallId())
                 || !Objects.equals(persisted.getAgentName(), parentRun.agentName())) {
             throw new IllegalArgumentException(
                     "Child RuntimeContext parent identity does not match the persisted run");

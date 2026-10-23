@@ -13,7 +13,15 @@ public record ResumedAgentRun(
         String newOwnerInstanceId,
         long newOwnerEpoch,
         Instant leaseUntil,
-        Instant deadline) {
+        Instant deadline,
+        boolean durableDispatch) {
+
+    public ResumedAgentRun(String runId, String conversationId, String sessionId, String kernelFingerprint,
+                           String agentDefinitionSnapshotJson, long pausedThroughSequence, String newOwnerInstanceId,
+                           long newOwnerEpoch, Instant leaseUntil, Instant deadline) {
+        this(runId, conversationId, sessionId, kernelFingerprint, agentDefinitionSnapshotJson, pausedThroughSequence,
+                newOwnerInstanceId, newOwnerEpoch, leaseUntil, deadline, false);
+    }
 
     public ResumedAgentRun {
         requireText(runId, "runId");

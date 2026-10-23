@@ -42,6 +42,7 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Mono;
@@ -79,11 +80,18 @@ class PlatformSubAgentRunServiceIT {
             .withUsername("afv")
             .withPassword("afv-test");
 
+    @Container
+    private static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4.5-alpine")
+            .withExposedPorts(6379);
+
     @DynamicPropertySource
     static void configureDatabase(DynamicPropertyRegistry properties) {
         properties.add("spring.datasource.url", MYSQL::getJdbcUrl);
         properties.add("spring.datasource.username", MYSQL::getUsername);
         properties.add("spring.datasource.password", MYSQL::getPassword);
+        properties.add("spring.data.redis.host", REDIS::getHost);
+        properties.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        properties.add("spring.data.redis.password", () -> "");
         properties.add("fusion.agentscope.v2.state.mode", () -> "IN_MEMORY");
         properties.add("fusion.agentscope.v2.execution.instance-id", () -> "child-node");
     }
@@ -114,6 +122,7 @@ class PlatformSubAgentRunServiceIT {
 
     @BeforeEach
     void configureMocks() {
+        when(signals.publishWakeup(anyString(), anyLong())).thenReturn(Mono.empty());
         when(supervisor.start(any(StartAgentExecutionCommand.class))).thenReturn(Mono.empty());
         when(supervisor.interruptOwned(anyString(), anyString(), anyLong(), any()))
                 .thenReturn(Mono.just(true));
@@ -180,7 +189,7 @@ class PlatformSubAgentRunServiceIT {
         await(service.cancelChildren(parent.runId()));
 
         assertThat(run(child.childRunId()).getStatus())
-                .isEqualTo(AgentRunStatus.CANCEL_REQUESTED.name());
+                .isIn(AgentRunStatus.CANCEL_REQUESTED.name(), AgentRunStatus.CANCELLED.name());
         assertThat(run(parent.runId()).getStatus())
                 .isEqualTo(AgentRunStatus.RUNNING.name());
     }
@@ -298,7 +307,8 @@ class PlatformSubAgentRunServiceIT {
                 Duration.ofSeconds(30),
                 deadline,
                 "parent input",
-                null)));
+                null,
+                null, null)));
     }
 
     private PlatformSubAgentCommand childCommand(

@@ -1,5 +1,7 @@
 package com.stonewu.fusion.service.ai;
 
+
+import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -8,18 +10,13 @@ import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.controller.ai.vo.AiModelConnectivityRespVO;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
-import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
+import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
+import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-
-import cn.hutool.core.util.StrUtil;
 
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
@@ -39,6 +36,7 @@ public class AiModelService {
     private final AiModelMetadataResolver aiModelMetadataResolver;
     private final ChatModelFactory chatModelFactory;
     private final ComfyUiWorkflowService comfyUiWorkflowService;
+    private final GenerationModelCapabilityService generationCapabilities;
 
     @Transactional
     public Long createAiModel(AiModel aiModel) {
@@ -61,37 +59,75 @@ public class AiModelService {
 
     @Transactional
     public void updateAiModel(Long id, String name, String code, String modelProtocol,
-                               String capabilityPresetCode, Integer modelType, String icon,
-                               String description, Integer sort, Integer status,
-                               String config, Boolean defaultModel, Long apiConfigId,
-                               Integer maxConcurrency, List<String> multimodalInputTypes,
-                               Map<String, List<String>> multimodalInputTransports,
-                               Boolean supportReasoning, List<String> reasoningEffortLevels,
-                               Integer contextWindow, Long comfyuiWorkflowId) {
+                              String capabilityPresetCode, Integer modelType, String icon,
+                              String description, Integer sort, Integer status,
+                              String config, Boolean defaultModel, Long apiConfigId,
+                              Integer maxConcurrency, List<String> multimodalInputTypes,
+                              Map<String, List<String>> multimodalInputTransports,
+                              Boolean supportReasoning, List<String> reasoningEffortLevels,
+                              Integer contextWindow, Long comfyuiWorkflowId) {
         AiModel model = aiModelMapper.selectById(id);
-        if (model == null) throw new BusinessException(404, "AI模型不存在");
+        if (model == null) {
+            throw new BusinessException(404, "AI模型不存在");
+        }
         Long nextApiConfigId = apiConfigId != null ? apiConfigId : model.getApiConfigId();
         String nextCode = code != null ? code : model.getCode();
         validateApiConfig(apiConfigId, false);
         validateUniqueCode(id, nextApiConfigId, nextCode);
-        if (name != null) model.setName(name);
-        if (code != null) model.setCode(code);
-        if (modelProtocol != null) model.setModelProtocol(aiModelMetadataResolver.normalizeProtocol(modelProtocol));
-        if (capabilityPresetCode != null) model.setCapabilityPresetCode(normalizeCapabilityPresetCode(capabilityPresetCode));
-        if (modelType != null) model.setModelType(modelType);
-        if (icon != null) model.setIcon(icon);
-        if (description != null) model.setDescription(description);
-        if (sort != null) model.setSort(sort);
-        if (status != null) model.setStatus(status);
-        if (config != null) model.setConfig(config);
-        if (maxConcurrency != null) model.setMaxConcurrency(maxConcurrency > 0 ? maxConcurrency : 5);
-        if (defaultModel != null) model.setDefaultModel(defaultModel);
-        if (multimodalInputTypes != null) model.setMultimodalInputTypes(multimodalInputTypes);
-        if (multimodalInputTransports != null) model.setMultimodalInputTransports(multimodalInputTransports);
-        if (supportReasoning != null) model.setSupportReasoning(supportReasoning);
-        if (reasoningEffortLevels != null) model.setReasoningEffortLevels(reasoningEffortLevels);
-        if (contextWindow != null) model.setContextWindow(contextWindow > 0 ? contextWindow : null);
-        if (apiConfigId != null) model.setApiConfigId(apiConfigId);
+        if (name != null) {
+            model.setName(name);
+        }
+        if (code != null) {
+            model.setCode(code);
+        }
+        if (modelProtocol != null) {
+            model.setModelProtocol(aiModelMetadataResolver.normalizeProtocol(modelProtocol));
+        }
+        if (capabilityPresetCode != null) {
+            model.setCapabilityPresetCode(normalizeCapabilityPresetCode(capabilityPresetCode));
+        }
+        if (modelType != null) {
+            model.setModelType(modelType);
+        }
+        if (icon != null) {
+            model.setIcon(icon);
+        }
+        if (description != null) {
+            model.setDescription(description);
+        }
+        if (sort != null) {
+            model.setSort(sort);
+        }
+        if (status != null) {
+            model.setStatus(status);
+        }
+        if (config != null) {
+            model.setConfig(config);
+        }
+        if (maxConcurrency != null) {
+            model.setMaxConcurrency(maxConcurrency > 0 ? maxConcurrency : 5);
+        }
+        if (defaultModel != null) {
+            model.setDefaultModel(defaultModel);
+        }
+        if (multimodalInputTypes != null) {
+            model.setMultimodalInputTypes(multimodalInputTypes);
+        }
+        if (multimodalInputTransports != null) {
+            model.setMultimodalInputTransports(multimodalInputTransports);
+        }
+        if (supportReasoning != null) {
+            model.setSupportReasoning(supportReasoning);
+        }
+        if (reasoningEffortLevels != null) {
+            model.setReasoningEffortLevels(reasoningEffortLevels);
+        }
+        if (contextWindow != null) {
+            model.setContextWindow(contextWindow > 0 ? contextWindow : null);
+        }
+        if (apiConfigId != null) {
+            model.setApiConfigId(apiConfigId);
+        }
         if (comfyuiWorkflowId != null) {
             model.setComfyuiWorkflowId(comfyuiWorkflowId > 0 ? comfyuiWorkflowId : null);
         }
@@ -124,15 +160,14 @@ public class AiModelService {
         if (StrUtil.isBlank(code) || apiConfigId == null) {
             return null;
         }
-        return aiModelMapper.selectOne(new LambdaQueryWrapper<AiModel>()
+        return aiModelMapper.selectPage(new Page<>(1, 1, false), new LambdaQueryWrapper<AiModel>()
                 .eq(AiModel::getCode, code)
                 .eq(AiModel::getApiConfigId, apiConfigId)
-                .eq(AiModel::getStatus, 1)
-                .last("LIMIT 1"));
+                .eq(AiModel::getStatus, 1)).getRecords().stream().findFirst().orElse(null);
     }
 
     public PageResult<AiModel> getPage(String name, String code, Integer modelType, Integer status,
-                                        int pageNo, int pageSize) {
+                                       int pageNo, int pageSize) {
         LambdaQueryWrapper<AiModel> wrapper = new LambdaQueryWrapper<>();
         wrapper.like(name != null, AiModel::getName, name)
                 .like(code != null, AiModel::getCode, code)
@@ -154,12 +189,11 @@ public class AiModelService {
     }
 
     public AiModel getDefaultByType(Integer modelType) {
-        return aiModelMapper.selectOne(new LambdaQueryWrapper<AiModel>()
+        return aiModelMapper.selectPage(new Page<>(1, 1, false), new LambdaQueryWrapper<AiModel>()
                 .eq(AiModel::getDefaultModel, true)
                 .eq(AiModel::getModelType, modelType)
                 .eq(AiModel::getStatus, 1)
-                .orderByAsc(AiModel::getSort)
-                .last("LIMIT 1"));
+                .orderByAsc(AiModel::getSort)).getRecords().stream().findFirst().orElse(null);
     }
 
     public AiModelConnectivityRespVO testTextModelConnectivity(Long id) {
@@ -173,13 +207,13 @@ public class AiModelService {
 
         long startTime = System.currentTimeMillis();
         try {
-            ChatModel chatModel = chatModelFactory.getOrCreate(model);
-            ChatResponse response = chatModel.call(new Prompt(CONNECTIVITY_TEST_MESSAGE));
+            String response = chatModelFactory.checkConnectivity(model, CONNECTIVITY_TEST_MESSAGE);
 
             AiModelConnectivityRespVO respVO = new AiModelConnectivityRespVO();
             respVO.setModelId(model.getId());
             respVO.setModelName(model.getName());
-            respVO.setResponseText(StrUtil.blankToDefault(extractResponseText(response), "模型已响应，但未返回文本内容"));
+            respVO.setResponseText(
+                    StrUtil.blankToDefault(response, "模型已响应，但未返回文本内容"));
             respVO.setDurationMs(System.currentTimeMillis() - startTime);
             respVO.setTestedAt(LocalDateTime.now());
             return respVO;
@@ -269,13 +303,25 @@ public class AiModelService {
         if (presetModelType != null && !presetModelType.equals(model.getModelType())) {
             throw new BusinessException(400, "模型能力预设与模型类型不匹配");
         }
+        if (StrUtil.isNotBlank(preset.getStr("providerId"))) {
+            var config = apiConfigService.getById(model.getApiConfigId());
+            if (!preset.getStr("providerId").equals(config.getProviderId())
+                    || !preset.getStr("modelProtocol").equals(aiModelMetadataResolver.resolve(model, config).modelProtocol())) {
+                throw new BusinessException(400, "赞助平台能力预设与当前提供商或请求协议不匹配");
+            }
+        }
     }
 
     private void validateRequestProtocol(AiModel model) {
-        if (model == null || model.getModelType() == null || model.getModelType() < 1 || model.getModelType() > 3) {
+        if (model == null || model.getModelType() == null) {
             return;
         }
-        var metadata = aiModelMetadataResolver.resolve(model);
+        var apiConfig = aiModelMetadataResolver.resolveApiConfig(model);
+        apiConfigService.validateModelType(apiConfig, model.getModelType());
+        if (model.getModelType() < 1 || model.getModelType() > 3) {
+            return;
+        }
+        var metadata = aiModelMetadataResolver.resolve(model, apiConfig);
         if (StrUtil.isBlank(metadata.modelProtocol()) || "generic".equals(metadata.modelProtocol())) {
             String capability = switch (model.getModelType()) {
                 case 1 -> "文本";
@@ -301,6 +347,7 @@ public class AiModelService {
             return;
         }
         comfyUiWorkflowService.validateModelBinding(model, apiConfig);
+        generationCapabilities.getMergedModelConfig(model);
     }
 
     private void clearOtherDefaults(Integer modelType, Long excludeId) {
@@ -314,14 +361,4 @@ public class AiModelService {
                 .ne(AiModel::getId, excludeId));
     }
 
-    private String extractResponseText(ChatResponse response) {
-        if (response == null || response.getResult() == null) {
-            return "";
-        }
-        AssistantMessage assistantMessage = response.getResult().getOutput();
-        if (assistantMessage == null) {
-            return "";
-        }
-        return StrUtil.trim(assistantMessage.getText());
-    }
 }

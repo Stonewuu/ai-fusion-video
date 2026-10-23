@@ -1,9 +1,14 @@
 package com.stonewu.fusion.integration;
 
+import com.stonewu.fusion.service.ai.run.AgentExecutionLimits;
+
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.service.canvas.agent.CanvasAgentWaitRepository;
+import com.stonewu.fusion.service.canvas.agent.CanvasAgentWaitBridge;
+import org.springframework.jdbc.core.JdbcTemplate;
 import com.stonewu.fusion.entity.ai.AgentEvent;
 import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
@@ -29,10 +34,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.testcontainers.containers.MySQLContainer;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import reactor.core.publisher.Mono;
@@ -58,11 +65,13 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers(disabledWithoutDocker = false)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AgentWaitingStateIT {
 
     private static final long USER_ID = 42L;
@@ -81,12 +90,16 @@ class AgentWaitingStateIT {
             .withDatabaseName("ai_fusion_video")
             .withUsername("afv")
             .withPassword("afv-test");
+    @Container private static final GenericContainer<?> REDIS = new GenericContainer<>("redis:7.4.5-alpine").withExposedPorts(6379);
 
     @DynamicPropertySource
     static void configureDatabase(DynamicPropertyRegistry properties) {
         properties.add("spring.datasource.url", MYSQL::getJdbcUrl);
         properties.add("spring.datasource.username", MYSQL::getUsername);
         properties.add("spring.datasource.password", MYSQL::getPassword);
+        properties.add("spring.data.redis.host", REDIS::getHost);
+        properties.add("spring.data.redis.port", () -> REDIS.getMappedPort(6379));
+        properties.add("spring.data.redis.password", () -> "");
         properties.add("fusion.agentscope.v2.state.mode", () -> "IN_MEMORY");
         properties.add(
                 "fusion.agentscope.v2.execution.instance-id", () -> "waiting-node-a");
@@ -109,6 +122,10 @@ class AgentWaitingStateIT {
 
     @Autowired
     private AgentEventMapper eventMapper;
+
+    @Autowired private CanvasAgentWaitRepository canvasWaits;
+    @Autowired private JdbcTemplate jdbc;
+    @MockitoBean private CanvasAgentWaitBridge canvasWaitBridge;
 
     @MockitoBean
     private AgentRunRedisSignalService signals;
@@ -196,8 +213,7 @@ class AgentWaitingStateIT {
                 .orElseThrow();
         assertResumedIdentity(started, checkpoint, resumed);
         assertThat(resumed.deadline())
-                .isAfter(Instant.now().plus(Duration.ofMinutes(29)))
-                .isBefore(Instant.now().plus(Duration.ofMinutes(31)));
+                .isEqualTo(AgentExecutionLimits.UNLIMITED_DEADLINE);
         assertThat(resumed.newOwnerEpoch()).isEqualTo(started.ownerEpoch() + 1);
         assertThat(resumed.newOwnerInstanceId())
                 .isIn("waiting-node-b", "waiting-node-c");
@@ -224,12 +240,11 @@ class AgentWaitingStateIT {
         StartedAgentRun started = startRun(Duration.ofMinutes(2));
         PendingConfirmation candidate = confirmation(
                 started.deadline().minusSeconds(30));
-        when(signals.publishWakeup(eq(started.runId()), anyLong()))
-                .thenAnswer(invocation -> {
+        doAnswer(invocation -> {
                     assertCommittedVisibleEvent(
                             started.runId(), invocation.getArgument(1));
-                    return Mono.empty();
-                });
+                    return null;
+                }).when(signals).notifyCommitted(eq(started.runId()), anyLong());
 
         await(waiting.recordConfirmationCandidate(started.runId(), candidate));
         AgentRun running = run(started.runId());
@@ -249,9 +264,9 @@ class AgentWaitingStateIT {
         AgentEvent confirmationResult = events(
                 started.runId(), "USER_CONFIRM_RESULT").getFirst();
 
-        verify(signals).publishWakeup(
+        verify(signals).notifyCommitted(
                 started.runId(), confirmationRequired.getSequenceNo());
-        verify(signals).publishWakeup(
+        verify(signals).notifyCommitted(
                 started.runId(), confirmationResult.getSequenceNo());
     }
 
@@ -311,6 +326,65 @@ class AgentWaitingStateIT {
         assertThat(event.getOutputType()).isNotNull();
         assertThat(event.getPublishRequired()).isTrue();
         assertThat(run(runId).getNextSequence()).isGreaterThan(sequence);
+    }
+
+    @Test
+    void canvasWaitPersistsResumeDispatchAndOnlyReclaimsAnUnstartedDispatch() {
+        var started = startRun(Duration.ofSeconds(75));
+        jdbc.update("UPDATE afv_agent_run SET canvas_scope_json=? WHERE run_id=?",
+                "{\"canvasId\":\"" + UUID.randomUUID() + "\",\"projectId\":77,\"selectedNodeIds\":[],\"visibleNodeIds\":[],\"clientSequence\":1,\"admittedSequence\":1,\"admittedRevision\":1}", started.runId());
+        var pending = new PendingExternalExecution("canvas-wait-1", "await_canvas_run",
+                "{\"toolCalls\":[{\"id\":\"call-a\",\"name\":\"await_canvas_run\",\"input\":{\"canvasRunId\":\"run-a\"}}]}", Instant.now().plusSeconds(3600));
+        assertThat(await(waiting.enterWaitingExternal(started.runId(), started.ownerEpoch(), checkpoint(run(started.runId())), pending))).isTrue();
+        assertThat(run(started.runId()).getWaitExpiresAt().toInstant(ZoneOffset.UTC)).isAfter(started.deadline());
+        var resumed = await(waiting.resumeExternal(new ResumeExternalCommand(started.runId(), USER_ID, "canvas-waiter", pending.toolCallId(),
+                "{\"results\":[{\"toolCallId\":\"call-a\",\"toolName\":\"await_canvas_run\",\"result\":{\"status\":\"SUCCEEDED\"}}]}", "waiting-node-b", Duration.ofSeconds(30))));
+        assertThat(run(started.runId()).getExternalResumeJson()).contains("SUCCEEDED");
+        assertThat(canvasWaits.claim(started.runId(), "waiting-node-c")).isNull();
+        jdbc.update("UPDATE afv_agent_run SET lease_until=DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE run_id=?", started.runId());
+        var dispatch = canvasWaits.claim(started.runId(), "waiting-node-c");
+        assertThat(dispatch).isNotNull();
+        assertThat(dispatch.run().newOwnerEpoch()).isEqualTo(resumed.newOwnerEpoch() + 1);
+        assertThat(dispatch.run().sessionId()).isEqualTo(started.agentStateSessionId());
+        assertThat(dispatch.resultJson()).contains("call-a");
+        // 执行事件已经开始后，不能再次重放这条恢复消息。
+        jdbc.update("UPDATE afv_agent_run SET next_sequence=next_sequence+1, lease_until=DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE run_id=?", started.runId());
+        assertThat(canvasWaits.claim(started.runId(), "waiting-node-d")).isNull();
+        assertThat(run(started.runId()).getExternalResumeJson()).isNull();
+    }
+
+    @Test
+    void unlimitedCanvasWaitDoesNotRestoreTheOldTwentyFourHourRunLimit() {
+        var started = startRun(Duration.ofMinutes(2));
+        jdbc.update("UPDATE afv_agent_run SET canvas_scope_json='{}', started_at=DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1430 MINUTE) WHERE run_id=?", started.runId());
+        var pending = new PendingExternalExecution("canvas-bound", "await_canvas_run", "{}", AgentExecutionLimits.UNLIMITED_DEADLINE);
+        assertThat(await(waiting.enterWaitingExternal(started.runId(), started.ownerEpoch(), checkpoint(run(started.runId())), pending))).isTrue();
+        assertThat(run(started.runId()).getWaitExpiresAt().toInstant(ZoneOffset.UTC))
+                .isEqualTo(AgentExecutionLimits.UNLIMITED_DEADLINE);
+    }
+
+    @Test
+    void approvalAndDenialSurviveTheCrashBetweenDecisionCommitAndDispatch() {
+        for (boolean approved : List.of(true, false)) {
+            var started = startRun(Duration.ofMinutes(2));
+            jdbc.update("UPDATE afv_agent_run SET canvas_scope_json='{}' WHERE run_id=?", started.runId());
+            var pending = confirmation(started.deadline().minusSeconds(15));
+            await(waiting.recordConfirmationCandidate(started.runId(), pending));
+            assertThat(await(waiting.enterWaitingConfirmation(started.runId(), started.ownerEpoch(), checkpoint(run(started.runId()))))).isTrue();
+            var resumed = await(waiting.resumeConfirmation(new ResumeConfirmationCommand(started.runId(), USER_ID, pending.replyId(),
+                    pending.decisionIds(), Map.of("tool-a", approved), "approval-owner", Duration.ofSeconds(30))));
+            assertThat(resumed.durableDispatch()).isTrue();
+            var saved = run(started.runId());
+            assertThat(saved.getExternalResumeJson()).contains("confirmation", "sunrise", "\"tool-a\": " + approved);
+            assertThat(canvasWaits.claim(started.runId(), "replacement-owner")).isNull();
+            jdbc.update("UPDATE afv_agent_run SET lease_until=DATE_SUB(UTC_TIMESTAMP(3), INTERVAL 1 SECOND) WHERE run_id=?", started.runId());
+            var reclaimed = canvasWaits.claim(started.runId(), "replacement-owner");
+            assertThat(reclaimed.run().newOwnerEpoch()).isEqualTo(resumed.newOwnerEpoch() + 1);
+            assertThat(reclaimed.resultJson()).isEqualTo(saved.getExternalResumeJson());
+            assertConflict(() -> await(waiting.resumeConfirmation(new ResumeConfirmationCommand(started.runId(), USER_ID, pending.replyId(),
+                    pending.decisionIds(), Map.of("tool-a", !approved), "replacement-owner", Duration.ofSeconds(30)))));
+            canvasWaits.clear(started.runId(), reclaimed.run().newOwnerEpoch(), reclaimed.sequence());
+        }
     }
 
     @Test
@@ -424,7 +498,8 @@ class AgentWaitingStateIT {
                 Duration.ofSeconds(30),
                 deadline,
                 "wait for a tool",
-                null)));
+                null,
+                null, null)));
     }
 
     private AgentKernelSnapshot snapshot() {

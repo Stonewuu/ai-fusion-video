@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.media.MediaAccessTicketMapper">
+    <delete id="removeExpired">
+        DELETE FROM afv_media_access_ticket WHERE expires_at &lt; TIMESTAMPADD(DAY, -1, UTC_TIMESTAMP(6)) LIMIT 1000
+    </delete>
+    <select id="agentExpiry" resultType="java.time.LocalDateTime">
+        SELECT LEAST(deadline_at, TIMESTAMPADD(MINUTE, 60, UTC_TIMESTAMP(6))) AS expires_at FROM afv_agent_run
+        WHERE run_id = #{runId} AND user_id = #{userId} AND actor_team_id &lt;=&gt; #{teamId} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch}
+            AND status = 'RUNNING' AND cancel_requested_at IS NULL
+            AND lease_until &gt; UTC_TIMESTAMP(6) AND deadline_at &gt; UTC_TIMESTAMP(6)
+            AND (project_id IS NULL OR #{projectId} IS NULL OR project_id = #{projectId}) FOR UPDATE
+    </select>
+    <select id="textExpiry" resultType="java.time.LocalDateTime">
+        SELECT j.deadline_at FROM afv_canvas_text_job j JOIN afv_canvas_run r ON r.id = j.run_id
+        JOIN afv_canvas c ON c.id = r.canvas_id
+        WHERE j.id = #{id} AND j.owner_instance_id = #{owner} AND j.owner_epoch = #{epoch} AND j.status = 'RUNNING'
+            AND j.lease_until &gt; UTC_TIMESTAMP(6) AND j.deadline_at &gt; UTC_TIMESTAMP(6)
+            AND j.cancel_requested = FALSE AND r.cancel_requested = FALSE AND c.archived = FALSE
+            AND r.actor_user_id = #{userId} AND r.actor_team_id &lt;=&gt; #{teamId} AND (#{projectId} IS NULL OR j.project_id = #{projectId})
+    </select>
+    <select id="authorize" resultType="com.stonewu.fusion.entity.media.MediaAccessTicketEntity">
+        SELECT * FROM afv_media_access_ticket WHERE token_hash = #{hash} AND resource_id = #{id}
+            AND revoked = FALSE AND expires_at &gt; UTC_TIMESTAMP(6)
+    </select>
+    <select id="validGeneration" resultType="long">
+        SELECT COUNT(*) FROM afv_remote_generation_job job JOIN afv_generation_submission submission ON submission.id = job.submission_id
+        WHERE job.id = #{id} AND job.active_attempt_id = #{attemptId} AND job.cancel_requested = FALSE AND job.permit_held = TRUE
+            AND job.deadline_at &gt; UTC_TIMESTAMP(6) AND job.state IN ('RUNNING','WAITING','UNKNOWN_SUBMISSION','NEEDS_REVIEW')
+            AND job.phase IN ('PREPARING','SUBMITTING','POLLING') AND submission.actor_user_id = #{userId} AND submission.actor_team_id &lt;=&gt; #{teamId}
+            AND (#{projectId} IS NULL OR job.project_id = #{projectId})
+    </select>
+    <select id="validAgent" resultType="long">
+        SELECT COUNT(*) FROM afv_agent_run WHERE run_id = #{runId} AND user_id = #{userId} AND actor_team_id &lt;=&gt; #{teamId}
+            AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND status = 'RUNNING'
+            AND cancel_requested_at IS NULL AND lease_until &gt; UTC_TIMESTAMP(6) AND deadline_at &gt; UTC_TIMESTAMP(6)
+            AND (project_id IS NULL OR #{projectId} IS NULL OR project_id = #{projectId})
+    </select>
+    <select id="validText" resultType="long">
+        SELECT COUNT(*) FROM afv_canvas_text_job j JOIN afv_canvas_run r ON r.id = j.run_id JOIN afv_canvas c ON c.id = r.canvas_id
+        WHERE j.id = #{id} AND j.cancel_requested = FALSE AND r.cancel_requested = FALSE AND c.archived = FALSE
+            AND j.permit_held = TRUE AND j.request_started_at IS NOT NULL AND j.deadline_at &gt; UTC_TIMESTAMP(6)
+            AND j.status IN ('RUNNING','UNKNOWN_SUBMISSION','NEEDS_REVIEW')
+            AND r.actor_user_id = #{userId} AND r.actor_team_id &lt;=&gt; #{teamId} AND (#{projectId} IS NULL OR j.project_id = #{projectId})
+    </select>
+</mapper>

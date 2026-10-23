@@ -6,6 +6,7 @@ import type { Storyboard, StoryboardStatistics } from "./storyboard";
 
 export interface Project {
   id: number;
+  version: number;
   name: string;
   description: string;
   coverUrl: string | null;
@@ -25,10 +26,12 @@ export interface Project {
 export interface ProjectCreateReq {
   name: string;
   description?: string;
-  properties?: string;
+  properties?: Record<string, unknown>;
+  artStyle?: string;
 }
 
 export interface ProjectWorkspaceOverview {
+  projectVersion: number;
   script: Script | null;
   scriptEpisodeCount: number;
   scriptSceneCount: number;
@@ -50,23 +53,33 @@ export const projectApi = {
     http.get<never, ProjectWorkspaceOverview>(`/api/project/${id}/workspace-overview`),
 
   /** 幂等补齐旧项目缺失的剧本与分镜容器，不修改已有数据 */
-  initializeWorkspace: (id: number) =>
-    http.post<never, ProjectWorkspaceOverview>(`/api/project/${id}/workspace/initialize`),
+  initializeWorkspace: (id: number, version: number, requestId = crypto.randomUUID()) =>
+    http.post<never, ProjectWorkspaceOverview>(`/api/project/${id}/workspace/initialize`, { version, requestId }),
 
   /** 创建项目 */
-  create: (data: ProjectCreateReq) => http.post<never, Project>("/api/project", data),
+  create: (fields: ProjectCreateReq, requestId = crypto.randomUUID()) =>
+    http.post<never, Project>("/api/project", { requestId, fields }),
 
   /** 更新项目 */
-  update: (data: Partial<Project> & { id: number }) =>
-    http.put<never, Project>("/api/project", data),
+  update: (
+    data: Partial<Pick<Project, "name" | "description" | "coverUrl" | "status" | "properties" | "artStyle" | "artStyleDescription" | "artStyleImagePrompt" | "artStyleImageUrl">>
+      & { id: number; version: number },
+    requestId = crypto.randomUUID(),
+  ) => {
+    const { id, version, ...patch } = data;
+    return http.put<never, Project>("/api/project", { id, version, requestId, patch });
+  },
 
-  /** 更新项目扩展属性（properties 传对象，自动序列化为 JSON 字符串） */
-  updateProperties: (id: number, properties: Record<string, unknown>) =>
+  /** 按读取版本原子更新项目扩展属性 */
+  updateProperties: (id: number, version: number, properties: Record<string, unknown>, requestId = crypto.randomUUID()) =>
     http.put<never, Project>("/api/project", {
       id,
-      properties: JSON.stringify(properties),
+      version,
+      requestId,
+      patch: { properties },
     }),
 
   /** 删除项目 */
-  delete: (id: number) => http.delete<never, boolean>(`/api/project/${id}`),
+  delete: (id: number, version: number, requestId = crypto.randomUUID()) =>
+    http.delete<never, boolean>(`/api/project/${id}`, { params: { version, requestId } }),
 };

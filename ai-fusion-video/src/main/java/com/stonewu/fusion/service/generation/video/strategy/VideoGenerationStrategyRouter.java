@@ -12,7 +12,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Routes video generation by the explicitly configured effective request protocol. */
+/**
+ * Routes video generation by the explicitly configured effective request protocol.
+ */
 @Component
 @RequiredArgsConstructor
 public class VideoGenerationStrategyRouter {
@@ -35,7 +37,8 @@ public class VideoGenerationStrategyRouter {
         AiModelMetadata metadata = aiModelMetadataResolver.resolve(model);
         String protocol = normalizeStrategyName(metadata.modelProtocol());
         if (StrUtil.isBlank(protocol)) {
-            throw new BusinessException("视频模型未配置请求协议：请在模型中设置覆盖协议，或在 API 配置中设置视频默认协议");
+            throw new BusinessException(
+                    "视频模型未配置请求协议：请在模型中设置覆盖协议，或在 API 配置中设置视频默认协议");
         }
 
         VideoGenerationStrategy strategy = candidates.get(protocol);

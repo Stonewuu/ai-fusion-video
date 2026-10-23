@@ -1,36 +1,32 @@
 package com.stonewu.fusion.service.generation.image.strategy.dashscope;
 
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONObject;
 import com.alibaba.cloud.ai.dashscope.api.DashScopeImageApi;
 import com.alibaba.cloud.ai.dashscope.image.DashScopeImageModel;
 import com.alibaba.cloud.ai.dashscope.image.DashScopeImageOptions;
 import com.alibaba.cloud.ai.dashscope.spec.DashScopeApiSpec.DashScopeImageAsyncResponse;
-import com.alibaba.dashscope.aigc.imagegeneration.ImageGeneration;
 import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationMessage;
 import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationParam;
 import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationResult;
-import com.alibaba.dashscope.protocol.Protocol;
-import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONObject;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
-import com.stonewu.fusion.entity.generation.ImageItem;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.dashscope.DashScopeGenerationSupport;
+import com.stonewu.fusion.service.ai.dashscope.DashScopeSingleRequestClient;
 import com.stonewu.fusion.service.generation.image.ImageGenerationService;
 import com.stonewu.fusion.service.generation.image.strategy.ImageGenerationStrategy;
+import com.stonewu.fusion.service.generation.job.*;
+import com.stonewu.fusion.service.generation.transport.GenerationHttpClients;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.image.ImagePrompt;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
+import java.util.*;
 
 /**
  * 阿里云百炼 DashScope 图片生成策略。
@@ -53,78 +49,79 @@ public class DashScopeImageStrategy implements ImageGenerationStrategy {
         return DashScopeGenerationSupport.PLATFORM;
     }
 
+
     @Override
-    public List<String> generate(String prompt, String modelCode, int width, int height, int count,
-                                 List<String> imageUrls, ApiConfig apiConfig) {
-        DashScopeImageResult result = generateInternal(prompt, modelCode, width + "*" + height, count,
-                imageUrls, apiConfig, new JSONObject());
-        return result.imageUrls();
+    public int batchSize(ImageTask task, AiModel model, ApiConfig apiConfig) {
+        return task.getCount();
     }
 
     @Override
-    public String submit(ImageTask task, ApiConfig apiConfig) {
-        AiModel model = resolveModel(task);
-        String modelCode = model != null && StrUtil.isNotBlank(model.getCode()) ? model.getCode() : "wan2.7-image";
+    public PreparedGenerationCall prepare(ImageTask task, AiModel model, ApiConfig apiConfig) {
+        DashScopeGenerationSupport.requireApiKey(apiConfig);
+        String code = model.getCode();
         JSONObject config = DashScopeGenerationSupport.parseModelConfig(model);
         int[] size = resolveDefaultSize(model, task);
         String sizeText = resolveSizeText(task, config, size[0], size[1]);
-        int count = task.getCount() != null && task.getCount() > 0 ? task.getCount() : 1;
-        List<String> refImageUrls = parseRefImageUrls(task.getRefImageUrls());
-
-        DashScopeImageResult result = generateInternal(task.getPrompt(), modelCode, sizeText, count, refImageUrls,
-                apiConfig, config);
-        updateItems(task, result, size[0], size[1]);
-        log.info("[DashScope] 图片生成完成: taskId={}, model={}, imageCount={}", task.getTaskId(), modelCode,
-                result.imageUrls().size());
-        return result.platformTaskId() != null ? result.platformTaskId() : task.getTaskId();
+        var references = prepareReferenceImages(parseRefImageUrls(task.getRefImageUrls()));
+        if (isLegacyPromptOnlyModel(code) && !references.isEmpty()) {
+            throw new BusinessException("当前 DashScope 模型不支持参考图");
+        }
+        if (shouldUseSpringAiImageSdk(code, references)) {
+            var client = buildSdkImageModel(apiConfig, code, sizeText, task.getCount(), references, config);
+            var prompt = new ImagePrompt(task.getPrompt(),
+                    buildSdkImageOptions(code, sizeText, task.getCount(), references, config));
+            return new PreparedGenerationCall(GenerationPreparedRequest.ordinary(), () ->
+                    GenerationProviderReceipt.accepted(client.submitImageGenTask(prompt)));
+        }
+        var client = buildOfficialImageGeneration(apiConfig);
+        var param = buildOfficialImageParam(task.getPrompt(), code, sizeText, task.getCount(), references, apiConfig,
+                config);
+        boolean async = isOfficialAsyncImageModel(code);
+        var call = client.prepareImage(param, async);
+        return new PreparedGenerationCall(GenerationPreparedRequest.ordinary(), () -> {
+            var response = call.get();
+            if (async) {
+                return GenerationProviderReceipt.accepted(extractTaskId(response));
+            }
+            return GenerationProviderReceipt.completed(
+                    RemoteGenerationResult.success(extractImageUrls(response).stream()
+                            .map(RemoteGenerationResult.Output::image).toList()));
+        });
     }
 
     @Override
-    public void poll(String platformTaskId, ImageTask task, ApiConfig apiConfig) {
-        // DashScope 图片策略在 submit 中同步等待异步任务完成，消费者无需重复轮询。
-    }
-
-    private DashScopeImageResult generateInternal(String prompt, String modelCode, String sizeText, int count,
-                                                  List<String> imageUrls, ApiConfig apiConfig, JSONObject config) {
+    public RemoteGenerationResult query(String platformTaskId, ImageTask task, AiModel model, ApiConfig apiConfig) {
         DashScopeGenerationSupport.requireApiKey(apiConfig);
-        String normalizedModelCode = StrUtil.blankToDefault(modelCode, "wan2.7-image").trim();
-        int normalizedCount = Math.max(1, count);
-        List<String> mediaUrls = prepareReferenceImages(imageUrls);
-        boolean legacyPromptOnlyModel = isLegacyPromptOnlyModel(normalizedModelCode);
-        if (legacyPromptOnlyModel && !mediaUrls.isEmpty()) {
-            throw new BusinessException("DashScope 模型 " + normalizedModelCode + " 不支持参考图输入");
+        // 查询只需要原输入数量选择协议；素材失效不能阻止观察已经发出的远端任务。
+        var references = parseRefImageUrls(task.getRefImageUrls());
+        if (shouldUseSpringAiImageSdk(model.getCode(), references)) {
+            var config = DashScopeGenerationSupport.parseModelConfig(model);
+            int[] size = resolveDefaultSize(model, task);
+            var client = buildSdkImageModel(apiConfig, model.getCode(), resolveSizeText(task, config, size[0], size[1]),
+                    1, references, config);
+            var result = client.getImageGenTask(platformTaskId);
+            return ProviderJobStates.result(extractTaskStatus(result), extractErrorMessage(result), 5,
+                    () -> extractImageUrls(result).stream().map(RemoteGenerationResult.Output::image).toList());
         }
-        if (shouldUseSpringAiImageSdk(normalizedModelCode, mediaUrls)) {
-            return generateWithSdk(prompt, normalizedModelCode, sizeText, normalizedCount, mediaUrls, apiConfig, config);
+        try {
+            var result = ImageGenerationResult.fromDashScopeResult(
+                    buildOfficialImageGeneration(apiConfig).fetch(platformTaskId, apiConfig.getApiKey()));
+            return ProviderJobStates.result(extractTaskStatus(result), extractErrorMessage(result), 5,
+                    () -> extractImageUrls(result).stream().map(RemoteGenerationResult.Output::image).toList());
+        } catch (BusinessException failure) {
+            throw failure;
+        } catch (Exception failure) {
+            throw new BusinessException("DashScope 图片查询请求异常: " + failure.getMessage());
         }
-
-        // Spring AI Alibaba 1.1.2.0 尚未暴露 Wan2.6/2.7 与 Qwen-Image 2.0 的 messages 多模态请求对象；
-        // DashScope Java SDK 2.22.x 已提供 ImageGeneration 高层 API，可兼容这些模型且无需手写 HTTP。
-        return generateWithDashScopeJavaSdk(prompt, normalizedModelCode, sizeText, normalizedCount, mediaUrls,
-                apiConfig, config);
     }
 
-    private DashScopeImageResult generateWithSdk(String prompt, String modelCode, String sizeText, int count,
-                                                 List<String> imageUrls, ApiConfig apiConfig, JSONObject config) {
-        DashScopeImageModel imageModel = buildSdkImageModel(apiConfig, modelCode, sizeText, count, imageUrls, config);
-        ImagePrompt imagePrompt = new ImagePrompt(prompt, buildSdkImageOptions(modelCode, sizeText, count, imageUrls, config));
-        String taskId = imageModel.submitImageGenTask(imagePrompt);
-        if (StrUtil.isBlank(taskId)) {
-            throw new BusinessException("DashScope 图片 SDK 未返回 task_id");
-        }
-        DashScopeImageAsyncResponse finalResponse = waitForSdkImageTask(imageModel, taskId);
-        List<String> urls = extractImageUrls(finalResponse);
-        if (urls.isEmpty()) {
-            throw new BusinessException("DashScope 图片 SDK 任务成功但未返回图片地址: " + finalResponse);
-        }
-        return new DashScopeImageResult(urls, taskId);
-    }
 
     private DashScopeImageModel buildSdkImageModel(ApiConfig apiConfig, String modelCode, String sizeText, int count,
                                                    List<String> imageUrls, JSONObject config) {
         DashScopeImageApi imageApi = DashScopeImageApi.builder()
                 .baseUrl(DashScopeGenerationSupport.resolveRootBaseUrl(apiConfig.getApiUrl()))
                 .apiKey(apiConfig.getApiKey())
+                .restClientBuilder(GenerationHttpClients.restClientBuilder(apiConfig))
                 .build();
         return DashScopeImageModel.builder()
                 .dashScopeApi(imageApi)
@@ -164,59 +161,9 @@ public class DashScopeImageStrategy implements ImageGenerationStrategy {
         return builder.build();
     }
 
-    private DashScopeImageAsyncResponse waitForSdkImageTask(DashScopeImageModel imageModel, String taskId) {
-        for (int i = 0; i < MAX_POLL_COUNT; i++) {
-            DashScopeImageAsyncResponse response = imageModel.getImageGenTask(taskId);
-            String status = extractTaskStatus(response);
-            if ("SUCCEEDED".equalsIgnoreCase(status)) {
-                return response;
-            }
-            if ("FAILED".equalsIgnoreCase(status) || "CANCELED".equalsIgnoreCase(status)
-                    || "UNKNOWN".equalsIgnoreCase(status)) {
-                throw new BusinessException("DashScope 图片 SDK 任务失败: status=" + status + ", message="
-                        + extractErrorMessage(response));
-            }
-            sleepQuietly(POLL_INTERVAL_MILLIS);
-        }
-        throw new BusinessException("DashScope 图片 SDK 任务轮询超时: " + taskId);
-    }
 
-    private DashScopeImageResult generateWithDashScopeJavaSdk(String prompt, String modelCode, String sizeText,
-                                                              int count, List<String> imageUrls, ApiConfig apiConfig,
-                                                              JSONObject config) {
-        try {
-            ImageGeneration imageGeneration = buildOfficialImageGeneration(apiConfig);
-            ImageGenerationParam param = buildOfficialImageParam(prompt, modelCode, sizeText, count,
-                    imageUrls, apiConfig, config);
-            if (isOfficialAsyncImageModel(modelCode)) {
-                ImageGenerationResult imageResult = imageGeneration.asyncCall(param);
-                String taskId = extractTaskId(imageResult);
-                if (StrUtil.isBlank(taskId)) {
-                    throw new BusinessException("DashScope Java SDK 图片任务未返回 task_id: " + imageResult);
-                }
-                ImageGenerationResult finalResult = waitForOfficialImageTask(imageGeneration, apiConfig, taskId);
-                List<String> urls = extractImageUrls(finalResult);
-                if (urls.isEmpty()) {
-                    throw new BusinessException("DashScope Java SDK 图片任务成功但未返回图片地址: " + finalResult);
-                }
-                return new DashScopeImageResult(urls, taskId);
-            }
-
-            ImageGenerationResult result = imageGeneration.call(param);
-            List<String> urls = extractImageUrls(result);
-            if (urls.isEmpty()) {
-                throw new BusinessException("DashScope Java SDK 图片接口未返回图片地址: " + result);
-            }
-            return new DashScopeImageResult(urls, null);
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BusinessException("DashScope Java SDK 图片接口调用异常: " + e.getMessage());
-        }
-    }
-
-    private ImageGeneration buildOfficialImageGeneration(ApiConfig apiConfig) {
-        return new ImageGeneration(Protocol.HTTP.getValue(), DashScopeGenerationSupport.resolveGenerationBaseUrl(apiConfig));
+    private DashScopeSingleRequestClient buildOfficialImageGeneration(ApiConfig apiConfig) {
+        return new DashScopeSingleRequestClient(apiConfig);
     }
 
     private ImageGenerationParam buildOfficialImageParam(String prompt, String modelCode, String sizeText,
@@ -269,23 +216,6 @@ public class DashScopeImageStrategy implements ImageGenerationStrategy {
                 .build();
     }
 
-    private ImageGenerationResult waitForOfficialImageTask(ImageGeneration imageGeneration, ApiConfig apiConfig,
-                                                           String taskId) throws Exception {
-        for (int i = 0; i < MAX_POLL_COUNT; i++) {
-            ImageGenerationResult response = imageGeneration.fetch(taskId, apiConfig.getApiKey());
-            String status = extractTaskStatus(response);
-            if ("SUCCEEDED".equalsIgnoreCase(status)) {
-                return response;
-            }
-            if ("FAILED".equalsIgnoreCase(status) || "CANCELED".equalsIgnoreCase(status)
-                    || "UNKNOWN".equalsIgnoreCase(status)) {
-                throw new BusinessException("DashScope Java SDK 图片任务失败: status=" + status + ", message="
-                        + extractErrorMessage(response));
-            }
-            sleepQuietly(POLL_INTERVAL_MILLIS);
-        }
-        throw new BusinessException("DashScope Java SDK 图片任务轮询超时: " + taskId);
-    }
 
     private List<String> extractImageUrls(ImageGenerationResult response) {
         if (response == null || response.getOutput() == null || response.getOutput().getChoices() == null) {
@@ -408,38 +338,6 @@ public class DashScopeImageStrategy implements ImageGenerationStrategy {
         return width + "*" + height;
     }
 
-    private void updateItems(ImageTask task, DashScopeImageResult result, int width, int height) {
-        List<ImageItem> items = imageGenerationService.listItems(task.getId());
-        List<String> urls = result.imageUrls();
-        int successCount = 0;
-        for (int i = 0; i < items.size(); i++) {
-            ImageItem item = items.get(i);
-            item.setPlatformTaskId(result.platformTaskId());
-            if (i < urls.size()) {
-                item.setImageUrl(urls.get(i));
-                item.setWidth(width);
-                item.setHeight(height);
-                item.setStatus(1);
-                successCount++;
-            } else {
-                item.setStatus(2);
-                item.setErrorMsg("DashScope 返回图片数量少于任务数量");
-            }
-            imageGenerationService.updateItem(item);
-        }
-        task.setSuccessCount(successCount);
-        imageGenerationService.update(task);
-    }
-
-    private AiModel resolveModel(ImageTask task) {
-        if (task != null && task.getModelId() != null) {
-            AiModel model = aiModelService.getById(task.getModelId());
-            if (model != null && StrUtil.isNotBlank(model.getCode())) {
-                return model;
-            }
-        }
-        return null;
-    }
 
     private void addIfNotBlank(List<String> urls, String url) {
         if (StrUtil.isNotBlank(url)) {
@@ -465,14 +363,6 @@ public class DashScopeImageStrategy implements ImageGenerationStrategy {
         return null;
     }
 
-    private void sleepQuietly(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new BusinessException("DashScope 图片任务轮询被中断");
-        }
-    }
 
     private record DashScopeImageResult(List<String> imageUrls, String platformTaskId) {
     }

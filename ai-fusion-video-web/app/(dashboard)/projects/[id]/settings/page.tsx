@@ -1,5 +1,7 @@
 "use client";
 
+import { useCommandRequestKey } from "@/hooks/use-command-request-key";
+
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -16,21 +18,23 @@ import {
   X,
   AlertTriangle,
   FolderPen,
+  Users,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useProject } from "../project-context";
-import { projectApi } from "@/lib/api/project";
+import { projectApi, type Project } from "@/lib/api/project";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { artStyleApi } from "@/lib/api/art-style";
 import type { ArtStylePreset } from "@/lib/api/art-style";
 import { storageConfigApi, uploadFile } from "@/lib/api/storage";
-import { getApiErrorMessage, readApiResponseError } from "@/lib/api/api-error";
+import { getApiErrorMessage } from "@/lib/api/api-error";
 import { resolveMediaUrl, http } from "@/lib/api/client";
-import { SafeImage } from "@/components/ui/safe-image";
+import { SafeImage } from "@/components/media/managed-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ProjectMembersDialog } from "@/components/project/members-dialog";
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -66,10 +70,12 @@ export default function ProjectSettingsPage() {
   const router = useRouter();
   const { project, refresh } = useProject();
 
+  const [baseProject, setBaseProject] = useState<Project | null>(null);
+
   // properties 中的简单配置
   const savedProperties = useMemo(
-    () => (project?.properties as Record<string, string>) || {},
-    [project?.properties],
+    () => (baseProject?.properties as Record<string, string>) || {},
+    [baseProject?.properties],
   );
 
   // 本地暂存
@@ -81,6 +87,7 @@ export default function ProjectSettingsPage() {
   const [artStyleImageUrl, setArtStyleImageUrl] = useState<string>("");
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [membersOpen, setMembersOpen] = useState(false);
 
   // 画风相关状态
   const [presets, setPresets] = useState<ArtStylePreset[]>([]);
@@ -96,34 +103,36 @@ export default function ProjectSettingsPage() {
     });
   }, []);
 
-  // 当后端数据变化时，同步到本地
-  useEffect(() => {
-    if (!project) return;
-    setProjectName(project.name);
-    setPropsDraft({ ...savedProperties });
-    setArtStyle(project.artStyle || "");
-    setArtStyleDescription(project.artStyleDescription || "");
-    setArtStyleImagePrompt(project.artStyleImagePrompt || "");
-    setArtStyleImageUrl(project.artStyleImageUrl || "");
-    setArtStyleTab(project.artStyle === "custom" ? "custom" : "preset");
-  }, [project]); // eslint-disable-line react-hooks/exhaustive-deps
-
   // 是否有未保存的修改
   const hasChanges = useMemo(() => {
-    if (!project) return false;
-    if (projectName !== project.name) return true;
+    if (!baseProject) return false;
+    if (projectName !== baseProject.name) return true;
     // 检查 properties
     const keys = new Set([...Object.keys(propsDraft), ...Object.keys(savedProperties)]);
     for (const k of keys) {
       if ((propsDraft[k] || "") !== (savedProperties[k] || "")) return true;
     }
     // 检查画风字段
-    if ((artStyle || "") !== (project.artStyle || "")) return true;
-    if ((artStyleDescription || "") !== (project.artStyleDescription || "")) return true;
-    if ((artStyleImagePrompt || "") !== (project.artStyleImagePrompt || "")) return true;
-    if ((artStyleImageUrl || "") !== (project.artStyleImageUrl || "")) return true;
+    if ((artStyle || "") !== (baseProject.artStyle || "")) return true;
+    if ((artStyleDescription || "") !== (baseProject.artStyleDescription || "")) return true;
+    if ((artStyleImagePrompt || "") !== (baseProject.artStyleImagePrompt || "")) return true;
+    if ((artStyleImageUrl || "") !== (baseProject.artStyleImageUrl || "")) return true;
     return false;
-  }, [projectName, propsDraft, savedProperties, artStyle, artStyleDescription, artStyleImagePrompt, artStyleImageUrl, project]);
+  }, [projectName, propsDraft, savedProperties, artStyle, artStyleDescription, artStyleImagePrompt, artStyleImageUrl, baseProject]);
+
+  // 当后端数据变化时，同步到本地
+  useEffect(() => {
+    if (!project) return;
+    if (baseProject?.id === project.id && (hasChanges || saving || project.version <= baseProject.version)) return;
+    setBaseProject(project);
+    setProjectName(project.name);
+    setPropsDraft({ ...(project.properties as Record<string, string> ?? {}) });
+    setArtStyle(project.artStyle || "");
+    setArtStyleDescription(project.artStyleDescription || "");
+    setArtStyleImagePrompt(project.artStyleImagePrompt || "");
+    setArtStyleImageUrl(project.artStyleImageUrl || "");
+    setArtStyleTab(project.artStyle === "custom" ? "custom" : "preset");
+  }, [project, baseProject, hasChanges, saving]);
 
   const handleToggleProp = (key: string, value: string) => {
     setPropsDraft((prev) => {
@@ -187,15 +196,10 @@ export default function ProjectSettingsPage() {
   // 加载存储 & 系统配置，判断外网访问能力
   useEffect(() => {
     storageConfigApi.list().then((configs) => {
-      setHasStorage(configs.length > 0);
-      const hasPublicStorage = configs.some((c) => c.type !== "local");
-      http.get<never, { configKey: string; configValue: string }[]>("/api/system/config")
-        .then((list) => {
-          const map: Record<string, string> = {};
-          list.forEach((c) => { map[c.configKey] = c.configValue || ""; });
-          setHasExternalAccess(
-            hasPublicStorage || !!map.resource_base_url,
-          );
+      setHasStorage(configs.filter((config) => config.isDefault && config.status === 1).length === 1);
+      http.get<never, string | null>("/api/system/config/resource_base_url")
+        .then((resourceBaseUrl) => {
+          setHasExternalAccess(!!resourceBaseUrl);
         })
         .catch((error) => {
           console.error("加载系统配置失败:", error);
@@ -207,24 +211,15 @@ export default function ProjectSettingsPage() {
     });
   }, []);
 
-  // 上传预设参考图到存储（保存到全局系统配置）
+  // 登记内置画风（所有已登录用户可读）
   const [uploadingPreset, setUploadingPreset] = useState<string | null>(null);
+  const presetRequests = useCommandRequestKey();
 
   const handleUploadPresetImage = useCallback(async (preset: ArtStylePreset) => {
     if (!preset.referenceImagePath) return;
     setUploadingPreset(preset.key);
     try {
-      // 从后端静态资源获取图片 blob
-      const imgUrl = resolveMediaUrl(preset.referenceImagePath);
-      if (!imgUrl) return;
-      const resp = await fetch(imgUrl);
-      if (!resp.ok) throw new Error(await readApiResponseError(resp));
-      const blob = await resp.blob();
-      const file = new File([blob], `${preset.key}.png`, { type: blob.type || "image/png" });
-      const url = await uploadFile(file, "art-styles");
-      // 保存到系统配置（全局生效）
-      await http.put("/api/system/config", { [`art_preset_url:${preset.key}`]: url });
-      // 刷新预设列表以更新状态
+      await artStyleApi.publish(preset.key, presetRequests.forPayload({ preset: preset.key }));
       const updatedPresets = await artStyleApi.getPresets();
       setPresets(updatedPresets);
     } catch (err) {
@@ -233,14 +228,17 @@ export default function ProjectSettingsPage() {
     } finally {
       setUploadingPreset(null);
     }
-  }, []);
+  }, [presetRequests]);
 
+  const deleteRequest = useCommandRequestKey();
+  const saveRequest = useCommandRequestKey();
   const handleDeleteProject = async () => {
     if (!project) return;
-    const ok = await confirm({ title: "彻底删除项目", description: "确定要删除该项目吗？此操作将永久移除所有剧本、分镜、资产等数据，不可恢复。", variant: "destructive", confirmText: "彻底删除项目" }); if (!ok) return;
+    const ok = await confirm({ title: "删除项目", description: "将删除项目及关联的剧本、分镜和资产。确定继续？", variant: "destructive", confirmText: "删除项目" }); if (!ok) return;
     setDeleting(true);
     try {
-      await projectApi.delete(project.id);
+      await projectApi.delete(project.id, project.version, deleteRequest.forPayload({ id: project.id, version: project.version }));
+      deleteRequest.clear();
       router.push("/projects");
     } catch (err) {
       console.error("删除项目失败:", err);
@@ -251,7 +249,7 @@ export default function ProjectSettingsPage() {
   };
 
   const handleSave = async () => {
-    if (!project || !hasChanges) return;
+    if (!project || !baseProject || !hasChanges) return;
     const normalizedProjectName = projectName.trim();
     if (!normalizedProjectName) {
       toast.error("项目名称不能为空");
@@ -259,17 +257,20 @@ export default function ProjectSettingsPage() {
     }
     setSaving(true);
     try {
-      // 更新 properties（JSON 字段）
-      await projectApi.updateProperties(project.id, propsDraft);
-      // 更新画风独立字段
-      await projectApi.update({
+      // 设置与画风同一事务保存，使用打开编辑器时读取的业务版本。
+      const update = {
         id: project.id,
+        version: baseProject.version,
+        properties: propsDraft,
         name: normalizedProjectName,
         artStyle: artStyle || null,
         artStyleDescription: artStyleDescription || null,
         artStyleImagePrompt: artStyleImagePrompt || null,
         artStyleImageUrl: artStyleImageUrl || null,
-      });
+      };
+      const saved = await projectApi.update(update, saveRequest.forPayload(update));
+      setBaseProject(saved);
+      saveRequest.clear();
       await refresh();
       toast.success("项目设置已保存");
     } catch (err) {
@@ -293,6 +294,8 @@ export default function ProjectSettingsPage() {
           <Settings className="h-5 w-5 text-primary" />
           项目设置
         </h2>
+        <div className="flex gap-2">
+        <Button variant="outline" onClick={() => setMembersOpen(true)}><Users />项目成员</Button>
         <Button
           onClick={handleSave}
           disabled={!hasChanges || saving || !projectName.trim()}
@@ -304,7 +307,9 @@ export default function ProjectSettingsPage() {
           )}
           {saving ? "保存中…" : "保存设置"}
         </Button>
+        </div>
       </motion.div>
+      {membersOpen && project && <ProjectMembersDialog key={project.id} projectId={project.id} onClose={() => setMembersOpen(false)} />}
 
       {/* 项目名称 */}
       <motion.div
@@ -472,8 +477,8 @@ export default function ProjectSettingsPage() {
                   <div className="mt-2 space-y-2">
                     {!isPresetRefAvailable && !hasExternalAccess && (
                       <p className="text-[10px] text-muted-foreground leading-relaxed">
-                        参考图未上传到存储桶且未配置外网访问，AI API 将无法访问参考图。
-                        建议上传到存储，或在<strong>系统设置 → 通用</strong>中配置外网访问地址。
+                        此参考图可用于支持 Base64 的模型；URL 输入需要配置后端资源公网地址。
+                        可在<strong>系统设置 → 通用</strong>中配置外网访问地址。
                       </p>
                     )}
                     {!isPresetRefAvailable && hasExternalAccess && (
@@ -485,7 +490,7 @@ export default function ProjectSettingsPage() {
                     <button
                       onClick={(e) => { e.stopPropagation(); handleUploadPresetImage(selectedPreset); }}
                       disabled={uploadingPreset === selectedPreset.key || !hasStorage}
-                      title={!hasStorage ? "请先在系统设置中配置存储" : undefined}
+                      title={!hasStorage ? "请先配置默认存储" : "登记内置参考图，供所有已登录用户使用"}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all",
                         !hasStorage

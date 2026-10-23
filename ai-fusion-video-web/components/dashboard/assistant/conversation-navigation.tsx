@@ -158,6 +158,9 @@ function ConversationList({ onSelected }: { onSelected?: () => void }) {
   const conversations = useAssistantStore((state) => state.conversations);
   const selectedId = useAssistantStore((state) => state.selectedConversationId);
   const loading = useAssistantStore((state) => state.conversationsLoading);
+  const error = useAssistantStore((state) => state.conversationsError);
+  const userId = useAssistantStore((state) => state.hydratedUserId);
+  const initializeForUser = useAssistantStore((state) => state.initializeForUser);
   const hasMore = useAssistantStore((state) => state.hasMoreConversations);
   const loadMore = useAssistantStore((state) => state.loadMoreConversations);
   const startNewConversation = useAssistantStore((state) => state.startNewConversation);
@@ -196,7 +199,11 @@ function ConversationList({ onSelected }: { onSelected?: () => void }) {
           if (hasMore && !loading && element.scrollHeight - element.scrollTop - element.clientHeight < 80) loadMore();
         }}
       >
-        {conversations.length === 0 && !loading ? (
+        {error && !loading ? <div className="flex flex-col gap-2 p-3 text-sm">
+          <p role="alert" className="text-destructive">{error}</p>
+          <Button variant="outline" size="sm" onClick={() => { if (userId) initializeForUser(userId); }}>重新加载会话</Button>
+        </div> : null}
+        {conversations.length === 0 && !loading && !error ? (
           <div className="flex flex-col items-center gap-2 px-4 py-10 text-center text-muted-foreground">
             <MessageSquarePlus className="size-7 opacity-40" />
             <p className="text-xs">还没有助手会话</p>

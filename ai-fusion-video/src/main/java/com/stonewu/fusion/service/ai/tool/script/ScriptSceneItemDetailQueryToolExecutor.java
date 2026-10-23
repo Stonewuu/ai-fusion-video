@@ -1,17 +1,11 @@
 package com.stonewu.fusion.service.ai.tool.script;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.script.ScriptSceneItem;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.ai.tool.ToolResourceAccessGuard;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * 查询剧本单场次完整内容工具（get_script_scene）
@@ -24,7 +18,8 @@ import java.util.Map;
 @Slf4j
 public class ScriptSceneItemDetailQueryToolExecutor implements ToolExecutor {
 
-    private final ToolResourceAccessGuard accessGuard;
+    private final ScriptToolQueries queries;
+
 
     @Override
     public String getToolName() {
@@ -65,51 +60,6 @@ public class ScriptSceneItemDetailQueryToolExecutor implements ToolExecutor {
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long scriptSceneItemId = params.getLong("scriptSceneItemId");
-
-            if (scriptSceneItemId == null) {
-                return JSONUtil.createObj().set("status", "error").set("message", "参数错误：scriptSceneItemId 不能为空").toString();
-            }
-
-            ScriptSceneItem sceneItem = accessGuard.requireScriptScene(scriptSceneItemId, context.getUserId());
-
-            // 构建返回结果
-            Map<String, Object> result = new LinkedHashMap<>();
-            result.put("scriptSceneItemId", sceneItem.getId());
-            result.put("scriptEpisodeId", sceneItem.getEpisodeId());
-            result.put("sceneNumber", sceneItem.getSceneNumber());
-            result.put("sceneHeading", sceneItem.getSceneHeading());
-            result.put("location", sceneItem.getLocation());
-            result.put("timeOfDay", sceneItem.getTimeOfDay());
-            result.put("intExt", sceneItem.getIntExt());
-            result.put("sceneDescription", sceneItem.getSceneDescription());
-
-            // 出场角色
-            if (sceneItem.getCharacters() != null) {
-                result.put("characters", JSONUtil.parse(sceneItem.getCharacters()));
-            }
-            if (sceneItem.getCharacterAssetIds() != null) {
-                result.put("characterAssetIds", JSONUtil.parse(sceneItem.getCharacterAssetIds()));
-            }
-            if (sceneItem.getSceneAssetId() != null) {
-                result.put("sceneAssetId", sceneItem.getSceneAssetId());
-            }
-            if (sceneItem.getPropAssetIds() != null) {
-                result.put("propAssetIds", JSONUtil.parse(sceneItem.getPropAssetIds()));
-            }
-
-            // 完整对白/动作列表
-            if (sceneItem.getDialogues() != null) {
-                result.put("dialogues", JSONUtil.parse(sceneItem.getDialogues()));
-            }
-
-            return JSONUtil.toJsonStr(result);
-
-        } catch (Exception e) {
-            log.error("查询场次详情失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "查询失败: " + e.getMessage()).toString();
-        }
+        return queries.execute(getToolName(), toolInput, context);
     }
 }

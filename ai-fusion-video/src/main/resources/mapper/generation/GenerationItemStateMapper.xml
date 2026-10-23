@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.generation.GenerationItemStateMapper">
+    <sql id="itemTable">
+        <choose>
+            <when test="kind.name() == 'IMAGE'">afv_image_item</when>
+            <otherwise>afv_video_item</otherwise>
+        </choose>
+    </sql>
+    <update id="failPending">
+        UPDATE <include refid="itemTable"/>
+        SET status = 2, error_msg = #{message}, version = version + 1 WHERE id = #{id} AND status = 0
+    </update>
+    <update id="failTaskItem">
+        UPDATE <include refid="itemTable"/>
+        SET status = 2, error_msg = #{message}, version = version + 1
+        WHERE id = #{id} AND task_id = #{taskId} AND status = 0 AND deleted = FALSE
+    </update>
+    <update id="resetFailed">
+        UPDATE <include refid="itemTable"/>
+        SET status = 0, error_msg = NULL, version = version + 1 WHERE id = #{id} AND status = 2
+    </update>
+</mapper>

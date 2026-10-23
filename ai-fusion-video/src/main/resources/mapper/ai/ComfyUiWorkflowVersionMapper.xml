@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.ai.ComfyUiWorkflowVersionMapper">
+    <update id="recordTest">
+        UPDATE afv_comfyui_workflow_version v JOIN afv_comfyui_workflow w ON w.id = v.workflow_id
+        SET v.test_status = #{status}, v.test_message = #{message}, v.last_test_time = CURRENT_TIMESTAMP(6),
+            v.test_api_config_hash = #{apiHash}
+        WHERE v.id = #{versionId} AND v.last_test_run_id = #{runId} AND v.workflow_hash = #{workflowHash} AND v.deleted = FALSE
+            AND w.deleted = FALSE AND w.model_type = #{modelType} AND w.api_config_id = #{apiConfigId}
+    </update>
+    <select id="selectForUpdate" resultType="com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion">
+        SELECT * FROM afv_comfyui_workflow_version WHERE id = #{id} AND deleted = FALSE FOR UPDATE
+    </select>
+</mapper>

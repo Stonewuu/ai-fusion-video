@@ -7,12 +7,16 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
+import com.stonewu.fusion.service.canvas.agent.node.CanvasAgentNodeGeneration;
+import com.stonewu.fusion.service.generation.GenerationKind;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 /**
  * 查询当前默认生图/生视频模型能力。
@@ -27,6 +31,7 @@ public class GetGenerationModelCapabilitiesToolExecutor implements ToolExecutor 
 
     private final AiModelService aiModelService;
     private final GenerationModelCapabilityService generationModelCapabilityService;
+    private final CanvasAgentNodeGeneration canvasModels;
 
     @Override
     public String getToolName() {
@@ -63,6 +68,10 @@ public class GetGenerationModelCapabilitiesToolExecutor implements ToolExecutor 
                 {
                     "type": "object",
                     "properties": {
+                        "modelId": {
+                            "type": "integer",
+                            "description": "明确选择的生成模型 ID；画布助手必须提供。专业节点默认查询已固定的模型。"
+                        },
                         "modelType": {
                             "type": "string",
                             "description": "查询类型：image、video、all（默认 all）",
@@ -82,19 +91,52 @@ public class GetGenerationModelCapabilitiesToolExecutor implements ToolExecutor 
             if (!"image".equals(requestedType) && !"video".equals(requestedType) && !"all".equals(requestedType)) {
                 return errorResult("modelType 仅支持 image、video、all");
             }
+            Long modelId = params.getLong("modelId");
+            boolean node = canvasModels.scoped(context);
+            if (context.getCanvasScope() != null && !node && modelId == null) {
+                return errorResult("请提供要查询的 modelId，可先用 get_canvas_models 查看画布可用模型。");
+            }
+            if (modelId != null) {
+                AiModel chosen = aiModelService.getById(modelId);
+                if (chosen == null || !Integer.valueOf(1).equals(chosen.getStatus())
+                        || !Set.of(MODEL_TYPE_IMAGE, MODEL_TYPE_VIDEO).contains(chosen.getModelType())) {
+                    return errorResult("指定生成模型不存在、已停用或类型不匹配");
+                }
+                String kind = chosen.getModelType() == MODEL_TYPE_IMAGE ? "image" : "video";
+                if (!"all".equals(requestedType) && !kind.equals(requestedType)) {
+                    return errorResult("modelType 与所选模型不一致");
+                }
+                if (node) {
+                    var selected = canvasModels.selected(context,
+                            kind.equals("image") ? GenerationKind.IMAGE : GenerationKind.VIDEO);
+                    if (selected == null || !selected.getId().equals(modelId)) {
+                        return errorResult("此模型不属于专业节点已确认的生成范围");
+                    }
+                    chosen = selected;
+                }
+                var selected = new ResolvedModel(chosen, node ? "canvas_node" : "explicit_model");
+                return JSONUtil.createObj().set("status", "success").set("requestedModelType", kind)
+                        .set(kind, kind.equals("image") ? buildImageResult(selected) : buildVideoResult(selected))
+                        .toString();
+            }
 
             JSONObject result = JSONUtil.createObj()
                     .set("status", "success")
                     .set("requestedModelType", requestedType)
-                    .set("usageHint", "先根据这里的能力结果组织 generate_image 或 generate_video 参数，只传当前默认模型支持的字段。")
-                    .set("retryPolicy", "如果某个字段不受支持，请直接删除该字段并改写 prompt，不要重复用相同的不支持参数重试。\n");
+                    .set("usageHint", "先根据这里的能力结果组织生成参数，只传本次所选模型支持的字段。")
+                    .set("retryPolicy",
+                            "如果某个字段不受支持，请直接删除该字段并改写 prompt，不要重复用相同的不支持参数重试。\n");
 
             if (!"video".equals(requestedType)) {
-                ResolvedModel imageModel = resolvePreferredModel(MODEL_TYPE_IMAGE);
+                ResolvedModel imageModel = canvasModels.scoped(context)
+                        ? new ResolvedModel(canvasModels.selected(context, GenerationKind.IMAGE),
+                        "canvas_node") : resolvePreferredModel(MODEL_TYPE_IMAGE);
                 result.set("image", buildImageResult(imageModel));
             }
             if (!"image".equals(requestedType)) {
-                ResolvedModel videoModel = resolvePreferredModel(MODEL_TYPE_VIDEO);
+                ResolvedModel videoModel = canvasModels.scoped(context)
+                        ? new ResolvedModel(canvasModels.selected(context, GenerationKind.VIDEO),
+                        "canvas_node") : resolvePreferredModel(MODEL_TYPE_VIDEO);
                 result.set("video", buildVideoResult(videoModel));
             }
             return result.toString();
@@ -175,10 +217,6 @@ public class GetGenerationModelCapabilitiesToolExecutor implements ToolExecutor 
             return new ResolvedModel(defaultModel, "default_model");
         }
 
-        List<AiModel> models = aiModelService.getListByType(modelType);
-        if (!models.isEmpty()) {
-            return new ResolvedModel(models.get(0), "first_enabled_fallback");
-        }
         return null;
     }
 

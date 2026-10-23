@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.team;
 
 import com.stonewu.fusion.common.BusinessException;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.stonewu.fusion.entity.team.TeamMember;
 import com.stonewu.fusion.mapper.team.TeamMemberMapper;
 import com.stonewu.fusion.mapper.team.TeamMapper;
@@ -69,7 +70,8 @@ class TeamServiceTests {
 
     @Test
     void getRequiredCurrentOwnerScopeByUserReturnsTeamScope() {
-        when(teamMemberMapper.selectOne(any())).thenReturn(TeamMember.builder().teamId(5L).userId(9L).status(1).build());
+        when(teamMemberMapper.selectPage(any(Page.class), any())).thenReturn(new Page<TeamMember>()
+                .setRecords(List.of(TeamMember.builder().teamId(5L).userId(9L).status(1).build())));
 
         TeamService.OwnerScope ownerScope = teamService.getRequiredCurrentOwnerScopeByUser(9L);
 

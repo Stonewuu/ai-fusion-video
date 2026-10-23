@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasAccessMapper">
+    <select id="activeTeamMember" resultType="int">
+        SELECT COUNT(*) FROM afv_team_member m JOIN afv_team t ON t.id = m.team_id
+        WHERE m.user_id = #{userId} AND m.team_id = #{teamId} AND m.status = 1 AND m.deleted = FALSE
+            AND t.status = 1 AND t.deleted = FALSE
+    </select>
+    <sql id="projectAccess">
+p.deleted = FALSE AND (
+                (p.owner_type = 1 AND p.owner_id = #{userId})
+                OR EXISTS (SELECT 1 FROM afv_project_member pm WHERE pm.project_id = p.id
+                    AND pm.user_id = #{userId} AND pm.deleted = FALSE)
+                OR (EXISTS (SELECT 1 FROM afv_team_member current_member
+                    WHERE current_member.team_id = #{teamId} AND current_member.user_id = #{userId}
+                        AND current_member.status = 1 AND current_member.deleted = FALSE
+                        AND EXISTS (SELECT 1 FROM afv_team current_team WHERE current_team.id = current_member.team_id
+                            AND current_team.status = 1 AND current_team.deleted = FALSE))
+                    AND ((p.owner_type = 2 AND p.owner_id = #{teamId})
+                        OR (p.owner_type = 1 AND EXISTS (SELECT 1 FROM afv_team_member owner_member
+                            WHERE owner_member.team_id = #{teamId} AND owner_member.user_id = p.owner_id
+                                AND owner_member.status = 1 AND owner_member.deleted = FALSE)))))
+    </sql>
+    <select id="project" resultType="com.stonewu.fusion.repository.canvas.CanvasAccessRepository$ProjectScope">
+        SELECT p.id, p.owner_type, p.owner_id FROM afv_project p WHERE p.id = #{projectId} AND <include refid="projectAccess"/>
+    </select>
+    <select id="readableProjects" resultType="Long">
+        SELECT p.id FROM afv_project p WHERE <include refid="projectAccess"/>
+    </select>
+    <select id="canEditProject" resultType="int">
+        SELECT COUNT(*) FROM afv_project p WHERE p.id = #{projectId} AND p.deleted = FALSE AND (
+            (p.owner_type = 1 AND p.owner_id = #{userId})
+            OR EXISTS (SELECT 1 FROM afv_project_member pm WHERE pm.project_id = p.id
+                AND pm.user_id = #{userId} AND pm.role IN (1, 2, 3) AND pm.deleted = FALSE)
+            OR (p.owner_type = 2 AND p.owner_id = #{teamId} AND EXISTS (
+                SELECT 1 FROM afv_team_member tm JOIN afv_team t ON t.id = tm.team_id
+                WHERE tm.team_id = #{teamId} AND tm.user_id = #{userId} AND tm.role IN (1, 2)
+                    AND tm.status = 1 AND tm.deleted = FALSE AND t.status = 1 AND t.deleted = FALSE)))
+    </select>
+    <select id="referenceBelongs" resultType="int">
+        SELECT COUNT(*) FROM
+        <choose>
+            <when test="type.name() == 'PROJECT'">afv_project r</when>
+            <when test="type.name() == 'SCRIPT'">afv_script r</when>
+            <when test="type.name() == 'SCRIPT_EPISODE'">afv_script_episode r JOIN afv_script p ON p.id = r.script_id AND p.deleted = FALSE</when>
+            <when test="type.name() == 'SCRIPT_SCENE'">afv_script_scene_item r JOIN afv_script p ON p.id = r.script_id AND p.deleted = FALSE JOIN afv_script_episode e ON e.id = r.episode_id AND e.deleted = FALSE</when>
+            <when test="type.name() == 'STORYBOARD'">afv_storyboard r</when>
+            <when test="type.name() == 'STORYBOARD_EPISODE'">afv_storyboard_episode r JOIN afv_storyboard p ON p.id = r.storyboard_id AND p.deleted = FALSE</when>
+            <when test="type.name() == 'STORYBOARD_SCENE'">afv_storyboard_scene r JOIN afv_storyboard p ON p.id = r.storyboard_id AND p.deleted = FALSE JOIN afv_storyboard_episode e ON e.id = r.episode_id AND e.deleted = FALSE</when>
+            <when test="type.name() == 'SHOT'">afv_storyboard_item r JOIN afv_storyboard p ON p.id = r.storyboard_id AND p.deleted = FALSE JOIN afv_storyboard_episode e ON e.id = r.storyboard_episode_id AND e.storyboard_id = p.id AND e.deleted = FALSE JOIN afv_storyboard_scene s ON s.id = r.storyboard_scene_id AND s.episode_id = e.id AND s.deleted = FALSE</when>
+            <when test="type.name() == 'ASSET'">afv_asset r</when>
+            <when test="type.name() == 'ASSET_ITEM'">afv_asset_item r JOIN afv_asset p ON p.id = r.asset_id AND p.deleted = FALSE</when>
+        </choose>
+        WHERE r.id = #{id} AND r.deleted = FALSE AND
+        <choose>
+            <when test="type.name() == 'PROJECT'">r.id</when>
+            <when test="type.name() == 'SCRIPT' or type.name() == 'STORYBOARD' or type.name() == 'ASSET'">r.project_id</when>
+            <otherwise>p.project_id</otherwise>
+        </choose> = #{projectId}
+    </select>
+</mapper>

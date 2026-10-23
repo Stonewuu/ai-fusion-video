@@ -8,9 +8,9 @@ import com.stonewu.fusion.controller.storage.vo.StorageConfigTestRespVO;
 import com.stonewu.fusion.convert.storage.StorageConfigConvert;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.storage.StorageConfigOptions;
+import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.storage.StorageConnectionTestResult;
 import com.stonewu.fusion.service.storage.StorageConnectionTestService;
-import com.stonewu.fusion.service.storage.StorageConfigService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -102,7 +102,8 @@ public class StorageConfigController {
                 .bucketName(valueOrExisting(reqVO.getBucketName(), existing != null ? existing.getBucketName() : null))
                 .region(valueOrExisting(reqVO.getRegion(), existing != null ? existing.getRegion() : null))
                 .basePath(valueOrExisting(reqVO.getBasePath(), existing != null ? existing.getBasePath() : null))
-                .customDomain(valueOrExisting(reqVO.getCustomDomain(), existing != null ? existing.getCustomDomain() : null))
+                .customDomain(
+                        valueOrExisting(reqVO.getCustomDomain(), existing != null ? existing.getCustomDomain() : null))
                 .isDefault(reqVO.getIsDefault() != null ? reqVO.getIsDefault()
                         : existing != null ? existing.getIsDefault() : false)
                 .status(reqVO.getStatus() != null ? reqVO.getStatus()

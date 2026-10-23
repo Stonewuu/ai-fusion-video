@@ -1,9 +1,14 @@
 import { http } from "./client";
 import type { PageResult } from "./types";
+import type {
+  GenerationScope,
+  GenerationExecutionSummary,
+} from "./generation-execution";
 
 export interface GenerationTaskBase {
   id: number;
   taskId: string;
+  userId: number;
   prompt: string;
   modelId: number | null;
   workflowVersionId: number | null;
@@ -13,6 +18,7 @@ export interface GenerationTaskBase {
   errorMsg: string | null;
   createTime: string;
   updateTime: string;
+  execution: GenerationExecutionSummary | null;
 }
 
 export interface ImageGenerationTask extends GenerationTaskBase {
@@ -44,6 +50,7 @@ export interface VideoGenerationTask extends GenerationTaskBase {
 
 export interface ImageGenerationItem {
   id: number;
+  version: number;
   taskId: number;
   imageUrl: string | null;
   thumbnailUrl: string | null;
@@ -55,6 +62,7 @@ export interface ImageGenerationItem {
 
 export interface VideoGenerationItem {
   id: number;
+  version: number;
   taskId: number;
   videoUrl: string | null;
   coverUrl: string | null;
@@ -66,6 +74,9 @@ export interface VideoGenerationItem {
 }
 
 export interface ImageGenerationSubmitReq {
+  requestId: string;
+  scope: GenerationScope;
+  workflowVersionId?: number;
   projectId?: number;
   prompt: string;
   refImageUrls?: string;
@@ -80,6 +91,9 @@ export interface ImageGenerationSubmitReq {
 }
 
 export interface VideoGenerationSubmitReq {
+  requestId: string;
+  scope: GenerationScope;
+  workflowVersionId?: number;
   projectId?: number;
   prompt: string;
   generateMode?: string;
@@ -104,30 +118,42 @@ export const generationApi = {
   submitImage: (data: ImageGenerationSubmitReq) =>
     http.post<never, string>("/api/generation/image/submit", data),
   getImageTask: (taskId: string) =>
-    http.get<never, ImageGenerationTask>(`/api/generation/image/${encodeURIComponent(taskId)}`),
+    http.get<never, ImageGenerationTask>(
+      `/api/generation/image/${encodeURIComponent(taskId)}`,
+    ),
   listImageItems: (taskId: number) =>
-    http.get<never, ImageGenerationItem[]>(`/api/generation/image/${taskId}/items`),
+    http.get<never, ImageGenerationItem[]>(
+      `/api/generation/image/${taskId}/items`,
+    ),
   pageImageTasks: (pageNo = 1, pageSize = 10) =>
     http.get<never, PageResult<ImageGenerationTask>>(
       `/api/generation/image/page?pageNo=${pageNo}&pageSize=${pageSize}`,
     ),
   cancelImage: (taskId: string) =>
-    http.post<never, boolean>(`/api/generation/image/${encodeURIComponent(taskId)}/cancel`),
+    http.post<never, boolean>(
+      `/api/generation/image/${encodeURIComponent(taskId)}/cancel`,
+    ),
   deleteImage: (id: number) =>
     http.delete<never, boolean>(`/api/generation/image/${id}`),
 
   submitVideo: (data: VideoGenerationSubmitReq) =>
     http.post<never, string>("/api/generation/video/submit", data),
   getVideoTask: (taskId: string) =>
-    http.get<never, VideoGenerationTask>(`/api/generation/video/${encodeURIComponent(taskId)}`),
+    http.get<never, VideoGenerationTask>(
+      `/api/generation/video/${encodeURIComponent(taskId)}`,
+    ),
   listVideoItems: (taskId: number) =>
-    http.get<never, VideoGenerationItem[]>(`/api/generation/video/${taskId}/items`),
+    http.get<never, VideoGenerationItem[]>(
+      `/api/generation/video/${taskId}/items`,
+    ),
   pageVideoTasks: (pageNo = 1, pageSize = 10) =>
     http.get<never, PageResult<VideoGenerationTask>>(
       `/api/generation/video/page?pageNo=${pageNo}&pageSize=${pageSize}`,
     ),
   cancelVideo: (taskId: string) =>
-    http.post<never, boolean>(`/api/generation/video/${encodeURIComponent(taskId)}/cancel`),
+    http.post<never, boolean>(
+      `/api/generation/video/${encodeURIComponent(taskId)}/cancel`,
+    ),
   deleteVideo: (id: number) =>
     http.delete<never, boolean>(`/api/generation/video/${id}`),
 };

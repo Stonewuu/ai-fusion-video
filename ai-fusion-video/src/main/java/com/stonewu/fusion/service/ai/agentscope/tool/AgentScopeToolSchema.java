@@ -9,11 +9,14 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Normalizes platform tool schemas to the strict AgentScope V2 contract. */
+/**
+ * Normalizes platform tool schemas to the strict AgentScope V2 contract.
+ */
 public final class AgentScopeToolSchema {
 
     private static final TypeReference<LinkedHashMap<String, Object>> OBJECT_SCHEMA =
-            new TypeReference<>() { };
+            new TypeReference<>() {
+            };
 
     private AgentScopeToolSchema() {
     }

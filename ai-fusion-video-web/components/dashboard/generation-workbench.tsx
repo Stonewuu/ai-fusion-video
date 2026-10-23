@@ -1,30 +1,30 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { ImageIcon, Settings2, Video } from "lucide-react";
 import { toast } from "sonner";
 import { aiModelApi, type AiModel, type ModelPreset } from "@/lib/api/ai-model";
+import { resolveGenerationCapabilities, workflowInputIssue } from "@/lib/generation-capabilities";
 import {
-  generationApi,
-  type ImageGenerationItem,
-  type VideoGenerationItem,
-} from "@/lib/api/generation";
-import { resolveGenerationCapabilities } from "@/lib/generation-capabilities";
+  videoFormIssue,
+  videoInputState,
+  videoRatioOptions,
+} from "@/lib/video-model-rules";
 import { toastApiError } from "@/lib/api/toast-api-error";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { GenerationAdvancedPanel } from "./generation/generation-advanced-panel";
 import { GenerationAssetDialog } from "./generation/generation-asset-dialog";
 import { GenerationHistory } from "./generation/generation-history";
 import { GenerationSimpleComposer } from "./generation/generation-simple-composer";
-import { OverlayScrollArea } from "./overlay-scroll-area";
+import { GenerationWorkspaceLayout } from "./generation/generation-workspace-layout";
+import { MODE_TRANSITION_EASE } from "./generation/generation-motion";
 import {
   EMPTY_GENERATION_FORM,
   type ComposerMode,
   type GenerationAssetTarget,
   type GenerationFormState,
-  type GenerationHistoryEntry,
   type GenerationResultItem,
   type SimpleAttachment,
   type SimpleAttachmentKind,
@@ -34,9 +34,13 @@ import {
 import {
   getResultMediaUrl,
   getResultPreviewUrl,
-  isGenerationTaskActive,
   parseLimit,
+  generationFormForModel,
 } from "./generation/generation-utils";
+import { GenerationSubmissionNotice } from "./generation/generation-submission-notice";
+import { useGenerationSubmission } from "./generation/use-generation-submission";
+import { useGenerationHistory } from "./generation/use-generation-history";
+import { generationSubmitRequest } from "./generation/generation-submit-request";
 import { useReferenceImageUploadAvailability } from "./generation/use-reference-image-upload-availability";
 
 interface GenerationWorkbenchProps {
@@ -47,9 +51,13 @@ function clean(values: string[]) {
   return values.map((value) => value.trim()).filter(Boolean);
 }
 
-const MODE_TRANSITION_EASE = [0.25, 0.46, 0.45, 0.94] as const;
+export default function GenerationWorkbench({
+  mode,
+}: GenerationWorkbenchProps) {
+  return <GenerationWorkbenchContent key={mode} mode={mode} />;
+}
 
-export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) {
+function GenerationWorkbenchContent({ mode }: GenerationWorkbenchProps) {
   const modelType = mode === "image" ? 2 : 3;
   const [composerMode, setComposerMode] = useState<ComposerMode>("simple");
   const [models, setModels] = useState<AiModel[]>([]);
@@ -57,34 +65,51 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
   const [modelId, setModelId] = useState<number | undefined>();
   const [loadingModels, setLoadingModels] = useState(true);
   const [form, setForm] = useState<GenerationFormState>(EMPTY_GENERATION_FORM);
-  const [submitting, setSubmitting] = useState(false);
-  const [history, setHistory] = useState<GenerationHistoryEntry[]>([]);
-  const [historyTotal, setHistoryTotal] = useState(0);
-  const [historyLimit, setHistoryLimit] = useState(10);
-  const [historyLoading, setHistoryLoading] = useState(true);
-  const [cancellingTaskIds, setCancellingTaskIds] = useState<Set<string>>(new Set());
-  const [assetTarget, setAssetTarget] = useState<GenerationAssetTarget | null>(null);
+  const submission = useGenerationSubmission(mode);
+  const historyState = useGenerationHistory(mode);
+  const {
+    entries: history,
+    total: historyTotal,
+    limit: historyLimit,
+    setLimit: setHistoryLimit,
+    loading: historyLoading,
+    cancelling: cancellingTaskIds,
+    load: loadHistory,
+    cancel: cancelTask,
+    remove: deleteTask,
+  } = historyState;
+  const submitting = submission.busy;
+  const [assetTarget, setAssetTarget] = useState<GenerationAssetTarget | null>(
+    null,
+  );
   const simpleComposerRef = useRef<HTMLDivElement>(null);
   const advancedComposerRef = useRef<HTMLDivElement>(null);
-  const historyRef = useRef<GenerationHistoryEntry[]>([]);
-  const activePollInFlightRef = useRef(false);
   const [composerHeight, setComposerHeight] = useState(220);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
-    historyRef.current = history;
-  }, [history]);
-
-  useEffect(() => {
     let cancelled = false;
-    setLoadingModels(true);
-    Promise.all([aiModelApi.listByType(modelType), aiModelApi.presets(modelType)])
+    Promise.all([
+      aiModelApi.listByType(modelType),
+      aiModelApi.presets(modelType),
+    ])
       .then(([modelList, presetList]) => {
-        if (cancelled) return;
+        if (cancelled) {
+          return;
+        }
         const enabled = modelList.filter((model) => model.status === 1);
         setModels(enabled);
         setPresets(presetList);
-        setModelId(enabled.find((model) => model.defaultModel)?.id ?? enabled[0]?.id);
+        const initial = enabled.find((model) => model.defaultModel);
+        setModelId(initial?.id);
+        if (initial) {
+          setForm((current) =>
+            generationFormForModel(
+              current,
+              resolveGenerationCapabilities(initial, presetList),
+            ),
+          );
+        }
       })
       .catch((error) => {
         if (!cancelled) {
@@ -93,7 +118,9 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
         }
       })
       .finally(() => {
-        if (!cancelled) setLoadingModels(false);
+        if (!cancelled) {
+          setLoadingModels(false);
+        }
       });
     return () => {
       cancelled = true;
@@ -113,184 +140,29 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
     capabilities,
   );
 
-  useEffect(() => {
-    if (!capabilities) return;
-    setForm((current) => ({
-      ...current,
-      ratio: capabilities.supportedAspectRatios[0] || "",
-      resolution: capabilities.supportedResolutions[0] || "",
-      count: Math.min(current.count, parseLimit(capabilities.maxCount, 4)),
-      duration: Math.min(
-        Math.max(capabilities.defaultDuration, capabilities.minDuration),
-        capabilities.maxDuration,
+  const changeModel = (id: number) => {
+    const model = models.find((candidate) => candidate.id === id);
+    if (!model) {
+      toast.error("所选模型已不可用，请刷新模型列表");
+      return;
+    }
+    setModelId(id);
+    setForm((current) =>
+      generationFormForModel(
+        current,
+        resolveGenerationCapabilities(model, presets),
       ),
-      referenceImages: [],
-      firstFrame: [],
-      lastFrame: [],
-      referenceVideos: [],
-      referenceAudios: [],
-    }));
-  }, [capabilities, modelId]);
-
-  const loadHistory = useCallback(
-    async (limit: number) => {
-      setHistoryLoading(true);
-      try {
-        if (mode === "image") {
-          const page = await generationApi.pageImageTasks(1, limit);
-          const entries = await Promise.all(
-            page.list.map(async (task) => ({
-              task,
-              items: await generationApi.listImageItems(task.id).catch((error) => {
-                toastApiError(error, "加载图片生成结果失败");
-                return [];
-              }),
-            })),
-          );
-          setHistory(entries);
-          setHistoryTotal(page.total);
-        } else {
-          const page = await generationApi.pageVideoTasks(1, limit);
-          const entries = await Promise.all(
-            page.list.map(async (task) => ({
-              task,
-              items: await generationApi.listVideoItems(task.id).catch((error) => {
-                toastApiError(error, "加载视频生成结果失败");
-                return [];
-              }),
-            })),
-          );
-          setHistory(entries);
-          setHistoryTotal(page.total);
-        }
-      } catch (error) {
-        toastApiError(error, "加载生成历史失败");
-        setHistory([]);
-        setHistoryTotal(0);
-      } finally {
-        setHistoryLoading(false);
-      }
-    },
-    [mode],
-  );
-
-  const refreshActiveHistory = useCallback(async () => {
-    if (activePollInFlightRef.current) return;
-
-    const activeEntries = historyRef.current.filter(({ task }) =>
-      isGenerationTaskActive(task),
     );
-    if (activeEntries.length === 0) return;
-
-    activePollInFlightRef.current = true;
-    try {
-      const refreshedEntries = await Promise.all(
-        activeEntries.map(async (entry) => {
-          try {
-            if (mode === "image") {
-              const task = await generationApi.getImageTask(entry.task.taskId);
-              const previousItems = entry.items.filter(
-                (item): item is ImageGenerationItem => "imageUrl" in item,
-              );
-              const items =
-                task.status === 0
-                  ? previousItems
-                  : await generationApi
-                      .listImageItems(task.id)
-                      .catch((error) => {
-                        toastApiError(error, "刷新图片生成结果失败");
-                        return previousItems;
-                      });
-              return {
-                id: task.id,
-                entry: { task, items } satisfies GenerationHistoryEntry,
-              };
-            }
-
-            const task = await generationApi.getVideoTask(entry.task.taskId);
-            const previousItems = entry.items.filter(
-              (item): item is VideoGenerationItem => "videoUrl" in item,
-            );
-            const items =
-              task.status === 0
-                ? previousItems
-                : await generationApi
-                    .listVideoItems(task.id)
-                    .catch((error) => {
-                      toastApiError(error, "刷新视频生成结果失败");
-                      return previousItems;
-                    });
-            return {
-              id: task.id,
-              entry: { task, items } satisfies GenerationHistoryEntry,
-            };
-          } catch {
-            return null;
-          }
-        }),
-      );
-
-      const updates = new Map(
-        refreshedEntries
-          .filter((result) => result !== null)
-          .map((result) => [result.id, result.entry]),
-      );
-      if (updates.size === 0) return;
-
-      setHistory((current) =>
-        current.map((entry) => {
-          if (!isGenerationTaskActive(entry.task)) return entry;
-          return updates.get(entry.task.id) ?? entry;
-        }),
-      );
-    } finally {
-      activePollInFlightRef.current = false;
-    }
-  }, [mode]);
-
-  const cancelTask = async (taskId: string) => {
-    setCancellingTaskIds(current => new Set(current).add(taskId));
-    try {
-      if (mode === "image") {
-        await generationApi.cancelImage(taskId);
-      } else {
-        await generationApi.cancelVideo(taskId);
-      }
-      toast.success("生成任务已取消");
-      await loadHistory(historyLimit);
-    } catch (error) {
-      toastApiError(error, "取消生成任务失败");
-    } finally {
-      setCancellingTaskIds(current => {
-        const next = new Set(current);
-        next.delete(taskId);
-        return next;
-      });
-    }
-  };
-
-  const deleteTask = async (id: number) => {
-    try {
-      if (mode === "image") {
-        await generationApi.deleteImage(id);
-      } else {
-        await generationApi.deleteVideo(id);
-      }
-      toast.success("创作记录已删除");
-      await loadHistory(historyLimit);
-    } catch (error) {
-      toastApiError(error, "删除创作记录失败");
-    }
   };
 
   useEffect(() => {
-    void loadHistory(historyLimit);
-  }, [historyLimit, loadHistory]);
-
-  useEffect(() => {
-    if (composerMode !== "simple") return;
+    if (composerMode !== "simple") {
+      return;
+    }
     const element = simpleComposerRef.current;
-    if (!element) return;
+    if (!element) {
+      return;
+    }
 
     const updateHeight = () => {
       setComposerHeight(Math.ceil(element.getBoundingClientRect().height));
@@ -302,29 +174,21 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
     return () => observer.disconnect();
   }, [composerMode]);
 
-  const hasRunningTask = history.some(({ task }) =>
-    isGenerationTaskActive(task),
-  );
-
-  useEffect(() => {
-    if (!hasRunningTask) return;
-
-    const refreshWhenVisible = () => {
-      if (document.visibilityState === "visible") {
-        void refreshActiveHistory();
-      }
-    };
-    const timer = window.setInterval(refreshWhenVisible, 4000);
-    document.addEventListener("visibilitychange", refreshWhenVisible);
-
-    return () => {
-      window.clearInterval(timer);
-      document.removeEventListener("visibilitychange", refreshWhenVisible);
-    };
-  }, [hasRunningTask, refreshActiveHistory]);
-
   const updateForm = (patch: Partial<GenerationFormState>) => {
-    setForm((current) => ({ ...current, ...patch }));
+    setForm((current) => {
+      const next = { ...current, ...patch };
+      if (mode === "video" && capabilities?.videoRules) {
+        const allowed = videoRatioOptions(
+          capabilities.supportedAspectRatios,
+          capabilities.videoRules,
+          videoInputState(next),
+        );
+        if (allowed.length && !allowed.includes(next.ratio)) {
+          next.ratio = allowed[0];
+        }
+      }
+      return next;
+    });
   };
 
   const simpleAttachments = useMemo<SimpleAttachment[]>(
@@ -370,8 +234,12 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
   );
 
   const maxSimpleImageAttachments = useMemo(() => {
-    if (!capabilities) return 0;
-    if (!referenceImageUploadAvailability.supported) return 0;
+    if (!capabilities) {
+      return 0;
+    }
+    if (!referenceImageUploadAvailability.supported) {
+      return 0;
+    }
     if (mode === "image") {
       return capabilities.supportsReferenceImages
         ? parseLimit(capabilities.maxReferenceImages, 1)
@@ -384,14 +252,21 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
         ? parseLimit(capabilities.maxReferenceImages, 1)
         : 0);
     return capabilities.maxImageInputs > 0
-      ? Math.min(slots || capabilities.maxImageInputs, capabilities.maxImageInputs)
+      ? Math.min(
+          slots || capabilities.maxImageInputs,
+          capabilities.maxImageInputs,
+        )
       : slots;
   }, [capabilities, mode, referenceImageUploadAvailability.supported]);
 
   const simpleAttachmentCapacity = useMemo(() => {
-    if (!capabilities) return 0;
+    if (!capabilities) {
+      return 0;
+    }
     const imageCapacity = maxSimpleImageAttachments;
-    if (mode === "image") return imageCapacity;
+    if (mode === "image") {
+      return imageCapacity;
+    }
     return (
       imageCapacity +
       (capabilities.supportsReferenceVideos
@@ -403,8 +278,12 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
     );
   }, [capabilities, maxSimpleImageAttachments, mode]);
 
-  const simpleAttachmentOptions = useMemo<SimpleAttachmentUploadOption[]>(() => {
-    if (!capabilities) return [];
+  const simpleAttachmentOptions = useMemo<
+    SimpleAttachmentUploadOption[]
+  >(() => {
+    if (!capabilities) {
+      return [];
+    }
 
     const options: SimpleAttachmentUploadOption[] = [];
     const imageInputCount =
@@ -501,7 +380,9 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
   }, [capabilities, form, mode, referenceImageUploadAvailability]);
 
   const simpleAttachmentDisabledReason = useMemo(() => {
-    if (!capabilities) return "请选择支持附件输入的模型";
+    if (!capabilities) {
+      return "请选择支持附件输入的模型";
+    }
     const supportsAnyAttachment =
       capabilities.supportsFirstFrame ||
       capabilities.supportsLastFrame ||
@@ -509,8 +390,12 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
       (mode === "video" &&
         (capabilities.supportsReferenceVideos ||
           capabilities.supportsReferenceAudios));
-    if (!supportsAnyAttachment) return "当前模型不支持附件输入";
-    if (simpleAttachmentOptions.length === 0) return "附件数量已达上限";
+    if (!supportsAnyAttachment) {
+      return "当前模型不支持附件输入";
+    }
+    if (simpleAttachmentOptions.length === 0) {
+      return "附件数量已达上限";
+    }
     return "";
   }, [capabilities, mode, simpleAttachmentOptions.length]);
 
@@ -518,7 +403,9 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
     urls: string[],
     kind?: SimpleAttachmentKind,
   ) => {
-    if (!capabilities || !urls.length) return;
+    if (!capabilities || !urls.length) {
+      return;
+    }
     const imageKind =
       !kind ||
       kind === "firstFrame" ||
@@ -581,11 +468,15 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
       };
       if (capabilities.supportsFirstFrame && next.firstFrame.length === 0) {
         const value = remaining.shift();
-        if (value) next.firstFrame = [value];
+        if (value) {
+          next.firstFrame = [value];
+        }
       }
       if (capabilities.supportsLastFrame && next.lastFrame.length === 0) {
         const value = remaining.shift();
-        if (value) next.lastFrame = [value];
+        if (value) {
+          next.lastFrame = [value];
+        }
       }
       if (capabilities.supportsReferenceImages && remaining.length > 0) {
         next.referenceImages = [...next.referenceImages, ...remaining].slice(
@@ -609,8 +500,28 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
   };
 
   const validate = () => {
-    if (!modelId || !capabilities) return "请选择生成模型";
-    if (!form.prompt.trim()) return "请输入提示词";
+    if (!modelId || !capabilities) {
+      return "请选择生成模型";
+    }
+    if (capabilities.unavailable) {
+      return capabilities.unavailable;
+    }
+    const workflowIssue = workflowInputIssue(capabilities, {
+      referenceImages: clean(form.referenceImages).length, firstFrame: clean(form.firstFrame).length,
+      lastFrame: clean(form.lastFrame).length, referenceVideos: clean(form.referenceVideos).length,
+      referenceAudios: clean(form.referenceAudios).length,
+    });
+    if (workflowIssue) {
+      return workflowIssue;
+    }
+    if (mode === "video") {
+      const issue = videoFormIssue(capabilities, form);
+      if (issue) {
+        return issue;
+      }
+    } else if (!form.prompt.trim()) {
+      return "请输入提示词";
+    }
     const referenceImages = clean(form.referenceImages);
     if (
       mode === "image" &&
@@ -635,75 +546,34 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
       toast.error(error);
       return;
     }
-    if (!modelId) return;
-
-    setSubmitting(true);
-    try {
-      const referenceImages = clean(form.referenceImages);
-      if (mode === "image") {
-        await generationApi.submitImage({
-          prompt: form.prompt.trim(),
-          modelId,
-          refImageUrls: referenceImages.length
-            ? JSON.stringify(referenceImages)
-            : undefined,
-          ratio: form.ratio || undefined,
-          aspectRatio: form.ratio || undefined,
-          resolution: form.resolution || undefined,
-          count: form.count,
-          category: "manual_image_generation",
-        });
-      } else {
-        const firstFrame = clean(form.firstFrame);
-        const lastFrame = clean(form.lastFrame);
-        const referenceVideos = clean(form.referenceVideos);
-        const referenceAudios = clean(form.referenceAudios);
-        const imageInputCount =
-          referenceImages.length + firstFrame.length + lastFrame.length;
-        await generationApi.submitVideo({
-          prompt: form.prompt.trim(),
-          modelId,
-          generateMode: imageInputCount > 0 ? "image2video" : "text2video",
-          firstFrameImageUrl: firstFrame[0],
-          lastFrameImageUrl: lastFrame[0],
-          referenceImageUrls: referenceImages.length
-            ? JSON.stringify(referenceImages)
-            : undefined,
-          referenceVideoUrls: referenceVideos.length
-            ? JSON.stringify(referenceVideos)
-            : undefined,
-          referenceAudioUrls: referenceAudios.length
-            ? JSON.stringify(referenceAudios)
-            : undefined,
-          ratio: form.ratio || undefined,
-          resolution: form.resolution || undefined,
-          duration: form.duration,
-          watermark: form.watermark,
-          generateAudio: form.generateAudio,
-          cameraFixed: form.cameraFixed,
-          seed: form.seed.trim() ? Number(form.seed) : undefined,
-          count: form.count,
-          category: "manual_video_generation",
-        });
-      }
-
-      toast.success("任务已提交");
-      setForm((current) => ({
-        ...current,
-        prompt: "",
-        referenceImages: [],
-        firstFrame: [],
-        lastFrame: [],
-        referenceVideos: [],
-        referenceAudios: [],
-      }));
-      setHistoryLimit(10);
-      await loadHistory(10);
-    } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "提交失败");
-    } finally {
-      setSubmitting(false);
+    if (!modelId) {
+      return;
     }
+
+    const originalForm = form;
+    const receipt = await submission.submit(
+      generationSubmitRequest(mode, form, modelId, capabilities),
+      selectedModel!.name,
+    );
+    if (!receipt) {
+      return;
+    }
+    toast.success("任务已提交，可关闭页面，稍后在创作记录查看结果");
+    setForm((current) =>
+      current === originalForm
+        ? {
+            ...current,
+            prompt: "",
+            referenceImages: [],
+            firstFrame: [],
+            lastFrame: [],
+            referenceVideos: [],
+            referenceAudios: [],
+          }
+        : current,
+    );
+    setHistoryLimit(10);
+    await loadHistory(10);
   };
 
   const focusComposer = () => {
@@ -723,20 +593,24 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
     if (mode === "video" && "videoUrl" in item && item.videoUrl) {
       if (capabilities?.supportsReferenceVideos) {
         updateForm({
-          referenceVideos: [
-            ...form.referenceVideos,
-            item.videoUrl,
-          ].slice(0, parseLimit(capabilities.maxReferenceVideos, 1)),
+          referenceVideos: [...form.referenceVideos, item.videoUrl].slice(
+            0,
+            parseLimit(capabilities.maxReferenceVideos, 1),
+          ),
         });
         toast.success("已加入参考视频");
         focusComposer();
         return;
       }
       const preview = getResultPreviewUrl(item);
-      if (preview) addSimpleAttachments([preview]);
+      if (preview) {
+        addSimpleAttachments([preview]);
+      }
     } else {
       const media = getResultMediaUrl(item) || getResultPreviewUrl(item);
-      if (media) addSimpleAttachments([media]);
+      if (media) {
+        addSimpleAttachments([media]);
+      }
     }
     toast.success("已加入参考素材");
     focusComposer();
@@ -769,7 +643,9 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
               <p className="mt-0.5 text-xs text-muted-foreground">
-                {mode === "image" ? "描述想法，生成画面" : "描述场景、动作和镜头"}
+                {mode === "image"
+                  ? "描述想法，生成画面"
+                  : "描述场景、动作和镜头"}
               </p>
             </div>
           </motion.div>
@@ -782,125 +658,74 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
             模型配置
           </motion.a>
         </motion.header>
+        <GenerationSubmissionNotice
+          submission={submission}
+          onConfirmed={() => void loadHistory(historyLimit)}
+        />
+        {capabilities?.unavailable && (
+          <p role="alert" className="text-sm text-destructive">{capabilities.unavailable}</p>
+        )}
       </div>
 
-      <div
-        data-slot="generation-workspace"
-        className={cn("min-h-0 flex-1", advancedMode && "px-5 lg:px-8")}
+      <GenerationWorkspaceLayout
+        advancedMode={advancedMode}
+        reduceMotion={reduceMotion}
+        composerRef={advancedComposerRef}
+        historyBottomInset={historyBottomInset}
+        composer={
+          <GenerationAdvancedPanel
+            mode={mode}
+            models={models}
+            modelId={modelId}
+            loadingModels={loadingModels}
+            capabilities={capabilities}
+            form={form}
+            submitting={submitting}
+            submitDisabled={!submission.canSubmit || Boolean(capabilities?.unavailable)}
+            onModelChange={changeModel}
+            onFormChange={updateForm}
+            onSubmit={() => void submit()}
+            onSimple={() => setComposerMode("simple")}
+            referenceImageUploadAvailability={referenceImageUploadAvailability}
+          />
+        }
       >
-        <div
-          className={cn(
-            "relative h-full min-h-0",
-            advancedMode &&
-              "grid w-full gap-4 overflow-y-auto xl:grid-cols-[minmax(400px,460px)_minmax(0,1fr)] xl:overflow-visible",
-          )}
-        >
-          <AnimatePresence initial={false} mode="popLayout">
-            {advancedMode && (
-              <motion.div
-                key="advanced-composer"
-                data-slot="generation-composer-layer"
-                initial={reduceMotion ? false : { opacity: 0, x: -14 }}
-                animate={{
-                  opacity: 1,
-                  x: 0,
-                  transition: reduceMotion
-                    ? { duration: 0 }
-                    : { duration: 0.24, ease: MODE_TRANSITION_EASE },
-                }}
-                exit={{
-                  opacity: 0,
-                  x: reduceMotion ? 0 : -10,
-                  transition: reduceMotion
-                    ? { duration: 0 }
-                    : { duration: 0.14, ease: "easeIn" },
-                }}
-                className="min-h-0 xl:h-full"
-              >
-                <div
-                  data-slot="generation-composer"
-                  ref={advancedComposerRef}
-                  className="h-full min-h-0"
-                >
-                  <GenerationAdvancedPanel
-                    mode={mode}
-                    models={models}
-                    modelId={modelId}
-                    loadingModels={loadingModels}
-                    capabilities={capabilities}
-                    form={form}
-                    submitting={submitting}
-                    onModelChange={setModelId}
-                    onFormChange={updateForm}
-                    onSubmit={() => void submit()}
-                    onSimple={() => setComposerMode("simple")}
-                    referenceImageUploadAvailability={
-                      referenceImageUploadAvailability
-                    }
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-
-          <motion.div
-            layout
-            transition={{
-              layout: reduceMotion
-                ? { duration: 0 }
-                : { duration: 0.26, ease: MODE_TRANSITION_EASE },
-            }}
-            className={cn(
-              "h-full min-h-0 w-full",
-              advancedMode && "max-h-[42vh] xl:max-h-none",
-            )}
-          >
-            <OverlayScrollArea
-              data-slot="generation-history-scroll"
-              className="h-full min-h-0 w-full"
-              viewportStyle={{
-                paddingBottom: historyBottomInset,
-                scrollPaddingBottom: historyBottomInset,
-              }}
+        <div className="mb-4 space-y-3">
+          {historyState.error && (
+            <div
+              role="alert"
+              className="flex items-center gap-2 text-sm text-destructive"
             >
-              <div
-                className={cn(
-                  "w-full",
-                  advancedMode ? "pr-3" : "px-5 lg:px-8",
-                )}
+              <p className="flex-1">{historyState.error}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void loadHistory(historyLimit)}
               >
-                <div
-                  className={cn(
-                    "mx-auto w-full",
-                    !advancedMode && "max-w-[1180px]",
-                  )}
-                >
-                  <GenerationHistory
-                    mode={mode}
-                    entries={history}
-                    models={models}
-                    loading={historyLoading}
-                    total={historyTotal}
-                    onRefresh={() => void loadHistory(historyLimit)}
-                    onLoadMore={() =>
-                      setHistoryLimit((current) => Math.min(100, current + 10))
-                    }
-                    onUseSuggestion={reusePrompt}
-                    onReusePrompt={reusePrompt}
-                    onUseReference={useReference}
-                    onCancel={taskId => void cancelTask(taskId)}
-                    cancellingTaskIds={cancellingTaskIds}
-                    onDelete={deleteTask}
-                    onAddAsset={(item, prompt) =>
-                      setAssetTarget({ mode, item, prompt })
-                    }
-                  />
-                </div>
-              </div>
-            </OverlayScrollArea>
-          </motion.div>
+                重新读取记录
+              </Button>
+            </div>
+          )}
         </div>
-      </div>
+        <GenerationHistory
+          mode={mode}
+          entries={history}
+          models={models}
+          loading={historyLoading}
+          total={historyTotal}
+          onRefresh={() => void loadHistory(historyLimit)}
+          onLoadMore={() =>
+            setHistoryLimit((current) => Math.min(100, current + 10))
+          }
+          onUseSuggestion={reusePrompt}
+          onReusePrompt={reusePrompt}
+          onUseReference={useReference}
+          onCancel={(taskId) => void cancelTask(taskId)}
+          cancellingTaskIds={cancellingTaskIds}
+          onDelete={deleteTask}
+          onAddAsset={(item, prompt) => setAssetTarget({ mode, item, prompt })}
+        />
+      </GenerationWorkspaceLayout>
 
       <AnimatePresence initial={false}>
         {!advancedMode && (
@@ -949,7 +774,8 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
                     mode === "video" ? capabilities?.minImageInputs || 0 : 0
                   }
                   submitting={submitting}
-                  onModelChange={setModelId}
+                  submitDisabled={!submission.canSubmit || Boolean(capabilities?.unavailable)}
+                  onModelChange={changeModel}
                   onFormChange={updateForm}
                   onAddAttachments={addSimpleAttachments}
                   onRemoveAttachment={removeSimpleAttachment}
@@ -969,7 +795,9 @@ export default function GenerationWorkbench({ mode }: GenerationWorkbenchProps) 
           target={assetTarget}
           open
           onOpenChange={(open) => {
-            if (!open) setAssetTarget(null);
+            if (!open) {
+              setAssetTarget(null);
+            }
           }}
           onAttached={() => setAssetTarget(null)}
         />

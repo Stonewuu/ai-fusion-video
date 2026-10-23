@@ -12,6 +12,7 @@ public final class AgentStatePreflight {
     private final AgentStateStore store;
     private final StateStoreFailureGuard failures;
     private final AgentRuntimeSchedulers schedulers;
+
     public AgentStatePreflight(
             AgentStateStore store,
             StateStoreFailureGuard failures,

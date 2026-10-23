@@ -22,7 +22,7 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 import static com.stonewu.fusion.common.CommonResult.success;
-import static com.stonewu.fusion.security.SecurityUtils.getCurrentUserId;
+import static com.stonewu.fusion.security.SecurityUtils.requireCurrentUserId;
 
 @Tag(name = "团队管理")
 @RestController
@@ -35,9 +35,10 @@ public class TeamController {
 
     @PostMapping("/create")
     @Operation(summary = "创建团队")
+    @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<Long> createTeam(@Valid @RequestBody TeamCreateReqVO reqVO) {
         // ownerUserId 由后端从 token 获取
-        Team team = teamService.createTeam(reqVO.getName(), reqVO.getDescription(), getCurrentUserId());
+        Team team = teamService.createTeam(reqVO.getName(), reqVO.getDescription(), requireCurrentUserId());
         return success(team.getId());
     }
 
@@ -54,14 +55,15 @@ public class TeamController {
     @PreAuthorize("hasRole('ADMIN')")
     public CommonResult<PageResult<TeamRespVO>> getTeamPage(@Valid TeamPageReqVO reqVO) {
         return success(teamService.getPage(reqVO.getName(), reqVO.getStatus(),
-                reqVO.getPageNo(), reqVO.getPageSize())
+                        reqVO.getPageNo(), reqVO.getPageSize())
                 .map(this::enrichTeamVO));
     }
 
     @PutMapping("/update")
     @Operation(summary = "更新团队")
     public CommonResult<Boolean> updateTeam(@Valid @RequestBody TeamUpdateReqVO reqVO) {
-        teamService.updateTeam(reqVO.getId(), reqVO.getName(), reqVO.getDescription(), reqVO.getLogo(), reqVO.getStatus());
+        teamService.updateTeam(reqVO.getId(), reqVO.getName(), reqVO.getDescription(), reqVO.getLogo(),
+                reqVO.getStatus());
         return success(true);
     }
 
@@ -83,7 +85,8 @@ public class TeamController {
 
     @PostMapping("/member/remove")
     @Operation(summary = "移除团队成员")
-    public CommonResult<Boolean> removeMember(@RequestParam("teamId") Long teamId, @RequestParam("userId") Long userId) {
+    public CommonResult<Boolean> removeMember(@RequestParam("teamId") Long teamId,
+                                              @RequestParam("userId") Long userId) {
         teamService.removeMember(teamId, userId);
         return success(true);
     }
@@ -91,8 +94,8 @@ public class TeamController {
     @PostMapping("/member/change-role")
     @Operation(summary = "变更成员角色")
     public CommonResult<Boolean> changeMemberRole(@RequestParam("teamId") Long teamId,
-                                                   @RequestParam("userId") Long userId,
-                                                   @RequestParam("role") Integer role) {
+                                                  @RequestParam("userId") Long userId,
+                                                  @RequestParam("role") Integer role) {
         teamService.changeMemberRole(teamId, userId, role);
         return success(true);
     }
@@ -106,7 +109,7 @@ public class TeamController {
     @PutMapping("/current")
     @Operation(summary = "切换当前团队")
     public CommonResult<Boolean> switchCurrentTeam(@RequestParam("teamId") Long teamId, HttpServletRequest request) {
-        teamService.switchCurrentTeam(getCurrentUserId(), teamId, getTokenFromRequest(request));
+        teamService.switchCurrentTeam(requireCurrentUserId(), teamId, getTokenFromRequest(request));
         return success(true);
     }
 

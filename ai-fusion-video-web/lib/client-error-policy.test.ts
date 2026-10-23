@@ -11,7 +11,7 @@ import {
 
 test("normalizes client error messages", () => {
   assert.equal(getClientErrorMessage(new Error("  渲染失败  ")), "渲染失败");
-  assert.equal(getClientErrorMessage(null), "发生未知客户端异常");
+  assert.equal(getClientErrorMessage(null), "操作遇到问题，请稍后重试。");
 });
 
 test("ignores request cancellation errors", () => {

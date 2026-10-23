@@ -4,7 +4,9 @@ import com.stonewu.fusion.enums.ai.AgentRunStatus;
 
 import java.util.Objects;
 
-/** Result of idempotently admitting a platform child run. */
+/**
+ * Result of idempotently admitting a platform child run.
+ */
 public record ChildRunAdmission(
         StartedAgentRun run,
         AgentRunStatus status,

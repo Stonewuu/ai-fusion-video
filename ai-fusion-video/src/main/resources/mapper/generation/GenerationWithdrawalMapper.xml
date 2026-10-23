@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.generation.GenerationWithdrawalMapper">
+    <select id="selectKind" resultType="string">
+        SELECT kind FROM afv_generation_request_withdrawal WHERE scope_key = #{scope} AND request_id = #{requestId}
+    </select>
+    <insert id="insert">
+        INSERT INTO afv_generation_request_withdrawal(scope_key, request_id, kind, actor_user_id, actor_team_id, created_at)
+        VALUES (#{scope}, #{requestId}, #{kind}, #{userId}, #{teamId}, UTC_TIMESTAMP(6))
+    </insert>
+</mapper>

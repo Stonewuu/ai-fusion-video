@@ -4,7 +4,9 @@ import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 
 import java.util.Objects;
 
-/** Exact AgentScope tool policy selected for the current conversation. */
+/**
+ * Exact AgentScope tool policy selected for the current conversation.
+ */
 public record ToolPermissionContext(ToolExecutionMode mode) {
 
     public ToolPermissionContext {

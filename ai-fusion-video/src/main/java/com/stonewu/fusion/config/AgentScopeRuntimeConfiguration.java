@@ -7,9 +7,9 @@ import com.stonewu.fusion.service.ai.agentscope.state.InMemoryStateStoreFailureG
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.run.AgentRuntimeMetrics;
 import io.agentscope.core.state.AgentStateStore;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;

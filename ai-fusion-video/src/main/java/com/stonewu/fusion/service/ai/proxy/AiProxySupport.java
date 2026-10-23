@@ -15,21 +15,15 @@ import okhttp3.OkHttpClient;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.http.client.reactive.ReactorClientHttpConnector;
 import reactor.netty.http.client.HttpClient;
 import reactor.netty.resources.ConnectionProvider;
 import reactor.netty.transport.ProxyProvider;
 
 import java.io.IOException;
-import java.net.Authenticator;
-import java.net.HttpURLConnection;
-import java.net.InetSocketAddress;
-import java.net.PasswordAuthentication;
-import java.net.Proxy;
-import java.net.ProxySelector;
-import java.net.URL;
+import java.net.*;
 import java.net.http.HttpClient.Builder;
 import java.time.Duration;
 import java.util.Locale;
@@ -80,6 +74,18 @@ public final class AiProxySupport {
         if (settings != null) {
             builder.proxy(settings.toJavaProxy());
             if (settings.hasHttpCredentials()) {
+                // HTTP 代理在首次发送时认证，避免付费请求为响应 407 而重放正文。
+                // HTTPS 的 CONNECT 认证仍交给 proxyAuthenticator，凭据不进入隧道内请求。
+                builder.addNetworkInterceptor(chain -> {
+                    var connection = chain.connection();
+                    var request = chain.request();
+                    if (!request.url().isHttps() && connection != null
+                            && connection.route().proxy().type() == Proxy.Type.HTTP) {
+                        request = request.newBuilder()
+                                .header("Proxy-Authorization", settings.basicProxyAuthorization()).build();
+                    }
+                    return chain.proceed(request);
+                });
                 builder.proxyAuthenticator((route, response) -> {
                     if (response.request().header("Proxy-Authorization") != null) {
                         return null;
@@ -273,7 +279,8 @@ public final class AiProxySupport {
 
         private String basicProxyAuthorization() {
             String credentials = username + ":" + passwordOrEmpty();
-            return "Basic " + java.util.Base64.getEncoder().encodeToString(credentials.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
+            return "Basic " + java.util.Base64.getEncoder()
+                    .encodeToString(credentials.getBytes(java.nio.charset.StandardCharsets.ISO_8859_1));
         }
 
         private Proxy toJavaProxy() {

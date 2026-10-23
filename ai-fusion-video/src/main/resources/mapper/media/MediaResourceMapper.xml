@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.media.MediaResourceMapper">
+    <select id="lockRequest" resultType="com.stonewu.fusion.entity.media.MediaResourceEntity">
+        SELECT * FROM afv_media_resource WHERE created_by = #{actor} AND request_id = #{requestId} FOR UPDATE
+    </select>
+    <select id="lock" resultType="com.stonewu.fusion.entity.media.MediaResourceEntity">
+        SELECT * FROM afv_media_resource WHERE id = #{id} FOR UPDATE
+    </select>
+    <select id="source" resultType="com.stonewu.fusion.entity.media.MediaResourceEntity">
+        SELECT r.* FROM afv_media_resource r JOIN afv_media_source s ON s.resource_id = r.id
+        WHERE s.source_type = #{type} AND s.source_id = #{id} AND s.source_version = #{version} AND s.source_field = #{field}
+        <if test="lock">FOR UPDATE</if>
+    </select>
+    <select id="directRetention" resultType="String">
+        SELECT 'BUSINESS_SOURCE' AS anchor_kind FROM afv_media_source WHERE resource_id=#{mediaId}
+        UNION ALL SELECT 'BUSINESS_BINDING' FROM afv_media_binding WHERE media_id=#{mediaId}
+        UNION ALL SELECT 'PRESET' FROM afv_media_preset_binding WHERE media_id=#{mediaId}
+        UNION ALL SELECT 'PREVIEW_SOURCE' FROM afv_media_preview_job WHERE source_resource_id=#{mediaId}
+        UNION ALL SELECT 'PREVIEW_OUTPUT' FROM afv_media_preview_job WHERE output_resource_id=#{mediaId}
+        UNION ALL SELECT 'ACCESS_TICKET' FROM afv_media_access_ticket
+            WHERE resource_id=#{mediaId} AND revoked=FALSE AND expires_at&gt;UTC_TIMESTAMP(6)
+        UNION ALL SELECT 'GENERATION_INPUT' FROM afv_remote_generation_job j
+            JOIN afv_generation_submission s ON s.id=j.submission_id
+            WHERE JSON_CONTAINS_PATH(j.input_json,'one',CONCAT('$.inputMediaVersions."',#{mediaId},'"'))
+        UNION ALL SELECT 'MEDIA_JOB_OUTPUT' FROM afv_media_resource m JOIN afv_media_job j
+            ON m.created_by=j.actor_user_id AND m.request_id LIKE CONCAT('job:',j.id,':%')
+            WHERE m.id=#{mediaId}
+        UNION ALL SELECT 'GENERATION_OUTPUT' FROM afv_media_resource m JOIN afv_generation_submission s
+            ON m.created_by=s.actor_user_id
+               AND m.request_id LIKE CONCAT('generation:',LOWER(s.kind),':',s.task_id,':%')
+            WHERE m.id=#{mediaId}
+        LIMIT 1
+    </select>
+    <select id="documentRetention" resultType="String">
+        SELECT anchor_kind FROM afv_media_all_reference_document
+        WHERE JSON_CONTAINS(JSON_EXTRACT(content,'$**.mediaId'),JSON_QUOTE(#{mediaId}))
+           OR JSON_CONTAINS(JSON_EXTRACT(content,'$**.resourceId'),JSON_QUOTE(#{mediaId}))
+           OR JSON_SEARCH(content,'one',CONCAT('%media://',#{mediaId},'%')) IS NOT NULL
+        LIMIT 1
+    </select>
+    <select id="readyResources" resultType="com.stonewu.fusion.entity.media.MediaResourceEntity">
+        SELECT r.* FROM afv_media_resource r WHERE state = 'READY' AND
+        <choose>
+            <when test="projectId == null">project_id IS NULL AND owner_type = #{ownerType} AND owner_id = #{ownerId}</when>
+            <otherwise>project_id = #{projectId}</otherwise>
+        </choose>
+        AND NOT EXISTS (SELECT 1 FROM afv_media_preview_job p WHERE p.output_resource_id = r.id)
+        ORDER BY created_at DESC, id DESC LIMIT #{limit} OFFSET #{offset}
+    </select>
+    <insert id="copy">
+        INSERT INTO afv_media_resource(id,project_id,owner_type,owner_id,created_by,actor_team_id,request_id,request_hash,
+            media_kind,mime_type,original_name,byte_size,content_hash,width,height,duration_ms,has_audio,state,version,
+            blob_id,ingest_epoch,origin,created_at,updated_at)
+        SELECT #{id},#{projectId},#{ownerType},#{ownerId},#{actorUserId},#{actorTeamId},#{requestId},#{requestHash},media_kind,mime_type,original_name,byte_size,content_hash,width,height,duration_ms,
+            has_audio,'READY',0,blob_id,1,'user',UTC_TIMESTAMP(6),UTC_TIMESTAMP(6) FROM afv_media_resource WHERE id=#{sourceId}
+    </insert>
+    <insert id="recordCopy">
+        INSERT INTO afv_media_copy(media_id,source_media_id,source_version,created_by,created_at) VALUES(#{id},#{sourceId},#{version},#{actor},UTC_TIMESTAMP(6))
+    </insert>
+    <update id="expireIngest">
+        UPDATE afv_media_resource SET lease_until = UTC_TIMESTAMP(6) WHERE id = #{id} AND state = 'STAGING'
+    </update>
+    <update id="restartIngest">
+        UPDATE afv_media_resource SET blob_id = #{blobId}, ingest_epoch = #{epoch}, state = 'STAGING',
+            version = version + 1, last_error = NULL, lease_until = TIMESTAMPADD(MINUTE, 10, UTC_TIMESTAMP(6)),
+            updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="finishIngest">
+        UPDATE afv_media_resource SET state = 'READY', version = version + 1, lease_until = NULL,
+            last_error = NULL, updated_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND lease_until &gt; UTC_TIMESTAMP(6)
+    </update>
+    <update id="failIngest">
+        UPDATE afv_media_resource SET state = 'FAILED', version = version + 1,
+            lease_until = NULL, last_error = '媒体接收未完成，请重试', updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <select id="lockExpiredIngests" resultType="String">
+        SELECT id FROM afv_media_resource WHERE state = 'STAGING' AND lease_until &lt;= UTC_TIMESTAMP(6)
+        ORDER BY lease_until LIMIT 100 FOR UPDATE SKIP LOCKED
+    </select>
+    <insert id="insertStaging">
+        INSERT INTO afv_media_resource(id, project_id, owner_type, owner_id, created_by, actor_team_id,
+            request_id, request_hash, media_kind, mime_type, original_name, byte_size, content_hash,
+            width, height, duration_ms, has_audio, state, blob_id, lease_until, origin, agent_run_id, tool_call_id, canvas_id)
+        VALUES (#{resource.id}, #{resource.projectId}, #{resource.ownerType}, #{resource.ownerId}, #{resource.createdBy}, #{resource.actorTeamId}, #{resource.requestId}, #{resource.requestHash}, #{resource.mediaKind}, #{resource.mimeType}, #{resource.originalName}, #{resource.byteSize}, #{resource.contentHash}, #{resource.width}, #{resource.height}, #{resource.durationMs}, #{resource.hasAudio}, 'STAGING', #{resource.blobId},
+            TIMESTAMPADD(MINUTE, 10, UTC_TIMESTAMP(6)), #{resource.origin}, #{resource.agentRunId}, #{resource.toolCallId}, #{resource.canvasId})
+    </insert>
+</mapper>

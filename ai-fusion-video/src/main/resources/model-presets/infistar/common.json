@@ -1,0 +1,170 @@
+[
+  {
+    "code": "infistar:common-image",
+    "name": "无限星河通用图片配置",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "常用尺寸与比例默认模板，可按所用线路调整。",
+    "capabilities": [
+      "文生图"
+    ],
+    "config": {
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "defaultAspectRatio": "1:1",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "4:3": "1152x864",
+          "3:4": "864x1152",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "3:2": "1248x832",
+          "2:3": "832x1248",
+          "21:9": "1568x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "4:3": "2304x1728",
+          "3:4": "1728x2304",
+          "16:9": "2560x1440",
+          "9:16": "1440x2560",
+          "3:2": "2496x1664",
+          "2:3": "1664x2496",
+          "21:9": "3024x1296"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "4:3": "4608x3456",
+          "3:4": "3456x4608",
+          "16:9": "5120x2880",
+          "9:16": "2880x5120",
+          "3:2": "4992x3328",
+          "2:3": "3328x4992",
+          "21:9": "6048x2592"
+        }
+      },
+      "supportReferenceImages": true,
+      "maxReferenceImages": 1,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceImageFormField": "image",
+      "supportTransparentBackground": false,
+      "asyncMode": false,
+      "maxCount": 1
+    }
+  },
+  {
+    "code": "infistar:common-video",
+    "name": "无限星河通用视频配置",
+    "providerId": "infistar",
+    "platform": "openai_compatible",
+    "modelProtocol": "infistar_video",
+    "modelType": 3,
+    "description": "常用尺寸、比例和 5–15 秒时长默认模板，可按所用线路调整。",
+    "capabilities": [
+      "文生视频",
+      "首帧"
+    ],
+    "config": {
+      "minDuration": 5,
+      "maxDuration": 15,
+      "defaultDuration": 5,
+      "supportedResolutions": [
+        "720p",
+        "1080p",
+        "4K"
+      ],
+      "defaultResolution": "720p",
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9"
+      ],
+      "useProviderDefaultSize": false,
+      "supportFirstFrame": true,
+      "supportLastFrame": false,
+      "supportReferenceImages": false,
+      "supportReferenceVideos": false,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 1,
+      "maxReferenceImages": 0,
+      "maxReferenceVideos": 0,
+      "maxReferenceAudios": 0,
+      "referenceImageInputFormats": [
+        "url",
+        "data_uri"
+      ],
+      "supportGenerateAudio": false,
+      "supportWatermark": false,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "videoRules": {
+        "version": 1,
+        "profile": "infistar_video",
+        "promptRequired": true,
+        "defaultRatio": "16:9",
+        "automaticDuration": false
+      },
+      "supportedSizes": {
+        "720p": {
+          "1:1": "720x720",
+          "4:3": "960x720",
+          "3:4": "720x960",
+          "16:9": "1280x720",
+          "9:16": "720x1280",
+          "3:2": "1080x720",
+          "2:3": "720x1080",
+          "21:9": "1680x720"
+        },
+        "1080p": {
+          "1:1": "1080x1080",
+          "4:3": "1440x1080",
+          "3:4": "1080x1440",
+          "16:9": "1920x1080",
+          "9:16": "1080x1920",
+          "3:2": "1620x1080",
+          "2:3": "1080x1620",
+          "21:9": "2520x1080"
+        },
+        "4K": {
+          "1:1": "2160x2160",
+          "4:3": "2880x2160",
+          "3:4": "2160x2880",
+          "16:9": "3840x2160",
+          "9:16": "2160x3840",
+          "3:2": "3240x2160",
+          "2:3": "2160x3240",
+          "21:9": "5040x2160"
+        }
+      }
+    }
+  }
+]

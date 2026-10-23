@@ -14,20 +14,13 @@ import io.modelcontextprotocol.spec.McpSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.DisposableBean;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
+import reactor.core.publisher.Mono;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 /**
  * Owns application-level MCP clients and exposes their discovered tools to immutable AgentScope
@@ -165,7 +158,9 @@ public final class AgentScopeMcpRegistry implements DisposableBean {
         return List.copyOf(catalog);
     }
 
-    /** Registers only the MCP tools already captured by the kernel whitelist. */
+    /**
+     * Registers only the MCP tools already captured by the kernel whitelist.
+     */
     public void register(
             String agentDefinitionStableKey,
             Set<String> kernelWhitelist,
@@ -215,6 +210,68 @@ public final class AgentScopeMcpRegistry implements DisposableBean {
         return userRegistry == null || userId == null
                 ? AgentKernelToolManifest.schemaSha256("")
                 : userRegistry.configurationFingerprint(userId);
+    }
+
+    public List<McpWorkflowTool> workflowTools(String agentType, long userId) {
+        List<McpWorkflowTool> result = new ArrayList<>();
+        Map<String, List<McpSchema.Tool>> current = new LinkedHashMap<>();
+        for (var tool : tools.values()) {
+            if (tool.availableTo(agentType)) {
+                var discovered = current.computeIfAbsent(tool.serverName(), name -> {
+                    var values = servers.get(name).client().listTools().block(Duration.ofSeconds(30));
+                    if (values == null) {
+                        throw new IllegalStateException("MCP 服务没有返回工具目录");
+                    }
+                    return values;
+                });
+                discovered.stream().filter(value -> value.name().equals(tool.definition().name())).findFirst()
+                        .ifPresent(value ->
+                                result.add(McpWorkflowTool.describe(tool.serverName(), value,
+                                        servers.get(tool.serverName()).configurationHash(), objectMapper)));
+            }
+        }
+        if (userRegistry != null) {
+            result.addAll(userRegistry.workflowTools(userId));
+        }
+        Set<String> names = new LinkedHashSet<>();
+        for (var tool : result) {
+            if (!names.add(tool.toolName())) {
+                throw new IllegalStateException("MCP 工具名称重复，请先修正服务配置");
+            }
+        }
+        return result.stream()
+                .sorted(Comparator.comparing(McpWorkflowTool::serverName).thenComparing(McpWorkflowTool::toolName))
+                .toList();
+    }
+
+    public McpWorkflowTool.Opened openWorkflowTool(String agentType, long userId, String toolName) {
+        var tool = tools.get(toolName);
+        if (tool != null && tool.availableTo(agentType)) {
+            var server = servers.get(tool.serverName());
+            var current = server.client().listTools().block(Duration.ofSeconds(30));
+            if (current == null) {
+                throw new IllegalStateException("MCP 服务没有返回工具定义");
+            }
+            var definition = current.stream().filter(value -> value.name().equals(toolName)).findFirst()
+                    .orElseThrow(() -> new IllegalStateException("MCP 工具已从远端移除"));
+            return new McpWorkflowTool.Opened(server.client(), false, McpWorkflowTool.describe(
+                    tool.serverName(), definition, server.configurationHash(), objectMapper));
+        }
+        if (userRegistry == null) {
+            throw new IllegalArgumentException("MCP 工具不存在或不可用于画布");
+        }
+        return userRegistry.openWorkflowTool(userId, toolName);
+    }
+
+    public String workflowConfigurationHash(String agentType, long userId, String toolName) {
+        var tool = tools.get(toolName);
+        if (tool != null && tool.availableTo(agentType)) {
+            return servers.get(tool.serverName()).configurationHash();
+        }
+        if (userRegistry == null) {
+            throw new IllegalArgumentException("MCP 工具不存在或不可用于画布");
+        }
+        return userRegistry.configurationFingerprint(userId);
     }
 
     @Override
@@ -279,7 +336,7 @@ public final class AgentScopeMcpRegistry implements DisposableBean {
             AgentScopeV2Properties.McpServer config) {
         Duration wait = config.getInitializationTimeout().plus(config.getTimeout());
         List<McpSchema.Tool> discovered = client.initialize()
-                .then(client.listTools())
+                .then(Mono.defer(client::listTools))
                 .block(wait);
         if (discovered == null) {
             throw new IllegalStateException("MCP server returned no tool catalog");
@@ -326,11 +383,28 @@ public final class AgentScopeMcpRegistry implements DisposableBean {
                     serverName,
                     tool.description() == null ? "" : tool.description(),
                     manifest,
-                    agentTypes);
+                    agentTypes, tool);
             serverTools.put(toolName, descriptor);
         }
         allTools.putAll(serverTools);
-        return new RegisteredServer(client);
+        return new RegisteredServer(client, serverFingerprint(config));
+    }
+
+    private String serverFingerprint(AgentScopeV2Properties.McpServer config) {
+        Map<String, Object> fields = new LinkedHashMap<>();
+        fields.put("transport", config.getTransport());
+        fields.put("url", config.getUrl());
+        fields.put("command", config.getCommand());
+        fields.put("args", config.getArgs());
+        fields.put("env", config.getEnv());
+        fields.put("headers", config.getHeaders());
+        fields.put("queryParams", config.getQueryParams());
+        fields.put("protocolVersions", config.getProtocolVersions());
+        fields.put("enabledTools", config.getEnabledTools());
+        fields.put("agentTypes", config.getAgentTypes());
+        fields.put("timeoutMillis", config.getTimeout().toMillis());
+        fields.put("initializationTimeoutMillis", config.getInitializationTimeout().toMillis());
+        return McpWorkflowTool.fingerprint(fields, objectMapper);
     }
 
     private AgentKernelToolManifest manifest(McpSchema.Tool tool) {
@@ -378,7 +452,7 @@ public final class AgentScopeMcpRegistry implements DisposableBean {
         if (!config.getProtocolVersions().isEmpty()) {
             builder.protocolVersions(config.getProtocolVersions().toArray(String[]::new));
         }
-        return builder.timeout(config.getTimeout())
+        return McpSingleSubmissionHttp.configure(builder).timeout(config.getTimeout())
                 .initializationTimeout(config.getInitializationTimeout())
                 .buildAsync()
                 .block(config.getInitializationTimeout());
@@ -424,14 +498,14 @@ public final class AgentScopeMcpRegistry implements DisposableBean {
         McpClientWrapper create(String name, AgentScopeV2Properties.McpServer config);
     }
 
-    private record RegisteredServer(McpClientWrapper client) {
+    private record RegisteredServer(McpClientWrapper client, String configurationHash) {
     }
 
     private record McpToolDescriptor(
             String serverName,
             String description,
             AgentKernelToolManifest manifest,
-            Set<String> agentTypes) {
+            Set<String> agentTypes, McpSchema.Tool definition) {
 
         private boolean availableTo(String agentDefinitionStableKey) {
             return agentTypes.isEmpty() || agentTypes.contains(agentDefinitionStableKey);

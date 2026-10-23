@@ -9,11 +9,13 @@ import com.stonewu.fusion.entity.ai.ComfyUiWorkflowVersion;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-/** Applies explicit platform bindings to a deep copy of an immutable workflow version. */
+/**
+ * Applies explicit platform bindings to a deep copy of an immutable workflow version.
+ */
 @Component
 @RequiredArgsConstructor
 public class ComfyUiWorkflowRenderer {
@@ -76,7 +78,9 @@ public class ComfyUiWorkflowRenderer {
                 || "uploaded_audio".equals(valueType);
     }
 
-    /** ComfyUI 连线格式：["源节点ID", 槽位索引]。 */
+    /**
+     * ComfyUI 连线格式：["源节点ID", 槽位索引]。
+     */
     private static boolean isLink(JsonNode value) {
         return value != null && value.isArray() && value.size() == 2
                 && value.get(0).isTextual() && value.get(1).isInt();
@@ -125,17 +129,23 @@ public class ComfyUiWorkflowRenderer {
     }
 
     private long toLong(Object value, ComfyUiInputBinding binding) {
-        if (value instanceof Number number) return number.longValue();
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
         return Long.parseLong(requireText(value, binding));
     }
 
     private double toDouble(Object value, ComfyUiInputBinding binding) {
-        if (value instanceof Number number) return number.doubleValue();
+        if (value instanceof Number number) {
+            return number.doubleValue();
+        }
         return Double.parseDouble(requireText(value, binding));
     }
 
     private boolean toBoolean(Object value, ComfyUiInputBinding binding) {
-        if (value instanceof Boolean bool) return bool;
+        if (value instanceof Boolean bool) {
+            return bool;
+        }
         String text = requireText(value, binding);
         if (!"true".equalsIgnoreCase(text) && !"false".equalsIgnoreCase(text)) {
             throw new BusinessException(400,

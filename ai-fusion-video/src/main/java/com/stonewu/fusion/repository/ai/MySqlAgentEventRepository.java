@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.entity.ai.AgentEvent;
+import com.stonewu.fusion.entity.ai.AgentModelCallUsage;
 import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.enums.ai.AgentModelCallStatus;
 import com.stonewu.fusion.enums.ai.AgentRunStatus;
@@ -24,13 +25,11 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 
-/** MySQL row-lock implementation of the durable event transaction port. */
+/**
+ * MySQL row-lock implementation of the durable event transaction port.
+ */
 @Repository
 @RequiredArgsConstructor
 public class MySqlAgentEventRepository implements AgentEventRepository {
@@ -179,22 +178,19 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
             return false;
         }
         return switch (actor) {
-            case CANCELLATION_COORDINATOR ->
-                    current == AgentRunStatus.CANCEL_REQUESTED
-                            && request.terminalStatus() == AgentRunStatus.CANCELLED;
-            case CONFIRMATION_EXPIRER ->
-                    current == AgentRunStatus.WAITING_CONFIRMATION
-                            && run.getWaitExpiresAt() != null
-                            && !run.getWaitExpiresAt().isAfter(databaseNow)
-                            && request.terminalStatus() == AgentRunStatus.CANCELLED;
-            case OWNER_RECONCILER ->
-                    run.getLeaseUntil() != null
-                            && !run.getLeaseUntil().isAfter(databaseNow)
-                            && ((current == AgentRunStatus.RUNNING
-                                    && request.terminalStatus() == AgentRunStatus.FAILED
-                                    && request.errorCode() == AgentRuntimeErrorCode.OWNER_LOST)
-                                || (current == AgentRunStatus.CANCEL_REQUESTED
-                                    && request.terminalStatus() == AgentRunStatus.CANCELLED));
+            case CANCELLATION_COORDINATOR -> current == AgentRunStatus.CANCEL_REQUESTED
+                    && request.terminalStatus() == AgentRunStatus.CANCELLED;
+            case CONFIRMATION_EXPIRER -> current == AgentRunStatus.WAITING_CONFIRMATION
+                    && run.getWaitExpiresAt() != null
+                    && !run.getWaitExpiresAt().isAfter(databaseNow)
+                    && request.terminalStatus() == AgentRunStatus.CANCELLED;
+            case OWNER_RECONCILER -> run.getLeaseUntil() != null
+                    && !run.getLeaseUntil().isAfter(databaseNow)
+                    && ((current == AgentRunStatus.RUNNING
+                    && request.terminalStatus() == AgentRunStatus.FAILED
+                    && request.errorCode() == AgentRuntimeErrorCode.OWNER_LOST)
+                    || (current == AgentRunStatus.CANCEL_REQUESTED
+                    && request.terminalStatus() == AgentRunStatus.CANCELLED));
         };
     }
 
@@ -229,12 +225,13 @@ public class MySqlAgentEventRepository implements AgentEventRepository {
             throw new IllegalStateException(
                     "Agent terminal update did not affect exactly one row");
         }
-        usageMapper.finishAllStartedForRun(
-                run.getRunId(),
-                request.terminalStatus() == AgentRunStatus.CANCELLED
-                        ? AgentModelCallStatus.CANCELLED.name()
-                        : AgentModelCallStatus.FAILED.name(),
-                databaseNow);
+        usageMapper.update(new LambdaUpdateWrapper<AgentModelCallUsage>()
+                .eq(AgentModelCallUsage::getRunId, run.getRunId())
+                .eq(AgentModelCallUsage::getStatus, AgentModelCallStatus.STARTED.name())
+                .set(AgentModelCallUsage::getStatus, request.terminalStatus() == AgentRunStatus.CANCELLED
+                        ? AgentModelCallStatus.CANCELLED.name() : AgentModelCallStatus.FAILED.name())
+                .set(AgentModelCallUsage::getFinishedAt, databaseNow)
+                .set(AgentModelCallUsage::getUpdateTime, databaseNow));
         return toCommitted(inserted, safeEnvelope, databaseNow);
     }
 

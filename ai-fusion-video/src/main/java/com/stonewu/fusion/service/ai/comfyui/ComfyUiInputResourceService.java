@@ -22,7 +22,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
-/** Loads platform image references and uploads them through ComfyUI /upload/image. */
+/**
+ * Loads platform image references and uploads them through ComfyUI /upload/image.
+ */
 @Service
 public class ComfyUiInputResourceService {
 
@@ -42,7 +44,9 @@ public class ComfyUiInputResourceService {
                                      String taskKey,
                                      String field,
                                      List<String> sources) {
-        if (sources == null || sources.isEmpty()) return List.of();
+        if (sources == null || sources.isEmpty()) {
+            return List.of();
+        }
         List<String> uploaded = new ArrayList<>();
         for (int index = 0; index < sources.size(); index++) {
             ImageBytes image = loadImage(apiConfig, sources.get(index));

@@ -12,19 +12,11 @@ import org.springframework.stereotype.Service;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.ArrayList;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.HexFormat;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 
-/** Parses, canonicalizes and validates ComfyUI workflow documents without network access. */
+/**
+ * Parses, canonicalizes and validates ComfyUI workflow documents without network access.
+ */
 @Service
 @RequiredArgsConstructor
 public class ComfyUiWorkflowDocumentService {
@@ -53,10 +45,10 @@ public class ComfyUiWorkflowDocumentService {
     private final ObjectMapper objectMapper;
 
     public ComfyUiWorkflowDefinition normalize(int modelType,
-                                                String uiWorkflowJson,
-                                                String apiWorkflowJson,
-                                                String inputBindingsJson,
-                                                String outputBindingsJson) {
+                                               String uiWorkflowJson,
+                                               String apiWorkflowJson,
+                                               String inputBindingsJson,
+                                               String outputBindingsJson) {
         requireModelType(modelType);
         ObjectNode apiWorkflow = parseObject(apiWorkflowJson, "API-format 工作流", MAX_API_JSON_BYTES, true);
         if (apiWorkflow.has("nodes") || apiWorkflow.has("links")) {

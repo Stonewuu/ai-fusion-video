@@ -1,0 +1,302 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.media.MediaJobMapper">
+    <select id="previewIngestEpoch" resultType="Long">
+        SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(checkpoint_json, '$.previewIngestOwnerEpoch')) AS UNSIGNED) FROM afv_media_job WHERE id = #{id}
+    </select>
+    <update id="previewIngestOwner">
+        UPDATE afv_media_job SET checkpoint_json = JSON_SET(checkpoint_json, '$.previewIngestOwnerEpoch', #{epoch}) WHERE id = #{id}
+    </update>
+    <select id="activePreviews" resultType="int">
+        SELECT COUNT(*) FROM afv_media_job WHERE kind = 'MEDIA_PREVIEW' AND status = 'RUNNING' AND lease_until &gt; UTC_TIMESTAMP(6)
+    </select>
+    <select id="nextPreview" resultType="String">
+        SELECT j.id FROM afv_media_job j JOIN afv_media_preview_current c ON c.job_id = j.id
+        WHERE j.kind = 'MEDIA_PREVIEW' AND ((j.status = 'WAITING' AND j.next_run_at &lt;= UTC_TIMESTAMP(6))
+            OR (j.status = 'RUNNING' AND j.lease_until &lt;= UTC_TIMESTAMP(6)))
+            AND (SELECT COUNT(*) FROM afv_media_job active WHERE active.kind = 'MEDIA_PREVIEW'
+                AND active.actor_user_id = j.actor_user_id AND active.status = 'RUNNING' AND active.lease_until &gt; UTC_TIMESTAMP(6)) &lt; 2
+        ORDER BY j.next_run_at, j.id LIMIT 1 FOR UPDATE SKIP LOCKED
+    </select>
+    <update id="claimPreview">
+        UPDATE afv_media_job SET status = 'RUNNING', phase = '正在生成预览', owner_instance_id = #{owner}, owner_epoch = owner_epoch + 1,
+            lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6)), revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="completePreview">
+        UPDATE afv_media_job SET status = 'SUCCEEDED', phase = '预览已生成', checkpoint_json = #{checkpoint}, error_msg = NULL,
+            owner_instance_id = NULL, lease_until = NULL, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="waitForPreviewIngest">
+        UPDATE afv_media_job SET status = 'WAITING', phase = '等待原预览接收完成', owner_instance_id = NULL,
+            lease_until = NULL, next_run_at = TIMESTAMPADD(SECOND, 5, UTC_TIMESTAMP(6)), revision = revision + 1,
+            updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <select id="lockPreviewOwner" resultType="String">
+        SELECT id FROM afv_media_job WHERE id = #{id} AND kind = 'MEDIA_PREVIEW' AND status = 'RUNNING'
+            AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND lease_until &gt; UTC_TIMESTAMP(6) FOR UPDATE
+    </select>
+    <update id="stopPreview">
+        UPDATE afv_media_job SET status = #{status}, phase = #{phase}, error_msg = #{error}, owner_instance_id = NULL, lease_until = NULL,
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <insert id="insertPreview">
+        INSERT INTO afv_media_job(id, kind, project_id, actor_user_id, request_id, request_hash, context_json,
+            input_json, checkpoint_json, phase, deadline_at, next_run_at, created_at, updated_at)
+        VALUES (#{id}, 'MEDIA_PREVIEW', #{projectId}, #{actor}, #{requestId}, #{requestHash}, #{context}, #{input}, '{}', '等待生成预览', TIMESTAMPADD(MINUTE, 10, UTC_TIMESTAMP(6)),
+            UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <select id="nextCompose" resultType="com.stonewu.fusion.entity.media.MediaJobEntity">
+        SELECT j.* FROM afv_media_job j LEFT JOIN afv_episode_audio_job a ON a.job_id = j.id
+        WHERE j.kind = 'EPISODE_COMPOSE' AND
+            ((j.status IN ('QUEUED', 'WAITING') AND j.next_run_at &lt;= UTC_TIMESTAMP(6))
+            OR (j.status = 'RUNNING' AND j.lease_until &lt;= UTC_TIMESTAMP(6)))
+            AND (a.job_id IS NULL OR a.permit_held = TRUE OR j.cancel_requested = TRUE OR j.deadline_at &lt;= UTC_TIMESTAMP(6)
+                OR ((a.music_result_json IS NOT NULL OR JSON_EXTRACT(j.checkpoint_json, '$.music') IS NOT NULL)
+                    AND (a.sfx_enabled = FALSE OR a.sfx_result_json IS NOT NULL OR JSON_EXTRACT(j.checkpoint_json, '$.sfx') IS NOT NULL))
+                OR (NOT EXISTS(SELECT 1 FROM afv_episode_audio_job busy WHERE busy.api_config_id = a.api_config_id AND busy.permit_held = TRUE)
+                    AND NOT EXISTS(SELECT 1 FROM afv_canvas_media_job busy WHERE busy.api_config_id = a.api_config_id AND busy.permit_held = TRUE)))
+        ORDER BY j.next_run_at, j.id LIMIT 1 FOR UPDATE SKIP LOCKED
+    </select>
+    <update id="claimCompose">
+        UPDATE afv_media_job SET status = 'RUNNING', owner_instance_id = #{owner}, owner_epoch = owner_epoch + 1,
+            lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6)), revision = revision + 1, updated_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id}
+    </update>
+    <update id="acquireEpisodeAudioPermit">
+        UPDATE afv_episode_audio_job a JOIN afv_media_job j ON j.id = a.job_id
+        SET a.permit_held = TRUE WHERE a.job_id = #{id} AND j.cancel_requested = FALSE AND j.deadline_at &gt; UTC_TIMESTAMP(6)
+            AND ((a.music_result_json IS NULL AND JSON_EXTRACT(j.checkpoint_json, '$.music') IS NULL)
+                OR (a.sfx_enabled = TRUE AND a.sfx_result_json IS NULL AND JSON_EXTRACT(j.checkpoint_json, '$.sfx') IS NULL))
+    </update>
+    <update id="heartbeat">
+        UPDATE afv_media_job SET lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6))
+        WHERE id = #{id} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND status = 'RUNNING'
+            AND lease_until &gt; UTC_TIMESTAMP(6)
+    </update>
+    <update id="checkpoint">
+        UPDATE afv_media_job SET checkpoint_json = #{checkpoint}, phase = #{phase}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="waitForProvider">
+        UPDATE afv_media_job SET status = 'WAITING', lease_until = NULL,
+            next_run_at = TIMESTAMPADD(SECOND, #{seconds}, UTC_TIMESTAMP(6)), revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <select id="lockEpisodeAudioPermit" resultType="String">
+        SELECT job_id FROM afv_episode_audio_job WHERE job_id = #{id} AND permit_held = TRUE FOR UPDATE
+    </select>
+    <select id="importAgentScope" resultType="String">
+        SELECT run_id FROM afv_agent_run WHERE run_id = #{runId} AND user_id = #{userId} AND actor_team_id &lt;=&gt; #{teamId}
+            AND cancel_requested_at IS NULL AND status NOT IN ('CANCELLED','FAILED','EXPIRED')
+    </select>
+    <select id="importNodeRuns" resultType="String">
+        SELECT node_run_id FROM afv_canvas_media_import WHERE job_id = #{id} AND canvas_id = #{canvasId}
+    </select>
+    <select id="activeCanvasNodes" resultType="String">
+        SELECT n.id FROM afv_canvas_media_job m JOIN afv_canvas_node_run n ON n.id = m.node_run_id
+            JOIN afv_canvas_run r ON r.id = n.run_id
+        WHERE m.job_id = #{id} AND n.external_id = m.job_id AND n.external_kind = 'MEDIA'
+            AND r.canvas_id = #{canvasId} AND r.actor_user_id = #{userId} AND r.actor_team_id &lt;=&gt; #{teamId}
+            AND n.status NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','BLOCKED','CANCELLED')
+        <if test="!allowCancel">AND r.cancel_requested = FALSE AND r.deadline_at &gt; UTC_TIMESTAMP(6)</if>
+    </select>
+    <select id="activeImportParents" resultType="String">
+        SELECT n.id FROM afv_canvas_node_run n JOIN afv_canvas_run r ON r.id = n.run_id
+        WHERE n.id = #{nodeRunId} AND n.external_kind = 'MEDIA_IMPORT' AND n.external_id = #{id} AND r.canvas_id = #{canvasId}
+            AND r.actor_user_id = #{userId} AND r.actor_team_id &lt;=&gt; #{teamId}
+            AND n.status NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','BLOCKED','CANCELLED')
+        <if test="!allowCancel">AND r.cancel_requested = FALSE AND r.deadline_at &gt; UTC_TIMESTAMP(6)</if>
+    </select>
+    <select id="lockOwner" resultType="String">
+        SELECT id FROM afv_media_job WHERE id = #{id} AND status = 'RUNNING'
+            AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND lease_until &gt; UTC_TIMESTAMP(6)
+        <if test="!allowCancel">AND cancel_requested = FALSE AND deadline_at &gt; UTC_TIMESTAMP(6)</if>
+        FOR UPDATE
+    </select>
+    <select id="countWorkflowTesterRoles" resultType="int">
+        SELECT COUNT(*) FROM sys_user_role ur JOIN sys_role r ON r.id = ur.role_id
+        WHERE ur.user_id = #{actor} AND ur.deleted = FALSE AND r.deleted = FALSE
+            AND r.status = 1 AND UPPER(r.code) = 'ADMIN'
+    </select>
+    <select id="lock" resultType="com.stonewu.fusion.entity.media.MediaJobEntity">
+        SELECT * FROM afv_media_job WHERE id = #{id} FOR UPDATE
+    </select>
+    <update id="recordFailure">
+        UPDATE afv_media_job SET error_msg = #{error}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND status = 'RUNNING'
+            AND lease_until &gt; UTC_TIMESTAMP(6)
+    </update>
+    <update id="terminal">
+        UPDATE afv_media_job SET status = #{status}, phase = #{phase}, error_msg = #{error}, lease_until = NULL,
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND status = 'RUNNING' AND lease_until &gt; UTC_TIMESTAMP(6)
+    </update>
+    <update id="requestComposeCancel">
+        UPDATE afv_media_job SET cancel_requested = TRUE, next_run_at = UTC_TIMESTAMP(6), revision = revision + 1,
+            updated_at = UTC_TIMESTAMP(6) WHERE id = #{id} AND status IN ('QUEUED', 'WAITING', 'RUNNING', 'NEEDS_REVIEW') AND cancel_requested = FALSE
+    </update>
+    <select id="activeImports" resultType="int">
+        SELECT COUNT(*) FROM afv_media_job WHERE kind = 'SOURCE_IMPORT' AND status = 'RUNNING' AND lease_until &gt; UTC_TIMESTAMP(6)
+    </select>
+    <select id="nextImport" resultType="String">
+        SELECT j.id FROM afv_media_job j JOIN afv_canvas_media_import b ON b.job_id = j.id
+        WHERE j.kind = 'SOURCE_IMPORT' AND ((j.status = 'WAITING' AND j.next_run_at &lt;= UTC_TIMESTAMP(6))
+            OR (j.status = 'RUNNING' AND j.lease_until &lt;= UTC_TIMESTAMP(6)))
+            AND (SELECT COUNT(*) FROM afv_media_job active WHERE active.kind = 'SOURCE_IMPORT'
+                AND active.actor_user_id = j.actor_user_id AND active.status = 'RUNNING' AND active.lease_until &gt; UTC_TIMESTAMP(6)) &lt; 2
+        ORDER BY j.next_run_at, j.id LIMIT 1 FOR UPDATE SKIP LOCKED
+    </select>
+    <update id="waitForImportIngest">
+        UPDATE afv_media_job SET status = 'WAITING', phase = '等待原素材接收完成', owner_instance_id = NULL,
+            lease_until = NULL, next_run_at = TIMESTAMPADD(SECOND, 5, UTC_TIMESTAMP(6)),
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <select id="lockImportOwner" resultType="String">
+        SELECT id FROM afv_media_job WHERE id = #{id} AND kind = 'SOURCE_IMPORT' AND status = 'RUNNING'
+            AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND lease_until &gt; UTC_TIMESTAMP(6) FOR UPDATE
+    </select>
+    <update id="stopImport">
+        UPDATE afv_media_job SET status = 'CANCELLED', cancel_requested = TRUE, phase = '导入已停止', error_msg = #{message},
+            checkpoint_json = #{checkpoint}, owner_instance_id = NULL, lease_until = NULL, revision = revision + 1,
+            updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="importProgress">
+        UPDATE afv_media_job SET status = #{status}, checkpoint_json = #{checkpoint}, phase = #{phase}, owner_instance_id = NULL,
+            lease_until = NULL, next_run_at = UTC_TIMESTAMP(6), revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="importPlacement">
+        UPDATE afv_media_job SET checkpoint_json = #{checkpoint}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <select id="lockRequest" resultType="com.stonewu.fusion.entity.media.MediaJobEntity">
+        SELECT * FROM afv_media_job WHERE actor_user_id = #{actor} AND request_id = #{requestId} FOR UPDATE
+    </select>
+    <insert id="insertImport">
+        INSERT INTO afv_media_job(id, kind, project_id, actor_user_id, request_id, request_hash, context_json,
+            input_json, checkpoint_json, phase, deadline_at, next_run_at, created_at, updated_at)
+        VALUES (#{id}, 'SOURCE_IMPORT', #{projectId}, #{actor}, #{requestId}, #{requestHash}, #{context}, #{input}, #{checkpoint}, '等待导入', TIMESTAMPADD(HOUR, 2, UTC_TIMESTAMP(6)),
+            UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <update id="cancelImport">
+        UPDATE afv_media_job SET cancel_requested = TRUE, status = #{status}, checkpoint_json = #{checkpoint}, next_run_at = UTC_TIMESTAMP(6),
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="retryImport">
+        UPDATE afv_media_job SET status = 'QUEUED', cancel_requested = FALSE, checkpoint_json = #{checkpoint}, error_msg = NULL,
+            phase = '等待重试未完成项', owner_instance_id = NULL, lease_until = NULL, owner_epoch = owner_epoch + 1,
+            deadline_at = TIMESTAMPADD(HOUR, 2, UTC_TIMESTAMP(6)), next_run_at = UTC_TIMESTAMP(6),
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <insert id="insertCompose">
+        INSERT INTO afv_media_job(id, kind, project_id, target_id, target_version, actor_user_id, request_id, request_hash,
+            context_json, input_json, checkpoint_json, next_run_at, deadline_at, created_at, updated_at)
+        VALUES (#{id}, 'EPISODE_COMPOSE', #{projectId}, #{episodeId}, #{version}, #{actor}, #{requestId}, #{requestHash}, #{context}, #{input}, '{}', UTC_TIMESTAMP(6),
+            TIMESTAMPADD(HOUR, 2, UTC_TIMESTAMP(6)), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <update id="advanceRevision">
+        UPDATE afv_media_job SET revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="waitForAudio">
+        UPDATE afv_media_job SET status = #{status}, phase = #{phase}, error_msg = #{error}, owner_instance_id = NULL, lease_until = NULL,
+            next_run_at = TIMESTAMPADD(SECOND, #{seconds}, UTC_TIMESTAMP(6)), revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="resumeReviewedAudio">
+        UPDATE afv_media_job SET status = 'WAITING', phase = '按核实决定继续原任务', error_msg = NULL,
+            next_run_at = UTC_TIMESTAMP(6), deadline_at = TIMESTAMPADD(HOUR, 2, UTC_TIMESTAMP(6)),
+            owner_instance_id = NULL, lease_until = NULL, owner_epoch = owner_epoch + 1,
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <select id="dueComfyTests" resultType="String">
+        SELECT id FROM afv_media_job WHERE kind = 'COMFY_WORKFLOW_TEST' AND
+            ((status = 'WAITING' AND (next_run_at &lt;= UTC_TIMESTAMP(6) OR cancel_requested = TRUE))
+            OR (status = 'RUNNING' AND lease_until &lt;= UTC_TIMESTAMP(6)))
+        ORDER BY next_run_at, id LIMIT 32 FOR UPDATE SKIP LOCKED
+    </select>
+    <update id="heartbeatComfyTest">
+        UPDATE afv_media_job SET lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6))
+        WHERE id = #{id} AND kind = 'COMFY_WORKFLOW_TEST' AND status = 'RUNNING' AND owner_instance_id = #{owner}
+            AND owner_epoch = #{epoch} AND lease_until &gt; UTC_TIMESTAMP(6)
+    </update>
+    <update id="submittingComfyTest">
+        UPDATE afv_media_job SET phase = 'SUBMITTING', revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="ingestingComfyTest">
+        UPDATE afv_media_job SET phase = 'INGESTING', error_msg = NULL, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="waitForComfyTest">
+        UPDATE afv_media_job SET status = 'WAITING', phase = #{phase}, error_msg = #{error}, lease_until = NULL,
+            next_run_at = TIMESTAMPADD(SECOND, #{seconds}, UTC_TIMESTAMP(6)), revision = revision + 1,
+            updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="finishComfyTest">
+        UPDATE afv_media_job SET status = #{status}, error_msg = #{error}, lease_until = NULL, revision = revision + 1,
+            updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <select id="lockComfyTestOwner" resultType="String">
+        SELECT id FROM afv_media_job WHERE id = #{id} AND kind = 'COMFY_WORKFLOW_TEST' AND status = 'RUNNING'
+            AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND lease_until &gt; UTC_TIMESTAMP(6) FOR UPDATE
+    </select>
+    <insert id="insertComfyTest">
+        INSERT INTO afv_media_job(id, kind, project_id, target_id, target_version, actor_user_id, request_id,
+            request_hash, context_json, input_json, checkpoint_json, status, phase, deadline_at, next_run_at, created_at, updated_at)
+        VALUES (#{id}, 'COMFY_WORKFLOW_TEST', NULL, NULL, NULL, #{actor}, #{requestId}, #{requestHash}, #{context}, #{input}, '{"outputs":[]}', 'QUEUED', 'PREPARING',
+            TIMESTAMPADD(MINUTE, #{minutes}, UTC_TIMESTAMP(6)), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <update id="cancelComfyTest">
+        UPDATE afv_media_job SET cancel_requested = TRUE, status = #{status}, next_run_at = UTC_TIMESTAMP(6),
+            error_msg = #{error}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="reviewComfyTest">
+        UPDATE afv_media_job SET status = #{status}, error_msg = #{error}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="resumeComfyTest">
+        UPDATE afv_media_job SET status = 'WAITING', error_msg = NULL, lease_until = NULL,
+            next_run_at = UTC_TIMESTAMP(6), deadline_at = TIMESTAMPADD(MINUTE, 60, UTC_TIMESTAMP(6)),
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <select id="endedCanvas" resultType="String">
+        SELECT j.id FROM afv_media_job j JOIN afv_canvas_media_job m ON m.job_id = j.id
+                            WHERE j.id = #{id} AND m.node_run_id = #{nodeRunId} AND m.permit_held = FALSE AND j.kind = 'CANVAS_MEDIA'
+                                AND j.status IN ('SUCCEEDED','FAILED','CANCELLED','CONFLICT')
+    </select>
+    <insert id="insertCanvasMedia">
+        INSERT INTO afv_media_job(id, kind, project_id, actor_user_id, request_id, request_hash, context_json,
+            input_json, checkpoint_json, status, phase, next_run_at, deadline_at, created_at, updated_at)
+        VALUES (#{id}, 'CANVAS_MEDIA', #{projectId}, #{actor}, #{requestId}, #{hash}, #{context}, #{input}, '{}', 'QUEUED', '等待处理', UTC_TIMESTAMP(6),
+            TIMESTAMPADD(HOUR, 2, UTC_TIMESTAMP(6)), UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <select id="nextCanvasMedia" resultType="String">
+        SELECT j.id FROM afv_media_job j JOIN afv_canvas_media_job c ON c.job_id = j.id
+        WHERE ((j.status = 'WAITING' AND j.next_run_at &lt;= UTC_TIMESTAMP(6))
+            OR (j.status = 'RUNNING' AND j.lease_until &lt;= UTC_TIMESTAMP(6)))
+            AND (c.api_config_id IS NULL OR c.permit_held = TRUE OR j.cancel_requested = TRUE
+                OR (NOT EXISTS(SELECT 1 FROM afv_canvas_media_job busy WHERE busy.api_config_id = c.api_config_id AND busy.permit_held = TRUE)
+                    AND NOT EXISTS(SELECT 1 FROM afv_episode_audio_job busy WHERE busy.api_config_id = c.api_config_id AND busy.permit_held = TRUE)))
+        ORDER BY j.next_run_at, j.id LIMIT 1 FOR UPDATE SKIP LOCKED
+    </select>
+    <update id="claimCanvasMedia">
+        UPDATE afv_media_job SET status = 'RUNNING', owner_instance_id = #{owner}, owner_epoch = owner_epoch + 1, lease_until = TIMESTAMPADD(SECOND, 90, UTC_TIMESTAMP(6)) WHERE id = #{id}
+    </update>
+    <update id="waitForCanvasMedia">
+        UPDATE afv_media_job SET status = 'WAITING', phase = #{phase}, owner_instance_id = NULL, lease_until = NULL,
+            next_run_at = TIMESTAMPADD(SECOND, #{seconds}, UTC_TIMESTAMP(6)), revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="finishCanvasMedia">
+        UPDATE afv_media_job SET status = #{status}, phase = #{phase}, error_msg = #{error}, checkpoint_json = #{checkpoint}, lease_until = NULL,
+            owner_instance_id = NULL, revision = revision + 1, updated_at = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch} AND status = 'RUNNING' AND lease_until &gt; UTC_TIMESTAMP(6)
+    </update>
+    <update id="cancelCanvasMedia">
+        UPDATE afv_media_job SET cancel_requested = TRUE, next_run_at = UTC_TIMESTAMP(6) WHERE id = #{id} AND cancel_requested = FALSE
+    </update>
+    <update id="reviewCanvasMedia">
+        UPDATE afv_media_job SET status = #{status}, phase = '人工核实结束', error_msg = #{error}, revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="resumeCanvasMedia">
+        UPDATE afv_media_job SET status = 'WAITING', phase = '按核实决定继续原任务', error_msg = NULL,
+            next_run_at = UTC_TIMESTAMP(6), deadline_at = TIMESTAMPADD(HOUR, 2, UTC_TIMESTAMP(6)),
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+    <update id="adminCancel">
+        UPDATE afv_media_job SET status = 'CANCELLED', phase = '管理员已核实结束', error_msg = #{message}, cancel_requested = TRUE,
+            owner_instance_id = NULL, lease_until = NULL, owner_epoch = owner_epoch + 1,
+            revision = revision + 1, updated_at = UTC_TIMESTAMP(6) WHERE id = #{id}
+    </update>
+</mapper>

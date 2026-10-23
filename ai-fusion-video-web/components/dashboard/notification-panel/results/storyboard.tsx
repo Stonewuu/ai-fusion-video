@@ -18,10 +18,8 @@ export function StoryboardResult({
   if (isSave) {
     const status = obj.status as string | undefined;
     const message = obj.message as string | undefined;
-    const sceneId = (obj.storyboardSceneId ?? obj.sceneId) as number | undefined;
     const sceneNumber = obj.sceneNumber as string | undefined;
     const shotCount = obj.shotCount as number | undefined;
-    const episodeId = (obj.storyboardEpisodeId ?? obj.episodeId) as number | undefined;
     const sceneCount = obj.sceneCount as number | undefined;
 
     return (
@@ -34,16 +32,15 @@ export function StoryboardResult({
           )}
           {message || (status === "error" ? "保存失败" : "保存成功")}
         </p>
-        {sceneNumber || sceneId !== undefined ? (
+        {sceneNumber || shotCount !== undefined ? (
           <p className="text-[10px] text-muted-foreground/60">
-            {sceneNumber ? `场次 ${sceneNumber}` : `场次 ID ${sceneId}`}
+            {sceneNumber ? `场次 ${sceneNumber}` : "镜头"}
             {shotCount !== undefined && ` · ${shotCount} 个镜头`}
           </p>
         ) : null}
-        {episodeId !== undefined ? (
+        {sceneCount !== undefined ? (
           <p className="text-[10px] text-muted-foreground/60">
-            集 ID: {episodeId}
-            {sceneCount !== undefined && ` · ${sceneCount} 个场次`}
+            {sceneCount} 个场次
           </p>
         ) : null}
       </div>
@@ -64,7 +61,7 @@ export function StoryboardResult({
           >
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-blue-400/60" />
             <span className="truncate">
-              {(storyboard.title as string) || `分镜 #${storyboard.id || index + 1}`}
+              {(storyboard.title as string) || `分镜 ${index + 1}`}
               {storyboard.totalItems !== undefined && ` · ${storyboard.totalItems} 项`}
             </span>
           </div>
@@ -78,8 +75,6 @@ export function StoryboardResult({
   const description = obj.description as string | undefined;
   const totalItems = obj.totalItems as number | undefined;
   const items = obj.items as Array<Record<string, unknown>> | undefined;
-  const storyboardId = obj.storyboardId ?? obj.id;
-  const sceneId = obj.storyboardSceneId ?? obj.sceneId;
   const shotItems = Array.isArray(items) ? items : [];
   const displayTitle = title || sceneName;
 
@@ -90,10 +85,8 @@ export function StoryboardResult({
           <p className="text-xs font-medium text-foreground">{displayTitle}</p>
         ) : null}
         <p className="text-[10px] text-muted-foreground/60">
-          {storyboardId !== undefined && `ID: ${storyboardId}`}
-          {storyboardId === undefined && sceneId !== undefined && `场次 ID: ${sceneId}`}
-          {totalItems !== undefined && ` · 共 ${totalItems} 个镜头`}
-          {shotItems.length > 0 && (expanded ? " · 增量加载" : ` · 预览 ${Math.min(shotItems.length, 3)} 项`)}
+          {totalItems !== undefined && `共 ${totalItems} 个镜头`}
+          {shotItems.length > 0 && !expanded && ` · 预览 ${Math.min(shotItems.length, 3)} 项`}
         </p>
         {description ? (
           <p className="line-clamp-1 text-[10px] leading-4 text-muted-foreground/70">

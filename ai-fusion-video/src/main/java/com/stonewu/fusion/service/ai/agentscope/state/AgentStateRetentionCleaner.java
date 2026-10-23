@@ -13,7 +13,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.Callable;
 
-/** Deletes expired AgentScope sessions before marking their conversation expired. */
+/**
+ * Deletes expired AgentScope sessions before marking their conversation expired.
+ */
 @Component
 public final class AgentStateRetentionCleaner {
 
@@ -56,8 +58,8 @@ public final class AgentStateRetentionCleaner {
             int batchSize,
             long cleaned) {
         return journal(() -> List.copyOf(
-                        conversations.selectAgentStateCleanupCandidates(
-                                cutoff, batchSize)))
+                conversations.selectAgentStateCleanupCandidates(
+                        cutoff, batchSize)))
                 .flatMap(candidates -> Flux.fromIterable(candidates)
                         .concatMap(conversation -> cleanConversation(
                                 conversation, expiredAt))
@@ -65,10 +67,10 @@ public final class AgentStateRetentionCleaner {
                             long nextCleaned = cleaned + candidates.size();
                             return candidates.size() == batchSize
                                     ? cleanBatches(
-                                            cutoff,
-                                            expiredAt,
-                                            batchSize,
-                                            nextCleaned)
+                                    cutoff,
+                                    expiredAt,
+                                    batchSize,
+                                    nextCleaned)
                                     : Mono.just(nextCleaned);
                         })));
     }
@@ -77,15 +79,15 @@ public final class AgentStateRetentionCleaner {
             AgentConversation conversation,
             LocalDateTime expiredAt) {
         return journal(() -> List.copyOf(
-                        runs.selectStateSessionIdsByConversation(
-                                conversation.getConversationId())))
+                runs.selectStateSessionIdsByConversation(
+                        conversation.getConversationId())))
                 .flatMapMany(Flux::fromIterable)
                 .concatMap(sessionId -> statePreflight.deleteSession(
                         String.valueOf(conversation.getUserId()), sessionId))
                 .then(journal(() -> conversations.markAgentStateExpired(
-                                conversation.getId(),
-                                conversation.getAgentStateLastActiveAt(),
-                                expiredAt))
+                        conversation.getId(),
+                        conversation.getAgentStateLastActiveAt(),
+                        expiredAt))
                         .then());
     }
 

@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.media.EpisodeAudioJobMapper">
+    <select id="lock" resultType="com.stonewu.fusion.entity.media.EpisodeAudioJobEntity">
+        SELECT * FROM afv_episode_audio_job WHERE job_id = #{id} FOR UPDATE
+    </select>
+    <select id="unresolved" resultType="String">
+        SELECT s.step FROM afv_media_job_submission s JOIN afv_episode_audio_job a ON a.job_id = s.job_id
+            JOIN afv_media_job j ON j.id = a.job_id
+        WHERE s.job_id = #{id} AND NOT JSON_CONTAINS(a.resolved_steps_json, JSON_QUOTE(s.step))
+            AND ((s.step = 'music' AND a.music_result_json IS NULL
+                AND JSON_EXTRACT(j.checkpoint_json, '$.music') IS NULL)
+            OR (s.step = 'sfx' AND a.sfx_result_json IS NULL AND JSON_EXTRACT(j.checkpoint_json, '$.sfx') IS NULL))
+        ORDER BY s.created_at, s.step
+    </select>
+    <select id="successfulResult" resultType="String">
+        SELECT job_id FROM afv_episode_audio_job WHERE job_id = #{id} AND
+            (JSON_UNQUOTE(JSON_EXTRACT(music_result_json, '$.status')) = 'succeeded'
+                OR JSON_UNQUOTE(JSON_EXTRACT(sfx_result_json, '$.status')) = 'succeeded')
+    </select>
+    <update id="pollResult">
+        UPDATE afv_episode_audio_job SET consecutive_errors =
+        <choose><when test="failed">consecutive_errors + 1</when><otherwise>0</otherwise></choose>
+        WHERE job_id = #{id}
+    </update>
+</mapper>

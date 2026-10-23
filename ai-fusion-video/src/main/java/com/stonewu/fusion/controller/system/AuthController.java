@@ -1,13 +1,19 @@
 package com.stonewu.fusion.controller.system;
 
-import com.stonewu.fusion.common.CommonResult;
+import cn.hutool.core.util.IdUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.crypto.SecureUtil;
 import com.stonewu.fusion.common.BusinessException;
-import com.stonewu.fusion.controller.system.vo.LoginRespVO;
-import com.stonewu.fusion.controller.system.vo.UserRespVO;
+import com.stonewu.fusion.common.CommonResult;
+import com.stonewu.fusion.controller.system.vo.*;
 import com.stonewu.fusion.entity.system.Role;
 import com.stonewu.fusion.entity.system.User;
 import com.stonewu.fusion.security.SecurityUserDetails;
 import com.stonewu.fusion.security.TokenService;
+import com.stonewu.fusion.service.system.MailService;
+import com.stonewu.fusion.service.system.SystemConfigService;
+import com.stonewu.fusion.service.system.UserService;
+import com.stonewu.fusion.service.team.TeamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
@@ -16,30 +22,16 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
-import org.springframework.data.redis.core.StringRedisTemplate;
-
-import com.stonewu.fusion.controller.system.vo.LoginReqVO;
-import com.stonewu.fusion.controller.system.vo.RegisterReqVO;
-import com.stonewu.fusion.controller.system.vo.ProfileUpdateReqVO;
-import com.stonewu.fusion.controller.system.vo.ChangePasswordReqVO;
-import com.stonewu.fusion.controller.system.vo.PasswordResetRequestVO;
-import com.stonewu.fusion.controller.system.vo.PasswordResetSubmitVO;
-import com.stonewu.fusion.service.team.TeamService;
-import com.stonewu.fusion.service.system.UserService;
-import com.stonewu.fusion.service.system.MailService;
-import com.stonewu.fusion.service.system.SystemConfigService;
-
-import cn.hutool.core.util.IdUtil;
-import cn.hutool.core.util.StrUtil;
-import cn.hutool.crypto.SecureUtil;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static com.stonewu.fusion.common.CommonResult.success;
@@ -91,14 +83,17 @@ public class AuthController {
     @PostMapping("/refresh")
     @Operation(summary = "刷新令牌")
     public CommonResult<LoginRespVO> refresh(@Valid @RequestBody RefreshTokenReqVO reqVO) {
+        var session = tokenService.getRefreshTokenSession(reqVO.getRefreshToken());
+        User user = session == null ? null : userService.getById(session.getUserId());
+        if (user == null || !Objects.equals(user.getStatus(), 1)
+                || !Objects.equals(user.getUsername(), session.getUsername())) {
+            throw new BusinessException(401, "刷新令牌无效或账户不可用");
+        }
         TokenService.TokenPair tokenPair = tokenService.refreshAccessToken(reqVO.getRefreshToken());
         if (tokenPair == null) {
-            return CommonResult.error(401, "刷新令牌无效或已过期");
+            throw new BusinessException(401, "刷新令牌无效或已过期");
         }
 
-        // 获取用户信息
-        Long userId = tokenService.getUserIdFromToken(tokenPair.getAccessToken());
-        User user = userService.getById(userId);
         return success(buildLoginResp(tokenPair, user));
     }
 
@@ -118,7 +113,7 @@ public class AuthController {
         SecurityUserDetails userDetails = (SecurityUserDetails) SecurityContextHolder.getContext()
                 .getAuthentication().getPrincipal();
         User user = userService.getById(userDetails.getUserId());
-        List<Role> roles = userService.getUserRoles(user.getId());
+        List<Role> roles = userService.loadUserRoles(user.getId());
 
         UserRespVO respVO = new UserRespVO();
         respVO.setId(user.getId());
@@ -129,7 +124,7 @@ public class AuthController {
         respVO.setPhone(user.getPhone());
         respVO.setStatus(user.getStatus());
         respVO.setCreateTime(user.getCreateTime());
-        respVO.setRoles(roles.stream().map(Role::getCode).toList());
+        respVO.setRoles(roles.stream().filter(role -> Objects.equals(role.getStatus(), 1)).map(Role::getCode).toList());
         return success(respVO);
     }
 
@@ -245,10 +240,10 @@ public class AuthController {
             stringRedisTemplate.opsForValue().set(key, String.valueOf(user.getId()), 24, TimeUnit.HOURS);
 
             log.warn("\n======================================================================\n" +
-                    "[PASSWORD RESET] 用户 {} (ID: {}) 申请重置密码。\n" +
-                    "验证码为: {}\n" +
-                    "请将该验证码复制并填入前端页面以重置密码。有效期为 24 小时。\n" +
-                    "======================================================================",
+                            "[PASSWORD RESET] 用户 {} (ID: {}) 申请重置密码。\n" +
+                            "验证码为: {}\n" +
+                            "请将该验证码复制并填入前端页面以重置密码。有效期为 24 小时。\n" +
+                            "======================================================================",
                     user.getUsername(), user.getId(), code);
 
             return success("验证码已输出至系统日志，请获取并输入");
@@ -298,16 +293,14 @@ public class AuthController {
             throw new BusinessException(400, "不支持的找回方式");
         }
 
-        String userIdStr = stringRedisTemplate.opsForValue().get(key);
+        // 验证请求格式后原子消费凭据；并发提交不能再次修改同一账户密码。
+        String userIdStr = stringRedisTemplate.opsForValue().getAndDelete(key);
         if (StrUtil.isBlank(userIdStr)) {
             throw new BusinessException(400, "重置链接或验证码已失效");
         }
 
         Long userId = Long.parseLong(userIdStr);
         userService.resetPassword(userId, reqVO.getNewPassword());
-
-        // 成功重置密码后，使 token 失效
-        stringRedisTemplate.delete(key);
 
         return success(true);
     }

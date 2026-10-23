@@ -4,10 +4,9 @@ import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.system.vo.LoginRespVO;
 import com.stonewu.fusion.entity.system.User;
 import com.stonewu.fusion.security.TokenService;
-import com.stonewu.fusion.service.team.TeamService;
 import com.stonewu.fusion.service.system.SystemConfigService;
 import com.stonewu.fusion.service.system.UserService;
-
+import com.stonewu.fusion.service.team.TeamService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;

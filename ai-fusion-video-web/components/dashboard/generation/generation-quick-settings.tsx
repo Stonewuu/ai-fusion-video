@@ -7,6 +7,7 @@ import { GenerationDurationSlider } from "./generation-duration-slider";
 import { GenerationQuickSelect } from "./generation-quick-select";
 import type { GenerationFormState, WorkbenchMode } from "./generation-types";
 import { parseLimit } from "./generation-utils";
+import { videoDurationForResolution, videoDurationOptions, videoInputState, videoMaxDuration, videoRatioOptions } from "@/lib/video-model-rules";
 
 interface GenerationQuickSettingsProps {
   mode: WorkbenchMode;
@@ -43,10 +44,14 @@ export function GenerationQuickSettings({
       <GenerationQuickSelect
         value={form.ratio}
         placeholder="比例"
-        options={(capabilities?.supportedAspectRatios || []).map((value) => ({
+        options={videoRatioOptions(
+          capabilities?.supportedAspectRatios || [],
+          capabilities?.videoRules,
+          videoInputState(form),
+        ).map((value) => ({
           value,
-          label: `比例 ${value}`,
-          menuLabel: value,
+          label: value === "adaptive" ? "自适应比例" : `比例 ${value}`,
+          menuLabel: value === "adaptive" ? "自适应" : value,
         }))}
         onChange={(ratio) => onFormChange({ ratio })}
       />
@@ -59,7 +64,10 @@ export function GenerationQuickSettings({
           label: value,
         }))}
         contentClassName="min-w-28"
-        onChange={(resolution) => onFormChange({ resolution })}
+        onChange={(resolution) => {
+          const duration = capabilities ? videoDurationForResolution(form.duration, capabilities, resolution) : form.duration;
+          onFormChange({ resolution, duration });
+        }}
       />
 
       <GenerationQuickSelect
@@ -78,7 +86,9 @@ export function GenerationQuickSettings({
           compact
           value={form.duration}
           min={capabilities.minDuration}
-          max={capabilities.maxDuration}
+          max={videoMaxDuration(capabilities, form.resolution)}
+          automatic={capabilities.videoRules?.automaticDuration}
+          options={videoDurationOptions(capabilities, form.resolution)}
           onChange={(duration) => onFormChange({ duration })}
         />
       )}

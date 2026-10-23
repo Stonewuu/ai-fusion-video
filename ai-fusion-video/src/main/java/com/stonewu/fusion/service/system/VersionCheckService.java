@@ -89,11 +89,11 @@ public class VersionCheckService {
         ReleaseInfo latestRelease = latest.latestRelease();
         boolean comparisonEnabled = latest.checkSucceeded()
                 && runtimeVersionInfo.comparisonEnabled()
-            && deployableRelease != null
-            && hasText(deployableRelease.version());
+                && deployableRelease != null
+                && hasText(deployableRelease.version());
         String versionRelation = resolveVersionRelation(
                 runtimeVersionInfo.currentVersion(),
-            deployableRelease != null ? deployableRelease.version() : null,
+                deployableRelease != null ? deployableRelease.version() : null,
                 comparisonEnabled
         );
 
@@ -425,13 +425,14 @@ public class VersionCheckService {
             return checkedAt.plus(CACHE_TTL).isBefore(Instant.now());
         }
 
-        private static CachedVersionInfo success(ReleaseInfo latestRelease, ReleaseInfo deployableRelease, String message) {
+        private static CachedVersionInfo success(ReleaseInfo latestRelease, ReleaseInfo deployableRelease,
+                                                 String message) {
             return new CachedVersionInfo(
-                latestRelease,
-                deployableRelease,
+                    latestRelease,
+                    deployableRelease,
                     Instant.now(),
                     true,
-                message
+                    message
             );
         }
 
@@ -460,12 +461,12 @@ public class VersionCheckService {
     ) {
     }
 
-            private record ReleaseInfo(
-                String version,
-                String releaseUrl,
-                String tagUrl,
-                String publishedAt,
-                boolean dockerReady
-            ) {
-            }
+    private record ReleaseInfo(
+            String version,
+            String releaseUrl,
+            String tagUrl,
+            String publishedAt,
+            boolean dockerReady
+    ) {
+    }
 }

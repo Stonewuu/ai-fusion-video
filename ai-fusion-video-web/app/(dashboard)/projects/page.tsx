@@ -1,4 +1,7 @@
 "use client";
+import { useResourceInvalidation } from "@/hooks/use-resource-invalidation";
+
+import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useEffect, useState, useCallback } from "react";
@@ -7,9 +10,7 @@ import {
   Plus,
   Search,
   FolderKanban,
-  MoreHorizontal,
   Clock,
-  Film,
   Trash2,
   Loader2,
 } from "lucide-react";
@@ -99,13 +100,16 @@ export default function ProjectsPage() {
   useEffect(() => {
     fetchProjects();
   }, [fetchProjects]);
+  useResourceInvalidation("projects", fetchProjects);
 
-  const handleDelete = async (e: React.MouseEvent, id: number) => {
+  const deleteRequest = useCommandRequestKey();
+  const handleDelete = async (e: React.MouseEvent, project: Project) => {
     e.stopPropagation();
-    const ok = await confirm({ title: "删除项目", description: "确定要删除该项目吗？此操作不可撤销，相关的剧本、分镜与资产数据将被永久移除。", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
-    setDeletingId(id);
+    const ok = await confirm({ title: "删除项目", description: "将删除项目及关联的剧本、分镜和资产。确定继续？", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
+    setDeletingId(project.id);
     try {
-      await projectApi.delete(id);
+      await projectApi.delete(project.id, project.version, deleteRequest.forPayload({ id: project.id, version: project.version }));
+      deleteRequest.clear();
       await fetchProjects();
     } catch (err) {
       console.error("删除项目失败:", err);
@@ -247,7 +251,7 @@ export default function ProjectsPage() {
                       </h3>
                     </div>
                     <button
-                      onClick={(e) => handleDelete(e, project.id)}
+                      onClick={(e) => handleDelete(e, project)}
                       disabled={deletingId === project.id}
                       className="p-1.5 rounded-lg hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-all"
                     >

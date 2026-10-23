@@ -1,19 +1,11 @@
 package com.stonewu.fusion.service.ai.tool.asset;
 
-import cn.hutool.json.JSONObject;
-import cn.hutool.json.JSONUtil;
-import com.stonewu.fusion.entity.asset.Asset;
-import com.stonewu.fusion.entity.asset.AssetItem;
-import com.stonewu.fusion.entity.project.Project;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.ToolExecutor;
-import com.stonewu.fusion.service.asset.AssetService;
-import com.stonewu.fusion.service.project.ProjectService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
-import java.util.List;
 
 /**
  * 创建单个资产工具（create_asset）
@@ -23,8 +15,8 @@ import java.util.List;
 @Slf4j
 public class AssetCreateToolExecutor implements ToolExecutor {
 
-    private final AssetService assetService;
-    private final ProjectService projectService;
+    private final AssetToolCommands commands;
+
 
     @Override
     public String getToolName() {
@@ -68,7 +60,7 @@ public class AssetCreateToolExecutor implements ToolExecutor {
                     "properties": {
                         "projectId": {
                             "type": "integer",
-                            "description": "项目ID（必填）"
+                            "description": "项目ID（可选；不传则创建独立素材）"
                         },
                         "type": {
                             "type": "string",
@@ -99,73 +91,13 @@ public class AssetCreateToolExecutor implements ToolExecutor {
                             }
                         }
                     },
-                    "required": ["type", "name", "projectId"]
+                    "required": ["type", "name"]
                 }
                 """;
     }
 
     @Override
     public String execute(String toolInput, ToolExecutionContext context) {
-        try {
-            JSONObject params = JSONUtil.parseObj(toolInput);
-            Long projectId = params.getLong("projectId");
-            String type = params.getStr("type");
-            String name = params.getStr("name");
-
-            if (projectId == null || type == null || name == null) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "缺少必要参数: projectId, type, name").toString();
-            }
-
-            Long userId = context.getUserId();
-
-            if (!projectService.canAccessProject(projectId, userId)) {
-                return JSONUtil.createObj().set("status", "error")
-                        .set("message", "无权访问该项目").toString();
-            }
-
-            Asset asset = Asset.builder()
-                    .projectId(projectId)
-                    .type(type)
-                    .name(name)
-                    .description(params.getStr("description"))
-                    .properties(params.containsKey("properties") ? params.getJSONObject("properties").toString() : null)
-                    .sourceType(2)
-                    .userId(userId)
-                    .build();
-
-            Asset saved = assetService.create(asset);
-
-            // 如果传入了 initialItem，用其数据更新自动创建的初始子资产
-            JSONObject initialItemData = params.getJSONObject("initialItem");
-            if (initialItemData != null) {
-                List<AssetItem> items = assetService.listItems(saved.getId());
-                if (!items.isEmpty()) {
-                    AssetItem first = items.get(0);
-                    if (initialItemData.getStr("name") != null) {
-                        first.setName(initialItemData.getStr("name"));
-                    }
-                    if (initialItemData.getStr("itemType") != null) {
-                        first.setItemType(initialItemData.getStr("itemType"));
-                    }
-                    if (initialItemData.getStr("imageUrl") != null) {
-                        first.setImageUrl(initialItemData.getStr("imageUrl"));
-                    }
-                    if (initialItemData.containsKey("properties")) {
-                        first.setProperties(initialItemData.getJSONObject("properties").toString());
-                    }
-                    assetService.updateItem(first);
-                }
-            }
-
-            return JSONUtil.createObj()
-                    .set("assetId", saved.getId())
-                    .set("type", type)
-                    .set("name", name)
-                    .set("message", String.format("资产 \"%s\" 创建成功", name)).toString();
-        } catch (Exception e) {
-            log.error("创建资产失败", e);
-            return JSONUtil.createObj().set("status", "error").set("message", "创建失败: " + e.getMessage()).toString();
-        }
+        return commands.execute(getToolName(), toolInput, context);
     }
 }

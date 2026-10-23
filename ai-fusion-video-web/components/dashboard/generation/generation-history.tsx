@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useAuthStore } from "@/lib/store/auth-store";
 import {
   Clock3,
   Loader2,
@@ -29,31 +30,18 @@ import {
   formatGenerationDateTime,
   getGenerationErrorSummary,
   getGenerationParameterItems,
+  getParameterTone,
   generationSuggestions,
   getTaskStatus,
+  isGenerationTaskActive,
 } from "./generation-utils";
 import { GenerationHistoryResult } from "./generation-history-result";
 import { GenerationHistoryReferences } from "./generation-history-references";
+import { GenerationExecutionDialog } from "./generation-execution-dialog";
 import {
   GenerationMediaPreviewDialog,
   type GenerationMediaPreview,
 } from "./generation-media-preview-dialog";
-
-function getParameterTone(label: string) {
-  if (label === "比例" || label === "宽高比") {
-    return "bg-sky-500/10 text-sky-700 dark:text-sky-300";
-  }
-  if (label === "分辨率" || label === "尺寸") {
-    return "bg-violet-500/10 text-violet-700 dark:text-violet-300";
-  }
-  if (label === "数量") {
-    return "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
-  }
-  if (label === "模式" || label === "时长") {
-    return "bg-amber-500/10 text-amber-700 dark:text-amber-300";
-  }
-  return "bg-primary/8 text-primary";
-}
 
 interface GenerationHistoryProps {
   mode: WorkbenchMode;
@@ -88,7 +76,10 @@ export function GenerationHistory({
   cancellingTaskIds,
   onDelete,
 }: GenerationHistoryProps) {
-  const [mediaPreview, setMediaPreview] = useState<GenerationMediaPreview | null>(null);
+  const [mediaPreview, setMediaPreview] =
+    useState<GenerationMediaPreview | null>(null);
+  const [executionId, setExecutionId] = useState<string | null>(null);
+  const userId = useAuthStore((state) => state.user?.id);
   const modelsById = new Map(models.map((model) => [model.id, model]));
 
   if (loading && entries.length === 0) {
@@ -110,7 +101,9 @@ export function GenerationHistory({
         <span className="grid h-14 w-14 place-items-center rounded-[20px] border border-border/40 bg-card text-primary shadow-sm">
           <Sparkles className="h-6 w-6" />
         </span>
-        <h2 className="mt-4 text-lg font-semibold tracking-tight">从一句描述开始</h2>
+        <h2 className="mt-4 text-lg font-semibold tracking-tight">
+          从一句描述开始
+        </h2>
         <p className="mt-1 text-xs text-muted-foreground">
           {mode === "image" ? "描述画面，或加入参考图" : "描述场景、动作和镜头"}
         </p>
@@ -170,12 +163,13 @@ export function GenerationHistory({
         );
         const statusBadgeClassName = cn(
           "inline-flex items-center gap-1 rounded-md px-1.5 py-0.5",
-          status.tone === "success" &&
-            "bg-emerald-500/10 text-emerald-600",
+          status.tone === "success" && "bg-emerald-500/10 text-emerald-600",
           status.tone === "failed" &&
             "cursor-pointer bg-destructive/10 text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
           status.tone === "running" && "bg-primary/10 text-primary",
           status.tone === "queued" && "bg-amber-500/10 text-amber-600",
+          status.tone === "attention" && "bg-muted text-foreground",
+          status.tone === "cancelled" && "bg-muted text-muted-foreground",
         );
         const statusBadgeTrigger = (
           <span
@@ -212,7 +206,7 @@ export function GenerationHistory({
               "shadow-[0_12px_36px_-32px_rgba(15,23,42,.48)]",
             )}
           >
-            <header className="flex items-start justify-between gap-3">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 flex-1">
                 <p className="line-clamp-2 text-[13px] leading-5 text-foreground/90">
                   {task.prompt}
@@ -241,9 +235,7 @@ export function GenerationHistory({
                           )}
                         >
                           <span className="opacity-65">{parameter.label}</span>
-                          <span className="font-medium">
-                            {parameter.value}
-                          </span>
+                          <span className="font-medium">{parameter.value}</span>
                         </span>
                       ))}
                     </>
@@ -254,18 +246,35 @@ export function GenerationHistory({
                   </span>
                 </div>
               </div>
-              <div className="flex shrink-0 items-center gap-2">
-                {(status.tone === "queued" || (status.tone === "running" && model?.comfyuiWorkflowId)) && (
+              <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
+                {task.execution && (
                   <Button
-                    variant="destructive-ghost"
+                    variant={status.tone === "attention" ? "outline" : "ghost"}
                     size="xs"
-                    onClick={() => onCancel(task.taskId)}
-                    disabled={cancellingTaskIds.has(task.taskId)}
+                    onClick={() => setExecutionId(task.execution!.id)}
                   >
-                    {cancellingTaskIds.has(task.taskId) ? <Loader2 className="animate-spin" /> : <Square />}
-                    取消
+                    {status.tone === "attention" && task.execution.canControl
+                      ? "处理任务"
+                      : "执行详情"}
                   </Button>
                 )}
+                {isGenerationTaskActive(task) &&
+                  task.execution?.canControl &&
+                  !task.execution.cancelRequested && (
+                    <Button
+                      variant="destructive-ghost"
+                      size="xs"
+                      onClick={() => onCancel(task.taskId)}
+                      disabled={cancellingTaskIds.has(task.taskId)}
+                    >
+                      {cancellingTaskIds.has(task.taskId) ? (
+                        <Loader2 className="animate-spin" />
+                      ) : (
+                        <Square />
+                      )}
+                      取消
+                    </Button>
+                  )}
                 <Button
                   variant="ghost"
                   size="xs"
@@ -275,9 +284,13 @@ export function GenerationHistory({
                   <RotateCcw className="h-3 w-3" />
                   再次使用
                 </Button>
-                {(task.status === 2 || task.status === 3) && (
-                  <GenerationDeleteButton recordId={task.id} onDelete={onDelete} />
-                )}
+                {task.userId === userId &&
+                  [2, 3, 4, 6].includes(task.status) && (
+                    <GenerationDeleteButton
+                      recordId={task.id}
+                      onDelete={onDelete}
+                    />
+                  )}
               </div>
             </header>
 
@@ -302,6 +315,10 @@ export function GenerationHistory({
                     item={item}
                     prompt={task.prompt}
                     taskFailed={status.tone === "failed"}
+                    taskStatus={status}
+                    taskCancelRequested={
+                      task.execution?.cancelRequested === true
+                    }
                     taskError={task.errorMsg}
                     onUseReference={onUseReference}
                     onAddAsset={onAddAsset}
@@ -330,7 +347,9 @@ export function GenerationHistory({
               </Tooltip>
             ) : (
               <div className="mt-2.5 flex h-14 max-w-xs items-center gap-2.5 rounded-xl border border-dashed border-border/45 bg-background/28 px-3 text-xs text-muted-foreground">
-                <Loader2 className="size-4 shrink-0 animate-spin" />
+                {(status.tone === "running" || status.tone === "queued") && (
+                  <Loader2 className="size-4 shrink-0 animate-spin motion-reduce:animate-none" />
+                )}
                 {status.label}
               </div>
             )}
@@ -340,7 +359,12 @@ export function GenerationHistory({
 
       {entries.length < total && (
         <div className="flex justify-center pb-2">
-          <Button variant="outline" size="sm" onClick={onLoadMore} disabled={loading}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onLoadMore}
+            disabled={loading}
+          >
             {loading && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             加载更多
           </Button>
@@ -350,9 +374,19 @@ export function GenerationHistory({
       <GenerationMediaPreviewDialog
         preview={mediaPreview}
         onOpenChange={(open) => {
-          if (!open) setMediaPreview(null);
+          if (!open) {
+            setMediaPreview(null);
+          }
         }}
       />
+      {executionId && (
+        <GenerationExecutionDialog
+          key={executionId}
+          id={executionId}
+          onClose={() => setExecutionId(null)}
+          onChanged={onRefresh}
+        />
+      )}
     </div>
   );
 }

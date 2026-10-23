@@ -5,8 +5,8 @@ import com.stonewu.fusion.repository.ai.AgentEventRepository.ReplaySnapshot;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.run.model.CommittedAgentEvent;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
 import reactor.core.Disposable;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -17,7 +17,9 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicLong;
 
-/** Ordered replay/live bridge whose only durable source is the MySQL journal. */
+/**
+ * Ordered replay/live bridge whose only durable source is the MySQL journal.
+ */
 @Service
 @Slf4j
 public class AgentRunReplayService {
@@ -61,24 +63,17 @@ public class AgentRunReplayService {
             ReplayWakeGate gate = new ReplayWakeGate();
             java.util.concurrent.atomic.AtomicBoolean firstSnapshot =
                     new java.util.concurrent.atomic.AtomicBoolean(true);
-            return signals.wakeupsWhenSubscribed(safeRunId)
-                    .onErrorResume(failure -> {
-                        log.warn(
-                                "Agent replay Redis subscription unavailable; polling MySQL: runId={}, type={}",
-                                safeRunId,
-                                failure.getClass().getSimpleName());
-                        return Mono.just(Flux.<Long>never());
-                    })
-                    .flatMapMany(wakeups -> Flux.using(
-                            () -> subscribeWakeups(
-                                    safeRunId, wakeups, gate),
-                            ignored -> replayCycle(
-                                    safeRunId,
-                                    cursor,
-                                    deliveredTerminal,
-                                    gate,
-                                    firstSnapshot),
-                            Disposable::dispose));
+            // 初次历史读取不等待 Redis 订阅握手；订阅尚未就绪时，原有周期读取仍检查同一日志游标。
+            return Flux.using(
+                    () -> subscribeWakeups(
+                            safeRunId, signals.wakeupsWhenSubscribed(safeRunId).flatMapMany(value -> value), gate),
+                    ignored -> replayCycle(
+                            safeRunId,
+                            cursor,
+                            deliveredTerminal,
+                            gate,
+                            firstSnapshot),
+                    Disposable::dispose);
         });
     }
 
@@ -113,10 +108,10 @@ public class AgentRunReplayService {
                             cursor.get(), deliveredTerminal, snapshot);
                     Flux<CommittedAgentEvent> drained = snapshot.latestSequence() > cursor.get()
                             ? drainThrough(
-                                    runId,
-                                    cursor,
-                                    deliveredTerminal,
-                                    snapshot)
+                            runId,
+                            cursor,
+                            deliveredTerminal,
+                            snapshot)
                             : Flux.empty();
                     return drained.concatWith(Flux.defer(() -> afterDrain(
                             runId,
@@ -137,9 +132,9 @@ public class AgentRunReplayService {
         return loadPage(runId, firstAfter, snapshot.latestSequence())
                 .expandDeep(page -> page.lastSequence() < snapshot.latestSequence()
                         ? loadPage(
-                                runId,
-                                page.lastSequence(),
-                                snapshot.latestSequence())
+                        runId,
+                        page.lastSequence(),
+                        snapshot.latestSequence())
                         : Mono.empty())
                 .concatMapIterable(ReplayPage::events)
                 .doOnNext(event -> advanceCursor(cursor, event))

@@ -1,6 +1,6 @@
 {
   "name": "ai-fusion-video-web",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "Web application for the AI-driven video creation platform",
   "license": "MIT",
@@ -17,7 +17,9 @@
     "start": "next start",
     "lint": "eslint",
     "test:storyboard": "node --test scripts/storyboard-refresh.test.mjs",
-    "clean": "rimraf .next"
+    "clean": "rimraf .next",
+    "test:canvas": "node --test scripts/canvas-editor.test.mjs",
+    "test:generation": "node --test scripts/generation-execution.test.mjs"
   },
   "dependencies": {
     "@ant-design/x": "^2.5.0",
@@ -31,15 +33,18 @@
     "@radix-ui/react-use-controllable-state": "^1.2.2",
     "@react-three/fiber": "^9.5.0",
     "@tanstack/react-virtual": "^3.14.8",
+    "@xyflow/react": "^12.12.0",
     "antd": "^6.3.3",
     "axios": "^1.13.6",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "cn": "^0.4.0",
     "framer-motion": "^12.36.0",
     "lucide-react": "^0.577.0",
     "motion": "^12.38.0",
     "next": "16.1.6",
     "next-themes": "^0.4.6",
+    "pdfjs-dist": "6.4.299",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-syntax-highlighter": "16.1.1",
@@ -62,5 +67,8 @@
     "rimraf": "^6.1.3",
     "tailwindcss": "^4",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

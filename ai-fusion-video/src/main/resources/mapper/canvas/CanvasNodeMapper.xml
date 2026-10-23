@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasNodeMapper">
+    <select id="ordered" resultType="com.stonewu.fusion.entity.canvas.CanvasNodeEntity">
+        SELECT * FROM afv_canvas_node FORCE INDEX (idx_canvas_node_read_order) WHERE canvas_id = #{canvasId} AND deleted = FALSE ORDER BY create_time, id
+    </select>
+    <select id="deleted" resultType="com.stonewu.fusion.entity.canvas.CanvasNodeEntity">
+        SELECT * FROM afv_canvas_node WHERE canvas_id = #{canvasId} AND deleted = TRUE
+        AND id IN <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </select>
+    <update id="deleteGraphNode">
+        UPDATE afv_canvas_node SET deleted = TRUE, config_version = config_version + 1,
+            layout_version = layout_version + 1, update_time = UTC_TIMESTAMP(6)
+        WHERE id = #{id} AND canvas_id = #{canvasId} AND config_version = #{configVersion} AND layout_version = #{layoutVersion} AND deleted = FALSE
+    </update>
+    <insert id="insertGraph">
+        INSERT INTO afv_canvas_node(id, canvas_id, kind, schema_version, title, x, y, width, height,
+            locked, collapsed, config_json, resource_type, resource_id, resource_version,
+            config_version, layout_version, create_time, update_time)
+        VALUES (#{row.id}, #{row.canvasId}, #{row.kind}, #{row.schemaVersion}, #{row.title}, #{row.x}, #{row.y}, #{row.width}, #{row.height}, #{row.locked}, #{row.collapsed}, #{row.configJson}, #{row.resourceType}, #{row.resourceId}, #{row.resourceVersion}, #{row.configVersion}, #{row.layoutVersion}, UTC_TIMESTAMP(6), UTC_TIMESTAMP(6))
+    </insert>
+    <update id="updateGraph">
+        UPDATE afv_canvas_node SET title = #{row.title}, x = #{row.x}, y = #{row.y}, width = #{row.width}, height = #{row.height}, parent_id = #{row.parentId}, locked = #{row.locked}, collapsed = #{row.collapsed},
+            config_json = #{row.configJson}, resource_type = #{row.resourceType}, resource_id = #{row.resourceId}, resource_version = #{row.resourceVersion}, config_version = #{row.configVersion}, layout_version = #{row.layoutVersion},
+            update_time = UTC_TIMESTAMP(6)
+        WHERE id = #{row.id} AND canvas_id = #{row.canvasId} AND config_version = #{previousConfig} AND layout_version = #{previousLayout} AND deleted = FALSE
+    </update>
+    <update id="restoreGraph">
+        UPDATE afv_canvas_node SET title = #{row.title}, x = #{row.x}, y = #{row.y}, width = #{row.width}, height = #{row.height}, parent_id = NULL,
+            locked = #{row.locked}, collapsed = #{row.collapsed}, config_json = #{row.configJson}, resource_type = #{row.resourceType}, resource_id = #{row.resourceId}, resource_version = #{row.resourceVersion},
+            config_version = #{row.configVersion}, layout_version = #{row.layoutVersion}, deleted = FALSE, update_time = UTC_TIMESTAMP(6)
+        WHERE canvas_id = #{row.canvasId} AND id = #{row.id} AND kind = #{row.kind} AND schema_version = #{row.schemaVersion} AND deleted = TRUE
+            AND config_version = #{previousConfig} AND layout_version = #{previousLayout}
+    </update>
+</mapper>

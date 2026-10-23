@@ -27,7 +27,7 @@
 
 1. 调用 get_script_episode（传入任务输入中的**剧本集 ID** `scriptEpisodeId`，detailLevel="summary"）获取该集概要信息和场次列表（各场次的 `scriptSceneItemId`）
 2. 调用 list_project_assets 获取项目所有主资产及其子资产列表（包含预处理器已创建的变体子资产）
-3. 调用 save_storyboard_episode 创建或复用该集的分镜集记录，必须传入 `storyboardId` 和当前 `scriptEpisodeId`，**记录其返回的“分镜集 ID”(`storyboardEpisodeId`)**
+3. 先调用 get_storyboard 读取分镜版本和已有分集，再按明确 ID 选择已有分集，或使用 save_storyboard_episode 创建缺失分集记录，必须传入 `storyboardId` 和当前 `scriptEpisodeId`，**记录其返回的“分镜集 ID”(`storyboardEpisodeId`)**
 4. 逐场次处理该集的所有场次：
    a. 调用 get_script_scene 获取场次完整内容（传入 `scriptSceneItemId`）
    b. 根据 list_project_assets 返回的子资产列表匹配角色、场景、道具的子资产ID
@@ -69,3 +69,14 @@ save_storyboard_scene_shots 的每个镜头：
 
 - 必须处理该集的所有场次，不允许跳过
 - save_storyboard_episode 必须传入当前剧本集 ID `scriptEpisodeId`，不要只传 episodeNumber
+
+
+### 分镜版本与真实回执
+
+- `get_storyboard` 返回分镜 `version`，以及分集、场次、镜头各自的 `version`；查询结果中的 ID 才能用于后续操作。业务状态另见 `resourceStatus`，工具的 `status` 表示调用结果。
+- 创建分镜集使用 `save_storyboard_episode` 的 `expectedParentVersion`（分镜 version）。如果已存在相同 `scriptEpisodeId` 的分镜集，使用查询到的分镜集 ID；需要修改元信息时明确传 `storyboardEpisodeId` 和该集的 `expectedVersion`，不得用创建操作猜测或覆盖现有分集。
+- 创建场次使用 `save_storyboard_scene_shots` 的 `expectedParentVersion`（分镜集 version）；保存成功后，下一场次使用返回的 `episodeVersion`。插入镜头使用场次 version。场次和镜头批次按顺序保存，不能并发使用同一父集合旧版本。
+- 修改或删除已有场次/镜头必须提供 `expectedVersion`。需要排序时使用有权限的 `manage_storyboard_children`，完整指定父集合、其版本和全部子对象顺序；通用字段修改不能再传 sortOrder。
+- 生图或生视频之前，记录目标镜头 version。结果回填必须使用该版本；同一流程刚成功保存提示词或另一帧时，可使用本流程成功回执返回的下一版本。其他修改导致冲突时保留候选，报告已生成但未绑定，禁止重新查询后强制覆盖。
+- 批量更新使用 `batch_update_storyboard`，每个对象单独带版本，任何失败都不宣称部分写入成功。工具是否可用仍以当前白名单和权限为准。
+- ID 数组和扩展属性使用原生 JSON 数组/对象，不把 characterIds、propIds、customData 编码为字符串。查询返回的 Stored 字段是存储位置；URL 为空时不能把 Stored 文本当成已可公开访问的媒体。

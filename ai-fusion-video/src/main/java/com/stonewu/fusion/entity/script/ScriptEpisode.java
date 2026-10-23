@@ -22,49 +22,75 @@ import lombok.*;
 @AllArgsConstructor
 public class ScriptEpisode extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 所属剧本ID */
+    /**
+     * 所属剧本ID
+     */
     private Long scriptId;
 
-    /** 集号（从1开始） */
+    /**
+     * 集号（从1开始）
+     */
     private Integer episodeNumber;
 
-    /** 本集标题 */
+    /**
+     * 本集标题
+     */
     private String title;
 
-    /** 本集剧情梗概 */
+    /**
+     * 本集剧情梗概
+     */
     private String synopsis;
 
-    /** 本集原始剧本内容 */
+    /**
+     * 本集原始剧本内容
+     */
     private String rawContent;
 
-    /** 预估时长（分钟） */
+    /**
+     * 预估时长（分钟）
+     */
     private Integer durationEstimate;
 
-    /** 本集总场次数 */
+    /**
+     * 本集总场次数
+     */
     @Builder.Default
     private Integer totalScenes = 0;
 
-    /** 来源类型：0-AI解析 1-手动添加 */
+    /**
+     * 来源类型：0-AI解析 1-手动添加
+     */
     @Builder.Default
     private Integer sourceType = 0;
 
-    /** 排列顺序 */
+    /**
+     * 排列顺序
+     */
     @Builder.Default
     private Integer sortOrder = 0;
 
-    /** 解析状态：0-未解析 1-解析中 2-解析完成 3-解析失败 */
+    /**
+     * 解析状态：0-未解析 1-解析中 2-解析完成 3-解析失败
+     */
     @Builder.Default
     private Integer parsingStatus = 0;
 
-    /** 状态：0-草稿 1-正常 */
+    /**
+     * 状态：0-草稿 1-正常
+     */
     @Builder.Default
     private Integer status = 0;
 
-    /** 乐观锁版本号 */
+    /**
+     * 乐观锁版本号
+     */
     @Version
     @Builder.Default
     private Integer version = 0;

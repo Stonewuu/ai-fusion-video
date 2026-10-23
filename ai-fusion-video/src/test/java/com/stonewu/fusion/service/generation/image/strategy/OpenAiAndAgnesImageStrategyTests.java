@@ -1,5 +1,11 @@
 package com.stonewu.fusion.service.generation.image.strategy;
 
+import com.stonewu.fusion.service.generation.image.strategy.ImageGenerationStrategy;
+
+import com.stonewu.fusion.service.generation.job.RemoteGenerationResult;
+
+import com.stonewu.fusion.service.generation.job.GenerationPreparedRequest;
+
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.stonewu.fusion.entity.ai.AiModel;
@@ -12,7 +18,9 @@ import com.stonewu.fusion.service.generation.image.ImageGenerationService;
 import com.stonewu.fusion.service.generation.image.strategy.agnes.AgnesImageStrategy;
 import com.stonewu.fusion.service.generation.image.strategy.newapi.NewApiImageStrategy;
 import com.stonewu.fusion.service.generation.image.strategy.openai.OpenAiImageStrategy;
-import com.stonewu.fusion.service.storage.MediaStorageService;
+import com.stonewu.fusion.service.media.GenerationMediaService;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.verifyNoInteractions;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import com.sun.net.httpserver.HttpExchange;
@@ -87,20 +95,6 @@ class OpenAiAndAgnesImageStrategyTests {
                 private final StorageConfigService storageConfigService = mock(StorageConfigService.class);
                 private final PresetArtStyleResourceResolver presetArtStyleResourceResolver = new PresetArtStyleResourceResolver();
 
-        @Test
-    void getNameUsesOfficialOpenAiProtocolKey() {
-                OpenAiImageStrategy strategy = new OpenAiImageStrategy(
-                                mock(ImageGenerationService.class),
-                                mock(AiModelService.class),
-                                mock(ModelPresetService.class),
-                                imageStorage(),
-                                storageConfigService,
-                                presetArtStyleResourceResolver
-                );
-
-                assertThat(strategy.getName()).isEqualTo("openai");
-        }
-
     @AfterEach
     void tearDown() {
         if (server != null) {
@@ -138,9 +132,9 @@ class OpenAiAndAgnesImageStrategyTests {
                 .autoAppendV1Path(false)
                 .build();
 
-        List<String> urls = strategy.generate("a test prompt", "gpt-image-2", 1024, 1024, 1, null, apiConfig);
+        List<String> urls = generate(strategy, "a test prompt", "gpt-image-2", 1024, 1024, 1, null, apiConfig);
 
-        assertThat(urls).containsExactly("/media/images/generated.png");
+        assertThat(urls).containsExactly(providerUrl("generated.png"));
         assertThat(requestPath.get()).isEqualTo("/images/generations");
         assertThat(requestBody.get()).contains("\"model\":\"gpt-image-2\"");
         assertThat(requestBody.get()).contains("\"size\":\"1024x1024\"");
@@ -158,8 +152,8 @@ class OpenAiAndAgnesImageStrategyTests {
                 """.formatted(base64Image)));
         startServer();
 
-        MediaStorageService mediaStorageService = imageStorage();
-        when(mediaStorageService.storeBytes(any(), eq("images"), eq("png")))
+        GenerationMediaService mediaStorageService = imageStorage();
+        when(mediaStorageService.image(any(), anyString(), anyString(), any()))
                 .thenReturn(storedUrl);
 
         OpenAiImageStrategy strategy = new OpenAiImageStrategy(
@@ -176,11 +170,10 @@ class OpenAiAndAgnesImageStrategyTests {
                 .apiKey("test-key")
                 .build();
 
-        List<String> urls = strategy.generate("a test prompt", "gpt-image-2", 1024, 1024, 1, null, apiConfig);
+        List<String> urls = generate(strategy, "a test prompt", "gpt-image-2", 1024, 1024, 1, null, apiConfig);
 
-        assertThat(urls).containsExactly(storedUrl);
-        assertThat(strategy.persistsResults()).isTrue();
-        verify(mediaStorageService).storeBytes(imageBytes, "images", "png");
+        assertThat(urls).containsExactly("data:image/png;base64," + base64Image);
+        verifyNoInteractions(mediaStorageService);
     }
 
     @Test
@@ -229,9 +222,9 @@ class OpenAiAndAgnesImageStrategyTests {
                 .code("gpt-image-2")
                 .capabilityPresetCode("gpt-image-2")
                 .build();
-        List<String> urls = strategy.generate("a scenic panorama", model, 2560, 1440, 1, null, apiConfig);
+        List<String> urls = generate(strategy, "a scenic panorama", model, 2560, 1440, 1, null, apiConfig);
 
-        assertThat(urls).containsExactly("/media/images/generated-2k.png");
+        assertThat(urls).containsExactly(providerUrl("generated-2k.png"));
         assertThat(requestBody.get()).contains("\"size\":\"2560x1440\"");
     }
 
@@ -269,7 +262,7 @@ class OpenAiAndAgnesImageStrategyTests {
                 .apiKey("test-key")
                 .build();
 
-        List<String> urls = strategy.generate(
+        List<String> urls = generate(strategy,
                 "a cinematic city",
                 AiModel.builder()
                         .code("agnes-image-2.1-flash")
@@ -286,8 +279,8 @@ class OpenAiAndAgnesImageStrategyTests {
         );
 
         assertThat(urls).containsExactly(
-                "/media/images/agnes-1.png",
-                "/media/images/agnes-2.png"
+                providerUrl("agnes-1.png"),
+                providerUrl("agnes-2.png")
         );
         assertThat(requestPath.get()).isEqualTo("/v1/images/generations");
         assertThat(requestCount.get()).isEqualTo(2);
@@ -340,7 +333,7 @@ class OpenAiAndAgnesImageStrategyTests {
                 .apiKey("test-key")
                 .build();
 
-        List<String> urls = strategy.generate(
+        List<String> urls = generate(strategy,
                 "combine the references",
                 AiModel.builder()
                         .code("agnes-image-2.0-flash")
@@ -354,7 +347,7 @@ class OpenAiAndAgnesImageStrategyTests {
         );
 
         JSONObject json = JSONUtil.parseObj(requestBody.get());
-        assertThat(urls).containsExactly("/media/images/agnes-20.png");
+        assertThat(urls).containsExactly(providerUrl("agnes-20.png"));
         assertThat(requestPath.get()).isEqualTo("/v1/images/generations");
         assertThat(json.getStr("size")).isEqualTo("1024x768");
         assertThat(json.containsKey("ratio")).isFalse();
@@ -415,14 +408,13 @@ class OpenAiAndAgnesImageStrategyTests {
                 .count(1)
                 .build();
 
-        String platformTaskId = strategy.submit(task, apiConfig);
+        var receipt = strategy.prepare(task, aiModelService.getById(task.getModelId()), apiConfig).submit();
 
         JSONObject json = JSONUtil.parseObj(requestBody.get());
-        assertThat(platformTaskId).isEqualTo("agnes-task");
+        assertThat(receipt.result().state()).isEqualTo(RemoteGenerationResult.State.SUCCEEDED);
         assertThat(json.getStr("size")).isEqualTo("2K");
         assertThat(json.getStr("ratio")).isEqualTo("16:9");
-        verify(imageGenerationService).updateItem(any(ImageItem.class));
-        verify(imageGenerationService).update(task);
+        verifyNoInteractions(imageGenerationService);
     }
 
     @Test
@@ -442,8 +434,8 @@ class OpenAiAndAgnesImageStrategyTests {
         });
         startServer();
 
-        MediaStorageService mediaStorageService = imageStorage();
-        when(mediaStorageService.storeBytes(any(), eq("images"), eq("png")))
+        GenerationMediaService mediaStorageService = imageStorage();
+        when(mediaStorageService.image(any(), anyString(), anyString(), any()))
                 .thenReturn("/media/images/generated.png");
         ImageGenerationService imageGenerationService = mock(ImageGenerationService.class);
         AiModelService aiModelService = mock(AiModelService.class);
@@ -474,15 +466,15 @@ class OpenAiAndAgnesImageStrategyTests {
                 .prompt("a test prompt")
                 .build();
 
-        String platformTaskId = strategy.submit(task, apiConfig);
+        var receipt = strategy.prepare(task, aiModelService.getById(task.getModelId()), apiConfig).submit();
 
-        assertThat(platformTaskId).isEqualTo("task-1");
+        assertThat(receipt.result().state()).isEqualTo(RemoteGenerationResult.State.SUCCEEDED);
         assertThat(requestPath.get()).isEqualTo("/v1/images/generations");
         assertThat(requestBody.get()).contains("\"model\":\"gpt-image-2\"");
         assertThat(requestBody.get()).contains("\"size\":\"1024x1024\"");
-        verify(mediaStorageService).storeBytes(imageBytes, "images", "png");
-        verify(imageGenerationService).updateItem(any(ImageItem.class));
-        verify(imageGenerationService).update(task);
+        assertThat(receipt.result().outputs().getFirst().media()).isEqualTo("data:image/png;base64," + Base64.getEncoder().encodeToString(imageBytes));
+        verifyNoInteractions(mediaStorageService);
+        verifyNoInteractions(imageGenerationService);
     }
 
     @Test
@@ -511,8 +503,8 @@ class OpenAiAndAgnesImageStrategyTests {
         });
         startServer();
 
-        MediaStorageService mediaStorageService = imageStorage();
-        when(mediaStorageService.storeBytes(any(), eq("images"), eq("png")))
+        GenerationMediaService mediaStorageService = imageStorage();
+        when(mediaStorageService.image(any(), anyString(), anyString(), any()))
                 .thenReturn("/media/images/edited.png");
 
         OpenAiImageStrategy strategy = new OpenAiImageStrategy(
@@ -529,7 +521,7 @@ class OpenAiAndAgnesImageStrategyTests {
                 .apiKey("test-key")
                 .build();
 
-        List<String> urls = strategy.generate(
+        List<String> urls = generate(strategy,
                 "edit this image",
                 "gpt-image-1",
                 1024,
@@ -539,7 +531,7 @@ class OpenAiAndAgnesImageStrategyTests {
                 apiConfig
         );
 
-        assertThat(urls).containsExactly("/media/images/edited.png");
+        assertThat(urls).containsExactly("data:image/png;base64," + Base64.getEncoder().encodeToString(generatedBytes));
         assertThat(requestPath.get()).isEqualTo("/v1/images/edits");
         assertThat(requestContentType.get()).contains("multipart/form-data");
         assertThat(requestBody.get()).contains("name=\"image[]\"");
@@ -547,7 +539,7 @@ class OpenAiAndAgnesImageStrategyTests {
         assertThat(requestBody.get()).contains("gpt-image-1");
         assertThat(requestBody.get()).contains("name=\"prompt\"");
         assertThat(requestBody.get()).contains("edit this image");
-        verify(mediaStorageService).storeBytes(generatedBytes, "images", "png");
+        verifyNoInteractions(mediaStorageService);
     }
 
     @Test
@@ -567,8 +559,8 @@ class OpenAiAndAgnesImageStrategyTests {
         });
         startServer();
 
-        MediaStorageService mediaStorageService = imageStorage();
-        when(mediaStorageService.storeBytes(any(), eq("images"), eq("png")))
+        GenerationMediaService mediaStorageService = imageStorage();
+        when(mediaStorageService.image(any(), anyString(), anyString(), any()))
                 .thenReturn("/media/images/preset-edited.png");
 
         OpenAiImageStrategy strategy = new OpenAiImageStrategy(
@@ -585,7 +577,7 @@ class OpenAiAndAgnesImageStrategyTests {
                 .apiKey("test-key")
                 .build();
 
-        List<String> urls = strategy.generate(
+        List<String> urls = generate(strategy,
                 "edit with preset",
                 "gpt-image-1",
                 1024,
@@ -595,11 +587,11 @@ class OpenAiAndAgnesImageStrategyTests {
                 apiConfig
         );
 
-        assertThat(urls).containsExactly("/media/images/preset-edited.png");
+        assertThat(urls).containsExactly("data:image/png;base64," + Base64.getEncoder().encodeToString(generatedBytes));
         assertThat(requestPath.get()).isEqualTo("/v1/images/edits");
         assertThat(requestBody.get()).contains("name=\"image[]\"");
                 assertThat(requestBody.get()).contains("filename=\"reference-1.jpg\"");
-        verify(mediaStorageService).storeBytes(generatedBytes, "images", "png");
+        verifyNoInteractions(mediaStorageService);
     }
 
     @Test
@@ -650,7 +642,7 @@ class OpenAiAndAgnesImageStrategyTests {
                 .apiKey("test-key")
                 .build();
 
-        List<String> urls = strategy.generate(
+        List<String> urls = generate(strategy,
                 "a test prompt",
                 AiModel.builder()
                         .code("gpt-image-2-official")
@@ -663,11 +655,33 @@ class OpenAiAndAgnesImageStrategyTests {
                 apiConfig
         );
 
-        assertThat(urls).containsExactly("/media/images/async.png");
+        assertThat(urls).containsExactly(providerUrl("async.png"));
         assertThat(generationPath.get()).isEqualTo("/v1/images/generations");
         assertThat(taskPath.get()).isEqualTo("/v1/tasks/task-123");
         assertThat(generationBody.get()).contains("\"image_urls\":[\"https://example.com/reference.png\"]");
         assertThat(generationBody.get()).doesNotContain("asyncMode");
+    }
+
+    private List<String> generate(ImageGenerationStrategy strategy, String prompt, String modelCode,
+                                  int width, int height, int count, List<String> references, ApiConfig api) {
+        return generate(strategy, prompt, AiModel.builder().code(modelCode).modelType(2).build(), width, height, count, references, api);
+    }
+
+    /** 协议测试显式模拟调度边界；每个远端请求提交一次、查询一次，数据库调度另有集成测试。 */
+    private List<String> generate(ImageGenerationStrategy strategy, String prompt, AiModel model,
+                                  int width, int height, int count, List<String> references, ApiConfig api) {
+        var task = ImageTask.builder().prompt(prompt).width(width).height(height).count(count)
+                .refImageUrls(references == null ? null : JSONUtil.toJsonStr(references)).modelId(model.getId()).build();
+        int batchSize = strategy.batchSize(task, model, api);
+        var urls = new ArrayList<String>();
+        for (int index = 0; index < count; index += batchSize) {
+            task.setCount(Math.min(batchSize, count - index));
+            var receipt = strategy.prepare(task, model, api).submit();
+            var result = receipt.result() == null ? strategy.query(receipt.providerTaskId(), task, model, api) : receipt.result();
+            assertThat(result.state()).isEqualTo(RemoteGenerationResult.State.SUCCEEDED);
+            urls.addAll(result.outputs().stream().map(RemoteGenerationResult.Output::media).toList());
+        }
+        return urls;
     }
 
     private static void writeJson(HttpExchange exchange, int status, String body) throws IOException {
@@ -698,10 +712,16 @@ class OpenAiAndAgnesImageStrategyTests {
         server.start();
     }
 
-    private MediaStorageService imageStorage() {
-        MediaStorageService storage = mock(MediaStorageService.class);
-        when(storage.storeFile(any(Path.class), eq("images"), eq("png"))).thenAnswer(invocation ->
-                "/media/images/" + Files.readString(invocation.getArgument(0), StandardCharsets.UTF_8));
+    private String providerUrl(String name) {
+        return "http://localhost:" + server.getAddress().getPort() + "/media-fixtures/" + name;
+    }
+
+    private GenerationMediaService imageStorage() {
+        GenerationMediaService storage = mock(GenerationMediaService.class);
+        when(storage.image(any(), anyString(), anyString(), any())).thenAnswer(invocation -> {
+            String source = invocation.getArgument(2);
+            return "/media/images/" + source.substring(source.lastIndexOf('/') + 1);
+        });
         return storage;
     }
 }

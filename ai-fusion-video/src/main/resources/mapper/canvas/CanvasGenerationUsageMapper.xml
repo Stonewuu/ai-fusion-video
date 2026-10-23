@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.canvas.CanvasGenerationUsageMapper">
+    <select id="tokensForRun" resultType="com.stonewu.fusion.mapper.canvas.CanvasGenerationUsageMapper$Tokens">
+        SELECT u.id, u.input_tokens, u.output_tokens FROM afv_agent_model_call_usage u
+        JOIN afv_agent_run a ON a.run_id = u.run_id
+        JOIN afv_canvas_agent_node_job j ON j.node_run_id = JSON_UNQUOTE(JSON_EXTRACT(a.canvas_scope_json, '$.nodeRunId'))
+        WHERE j.canvas_run_id = #{runId} ORDER BY u.id
+    </select>
+    <resultMap id="usage" type="com.stonewu.fusion.mapper.canvas.CanvasGenerationUsageMapper$Usage">
+        <constructor>
+            <arg name="inputJson" column="input_json" javaType="java.lang.String"/>
+            <arg name="modelSnapshotJson" column="model_snapshot_json" javaType="java.lang.String"/>
+        </constructor>
+    </resultMap>
+    <select id="selectNodeUsage" resultMap="usage">
+        SELECT j.input_json, s.model_snapshot_json
+        FROM afv_generation_submission s
+        JOIN afv_remote_generation_job j ON j.submission_id = s.id
+        WHERE s.canvas_node_run_id = #{nodeRunId} AND s.kind = #{kind}
+    </select>
+    <select id="successfulImages" resultType="String">
+        SELECT i.image_url FROM afv_generation_submission s JOIN afv_image_item i ON i.task_id = s.task_id
+        WHERE s.canvas_node_run_id = #{nodeRunId} AND s.kind = 'IMAGE' AND i.status = 1 AND i.deleted = FALSE
+        ORDER BY s.created_at, i.id
+    </select>
+    <select id="successfulVideos" resultType="String">
+        SELECT i.video_url FROM afv_generation_submission s JOIN afv_video_item i ON i.task_id = s.task_id
+        WHERE s.canvas_node_run_id = #{nodeRunId} AND s.kind = 'VIDEO' AND i.status = 1 AND i.deleted = FALSE
+        ORDER BY s.created_at, i.id
+    </select>
+</mapper>

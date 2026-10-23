@@ -5,10 +5,18 @@
     "platform": "dashscope",
     "modelType": 2,
     "description": "阿里云百炼万相 2.7 专业图片生成模型，支持文生图、参考图生成与 1K~4K 分辨率",
-    "capabilities": ["文生图", "图生图", "多图参考", "1K/2K/4K"],
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考",
+      "1K/2K/4K"
+    ],
     "config": {
       "supportReferenceImages": true,
-      "referenceImageInputFormats": ["url", "data_uri"],
+      "referenceImageInputFormats": [
+        "url",
+        "data_uri"
+      ],
       "minReferenceImages": 0,
       "maxReferenceImages": 10,
       "defaultWidth": 2048,
@@ -17,7 +25,16 @@
       "maxPixels": 16777216,
       "promptExtend": true,
       "watermark": false,
-      "supportedAspectRatios": ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"],
+      "supportedAspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "16:9",
+        "9:16",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
       "supportedSizes": {
         "1K": {
           "1:1": "1024x1024",
@@ -58,10 +75,18 @@
     "platform": "dashscope",
     "modelType": 2,
     "description": "阿里云百炼万相 2.7 图片生成模型，支持文生图、参考图生成与 1K~2K 分辨率",
-    "capabilities": ["文生图", "图生图", "多图参考", "1K/2K"],
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考",
+      "1K/2K"
+    ],
     "config": {
       "supportReferenceImages": true,
-      "referenceImageInputFormats": ["url", "data_uri"],
+      "referenceImageInputFormats": [
+        "url",
+        "data_uri"
+      ],
       "minReferenceImages": 0,
       "maxReferenceImages": 10,
       "defaultWidth": 2048,
@@ -70,7 +95,16 @@
       "maxPixels": 4194304,
       "promptExtend": true,
       "watermark": false,
-      "supportedAspectRatios": ["1:1", "3:4", "4:3", "16:9", "9:16", "2:3", "3:2", "21:9"],
+      "supportedAspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "16:9",
+        "9:16",
+        "2:3",
+        "3:2",
+        "21:9"
+      ],
       "supportedSizes": {
         "1K": {
           "1:1": "1024x1024",
@@ -86,11 +120,11 @@
           "1:1": "2048x2048",
           "3:4": "1728x2304",
           "4:3": "2304x1728",
-          "16:9": "2848x1600",
-          "9:16": "1600x2848",
+          "16:9": "2688x1536",
+          "9:16": "1536x2688",
           "2:3": "1664x2496",
           "3:2": "2496x1664",
-          "21:9": "3136x1344"
+          "21:9": "3072x1312"
         }
       }
     }
@@ -101,10 +135,17 @@
     "platform": "dashscope",
     "modelType": 2,
     "description": "阿里云百炼 Qwen Image 2.0 Pro 图像生成模型，支持高质量文生图与参考图编辑",
-    "capabilities": ["文生图", "图像编辑", "参考图"],
+    "capabilities": [
+      "文生图",
+      "图像编辑",
+      "参考图"
+    ],
     "config": {
       "supportReferenceImages": true,
-      "referenceImageInputFormats": ["url", "data_uri"],
+      "referenceImageInputFormats": [
+        "url",
+        "data_uri"
+      ],
       "minReferenceImages": 0,
       "maxReferenceImages": 2,
       "defaultWidth": 2048,
@@ -112,7 +153,13 @@
       "minPixels": 262144,
       "maxPixels": 4194304,
       "watermark": false,
-      "supportedAspectRatios": ["1:1", "3:4", "4:3", "16:9", "9:16"],
+      "supportedAspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "16:9",
+        "9:16"
+      ],
       "supportedSizes": {
         "1K": {
           "1:1": "1024x1024",
@@ -125,8 +172,8 @@
           "1:1": "2048x2048",
           "3:4": "1728x2304",
           "4:3": "2304x1728",
-          "16:9": "2848x1600",
-          "9:16": "1600x2848"
+          "16:9": "2688x1536",
+          "9:16": "1536x2688"
         }
       }
     }
@@ -137,10 +184,17 @@
     "platform": "dashscope",
     "modelType": 2,
     "description": "阿里云百炼 Qwen Image 2.0 图像生成模型，支持文生图与参考图编辑",
-    "capabilities": ["文生图", "图像编辑", "参考图"],
+    "capabilities": [
+      "文生图",
+      "图像编辑",
+      "参考图"
+    ],
     "config": {
       "supportReferenceImages": true,
-      "referenceImageInputFormats": ["url", "data_uri"],
+      "referenceImageInputFormats": [
+        "url",
+        "data_uri"
+      ],
       "minReferenceImages": 0,
       "maxReferenceImages": 2,
       "defaultWidth": 2048,
@@ -148,7 +202,13 @@
       "minPixels": 262144,
       "maxPixels": 4194304,
       "watermark": false,
-      "supportedAspectRatios": ["1:1", "3:4", "4:3", "16:9", "9:16"],
+      "supportedAspectRatios": [
+        "1:1",
+        "3:4",
+        "4:3",
+        "16:9",
+        "9:16"
+      ],
       "supportedSizes": {
         "1K": {
           "1:1": "1024x1024",
@@ -161,8 +221,8 @@
           "1:1": "2048x2048",
           "3:4": "1728x2304",
           "4:3": "2304x1728",
-          "16:9": "2848x1600",
-          "9:16": "1600x2848"
+          "16:9": "2688x1536",
+          "9:16": "1536x2688"
         }
       }
     }
@@ -173,7 +233,9 @@
     "platform": "dashscope",
     "modelType": 2,
     "description": "阿里云百炼 Qwen Image Max 文生图模型",
-    "capabilities": ["文生图"],
+    "capabilities": [
+      "文生图"
+    ],
     "config": {
       "supportReferenceImages": false,
       "minReferenceImages": 0,
@@ -181,7 +243,13 @@
       "defaultWidth": 1328,
       "defaultHeight": 1328,
       "watermark": false,
-      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16"],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ],
       "supportedSizes": {
         "标准": {
           "1:1": "1328x1328",
@@ -199,7 +267,9 @@
     "platform": "dashscope",
     "modelType": 2,
     "description": "阿里云百炼 Qwen Image Plus 文生图模型",
-    "capabilities": ["文生图"],
+    "capabilities": [
+      "文生图"
+    ],
     "config": {
       "supportReferenceImages": false,
       "minReferenceImages": 0,
@@ -207,7 +277,13 @@
       "defaultWidth": 1328,
       "defaultHeight": 1328,
       "watermark": false,
-      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16"],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ],
       "supportedSizes": {
         "标准": {
           "1:1": "1328x1328",
@@ -225,7 +301,9 @@
     "platform": "dashscope",
     "modelType": 2,
     "description": "阿里云百炼 Qwen Image 基础文生图模型",
-    "capabilities": ["文生图"],
+    "capabilities": [
+      "文生图"
+    ],
     "config": {
       "supportReferenceImages": false,
       "minReferenceImages": 0,
@@ -233,7 +311,13 @@
       "defaultWidth": 1328,
       "defaultHeight": 1328,
       "watermark": false,
-      "supportedAspectRatios": ["1:1", "4:3", "3:4", "16:9", "9:16"],
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16"
+      ],
       "supportedSizes": {
         "标准": {
           "1:1": "1328x1328",

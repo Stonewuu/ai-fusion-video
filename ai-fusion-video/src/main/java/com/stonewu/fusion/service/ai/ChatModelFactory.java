@@ -2,11 +2,19 @@ package com.stonewu.fusion.service.ai;
 
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.provider.AiProviderService;
+import com.stonewu.fusion.service.ai.agentscope.kernel.OwnedChatModel;
+import io.agentscope.core.message.Msg;
+import io.agentscope.core.message.MsgRole;
+import io.agentscope.core.message.TextBlock;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 import lombok.RequiredArgsConstructor;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.List;
+import java.time.Duration;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
@@ -27,6 +35,19 @@ public class ChatModelFactory {
      */
     public ChatModel getOrCreate(AiModel model) {
         return modelCache.computeIfAbsent(model.getId(), id -> createChatModel(model));
+    }
+
+    /** 使用与画布、助手一致的单次请求协议，包含仅支持 Responses 的模型。 */
+    @Transactional(propagation = Propagation.NEVER)
+    public String checkConnectivity(AiModel model, String message) {
+        try (var owned = OwnedChatModel.owned(aiProviderService.provisionSingleRequestModel(model).model())) {
+            var input = Msg.builder().name("user").role(MsgRole.USER)
+                    .content(TextBlock.builder().text(message).build()).build();
+            var parts = owned.model().stream(List.of(input), List.of(), null)
+                    .concatMapIterable(response -> response.getContent()).ofType(TextBlock.class)
+                    .map(TextBlock::getText).collectList().block(Duration.ofSeconds(60));
+            return String.join("", parts);
+        }
     }
 
     /**

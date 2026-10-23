@@ -13,7 +13,9 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Routes image generation by the explicitly configured effective request protocol. */
+/**
+ * Routes image generation by the explicitly configured effective request protocol.
+ */
 @Component
 @RequiredArgsConstructor
 public class ImageGenerationStrategyRouter {
@@ -35,7 +37,8 @@ public class ImageGenerationStrategyRouter {
         AiModelMetadata metadata = aiModelMetadataResolver.resolve(model, apiConfig);
         String protocol = normalize(metadata.modelProtocol());
         if (StrUtil.isBlank(protocol)) {
-            throw new BusinessException("图片模型未配置请求协议：请在模型中设置覆盖协议，或在 API 配置中设置图片默认协议");
+            throw new BusinessException(
+                    "图片模型未配置请求协议：请在模型中设置覆盖协议，或在 API 配置中设置图片默认协议");
         }
 
         ImageGenerationStrategy strategy = candidates.get(protocol);

@@ -21,46 +21,74 @@ import lombok.*;
 @AllArgsConstructor
 public class AgentMessage extends BaseEntity {
 
-    /** 主键ID，自增 */
+    /**
+     * 主键ID，自增
+     */
     @TableId(type = IdType.AUTO)
     private Long id;
 
-    /** 所属对话ID（UUID），关联 AgentConversation.conversationId */
+    /**
+     * 所属对话ID（UUID），关联 AgentConversation.conversationId
+     */
     private String conversationId;
 
-    /** 产生该消息的运行 ID */
+    /**
+     * 产生该消息的运行 ID
+     */
     private String runId;
 
-    /** 事件投影幂等键 */
+    /**
+     * 事件投影幂等键
+     */
     private String projectionKey;
 
-    /** 消息角色：user-用户 assistant-AI system-系统 tool-工具 */
+    /**
+     * 消息角色：user-用户 assistant-AI system-系统 tool-工具
+     */
     private String role;
 
-    /** 消息文本内容 */
+    /**
+     * 消息文本内容
+     */
     private String content;
 
-    /** 引用资源 JSON，存储消息中引用的文件/图片等 */
+    /**
+     * 引用资源 JSON，存储消息中引用的文件/图片等
+     */
     private String referencesJson;
 
-    /** 工具调用名称（当 role=tool 时） */
+    /**
+     * 工具调用名称（当 role=tool 时）
+     */
     private String toolName;
 
-    /** 工具执行状态：running/success/error/cancelled/rejected */
+    /**
+     * 工具执行状态：running/success/error/cancelled/rejected
+     */
     private String toolStatus;
 
-    /** 工具调用 ID（关联同一次工具调用的发起和结果） */
+    /**
+     * 工具调用 ID（关联同一次工具调用的发起和结果）
+     */
     private String toolCallId;
 
-    /** 父级工具调用 ID（子 Agent 事件归属到父工具调用） */
+    /**
+     * 父级工具调用 ID（子 Agent 事件归属到父工具调用）
+     */
     private String parentToolCallId;
 
-    /** AI推理过程内容（思维链） */
+    /**
+     * AI推理过程内容（思维链）
+     */
     private String reasoningContent;
 
-    /** AI推理耗时（毫秒） */
+    /**
+     * AI推理耗时（毫秒）
+     */
     private Long reasoningDurationMs;
 
-    /** 消息在对话中的排列顺序 */
+    /**
+     * 消息在对话中的排列顺序
+     */
     private Long messageOrder;
 }
