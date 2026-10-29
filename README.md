@@ -27,9 +27,9 @@
 
 <table width="100%">
   <tbody>
-    <!-- 每位赞助商新增一条 tr：横幅独占整行，下方完整展示文案；联系入口统一保留在表格之后。 -->
+    <!-- 每位赞助商占一行：横幅跨两列，方形 Logo 左图右文；联系入口统一保留在表格之后。 -->
     <tr>
-      <td valign="top">
+      <td colspan="2" valign="top">
         <p align="center">
           <a href="https://www.infistar.cc/register?aff=KRJVKLFP&amp;ref_source=link" target="_blank" rel="noopener noreferrer">
             <img src="assets/sponsors/infistar-banner.png" alt="Infistar.cc 无限星河：一站式全球大模型 API 服务平台" width="920" />
@@ -42,6 +42,24 @@
           🤖 <strong>Agent 创作赋能</strong>：高并发低延迟，深度支撑“融光助手”及多步骤 Agent 任务的长时挂机与连续生成；<br />
           🎁 <strong>专属开箱福利</strong>：通过 <a href="https://www.infistar.cc/register?aff=KRJVKLFP&amp;ref_source=link" target="_blank" rel="noopener noreferrer">专属推广链接</a> 注册即赠 <strong>$5 测试额度</strong> 与<strong>首充专享特惠</strong>！
         </p>
+      </td>
+    </tr>
+    <tr>
+      <td width="180" align="center" valign="middle">
+        <a href="https://hub.ll2.cn?p=mj5f" target="_blank" rel="noopener noreferrer">
+          <img src="assets/sponsors/ll2-logo.jpg" alt="LL2 Logo" width="144" height="144" />
+        </a>
+      </td>
+      <td valign="top">
+        <p><strong>感谢 <a href="https://hub.ll2.cn?p=mj5f" target="_blank" rel="noopener noreferrer">LL2</a> 赞助本项目！｜自营算力底座 · 官方直签批价。</strong></p>
+        <p>
+          MiniMax-H3 <strong>0.05 元/秒</strong>（自部署 768P 满血）；
+          GLM / DeepSeek 全系官方 <strong>5.5 折</strong>；<br />
+          Seedance 系列 <strong>7 折起</strong>；
+          超分 <strong>0.018 元/秒</strong>；
+          Vega 系列 <strong>6 折起</strong>
+        </p>
+        <p><a href="https://hub.ll2.cn?p=mj5f" target="_blank" rel="noopener noreferrer"><strong>注册 LL2 →</strong></a></p>
       </td>
     </tr>
   </tbody>

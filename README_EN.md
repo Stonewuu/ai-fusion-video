@@ -27,9 +27,9 @@ Thank you to the following sponsors for supporting AI Fusion Video!
 
 <table width="100%">
   <tbody>
-    <!-- Add one tr per sponsor: a full-width banner with the complete description below; keep the contact link after the table. -->
+    <!-- Add one row per sponsor: banners span both columns; square logos sit beside the description. Keep the contact link after the table. -->
     <tr>
-      <td valign="top">
+      <td colspan="2" valign="top">
         <p align="center">
           <a href="https://www.infistar.cc/register?aff=KRJVKLFP&amp;ref_source=link" target="_blank" rel="noopener noreferrer">
             <img src="assets/sponsors/infistar-banner.png" alt="Infistar.cc: a one-stop API platform for leading AI models worldwide" width="920" />
@@ -42,6 +42,24 @@ Thank you to the following sponsors for supporting AI Fusion Video!
           🤖 <strong>Built for Agent workflows</strong>: High concurrency and low latency support long-running, unattended sessions and continuous generation in the AI Fusion Video assistant and multi-step Agent tasks;<br />
           🎁 <strong>Exclusive welcome offer</strong>: Sign up through the <a href="https://www.infistar.cc/register?aff=KRJVKLFP&amp;ref_source=link" target="_blank" rel="noopener noreferrer">exclusive referral link</a> to receive <strong>$5 in trial credits</strong> and a <strong>special offer on your first top-up</strong>!
         </p>
+      </td>
+    </tr>
+    <tr>
+      <td width="180" align="center" valign="middle">
+        <a href="https://hub.ll2.cn?p=mj5f" target="_blank" rel="noopener noreferrer">
+          <img src="assets/sponsors/ll2-logo.jpg" alt="LL2 Logo" width="144" height="144" />
+        </a>
+      </td>
+      <td valign="top">
+        <p><strong>Thank you to <a href="https://hub.ll2.cn?p=mj5f" target="_blank" rel="noopener noreferrer">LL2</a> for sponsoring this project! | In-house compute · Wholesale rates through direct provider contracts.</strong></p>
+        <p>
+          MiniMax-H3 <strong>CNY 0.05/s</strong> (self-hosted, full-quality 768P);
+          all GLM / DeepSeek models at <strong>55% of official prices</strong>;<br />
+          Seedance series from <strong>70% of official prices</strong>;
+          upscaling at <strong>CNY 0.018/s</strong>;
+          Vega series from <strong>60% of official prices</strong>
+        </p>
+        <p><a href="https://hub.ll2.cn?p=mj5f" target="_blank" rel="noopener noreferrer"><strong>Sign up for LL2 →</strong></a></p>
       </td>
     </tr>
   </tbody>
