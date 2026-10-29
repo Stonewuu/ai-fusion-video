@@ -54,7 +54,7 @@
         <p><strong>感谢 <a href="https://hub.ll2.cn?p=mj5f" target="_blank" rel="noopener noreferrer">LL2</a> 赞助本项目！｜自营算力底座 · 官方直签批价。</strong></p>
         <p>
           MiniMax-H3 <strong>0.05 元/秒</strong>（自部署 768P 满血）；
-          GLM / DeepSeek 全系官方 <strong>5.5 折</strong>；<br />
+          deepseek-v4.1-flash 官方 <strong>4 折</strong>；<br />
           Seedance 系列 <strong>7 折起</strong>；
           超分 <strong>0.018 元/秒</strong>；
           Vega 系列 <strong>6 折起</strong>

@@ -54,7 +54,7 @@ Thank you to the following sponsors for supporting AI Fusion Video!
         <p><strong>Thank you to <a href="https://hub.ll2.cn?p=mj5f" target="_blank" rel="noopener noreferrer">LL2</a> for sponsoring this project! | In-house compute · Wholesale rates through direct provider contracts.</strong></p>
         <p>
           MiniMax-H3 <strong>CNY 0.05/s</strong> (self-hosted, full-quality 768P);
-          all GLM / DeepSeek models at <strong>55% of official prices</strong>;<br />
+          deepseek-v4.1-flash at <strong>40% of official prices</strong>;<br />
           Seedance series from <strong>70% of official prices</strong>;
           upscaling at <strong>CNY 0.018/s</strong>;
           Vega series from <strong>60% of official prices</strong>
