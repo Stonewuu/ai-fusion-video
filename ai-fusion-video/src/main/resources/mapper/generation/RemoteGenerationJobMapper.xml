@@ -12,7 +12,9 @@
         SELECT id, model_id, actor_user_id, project_id, phase, permit_held, cancel_requested
         FROM afv_remote_generation_job
         WHERE ((state IN ('READY', 'WAITING') AND next_poll_at &lt;= UTC_TIMESTAMP(6))
-            OR (state = 'RUNNING' AND lease_until &lt;= UTC_TIMESTAMP(6)))
+            OR (state = 'RUNNING' AND lease_until &lt;= UTC_TIMESTAMP(6))
+            OR state = 'NEEDS_REVIEW'
+            OR (state = 'UNKNOWN_SUBMISSION' AND (permit_held = TRUE OR phase &lt;&gt; 'FINISHED')))
         ORDER BY next_poll_at, id LIMIT 128 FOR UPDATE SKIP LOCKED
     </select>
     <update id="deferForCapacity">

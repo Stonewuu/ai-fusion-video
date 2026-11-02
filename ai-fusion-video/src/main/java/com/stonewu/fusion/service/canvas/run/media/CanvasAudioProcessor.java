@@ -42,9 +42,9 @@ public class CanvasAudioProcessor {
             return;
         }
         if (!jobs.now().isBefore(job.deadline())) {
-            tasks.finish(job.claim(), original.isEmpty() ? "FAILED" : "NEEDS_REVIEW", "音频执行超过时限，请核实原任务",
-                    null,
-                    original.isPresent() && tasks.received(job.id()) == null);
+            boolean unknown = original.isPresent() && tasks.received(job.id()) == null;
+            tasks.finish(job.claim(), unknown ? "UNKNOWN_SUBMISSION" : "FAILED",
+                    unknown ? "远端结果未知，已结束音频任务的本地等待" : "音频处理超过等待期限", null, false);
             return;
         }
         var api = tasks.api(input);
@@ -84,8 +84,8 @@ public class CanvasAudioProcessor {
         }
         var result = tasks.received(job.id());
         if (original.get().providerId() == null && result == null) {
-            tasks.finish(job.claim(), "UNKNOWN_SUBMISSION", "提交回执不明，请核实供应商是否已经受理；不会自动重新提交",
-                    null, true);
+            tasks.finish(job.claim(), "UNKNOWN_SUBMISSION", "远端结果未知，未取得可查询的音频回执，原请求不会自动重发",
+                    null, false);
             return;
         }
         if (result == null) {
@@ -101,12 +101,12 @@ public class CanvasAudioProcessor {
                 return;
             }
             if (!"succeeded".equals(state) && !"failed".equals(state)) {
-                throw CanvasRunException.invalid("供应商返回了未知状态，需要核实原音频任务");
+                throw CanvasRunException.invalid("供应商未返回可识别的音频状态，远端结果未知");
             }
             result = json.read(response.toString(), ObjectNode.class);
             tasks.received(job.claim(), result);
         }
-        var current = tasks.check(job.claim(), true);
+        var current = jobs.observe(job.claim());
         if (current.cancelRequested()) {
             tasks.finish(job.claim(), "CANCELLED", "供应商原任务已结束，后续执行已停止", null, false);
             return;
@@ -115,6 +115,7 @@ public class CanvasAudioProcessor {
             tasks.finish(job.claim(), "FAILED", result.path("error").asText("供应商音频生成失败"), null, false);
             return;
         }
+        tasks.check(job.claim(), false);
         var previous = outputs.existing(job.claim(), "audio", MediaKind.AUDIO);
         String reference;
         if (previous.isPresent()) {

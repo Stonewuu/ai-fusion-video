@@ -24,7 +24,7 @@ import {
   generationStateLabels,
   generationTerminalStates,
 } from "@/lib/generation-execution-view";
-import { GenerationReviewDialog } from "./generation-review-dialog";
+import { ExecutionRecordButton } from "@/components/dashboard/notification-panel/execution-record-button";
 
 export function GenerationExecutionDialog({
   id,
@@ -40,10 +40,6 @@ export function GenerationExecutionDialog({
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [revision, refresh] = useState(0);
   const [busy, setBusy] = useState(false);
-  const [decision, setDecision] = useState<{
-    item: GenerationExecutionItem;
-    action: GenerationReviewAction;
-  } | null>(null);
   useEffect(() => {
     let active = true;
     let timer: ReturnType<typeof setTimeout>;
@@ -65,7 +61,9 @@ export function GenerationExecutionDialog({
           }
         }
       } finally {
-        if (active && !complete) timer = setTimeout(() => void read(), 3000);
+        if (active && !complete) {
+          timer = setTimeout(() => void read(), 3000);
+        }
       }
     };
     void read();
@@ -79,7 +77,9 @@ export function GenerationExecutionDialog({
     action: GenerationReviewAction,
     note: string,
   ) => {
-    if (busy || error) return false;
+    if (busy || error) {
+      return false;
+    }
     setBusy(true);
     setReviewError(null);
     try {
@@ -104,7 +104,9 @@ export function GenerationExecutionDialog({
       <Dialog
         open
         onOpenChange={(open) => {
-          if (!open && !busy) onClose();
+          if (!open && !busy) {
+            onClose();
+          }
         }}
       >
         <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-2xl">
@@ -133,7 +135,7 @@ export function GenerationExecutionDialog({
                 </Button>
               </div>
             )}
-            {reviewError && !decision && (
+            {reviewError && (
               <p role="alert" className="text-sm text-destructive">
                 {reviewError}
               </p>
@@ -162,7 +164,7 @@ export function GenerationExecutionDialog({
                 {item.cancelRequested &&
                   !generationTerminalStates.has(item.state) && (
                     <p className="text-sm text-muted-foreground">
-                      已请求取消，正在核实供应商是否结束。
+                      已请求取消，正在查询原任务状态。
                     </p>
                   )}
                 {item.remoteCapacityHeld && (
@@ -170,34 +172,17 @@ export function GenerationExecutionDialog({
                     远端任务尚未确认结束，暂时保留生成名额。
                   </p>
                 )}
-                {item.availableActions.length > 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {item.availableActions.map((action) => (
-                      <Button
-                        key={action}
-                        variant="outline"
-                        size="sm"
-                        disabled={busy || !!error}
-                        onClick={() => {
-                          setReviewError(null);
-                          if (
-                            action === "CONFIRM_NOT_ACCEPTED_AND_RETRY" ||
-                            action === "CONFIRM_PROVIDER_FINISHED"
-                          )
-                            setDecision({ item, action });
-                          else
-                            void review(
-                              item,
-                              action,
-                              `用户在执行详情中选择：${generationReviewLabels[action]}`,
-                            );
-                        }}
-                      >
-                        {generationReviewLabels[action]}
-                      </Button>
-                    ))}
-                  </div>
-                )}
+                <div className="flex flex-wrap gap-2">
+                  {item.availableActions.includes("RETRY_INGEST") && (
+                    <Button variant="outline" size="sm" disabled={busy || !!error}
+                      onClick={() => void review(item, "RETRY_INGEST", "重新保存已收到的结果")}>
+                      重新保存结果
+                    </Button>
+                  )}
+                  {["UNKNOWN_SUBMISSION", "FAILED", "NEEDS_REVIEW"].includes(item.state) && (
+                    <ExecutionRecordButton target={{ kind: "GENERATION", id: item.id }} onOpen={onClose} />
+                  )}
+                </div>
                 {item.attempts.length > 0 && (
                   <details className="text-xs text-muted-foreground">
                     <summary className="cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -223,7 +208,7 @@ export function GenerationExecutionDialog({
                           )}
                           {attempt.resolution && (
                             <p>
-                              核实操作：
+                              历史处理：
                               {generationReviewLabels[
                                 attempt.resolution as GenerationReviewAction
                               ] ?? attempt.resolution}
@@ -239,16 +224,6 @@ export function GenerationExecutionDialog({
           </DialogScrollBody>
         </DialogContent>
       </Dialog>
-      {decision && (
-        <GenerationReviewDialog
-          item={decision.item}
-          action={decision.action}
-          busy={busy}
-          error={reviewError}
-          onClose={() => setDecision(null)}
-          onConfirm={(note) => review(decision.item, decision.action, note)}
-        />
-      )}
     </>
   );
 }

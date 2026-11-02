@@ -3,6 +3,7 @@ import type { CanvasLibraryEntry } from "./resource-library";
 
 export type CanvasRelationScope = "hidden" | "all" | "structure" | "assets";
 export type CanvasRelationCategory = "structure" | "assets";
+export type CanvasRelationAvailability = Record<CanvasRelationCategory, boolean>;
 
 export function toggleCanvasRelation(scope: CanvasRelationScope, category: CanvasRelationCategory): CanvasRelationScope {
   const enabled = scope === "all" || scope === category;
@@ -18,7 +19,9 @@ export function canvasBusinessRelations(
 ) {
   const byResource = new Map<string, string[]>();
   for (const node of graph.nodes) {
-    if (!node.resource) continue;
+    if (!node.resource) {
+      continue;
+    }
     const key = `${node.resource.type}:${node.resource.id}`;
     byResource.set(key, [...(byResource.get(key) ?? []), node.id]);
   }
@@ -26,9 +29,11 @@ export function canvasBusinessRelations(
     const targets = byResource.get(`${entry.ref.type}:${entry.ref.id}`) ?? [];
     const refs = [
       ...(entry.parent && scope !== "assets"
-        ? [{ key: entry.parent, label: "包含" }]
+        ? [{ key: entry.parent, label: "包含", category: "structure" as const }]
         : []),
-      ...(scope !== "structure" ? (entry.relations ?? []) : []),
+      ...(scope !== "structure"
+        ? (entry.relations ?? []).map((relation) => ({ ...relation, category: "assets" as const }))
+        : []),
     ];
     return refs.flatMap((ref) =>
       (byResource.get(ref.key) ?? []).flatMap((source) =>
@@ -39,6 +44,7 @@ export function canvasBusinessRelations(
             source,
             target,
             label: ref.label,
+            category: ref.category,
           })),
       ),
     );

@@ -57,13 +57,13 @@ public class CanvasRunOrphanSettlement {
                         Wrappers.<CanvasMcpJobEntity>lambdaQuery().eq(CanvasMcpJobEntity::getId, node.externalId())
                                 .eq(CanvasMcpJobEntity::getNodeRunId, node.id())
                                 .eq(CanvasMcpJobEntity::getPermitHeld, false)
-                                .in(CanvasMcpJobEntity::getStatus, List.of("SUCCEEDED", "FAILED", "CANCELLED")));
+                                .in(CanvasMcpJobEntity::getStatus, List.of("SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN_SUBMISSION")));
             }
             case "TEXT" -> text.exists(
                     Wrappers.<CanvasTextJobEntity>lambdaQuery().eq(CanvasTextJobEntity::getId, node.externalId())
                             .eq(CanvasTextJobEntity::getNodeRunId, node.id())
                             .eq(CanvasTextJobEntity::getPermitHeld, false)
-                            .in(CanvasTextJobEntity::getStatus, List.of("SUCCEEDED", "FAILED", "CANCELLED")));
+                            .in(CanvasTextJobEntity::getStatus, List.of("SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN_SUBMISSION")));
             case "GENERATION" -> generations.endedNode(node.externalId(), node.id()) != null;
             case "MEDIA" -> media.endedCanvas(node.externalId(), node.id()) != null;
             default -> false;

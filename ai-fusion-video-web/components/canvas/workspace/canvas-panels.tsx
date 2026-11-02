@@ -4,7 +4,7 @@ import { useEffect, useRef, type ReactNode } from "react";
 import { X, PanelLeftClose, PanelRightClose } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { CanvasPanelPages } from "./panel-pages";
+import { AnimatedCanvasPanelBody } from "./animated-panel-body";
 import {
   CanvasPanelNavigation,
   canvasLeftTabs,
@@ -49,19 +49,25 @@ export function CanvasWorkspacePanels({
     const sync = () => {
       const overlayLeft = mobile === "left" && !!left && narrowLeft.matches;
       const overlayRight = mobile === "right" && !!right && narrowRight.matches;
-      if (editor.current) editor.current.inert = overlayLeft || overlayRight;
-      if (leftAside.current)
-        leftAside.current.inert = overlayRight && narrowLeft.matches;
-      if (rightAside.current) rightAside.current.inert = overlayLeft;
+      if (editor.current) {
+        editor.current.inert = overlayLeft || overlayRight;
+      }
+      if (leftAside.current) {
+        leftAside.current.inert = (narrowLeft.matches && !overlayLeft) || overlayRight;
+      }
+      if (rightAside.current) {
+        rightAside.current.inert = (narrowRight.matches && !overlayRight) || overlayLeft;
+      }
       const overlay = overlayLeft
         ? leftAside.current
         : overlayRight
           ? rightAside.current
           : null;
       if (overlay && !overlay.contains(document.activeElement)) {
-        if (document.activeElement instanceof HTMLElement)
+        if (document.activeElement instanceof HTMLElement) {
           mobileReturn.current = document.activeElement;
-        overlay.querySelector<HTMLButtonElement>("[data-panel-close]")?.focus();
+        }
+        overlay.querySelector<HTMLButtonElement>("[data-panel-close]")?.focus({ preventScroll: true });
       }
     };
     sync();
@@ -77,9 +83,14 @@ export function CanvasWorkspacePanels({
     const panel = side === "left" ? left : right;
     const aside = side === "left" ? leftAside.current : rightAside.current;
     const focusWasInside = aside?.contains(document.activeElement);
-    if (side === "left") onCloseLeft();
-    else onCloseRight();
-    if (!focusWasInside) return;
+    if (side === "left") {
+      onCloseLeft();
+    } else {
+      onCloseRight();
+    }
+    if (!focusWasInside) {
+      return;
+    }
     requestAnimationFrame(() => {
       const triggers = navigation.current?.querySelectorAll<HTMLButtonElement>(
         `button[data-canvas-panel="${panel}"]`,
@@ -87,13 +98,16 @@ export function CanvasWorkspacePanels({
       const trigger = [...(triggers ?? [])].find(
         (button) => button.getClientRects().length > 0,
       );
-      if (trigger) trigger.focus();
-      else if (
+      if (trigger) {
+        trigger.focus({ preventScroll: true });
+      } else if (
         mobileReturn.current?.isConnected &&
         mobileReturn.current.getClientRects().length > 0
-      )
-        mobileReturn.current.focus();
-      else editor.current?.focus();
+      ) {
+        mobileReturn.current.focus({ preventScroll: true });
+      } else {
+        editor.current?.focus({ preventScroll: true });
+      }
       mobileReturn.current = null;
     });
   };
@@ -133,9 +147,9 @@ export function CanvasWorkspacePanels({
             }
           }}
           className={cn(
-            "absolute inset-y-0 left-0 z-40 min-h-0 flex-col border-r border-border/20 bg-card md:static md:z-auto md:shrink-0",
-            left && mobile === "left" ? "flex" : "hidden md:flex",
-            left ? "w-full max-w-sm md:w-64 md:max-w-none" : "md:w-20",
+            "absolute inset-y-0 left-0 z-40 flex w-full max-w-sm min-h-0 flex-col overflow-hidden border-r border-border/20 bg-card transition-[width,translate,opacity] motion-reduce:transition-none md:static md:z-auto md:max-w-none md:shrink-0",
+            left && mobile === "left" ? "translate-x-0 opacity-100" : "pointer-events-none -translate-x-full opacity-0 md:pointer-events-auto md:translate-x-0 md:opacity-100",
+            left ? "duration-200 ease-out md:w-64" : "duration-150 ease-in md:w-20",
           )}
         >
           <div
@@ -171,7 +185,8 @@ export function CanvasWorkspacePanels({
               </Button>
             )}
           </div>
-          <CanvasPanelPages
+          <AnimatedCanvasPanelBody
+            side="left"
             tabs={canvasLeftTabs}
             active={left}
             visited={visited}
@@ -200,9 +215,9 @@ export function CanvasWorkspacePanels({
             }
           }}
           className={cn(
-            "absolute inset-y-0 right-0 z-50 min-h-0 flex-col border-l border-border/20 bg-card xl:static xl:z-auto xl:shrink-0",
-            right && mobile === "right" ? "flex" : "hidden xl:flex",
-            right ? "w-full max-w-sm xl:w-88 xl:max-w-none" : "xl:w-20",
+            "absolute inset-y-0 right-0 z-50 flex w-full max-w-sm min-h-0 flex-col overflow-hidden border-l border-border/20 bg-card transition-[width,translate,opacity] motion-reduce:transition-none xl:static xl:z-auto xl:max-w-none xl:shrink-0",
+            right && mobile === "right" ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0 xl:pointer-events-auto xl:translate-x-0 xl:opacity-100",
+            right ? "duration-200 ease-out xl:w-88" : "duration-150 ease-in xl:w-20",
           )}
         >
           <div
@@ -239,7 +254,8 @@ export function CanvasWorkspacePanels({
               </Button>
             )}
           </div>
-          <CanvasPanelPages
+          <AnimatedCanvasPanelBody
+            side="right"
             tabs={canvasRightTabs}
             active={right}
             visited={visited}

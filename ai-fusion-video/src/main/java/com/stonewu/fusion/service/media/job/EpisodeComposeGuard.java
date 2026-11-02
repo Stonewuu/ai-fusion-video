@@ -24,7 +24,7 @@ public class EpisodeComposeGuard {
         if (mediaJobs.exists(Wrappers.<MediaJobEntity>lambdaQuery()
                 .eq(MediaJobEntity::getKind, "EPISODE_COMPOSE").eq(MediaJobEntity::getTargetId, episodeId)
                 .in(MediaJobEntity::getStatus,
-                        List.of("QUEUED", "RUNNING", "WAITING", "NEEDS_REVIEW", "UNKNOWN_SUBMISSION")))) {
+                        List.of("QUEUED", "RUNNING", "WAITING", "NEEDS_REVIEW")))) {
             throw active();
         }
         if (episode.path("composeStatus").asInt() != 1) {
@@ -33,13 +33,13 @@ public class EpisodeComposeGuard {
         var ended = mediaJobs.exists(
                 Wrappers.<MediaJobEntity>lambdaQuery().eq(MediaJobEntity::getId, episode.path("composeJobId").asText())
                         .eq(MediaJobEntity::getKind, "EPISODE_COMPOSE").eq(MediaJobEntity::getTargetId, episodeId)
-                        .in(MediaJobEntity::getStatus, List.of("SUCCEEDED", "FAILED", "CANCELLED", "CONFLICT")));
+                        .in(MediaJobEntity::getStatus, List.of("SUCCEEDED", "FAILED", "CANCELLED", "CONFLICT", "UNKNOWN_SUBMISSION")));
         if (!ended) {
             throw active();
         }
     }
 
     private static MediaException active() {
-        return new MediaException(409, "MEDIA_JOB_ALREADY_RUNNING", "分集仍在合成或等待核实，请先停止或等待原合成结束");
+        return new MediaException(409, "MEDIA_JOB_ALREADY_RUNNING", "分集仍在合成，请先停止或等待原合成结束");
     }
 }

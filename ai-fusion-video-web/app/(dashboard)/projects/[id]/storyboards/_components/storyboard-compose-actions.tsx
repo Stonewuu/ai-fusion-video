@@ -25,13 +25,17 @@ export function StoryboardComposeActions({ episode, submitting, running, onCompo
   const [refresh, setRefresh] = useState(0);
   const [cancelState, setCancelState] = useState<{ id: string; pending: boolean; message?: string }>();
   const state = useMediaJob(episode?.composeJobId, refresh);
-  if (!episode) return null;
+  if (!episode) {
+    return null;
+  }
   const job = state?.job;
   const busy = submitting || (job ? mediaJobRunning(job) : running || episode.composeStatus === 1);
-  const review = job?.status === "NEEDS_REVIEW";
+  const review = job?.status === "NEEDS_REVIEW" || job?.status === "UNKNOWN_SUBMISSION";
   const partial = job?.results.video || job?.results.baseVideo;
   const cancel = async () => {
-    if (!job) return;
+    if (!job) {
+      return;
+    }
     setCancelState({ id: job.id, pending: true });
     try {
       await mediaJobsApi.cancel(job.id);
@@ -52,10 +56,10 @@ export function StoryboardComposeActions({ episode, submitting, running, onCompo
         <Checkbox checked={includeBgm} onCheckedChange={(checked) => setIncludeBgm(checked === true)} disabled={busy} />
         配乐
       </label>
-      <Button variant="outline" size="sm" disabled={busy || review} onClick={() => onCompose(includeBgm)}
+      <Button variant="outline" size="sm" disabled={busy} onClick={() => onCompose(includeBgm)}
         title={includeBgm ? "按镜头顺序合成；启用 Sonilo 配置时生成配乐" : "按镜头顺序合成并保留原声"}>
         {busy ? <Loader2 className="animate-spin" /> : <Clapperboard />}
-        {submitting ? "提交中" : review ? "待核实" : job?.cancelRequested && busy ? "取消中" : busy ? "合成中" : episode.composeStatus === 3 ? "重试" : episode.composedVideoUrl ? "重新合成" : "合成"}
+        {submitting ? "提交中" : job?.cancelRequested && busy ? "取消中" : busy ? "合成中" : episode.composeStatus === 3 ? "重试" : episode.composedVideoUrl ? "重新合成" : "合成"}
       </Button>
       {episode.composeJobId && <Button variant="ghost" size="sm" onClick={() => setDetails(true)}>任务</Button>}
       <Dialog open={details} onOpenChange={setDetails}>
@@ -72,7 +76,7 @@ export function StoryboardComposeActions({ episode, submitting, running, onCompo
               {job && mediaJobRunning(job) && <Button variant="destructive-ghost" disabled={job.cancelRequested || (cancelState?.id === job.id && cancelState.pending)} onClick={cancel}>{job.cancelRequested ? "正在取消" : "取消处理"}</Button>}
             </div>
             {job && mediaJobRunning(job) && cancelState?.id === job.id && cancelState.message && <p className="text-sm text-muted-foreground">{cancelState.message}</p>}
-            {job && mediaJobRunning(job) && <p className="text-xs text-muted-foreground">关闭页面后继续处理。取消后等待供应商已受理的请求结束，再释放并发名额。</p>}
+            {job && mediaJobRunning(job) && <p className="text-xs text-muted-foreground">关闭页面后继续处理。取消后会查询原任务，超时则结束本地等待。</p>}
             {job && review && <EpisodeAudioReviewForm key={job.id} job={job} onChanged={() => setRefresh(value => value + 1)} />}
           </DialogScrollBody>
         </DialogContent>

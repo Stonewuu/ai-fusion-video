@@ -19,7 +19,7 @@ import {
 import { getApiErrorMessage, getApiErrorStatus } from "@/lib/api/api-error";
 import { useCanvasRuns } from "../runs/canvas-runs-provider";
 import { CanvasAgentTaskProgress } from "./task-progress";
-import { CanvasAgentModelRecovery } from "./model-recovery";
+import { CanvasAgentModelStatus } from "./model-call-status";
 import { CanvasAgentGenerationProgress } from "./generation-progress";
 import { canvasAgentExecutionFinished } from "@/lib/canvas/agent-execution";
 
@@ -85,19 +85,25 @@ function CanvasAgentExecutionDialog({
           nodeId,
           controller.signal,
         );
-        if (!active) return;
+        if (!active) {
+          return;
+        }
         setData(result);
         setError(null);
         stopped = canvasAgentExecutionFinished(result);
       } catch (failure) {
-        if (!active) return;
+        if (!active) {
+          return;
+        }
         setError(getApiErrorMessage(failure));
         if ([401, 403, 404].includes(getApiErrorStatus(failure) ?? 0)) {
           setData(null);
           stopped = true;
         }
       } finally {
-        if (active && !stopped) timer = setTimeout(() => void load(), 3000);
+        if (active && !stopped) {
+          timer = setTimeout(() => void load(), 3000);
+        }
       }
     };
     void load();
@@ -115,7 +121,9 @@ function CanvasAgentExecutionDialog({
     <Dialog
       open
       onOpenChange={(value) => {
-        if (!value) onClose();
+        if (!value) {
+          onClose();
+        }
       }}
     >
       <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-2xl">
@@ -124,11 +132,9 @@ function CanvasAgentExecutionDialog({
           <DialogDescription>
             {data
               ? `已启动 ${data.tasks.length} / ${data.maxAgentRuns} 个任务。${
-                  data.unresolvedModelCalls > 0
-                    ? "请在下方处理未完成的调用。"
-                    : canvasAgentExecutionFinished(data)
-                      ? "本次任务已结束，已有结果保留。"
-                      : "画布计划内的操作自动批准，关闭窗口后任务继续执行。"
+                  canvasAgentExecutionFinished(data)
+                    ? "本次任务已结束，已有结果保留。"
+                    : "画布计划内的操作自动批准，关闭窗口后任务继续执行。"
                 }`
               : "读取主任务与子任务状态"}
           </DialogDescription>
@@ -144,10 +150,9 @@ function CanvasAgentExecutionDialog({
               正在读取任务…
             </p>
           ) : null}
-          {data && data.unresolvedModelCalls > 0 ? (
-            <CanvasAgentModelRecovery
-              requestIds={data.unresolvedModelRequestIds}
-              onChanged={changed}
+          {data && data.unknownModelCalls > 0 ? (
+            <CanvasAgentModelStatus
+              requestIds={data.unknownModelRequestIds}
             />
           ) : null}
           {data && (

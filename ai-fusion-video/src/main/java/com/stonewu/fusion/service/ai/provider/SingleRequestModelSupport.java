@@ -30,7 +30,7 @@ public final class SingleRequestModelSupport {
                 .writeTimeout(Duration.ofMinutes(1)).callTimeout(Duration.ofMinutes(25))
                 .addInterceptor(chain -> {
                     if (!sent.compareAndSet(false, true)) {
-                        throw new IOException("模型调用已经发送，必须核实原任务，不能自动重发");
+                        throw new IOException("模型调用已经发送，不能自动重复提交");
                     }
                     return chain.proceed(chain.request());
                 });

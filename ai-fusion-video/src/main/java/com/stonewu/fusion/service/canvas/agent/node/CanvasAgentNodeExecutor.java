@@ -95,11 +95,6 @@ public class CanvasAgentNodeExecutor implements Executor {
         if ((state == State.SUCCEEDED || state == State.PARTIAL_FAILED) && agent.getProjectionCompletedAt() == null) {
             state = State.RUNNING;
         }
-        long uncertain = nodes.unresolvedModelIds(node.id()).size();
-        if (uncertain > 0) {
-            return new Outcome(State.UNKNOWN_SUBMISSION, outputs.preview(run, node), "AGENT", job.agentRunId(),
-                    "模型连接已中断，暂时无法确认本次调用是否结束。请打开本节点的任务详情处理。");
-        }
         try {
             var result = state == State.SUCCEEDED || state == State.PARTIAL_FAILED ? outputs.collect(run, node,
                     job) : outputs.preview(run, node);

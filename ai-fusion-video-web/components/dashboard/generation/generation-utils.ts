@@ -64,10 +64,10 @@ export function getResultPreviewUrl(item: GenerationResultItem) {
 export function getTaskStatus(task: GenerationTask) {
   const state = task.execution?.state;
   if (state === "UNKNOWN_SUBMISSION") {
-    return { label: "受理情况待核实", tone: "attention" as const };
+    return { label: "远端结果未知", tone: "attention" as const };
   }
   if (state === "NEEDS_REVIEW") {
-    return { label: "需要核实", tone: "attention" as const };
+    return { label: "自动处理中", tone: "attention" as const };
   }
   if (state === "CANCEL_REQUESTED") {
     return { label: "取消中", tone: "running" as const };

@@ -83,11 +83,11 @@ public class GenerationModelSnapshot {
         var api = requireApi(submission.apiConfigId());
         if (!fingerprint(api).equals(submission.apiConfigHash())) {
             throw new GenerationJobException(409, "GENERATION_PROVIDER_CHANGED",
-                    "供应商连接配置已变化，请核实原任务后继续");
+                    "供应商连接配置已变化，无法继续访问原任务");
         }
         var current = models.getById(submission.model().getId());
         if (current == null || !Integer.valueOf(1).equals(current.getStatus())) {
-            throw new GenerationJobException(409, "GENERATION_MODEL_DISABLED", "模型已停用，任务需要核实处理");
+            throw new GenerationJobException(409, "GENERATION_MODEL_DISABLED", "模型已停用，已停止后续生成处理");
         }
         return api;
     }

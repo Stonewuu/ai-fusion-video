@@ -10,7 +10,8 @@
     </insert>
     <select id="next" resultType="String">
         SELECT j.id FROM afv_canvas_mcp_job j JOIN afv_canvas_mcp_contract c ON c.id=j.contract_id
-        WHERE (j.status='READY' OR (j.status='RUNNING' AND j.lease_until&lt;=UTC_TIMESTAMP(6)))
+        WHERE (j.status='READY' OR (j.status='RUNNING' AND j.lease_until&lt;=UTC_TIMESTAMP(6))
+            OR j.status='NEEDS_REVIEW' OR (j.status='UNKNOWN_SUBMISSION' AND j.permit_held=TRUE))
             AND (j.permit_held=TRUE OR j.cancel_requested=TRUE OR j.request_started_at IS NOT NULL
                 OR j.deadline_at&lt;=UTC_TIMESTAMP(6) OR c.enabled=FALSE OR c.deleted=TRUE
                 OR NOT EXISTS(SELECT 1 FROM afv_canvas_mcp_job busy WHERE busy.contract_id=j.contract_id AND busy.permit_held=TRUE))

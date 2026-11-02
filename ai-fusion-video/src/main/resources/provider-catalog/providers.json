@@ -11,6 +11,7 @@
     "vendor": "metaso",
     "hint": "MiniMax H3、Seedance 视频生成",
     "sponsored": true,
+    "hidden": false,
     "quickSetup": true,
     "credentialUrl": "https://metaso.cn/minimax-h3/?s=fusiov",
     "documentationUrl": "https://metaso.cn/minimax-h3",

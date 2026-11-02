@@ -22,11 +22,11 @@ public record RemoteGenerationJob(String id, String submissionId, long itemId, i
 
     public boolean terminal() {
         return state.equals("SUCCEEDED") || state.equals("PARTIAL_FAILED") || state.equals("FAILED") || state.equals(
-                "CANCELLED");
+                "CANCELLED") || state.equals("UNKNOWN_SUBMISSION") && !permitHeld;
     }
 
     public boolean requiresReview() {
-        return state.equals("UNKNOWN_SUBMISSION") || state.equals("NEEDS_REVIEW");
+        return state.equals("NEEDS_REVIEW");
     }
 
     public List<Long> itemIds() {

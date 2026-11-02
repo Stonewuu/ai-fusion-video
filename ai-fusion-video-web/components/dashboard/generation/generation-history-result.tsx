@@ -99,7 +99,7 @@ export function GenerationHistoryResult({
       : stopped
         ? "这项生成已停止，已完成的其他结果会保留"
         : attention
-          ? "请打开执行详情核实原任务"
+          ? "可在任务详情中查看处理记录"
           : stopping
             ? "等待供应商确认结束，不会自动发布取消后的结果"
             : taskStatus.tone === "success"

@@ -147,7 +147,7 @@ public class ComfyUiTestService {
     public ComfyUiTestView cancel(String id, CanvasActor actor) {
         // 取消是针对固定任务的单向、幂等请求，不要求用户追赶后台轮询版本。
         var run = lockOwned(id, null, actor);
-        if (run.job().cancelRequested() || Set.of("SUCCEEDED", "FAILED", "CANCELLED").contains(run.job().status())) {
+        if (run.job().cancelRequested() || Set.of("SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN_SUBMISSION").contains(run.job().status())) {
             return view(run);
         }
         boolean immediate = run.submittedAt() == null || run.result() != null;
@@ -171,20 +171,12 @@ public class ComfyUiTestService {
             throw new MediaException(409, "COMFY_TEST_ACTION_CHANGED", "任务状态已变化，此操作不再可用");
         }
         if (note == null || note.isBlank() || note.length() > 2000) {
-            throw MediaException.invalid("请填写不超过 2000 字的核实说明");
+            throw MediaException.invalid("处理说明不能为空且不能超过 2000 字符");
         }
-        if (action.equals("CONFIRM_FINISHED")) {
-            mediaJobs.reviewComfyTest(run.job().cancelRequested() ? "CANCELLED" : "FAILED",
-                    "人工确认远端已结束：" + note.trim(), id);
-            testRuns.update(Wrappers.<ComfyUiTestRunEntity>lambdaUpdate().eq(ComfyUiTestRunEntity::getJobId, id)
-                    .set(ComfyUiTestRunEntity::getPermitHeld, false));
-        } else {
-            requireApi(run.apiConfigId(), run.apiConfigHash());
-            mediaJobs.resumeComfyTest(id);
-            testRuns.update(Wrappers.<ComfyUiTestRunEntity>lambdaUpdate().eq(ComfyUiTestRunEntity::getJobId, id)
-                    .set(ComfyUiTestRunEntity::getConsecutiveErrors, 0)
-                    .set(ComfyUiTestRunEntity::getCancelSent, false));
-        }
+        requireApi(run.apiConfigId(), run.apiConfigHash());
+        mediaJobs.resumeComfyTest(id);
+        testRuns.update(Wrappers.<ComfyUiTestRunEntity>lambdaUpdate().eq(ComfyUiTestRunEntity::getJobId, id)
+                .set(ComfyUiTestRunEntity::getConsecutiveErrors, 0));
         runs.recordVersion(runs.get(id));
         runs.changed(id, "COMFY_TEST_REVIEW",
                 Map.of("action", action, "note", note.trim(), "actorUserId", actor.userId()));
@@ -194,7 +186,7 @@ public class ComfyUiTestService {
     public ApiConfig requireApi(long id, String expectedHash) {
         var api = requireApi(id);
         if (!ProviderConfigurationFingerprint.of(api, json).equals(expectedHash)) {
-            throw new MediaException(409, "COMFY_TEST_PROVIDER_CHANGED", "供应商连接已变化，请恢复原连接后核实原任务");
+            throw new MediaException(409, "COMFY_TEST_PROVIDER_CHANGED", "供应商连接已变化，无法继续访问原任务");
         }
         return api;
     }
@@ -242,18 +234,10 @@ public class ComfyUiTestService {
     }
 
     private List<String> actions(ComfyUiTestRun run) {
-        if (!run.job().status().equals("NEEDS_REVIEW")) {
-            return List.of();
+        if (run.job().status().equals("FAILED") && run.result() != null && !run.job().cancelRequested()) {
+            return List.of("RETRY_INGEST");
         }
-        List<String> actions = new ArrayList<>();
-        if (run.promptId() != null && run.result() == null) {
-            actions.add("RECHECK");
-        }
-        if (run.result() != null && !run.job().cancelRequested()) {
-            actions.add("RETRY_INGEST");
-        }
-        actions.add("CONFIRM_FINISHED");
-        return List.copyOf(actions);
+        return List.of();
     }
 
     private ComfyUiTestView view(ComfyUiTestRun run) {

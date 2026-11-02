@@ -76,4 +76,26 @@
             AND n.status NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','BLOCKED','CANCELLED')
             AND n.node_id IN <foreach collection="nodeIds" item="id" open="(" separator="," close=")">#{id}</foreach>)
     </select>
+    <sql id="nodeRunIds">
+        <foreach collection="nodeRunIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+    </sql>
+    <select id="hasUnknownRemote" resultType="boolean">
+        SELECT EXISTS(
+            SELECT 1 FROM afv_canvas_text_job WHERE status = 'UNKNOWN_SUBMISSION'
+                AND node_run_id IN <include refid="nodeRunIds"/>
+            UNION ALL
+            SELECT 1 FROM afv_canvas_mcp_job WHERE status = 'UNKNOWN_SUBMISSION'
+                AND node_run_id IN <include refid="nodeRunIds"/>
+            UNION ALL
+            SELECT 1 FROM afv_media_job j JOIN afv_canvas_media_job c ON c.job_id = j.id
+                WHERE j.status = 'UNKNOWN_SUBMISSION' AND c.node_run_id IN <include refid="nodeRunIds"/>
+            UNION ALL
+            SELECT 1 FROM afv_remote_generation_job j JOIN afv_generation_submission s ON s.id = j.submission_id
+                WHERE j.state = 'UNKNOWN_SUBMISSION' AND s.canvas_node_run_id IN <include refid="nodeRunIds"/>
+            UNION ALL
+            SELECT 1 FROM afv_agent_model_request m JOIN afv_agent_run r ON r.run_id = m.run_id
+                WHERE m.status = 'UNKNOWN_SUBMISSION'
+                    AND JSON_UNQUOTE(JSON_EXTRACT(r.canvas_scope_json, '$.nodeRunId')) IN <include refid="nodeRunIds"/>
+        )
+    </select>
 </mapper>

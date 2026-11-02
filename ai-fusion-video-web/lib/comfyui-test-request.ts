@@ -70,7 +70,12 @@ export function comfyUiTestInput(
 export const comfyUiTestActive = (run: ComfyUiTestRun) =>
   ["QUEUED", "WAITING", "RUNNING"].includes(run.status);
 export function comfyUiTestStatus(run: ComfyUiTestRun) {
-  if (run.status === "NEEDS_REVIEW") return "需要核实";
+  if (run.status === "UNKNOWN_SUBMISSION") {
+    return "远端结果未知";
+  }
+  if (run.status === "NEEDS_REVIEW") {
+    return "自动处理中";
+  }
   if (run.status === "SUCCEEDED") return "试运行成功";
   if (run.status === "FAILED") return "试运行失败";
   if (run.status === "CANCELLED") return "已取消";

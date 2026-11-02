@@ -36,7 +36,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * 模型调用在网络订阅前受理；与画布文本任务共用模型额度，租约丢失不能释放未知的远端调用。
+ * 模型调用在网络订阅前受理；本地执行结束后释放并发，远端结果未知时保留原请求记录。
  */
 @Repository
 @RequiredArgsConstructor
@@ -89,11 +89,6 @@ public class AgentModelRequests {
                 access.requireExecute(canvas, actor);
             }
         }
-        // 不允许在同一对话的原请求仍不确定时继续产生新的模型调用。
-        long uncertain = requests.uncertainForConversation(run.getConversationId());
-        if (uncertain != 0) {
-            throw new BusinessException(409, "原模型调用仍需核实，请在任务详情中处理未完成的调用");
-        }
         var currentModel = models.selectById(model.getId());
         if (currentModel != null && model.getConfig() != null) {
             currentModel = AiModelRequestOptions.withReasoningEffort(currentModel,
@@ -144,7 +139,7 @@ public class AgentModelRequests {
             return;
         }
         usages.failCall(claim.runId(), claim.id(), AgentModelCallStatus.FAILED);
-        // COMPLETED describes the request lifecycle; the call and Agent run remain FAILED.
+        // 已收到失败响应，远端调用已结束；用量记录和智能体运行仍保留失败状态。
         requests.completed(claim.id());
     }
 

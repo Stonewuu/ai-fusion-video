@@ -105,13 +105,9 @@ public class CanvasMediaJobs {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     @CacheEvict(value = "canvasMediaJob", key = "#claim.id()")
     public void waitNext(MediaJob.Claim claim, String phase, boolean failedQuery) {
-        var job = check(claim, true);
+        var job = jobs.observe(claim);
         canvasJobs.pollResult(job.id(), failedQuery);
         int errors = canvasJobs.selectById(job.id()).getConsecutiveErrors();
-        if (errors >= 8) {
-            finish(claim, "NEEDS_REVIEW", "连续查询失败，请核实原音频任务", null, true);
-            return;
-        }
         mediaJobs.waitForCanvasMedia(phase, Math.min(30, 3 + errors * 3), job.id());
         event(jobs.get(job.id()), "CANVAS_MEDIA_CHANGED", Map.of());
     }
@@ -129,7 +125,7 @@ public class CanvasMediaJobs {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     @CacheEvict(value = "canvasMediaJob", key = "#claim.id()")
     public void received(MediaJob.Claim claim, ObjectNode result) {
-        check(claim, true);
+        jobs.observe(claim);
         canvasJobs.update(Wrappers.<CanvasMediaJobEntity>lambdaUpdate().eq(CanvasMediaJobEntity::getJobId, claim.id())
                 .set(CanvasMediaJobEntity::getResultJson, json.write(result))
                 .set(CanvasMediaJobEntity::getPermitHeld, false)
@@ -177,7 +173,7 @@ public class CanvasMediaJobs {
     public ApiConfig api(CanvasMediaInput input) {
         var api = apis.requireApi(input.environment().path("apiConfigId").asLong());
         if (!Objects.equals(apis.fingerprint(api), input.environment().path("apiHash").asText())) {
-            throw CanvasRunException.conflict("音频供应商连接已变化，需要核实原任务");
+            throw CanvasRunException.conflict("音频供应商连接已变化，无法继续查询原任务");
         }
         return api;
     }

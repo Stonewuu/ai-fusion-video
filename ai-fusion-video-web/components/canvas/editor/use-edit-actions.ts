@@ -1,7 +1,7 @@
 "use client";
 import type { KeyboardEventHandler, RefObject } from "react";
 import { useReactFlow } from "@xyflow/react";
-import type { CanvasGeometry } from "@/lib/canvas/auto-layout";
+import { captureLayoutGeometry } from "./layout-geometry";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import { copyNodes } from "@/lib/canvas/graph";
@@ -28,6 +28,7 @@ export function useCanvasEditActions({
   onSearch,
   onFit,
   onHelp,
+  onAutoArrange,
 }: {
   store: CanvasStore;
   snapshot: CanvasSnapshot;
@@ -42,6 +43,7 @@ export function useCanvasEditActions({
   onSearch: () => void;
   onFit: () => void;
   onHelp: () => void;
+  onAutoArrange: () => void;
 }) {
   const flow = useReactFlow();
   const selectedNodes = () =>
@@ -79,28 +81,12 @@ export function useCanvasEditActions({
   };
   const arrange = (mode: CanvasAlignment) => {
     try {
-      const geometry: CanvasGeometry = {};
-      for (const node of flow.getNodes()) {
-        const internal = flow.getInternalNode(node.id);
-        if (!node.measured?.width || !node.measured.height) continue;
-        const handleMap = (
-          handles:
-            | { id?: string | null; y: number; height: number }[]
-            | null
-            | undefined,
-        ) =>
-          Object.fromEntries(
-            (handles ?? [])
-              .filter((handle) => !!handle.id)
-              .map((handle) => [handle.id!, handle.y + handle.height / 2]),
-          );
-        geometry[node.id] = {
-          width: node.measured.width,
-          height: node.measured.height,
-          inputs: handleMap(internal?.internals.handleBounds?.target),
-          outputs: handleMap(internal?.internals.handleBounds?.source),
-        };
+      if (mode === "arrange") {
+        onAutoArrange();
+        return;
       }
+      const state = store.getState();
+      const geometry = captureLayoutGeometry(state.snapshot!.graph, state.catalog!, flow);
       perform(
         "排列节点",
         arrangeCanvasNodes(

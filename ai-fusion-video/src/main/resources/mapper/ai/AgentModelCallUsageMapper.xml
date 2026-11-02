@@ -9,12 +9,14 @@
         LIMIT 1
     </select>
     <select id="selectSettlementCandidatesForUpdate" resultType="com.stonewu.fusion.entity.ai.AgentModelCallUsage">
+        <!-- 本地名额释放后，远端结果未知的用量仍须等待结束证据，不能据此按零用量结算。 -->
         SELECT *
         FROM afv_agent_model_call_usage FORCE INDEX (idx_agent_usage_settlement)
         WHERE status IN ('COMPLETED', 'FAILED', 'CANCELLED')
           AND NOT EXISTS (SELECT 1 FROM afv_agent_model_request request
                 WHERE request.run_id = afv_agent_model_call_usage.run_id
-                  AND request.id = afv_agent_model_call_usage.model_call_id AND request.permit_held = TRUE)
+                  AND request.id = afv_agent_model_call_usage.model_call_id
+                  AND (request.permit_held = TRUE OR request.status = 'UNKNOWN_SUBMISSION'))
           AND (
                 (settlement_status = 'PENDING'
                  AND (next_settlement_attempt_at IS NULL

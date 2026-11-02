@@ -59,25 +59,21 @@ public class MediaJobCompletion {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public void terminal(MediaJob.Claim claim, String status, String error) {
-        if (!Set.of("SUCCEEDED", "FAILED", "CANCELLED", "CONFLICT", "NEEDS_REVIEW").contains(status)) {
+        if (!Set.of("SUCCEEDED", "FAILED", "CANCELLED", "CONFLICT", "UNKNOWN_SUBMISSION").contains(status)) {
             throw MediaException.invalid("无效的媒体终态");
         }
         mediaJobs.lock(claim.id());
         boolean unresolved = !audio.unresolved(claim.id()).isEmpty();
-        if (unresolved && !status.equals("NEEDS_REVIEW")) {
-            throw new MediaException(409, "MEDIA_AUDIO_UNRESOLVED", "原音频请求仍待核实，不能提前结束任务或释放额度");
+        if (unresolved && !status.equals("UNKNOWN_SUBMISSION")) {
+            throw new MediaException(409, "MEDIA_AUDIO_UNRESOLVED", "原音频请求尚未确认结束，必须保留远端结果未知");
         }
         int changed = mediaJobs.terminal(status, status.equals("SUCCEEDED") ? "合成完成" : status.equals(
-                "NEEDS_REVIEW") ? "音频任务等待核实" : "处理已结束", error, claim.id(), claim.owner(), claim.epoch());
+                "UNKNOWN_SUBMISSION") ? "远端结果未知" : "处理已结束", error, claim.id(), claim.owner(), claim.epoch());
         if (changed == 1) {
             audioJobs.update(
                     Wrappers.<EpisodeAudioJobEntity>lambdaUpdate().eq(EpisodeAudioJobEntity::getJobId, claim.id())
-                            .set(EpisodeAudioJobEntity::getPermitHeld, unresolved));
-            if (status.equals("NEEDS_REVIEW")) {
-                notifications.progress(jobs.get(claim.id()));
-            } else {
-                notifications.finished(jobs.get(claim.id()));
-            }
+                            .set(EpisodeAudioJobEntity::getPermitHeld, false));
+            notifications.finished(jobs.get(claim.id()));
         }
     }
 }

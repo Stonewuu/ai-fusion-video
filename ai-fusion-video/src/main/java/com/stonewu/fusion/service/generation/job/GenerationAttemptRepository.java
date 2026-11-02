@@ -38,7 +38,7 @@ public class GenerationAttemptRepository {
         }
         if (!job.phase().equals("NEW") || job.activeAttemptId() != null) {
             throw new GenerationJobException(409, "GENERATION_ALREADY_SUBMITTED",
-                    "此尝试已提交，请读取原回执或核实受理状态");
+                    "此尝试已提交，不能再次发送原请求");
         }
         requireNoLateReceipt(job.id());
         String id = UUID.randomUUID().toString();
@@ -60,7 +60,7 @@ public class GenerationAttemptRepository {
         job = jobs.leased(claim, false);
         if (!job.phase().equals("PREPARING") || job.activeAttemptId() == null) {
             throw new GenerationJobException(409, "GENERATION_ALREADY_SUBMITTED",
-                    "此尝试已提交，请读取原回执或核实受理状态");
+                    "此尝试已提交，不能再次发送原请求");
         }
         requireNoLateReceipt(job.id());
         int changed = attempts.beginSubmission(prepared.payload() == null ? null : json.write(prepared.payload()),
@@ -76,7 +76,7 @@ public class GenerationAttemptRepository {
         var acknowledged = attempts.lockRetriedAcknowledgements(jobId);
         if (acknowledged.stream().anyMatch(Objects::nonNull)) {
             throw new GenerationJobException(409, "GENERATION_LATE_RECEIPT",
-                    "已收到先前请求的迟到回执，不能再次提交，请重新核实");
+                    "已收到先前请求的迟到回执，不能再次提交");
         }
     }
 

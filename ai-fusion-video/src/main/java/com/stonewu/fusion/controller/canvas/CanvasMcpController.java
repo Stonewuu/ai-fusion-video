@@ -46,9 +46,4 @@ public class CanvasMcpController {
         return CommonResult.success(reviews.detail(runId, nodeId, actors.current()));
     }
 
-    @PostMapping("/api/canvas-runs/{runId}/nodes/{nodeId}/mcp/review")
-    public CommonResult<CanvasMcpReviewService.View> review(@PathVariable String runId, @PathVariable String nodeId,
-                                                            @Valid @RequestBody CanvasMcpReviewService.Review request) {
-        return CommonResult.success(reviews.review(runId, nodeId, request, actors.current()));
-    }
 }

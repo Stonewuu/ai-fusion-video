@@ -174,7 +174,7 @@ public class ComfyUiTestRepository {
     @Transactional(isolation = Isolation.READ_COMMITTED)
     @CacheEvict(value = {"comfyUiWorkflow", "comfyUiWorkflowVersion"}, allEntries = true)
     public void finish(MediaJob.Claim claim, String status, String error, boolean keepPermit) {
-        if (!Set.of("SUCCEEDED", "FAILED", "CANCELLED", "NEEDS_REVIEW").contains(status)) {
+        if (!Set.of("SUCCEEDED", "FAILED", "CANCELLED", "UNKNOWN_SUBMISSION").contains(status)) {
             throw MediaException.invalid("试运行状态无效");
         }
         var run = get(claim.id());
@@ -197,7 +197,7 @@ public class ComfyUiTestRepository {
             case "SUCCEEDED" -> 1;
             case "FAILED" -> 2;
             case "CANCELLED" -> 4;
-            case "NEEDS_REVIEW" -> 5;
+            case "UNKNOWN_SUBMISSION" -> 2;
             default -> 3;
         };
         String message = run.job().error() != null ? run.job().error() : switch (status) {

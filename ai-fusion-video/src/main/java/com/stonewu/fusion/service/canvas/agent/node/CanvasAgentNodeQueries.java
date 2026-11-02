@@ -47,7 +47,7 @@ public class CanvasAgentNodeQueries {
     }
 
     public record View(String nodeRunId, String conversationId, boolean canControl, int maxAgentRuns,
-                       long unresolvedModelCalls, List<String> unresolvedModelRequestIds, List<Progress> tasks,
+                       long unknownModelCalls, List<String> unknownModelRequestIds, List<Progress> tasks,
                        List<GenerationJobQueries.Summary> generations) {
     }
 
@@ -119,14 +119,14 @@ public class CanvasAgentNodeQueries {
                     task.getStatus(), task.getErrorMessage(), text, truncated,
                     task.getStartedAt().toInstant(ZoneOffset.UTC), confirmation));
         }
-        var uncertain = nodes.unresolvedModelIds(nodeRunId);
+        var unknown = nodes.unknownModelRequestIds(nodeRunId);
         var generationProgress = submissions.selectList(Wrappers.<GenerationSubmissionEntity>lambdaQuery()
                         .select(GenerationSubmissionEntity::getId).eq(GenerationSubmissionEntity::getCanvasNodeRunId, nodeRunId)
                         .orderByAsc(GenerationSubmissionEntity::getCreatedAt, GenerationSubmissionEntity::getId))
                 .stream().map(GenerationSubmissionEntity::getId)
                 .map(id -> generations.summary(id, actor)).toList();
         return new View(nodeRunId, job.conversationId(), view.canControl(), job.scope().maxAgentRuns(),
-                uncertain.size(), List.copyOf(uncertain), List.copyOf(progress), generationProgress);
+                unknown.size(), List.copyOf(unknown), List.copyOf(progress), generationProgress);
     }
 
     public Mono<Void> confirm(String runId, String nodeRunId, ToolConfirmationReqVO request, CanvasActor actor) {

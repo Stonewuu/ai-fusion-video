@@ -7,6 +7,10 @@ import { useCanvasEditActions } from "./use-edit-actions";
 import { useCanvasTransfer } from "./use-canvas-transfer";
 import { useCanvasConnections } from "./use-connections";
 import { useCanvasFlowProjection } from "./use-flow-projection";
+import { useCanvasChainHighlight } from "./use-chain-highlight";
+import { useCanvasEdgeMarquee } from "./use-edge-marquee";
+import { useCanvasAutoLayout } from "./use-auto-layout";
+import { useCanvasEdgeRoutes } from "./use-edge-routes";
 
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
@@ -19,6 +23,7 @@ import {
   ReactFlow,
   ReactFlowProvider,
   SelectionMode,
+  useKeyPress,
   useReactFlow,
   type ReactFlowProps,
 } from "@xyflow/react";
@@ -29,6 +34,7 @@ import { toast } from "sonner";
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import { worldPosition } from "@/lib/canvas/graph";
 import { canvasNodeColor } from "@/lib/canvas/node-appearance";
+import { CANVAS_MAX_ZOOM, CANVAS_MIN_ZOOM } from "@/lib/canvas/viewport-limits";
 import { isEditableTarget } from "@/lib/canvas/layout-actions";
 import type { CanvasAddIntent, CanvasOperation } from "@/lib/canvas/types";
 import type { CanvasMediaPreview } from "@/lib/canvas/presentation";
@@ -120,6 +126,9 @@ function CanvasFlowEditor({
   const [searching, setSearching] = useState(false);
   const [help, setHelp] = useState(false);
   const [pointerMode, setPointerMode] = useState<"select" | "pan">("select");
+  const [interacting, setInteracting] = useState(false);
+  const panKeyPressed = useKeyPress("Space");
+  const edgeMarquee = useCanvasEdgeMarquee(pointerMode === "select" && !panKeyPressed);
   const { initialView, fit, saveViewport } = useCanvasViewport(
     viewKey,
     flow,
@@ -228,6 +237,17 @@ function CanvasFlowEditor({
     () => [...edges, ...relations.edges],
     [edges, relations.edges],
   );
+  const routing = useCanvasEdgeRoutes({
+    graph: snapshot.graph, catalog, relations: relations.layoutRelations,
+    hidden, edges: flowEdges, measurements,
+    paused: interacting || !!pending || relations.loading,
+  });
+  const automaticLayout = useCanvasAutoLayout({
+    store, hidden, relations: relations.layoutRelations,
+    relationLoading: relations.loading, relationError: relations.error,
+    onResult: routing.accept,
+  });
+  const highlighted = useCanvasChainHighlight(nodes, routing.edges, selection);
   const {
     connect,
     onConnectEnd,
@@ -256,6 +276,7 @@ function CanvasFlowEditor({
       onSearch: () => setSearching(true),
       onFit: fit,
       onHelp: () => setHelp(true),
+      onAutoArrange: automaticLayout.arrange,
       onEscape: () => {
         setIntent(null);
         setContext(null);
@@ -394,6 +415,7 @@ function CanvasFlowEditor({
       <div
         ref={canvasArea}
         className="relative min-h-0 grow basis-0"
+        {...edgeMarquee}
         onDragOver={transfer.onDragOver}
         onDrop={transfer.onDrop}
         onMouseDownCapture={gestureGate.mouseDown}
@@ -408,9 +430,14 @@ function CanvasFlowEditor({
             onMinimap={() => setMinimap(!minimap)}
             relations={relations.scope}
             onRelations={relations.setScope}
+            relationAvailability={relations.available}
+            relationLoading={relations.loading}
+            relationError={relations.error}
+            onReloadRelations={relations.refresh}
             onAdd={addAtCenter}
             onFit={() => fit()}
-            onArrange={arrange}
+            onArrange={automaticLayout.arranging ? automaticLayout.cancel : arrange}
+            arranging={automaticLayout.arranging}
             onSearch={() => setSearching(true)}
           />
           {relations.scope !== "hidden" && (relations.error || relations.loading) && (
@@ -422,11 +449,17 @@ function CanvasFlowEditor({
             </p>
           )}
           <CanvasFlowNotices transfer={transfer} />
+          {routing.error && (
+            <p role="status" className="max-w-full rounded-2xl border border-border/40 bg-popover/90 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur-xl">
+              连线避让未完成：{routing.error}
+            </p>
+          )}
         </div>
         <ReactFlow<CanvasFlowNode>
-          className="fusion-canvas"
-          nodes={nodes}
-          edges={flowEdges}
+          className={highlighted.active ? "fusion-canvas canvas-chain-active" : "fusion-canvas"}
+          data-panning={pointerMode === "pan" || panKeyPressed || undefined}
+          nodes={highlighted.nodes}
+          edges={highlighted.edges}
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           onNodesChange={onNodesChange}
@@ -443,8 +476,14 @@ function CanvasFlowEditor({
             )
           }
           isValidConnection={isValidConnection}
-          onNodeDragStart={onNodeDragStart}
-          onNodeDragStop={onNodeDragStop}
+          onNodeDragStart={(...args) => {
+            setInteracting(true);
+            onNodeDragStart(...args);
+          }}
+          onNodeDragStop={(...args) => {
+            onNodeDragStop(...args);
+            setInteracting(false);
+          }}
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
           onPaneContextMenu={(event) => {
@@ -460,16 +499,22 @@ function CanvasFlowEditor({
             setIntent(null);
             setContext(null);
           }}
-          onMoveStart={() => setIntent(null)}
-          onMoveEnd={(_event, viewport) => saveViewport(viewport)}
+          onMoveStart={() => {
+            setIntent(null);
+            setInteracting(true);
+          }}
+          onMoveEnd={(_event, viewport) => {
+            saveViewport(viewport);
+            setInteracting(false);
+          }}
           onInit={() => {
             if (initialView.error) toast.error(initialView.error);
           }}
           defaultViewport={initialView.viewport}
           ariaLabelConfig={canvasAriaLabels}
           colorMode={resolvedTheme === "dark" ? "dark" : "light"}
-          minZoom={0.15}
-          maxZoom={2}
+          minZoom={CANVAS_MIN_ZOOM}
+          maxZoom={CANVAS_MAX_ZOOM}
           panOnScroll={false}
           zoomOnScroll
           zoomOnPinch

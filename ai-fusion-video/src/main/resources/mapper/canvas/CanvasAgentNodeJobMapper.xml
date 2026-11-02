@@ -52,10 +52,11 @@
     <select id="agentRunIds" resultType="String">
         SELECT run_id FROM afv_agent_run WHERE JSON_UNQUOTE(JSON_EXTRACT(canvas_scope_json,'$.nodeRunId'))=#{nodeRunId} ORDER BY id LIMIT 65
     </select>
-    <select id="unresolvedModelIds" resultType="String">
+    <select id="unknownModelRequestIds" resultType="String">
         SELECT m.id FROM afv_agent_model_request m JOIN afv_agent_run r ON r.run_id=m.run_id
-        WHERE JSON_UNQUOTE(JSON_EXTRACT(r.canvas_scope_json,'$.nodeRunId'))=#{nodeRunId} AND m.permit_held=TRUE
-            AND (m.status='UNKNOWN_SUBMISSION' OR r.status IN ('COMPLETED','FAILED','CANCELLED'))
+        WHERE JSON_UNQUOTE(JSON_EXTRACT(r.canvas_scope_json,'$.nodeRunId'))=#{nodeRunId}
+            AND (m.status='UNKNOWN_SUBMISSION'
+                OR (m.status='RUNNING' AND r.status IN ('COMPLETED','FAILED','CANCELLED')))
         ORDER BY m.created_at,m.id
     </select>
     <select id="childStates" resultType="String">
@@ -68,7 +69,7 @@
                                 AND NOT EXISTS(SELECT 1 FROM afv_agent_run c WHERE JSON_UNQUOTE(JSON_EXTRACT(c.canvas_scope_json,'$.nodeRunId'))=j.node_run_id
                                     AND c.status NOT IN ('COMPLETED','FAILED','CANCELLED'))
                                 AND NOT EXISTS(SELECT 1 FROM afv_generation_submission s JOIN afv_remote_generation_job g ON g.submission_id=s.id
-                                    WHERE s.canvas_node_run_id=j.node_run_id AND (g.permit_held=TRUE OR g.state NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','CANCELLED')))
+                                    WHERE s.canvas_node_run_id=j.node_run_id AND (g.permit_held=TRUE OR g.state NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','CANCELLED','UNKNOWN_SUBMISSION')))
                                 AND NOT EXISTS(SELECT 1 FROM afv_agent_model_request m JOIN afv_agent_run c ON c.run_id=m.run_id
                                     WHERE JSON_UNQUOTE(JSON_EXTRACT(c.canvas_scope_json,'$.nodeRunId'))=j.node_run_id AND m.permit_held=TRUE)
     </select>

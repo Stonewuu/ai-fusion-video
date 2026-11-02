@@ -19,9 +19,4 @@ public class CanvasMediaRunController {
         return CommonResult.success(reviews.detail(runId, nodeId, actors.current()));
     }
 
-    @PostMapping("/review")
-    public CommonResult<CanvasMediaReviewService.View> review(@PathVariable String runId, @PathVariable String nodeId,
-                                                              @Valid @RequestBody CanvasMediaReviewService.Review request) {
-        return CommonResult.success(reviews.review(runId, nodeId, request, actors.current()));
-    }
 }

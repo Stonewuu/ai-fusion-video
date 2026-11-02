@@ -41,7 +41,7 @@ public class CanvasMediaExecutor implements CanvasRunExecutors.Executor {
             case "FAILED" -> State.FAILED;
             case "CANCELLED" -> State.CANCELLED;
             case "NEEDS_REVIEW" -> State.NEEDS_REVIEW;
-            case "UNKNOWN_SUBMISSION" -> State.UNKNOWN_SUBMISSION;
+            case "UNKNOWN_SUBMISSION" -> State.FAILED;
             case "QUEUED", "WAITING", "RUNNING" -> task.cancelRequested() ? State.CANCEL_REQUESTED : State.RUNNING;
             default -> throw new IllegalStateException("画布媒体任务状态未登记：" + task.status());
         };

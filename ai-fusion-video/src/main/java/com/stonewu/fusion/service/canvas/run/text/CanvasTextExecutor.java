@@ -38,7 +38,7 @@ public class CanvasTextExecutor implements Executor {
             case "SUCCEEDED" -> State.SUCCEEDED;
             case "FAILED" -> State.FAILED;
             case "CANCELLED" -> State.CANCELLED;
-            case "UNKNOWN_SUBMISSION" -> State.UNKNOWN_SUBMISSION;
+            case "UNKNOWN_SUBMISSION" -> job.permitHeld() ? State.RUNNING : State.FAILED;
             case "NEEDS_REVIEW" -> State.NEEDS_REVIEW;
             default -> job.cancelRequested() ? State.CANCEL_REQUESTED : State.RUNNING;
         };

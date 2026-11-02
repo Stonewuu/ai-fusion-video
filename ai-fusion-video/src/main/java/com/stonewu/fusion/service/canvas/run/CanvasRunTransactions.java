@@ -155,7 +155,7 @@ public class CanvasRunTransactions {
                 update(node, State.CANCELLED, node.inputs(), Ports.empty(), "运行授权已失效，后续执行已停止");
             } else if (node.status() != State.NEEDS_REVIEW) {
                 update(node, State.NEEDS_REVIEW, node.inputs(), node.outputs(),
-                        "运行授权已失效，原外部任务需要管理员核实");
+                        "运行授权已失效，系统正在自动结束原外部任务");
             }
         }
         var settled = runs.nodes(runId);
@@ -167,7 +167,7 @@ public class CanvasRunTransactions {
                     .allMatch(item -> item.status().terminal())) {
                 update(node, State.CANCELLED, node.inputs(), Ports.empty(), "运行授权已失效，批量子项已结束");
             } else if (node.status() != State.NEEDS_REVIEW) {
-                update(node, State.NEEDS_REVIEW, node.inputs(), Ports.empty(), "运行授权已失效，等待原批量子项核实");
+                update(node, State.NEEDS_REVIEW, node.inputs(), Ports.empty(), "运行授权已失效，等待原批量子项自动结束");
             }
         }
         var current = runs.run(runId, false);

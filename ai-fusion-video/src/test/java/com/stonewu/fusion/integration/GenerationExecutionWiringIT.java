@@ -257,34 +257,35 @@ class GenerationExecutionWiringIT {
         assertThat(ok(get("/api/generation/executions/" + failed.path("id").asText(), f.headers)).path("state").asText()).isEqualTo("FAILED");
     }
 
-    @Test void ambiguousSubmissionDoesNotRetryAndRequiresVersionedExplicitReview() {
+    @Test void ambiguousSubmissionReleasesCapacityAndRetainsUnknownRecordWithoutReposting() {
         var f = fixture("unknown");
         String task = submit(f, f.request(1));
-        var unknown = awaitState(f, task, "UNKNOWN_SUBMISSION");
+        var done = awaitState(f, task, "FAILED");
+        var item = done.path("items").get(0);
+        assertThat(item.path("state").asText()).isEqualTo("UNKNOWN_SUBMISSION");
+        assertThat(item.path("remoteCapacityHeld").asBoolean()).isFalse();
+        assertThat(item.path("availableActions")).isEmpty();
+        var record = ok(get("/api/execution-records/GENERATION/" + item.path("id").asText(), f.headers));
+        assertThat(record.at("/task/remoteUnknown").asBoolean()).isTrue();
+        assertThat(record.at("/task/localFinished").asBoolean()).isTrue();
+        assertThat(record.path("capacityHeld").asBoolean()).isFalse();
+        assertThat(ok(get("/api/execution-records", f.headers)).path("items").toString()).contains(item.path("id").asText());
         assertThat(f.remote.calls.get()).isEqualTo(1);
-        var item = unknown.path("items").get(0);
-        assertThat(item.path("remoteCapacityHeld").asBoolean()).isTrue();
-        var stale = Map.of("expectedRevision", item.path("revision").asLong() - 1, "action", "CONFIRM_NOT_ACCEPTED_AND_RETRY", "note", "测试供应商已确认未受理");
-        String path = "/api/generation/executions/jobs/" + item.path("id").asText() + "/review";
-        assertThat(http.postForEntity(path, new HttpEntity<>(stale, f.headers), JsonNode.class).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
         f.remote.complete.set(true);
-        ok(http.postForEntity(path, new HttpEntity<>(Map.of("expectedRevision", item.path("revision").asLong(),
-                "action", "CONFIRM_NOT_ACCEPTED_AND_RETRY", "note", "受控供应商确认第一次请求未受理，明确重新提交"), f.headers), JsonNode.class));
-        awaitState(f, task, "SUCCEEDED");
+        awaitState(f, submit(f, f.request(1)), "SUCCEEDED");
         assertThat(f.remote.calls.get()).isEqualTo(2);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_generation_attempt WHERE job_id = ?", Integer.class, item.path("id").asText())).isEqualTo(2);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_generation_attempt WHERE job_id = ?", Integer.class, item.path("id").asText())).isEqualTo(1);
     }
 
-    @Test void anotherUserCannotReadOrReviewAnUncertainExecution() {
+    @Test void anotherUserCannotReadTheUnknownExecutionOrItsExceptionRecord() {
         var owner = fixture("unknown");
         var other = fixture("sync");
         String task = submit(owner, owner.request(1));
-        var unknown = awaitState(owner, task, "UNKNOWN_SUBMISSION");
-        assertThat(get("/api/generation/executions/" + unknown.path("id").asText(), other.headers).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        var item = unknown.path("items").get(0);
-        var denied = http.postForEntity("/api/generation/executions/jobs/" + item.path("id").asText() + "/review", new HttpEntity<>(Map.of(
-                "expectedRevision", item.path("revision").asLong(), "action", "CONFIRM_PROVIDER_FINISHED", "note", "无权作出此决定"), other.headers), JsonNode.class);
-        assertThat(denied.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        var done = awaitState(owner, task, "FAILED");
+        assertThat(get("/api/generation/executions/" + done.path("id").asText(), other.headers).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        String job = done.path("items").get(0).path("id").asText();
+        assertThat(get("/api/execution-records/GENERATION/" + job, other.headers).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(ok(get("/api/execution-records", other.headers)).path("items").toString()).doesNotContain(job);
         assertThat(owner.remote.calls.get()).isEqualTo(1);
     }
 
@@ -346,25 +347,19 @@ class GenerationExecutionWiringIT {
         headers.setContentType(MediaType.APPLICATION_JSON);
         return new Fixture(id, prompt, headers, remote);
     }
-    @Test void aLateSuccessfulReceiptCanBeRestoredWithoutAnotherProviderPost() {
+    @Test void lateSuccessfulReceiptIsRetainedWithoutRestartingTheEndedJob() {
         var f = fixture("unknown");
         String taskId = submit(f, f.request(1));
-        var unknown = awaitState(f, taskId, "UNKNOWN_SUBMISSION");
-        var item = unknown.path("items").get(0);
-        String jobId = item.path("id").asText();
+        var done = awaitState(f, taskId, "FAILED");
+        String jobId = done.path("items").get(0).path("id").asText();
         String original = jdbc.queryForObject("SELECT active_attempt_id FROM afv_remote_generation_job WHERE id = ?", String.class, jobId);
-        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
-            jdbc.queryForList("SELECT id FROM afv_generation_dispatch_lock WHERE id = 1 FOR UPDATE");
-            var review = Map.of("expectedRevision", item.path("revision").asLong(), "action", "CONFIRM_NOT_ACCEPTED_AND_RETRY", "note", "先核实未受理，随后收到迟到回执");
-            ok(http.postForEntity("/api/generation/executions/jobs/" + jobId + "/review", new HttpEntity<>(review, f.headers), JsonNode.class));
-            attempts.acknowledge(original, GenerationProviderReceipt.completed(RemoteGenerationResult.success(List.of(
-                    RemoteGenerationResult.Output.image("data:image/png;base64," + Base64.getEncoder().encodeToString(PNG))))));
-        });
-        var needsReview = awaitState(f, taskId, "NEEDS_REVIEW").path("items").get(0);
-        assertThat(needsReview.path("availableActions").toString()).contains("RESTORE_ACCEPTED_RECEIPT");
-        ok(http.postForEntity("/api/generation/executions/jobs/" + jobId + "/review", new HttpEntity<>(Map.of(
-                "expectedRevision", needsReview.path("revision").asLong(), "action", "RESTORE_ACCEPTED_RECEIPT", "note", "恢复供应商已确认的原请求"), f.headers), JsonNode.class));
-        awaitState(f, taskId, "SUCCEEDED");
+        attempts.acknowledge(original, GenerationProviderReceipt.completed(RemoteGenerationResult.success(List.of(
+                RemoteGenerationResult.Output.image("data:image/png;base64," + Base64.getEncoder().encodeToString(PNG))))));
+        var record = ok(get("/api/execution-records/GENERATION/" + jobId, f.headers));
+        assertThat(record.path("remote").get(0).path("responseRecorded").asBoolean()).isTrue();
+        assertThat(record.path("capacityHeld").asBoolean()).isFalse();
+        assertThat(record.at("/task/localFinished").asBoolean()).isTrue();
+        assertThat(ok(get("/api/generation/executions/" + done.path("id").asText(), f.headers)).path("state").asText()).isEqualTo("FAILED");
         assertThat(f.remote.calls.get()).isEqualTo(1);
     }
 

@@ -6,6 +6,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Maximize2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
+import { openExecutionRecord } from "@/lib/execution-record-navigation";
+import { ExecutionRecordSection } from "./execution-records";
 import {
   ExpandedPanel,
   PipelineTaskCard,
@@ -105,7 +107,7 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
       style={{ top: position.top, "--panel-right": `${position.right}px` } as React.CSSProperties}
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/20">
-        <h3 className="text-sm font-semibold">AI 任务</h3>
+        <h3 className="text-sm font-semibold">运行与通知</h3>
         <div className="flex items-center gap-1">
           {completedTasks.length > 0 && (
             <button
@@ -133,6 +135,7 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
       </div>
 
       <div className="max-h-[60vh] overflow-y-auto">
+        <ExecutionRecordSection selected={null} onSelect={openExecutionRecord} />
         {tasks.length === 0 ? (
           <div className="py-12 text-center">
             <p className="text-sm text-muted-foreground">暂无 AI 任务</p>

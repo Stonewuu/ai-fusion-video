@@ -77,7 +77,7 @@ public class CanvasTextProcessor {
         var result = model.model().stream(messages, List.of(), SingleRequestModelSupport.options(null))
                 .reduce(new Result(), Result::add).block(Duration.ofMinutes(25));
         if (result == null || result.finish == null || result.finish.isBlank()) {
-            throw CanvasRunException.invalid("模型连接结束但没有完整终态，请核实原请求");
+            throw CanvasRunException.invalid("模型连接结束但未取得完整结果");
         }
         var output = json.object(Map.of("text", result.text.toString(), "finishReason", result.finish,
                 "complete", !result.truncated && !result.toolCall && !result.text.isEmpty()

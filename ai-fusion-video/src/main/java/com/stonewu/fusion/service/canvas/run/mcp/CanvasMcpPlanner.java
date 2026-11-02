@@ -78,6 +78,12 @@ public class CanvasMcpPlanner {
         }
     }
 
+    public void validateTemplate(CanvasNode node, Contract contract, boolean dynamic) {
+        var values = !dynamic && node.config().hasNonNull("input")
+                ? List.of(sources.text(node.config().path("input").asText())) : List.<Value>of();
+        validateInputs(node, contract, values, dynamic);
+    }
+
     public ExternalOperation describe(NodePlan plan) {
         if (plan.action().equals("REUSE")) {
             return null;

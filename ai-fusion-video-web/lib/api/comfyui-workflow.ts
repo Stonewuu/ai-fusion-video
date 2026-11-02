@@ -118,6 +118,7 @@ export interface ComfyUiTestRun {
     | "SUCCEEDED"
     | "FAILED"
     | "CANCELLED"
+    | "UNKNOWN_SUBMISSION"
     | "NEEDS_REVIEW";
   phase: "PREPARING" | "SUBMITTING" | "POLLING" | "INGESTING";
   error: string | null;

@@ -22,9 +22,7 @@ export function userFacingError(message: string | null | undefined): string {
   }
   if (text === "请求失败") return "暂时无法完成请求，请稍后重试。";
   if (/请求结果未确认|提交意图已保存|未取得(?:受理)?回执|调用状态待确认|UNKNOWN_SUBMISSION/.test(text)) {
-    if (/video queue is full/i.test(text))
-      return "视频服务繁忙，这次请求的受理状态尚未确认。请打开生成详情核实，避免重复生成。";
-    return "这次请求的受理状态尚未确认。请打开任务详情核实，避免重复提交。";
+    return "远端结果未知，可在运行与通知的任务详情中查看记录。";
   }
   const providerFailure = text.match(/(?:生成失败（HTTP (\d{3})）：|^.+?任务提交失败:\s*HTTP\s+(\d{3})\s+)([\s\S]+)$/);
   if (providerFailure) {
@@ -43,7 +41,7 @@ export function userFacingError(message: string | null | undefined): string {
     text.includes("原模型调用仍需核实") ||
     text.includes("智能体模型调用未完整返回")
   )
-    return "模型连接已中断，暂时无法确认本次调用是否结束。请打开本节点的任务详情处理。";
+    return "模型连接已中断，远端结果未知，可在任务详情中查看记录。";
   if (text.includes("Expected canvas tool is unavailable"))
     return "所选模型未能处理当前智能体的工具。请在本节点选择支持当前任务的思考模型后重新运行。";
   const unsupportedMedia = text.match(/当前模型不支持 (image|video|audio|file) 的 (?:url|base64) 输入/);

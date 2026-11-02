@@ -49,7 +49,8 @@
         SELECT j.* FROM afv_media_job j LEFT JOIN afv_episode_audio_job a ON a.job_id = j.id
         WHERE j.kind = 'EPISODE_COMPOSE' AND
             ((j.status IN ('QUEUED', 'WAITING') AND j.next_run_at &lt;= UTC_TIMESTAMP(6))
-            OR (j.status = 'RUNNING' AND j.lease_until &lt;= UTC_TIMESTAMP(6)))
+            OR (j.status = 'RUNNING' AND j.lease_until &lt;= UTC_TIMESTAMP(6))
+            OR j.status = 'NEEDS_REVIEW' OR (j.status = 'UNKNOWN_SUBMISSION' AND a.permit_held = TRUE))
             AND (a.job_id IS NULL OR a.permit_held = TRUE OR j.cancel_requested = TRUE OR j.deadline_at &lt;= UTC_TIMESTAMP(6)
                 OR ((a.music_result_json IS NOT NULL OR JSON_EXTRACT(j.checkpoint_json, '$.music') IS NOT NULL)
                     AND (a.sfx_enabled = FALSE OR a.sfx_result_json IS NOT NULL OR JSON_EXTRACT(j.checkpoint_json, '$.sfx') IS NOT NULL))
@@ -206,7 +207,10 @@
     <select id="dueComfyTests" resultType="String">
         SELECT id FROM afv_media_job WHERE kind = 'COMFY_WORKFLOW_TEST' AND
             ((status = 'WAITING' AND (next_run_at &lt;= UTC_TIMESTAMP(6) OR cancel_requested = TRUE))
-            OR (status = 'RUNNING' AND lease_until &lt;= UTC_TIMESTAMP(6)))
+            OR (status = 'RUNNING' AND lease_until &lt;= UTC_TIMESTAMP(6))
+            OR status = 'NEEDS_REVIEW'
+            OR (status = 'UNKNOWN_SUBMISSION' AND EXISTS(SELECT 1 FROM afv_comfyui_test_run t
+                WHERE t.job_id = afv_media_job.id AND t.permit_held = TRUE)))
         ORDER BY next_run_at, id LIMIT 32 FOR UPDATE SKIP LOCKED
     </select>
     <update id="heartbeatComfyTest">
@@ -254,7 +258,7 @@
     <select id="endedCanvas" resultType="String">
         SELECT j.id FROM afv_media_job j JOIN afv_canvas_media_job m ON m.job_id = j.id
                             WHERE j.id = #{id} AND m.node_run_id = #{nodeRunId} AND m.permit_held = FALSE AND j.kind = 'CANVAS_MEDIA'
-                                AND j.status IN ('SUCCEEDED','FAILED','CANCELLED','CONFLICT')
+                                AND j.status IN ('SUCCEEDED','FAILED','CANCELLED','CONFLICT','UNKNOWN_SUBMISSION')
     </select>
     <insert id="insertCanvasMedia">
         INSERT INTO afv_media_job(id, kind, project_id, actor_user_id, request_id, request_hash, context_json,
@@ -265,7 +269,8 @@
     <select id="nextCanvasMedia" resultType="String">
         SELECT j.id FROM afv_media_job j JOIN afv_canvas_media_job c ON c.job_id = j.id
         WHERE ((j.status = 'WAITING' AND j.next_run_at &lt;= UTC_TIMESTAMP(6))
-            OR (j.status = 'RUNNING' AND j.lease_until &lt;= UTC_TIMESTAMP(6)))
+            OR (j.status = 'RUNNING' AND j.lease_until &lt;= UTC_TIMESTAMP(6))
+            OR j.status = 'NEEDS_REVIEW' OR (j.status = 'UNKNOWN_SUBMISSION' AND c.permit_held = TRUE))
             AND (c.api_config_id IS NULL OR c.permit_held = TRUE OR j.cancel_requested = TRUE
                 OR (NOT EXISTS(SELECT 1 FROM afv_canvas_media_job busy WHERE busy.api_config_id = c.api_config_id AND busy.permit_held = TRUE)
                     AND NOT EXISTS(SELECT 1 FROM afv_episode_audio_job busy WHERE busy.api_config_id = c.api_config_id AND busy.permit_held = TRUE)))

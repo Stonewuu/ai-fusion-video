@@ -67,8 +67,17 @@ public class MediaJobRepository {
 
     @Transactional(isolation = Isolation.READ_COMMITTED)
     public MediaJob observe(MediaJob.Claim claim) {
-        MediaJob job = get(claim.id());
-        fence.require(claim, job.context(), true);
+        // 工作者查询原远端任务只校验自己的租约；发布业务结果仍必须经过 check 的权限校验。
+        if (mediaJobs.lockOwner(claim.id(), claim.owner(), claim.epoch(), true).size() != 1) {
+            throw MediaJobFence.lost();
+        }
+        return get(claim.id());
+    }
+
+    @Transactional(isolation = Isolation.READ_COMMITTED)
+    public MediaJob requestStop(MediaJob.Claim claim) {
+        observe(claim);
+        mediaJobs.requestComposeCancel(claim.id());
         return get(claim.id());
     }
 

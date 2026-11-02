@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.canvas.run.media;
 
 import com.stonewu.fusion.service.media.job.MediaJob;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.service.media.job.MediaJobRepository;
 import com.stonewu.fusion.service.media.model.MediaException;
 import jakarta.annotation.PreDestroy;
@@ -63,7 +64,16 @@ public class CanvasMediaWorker {
         try (var directory = new WorkDirectory()) {
             var input = tasks.input(job);
             if (CanvasMediaExecutor.AUDIO.contains(input.operation())) {
-                tasks.check(job.claim(), true);
+                if (!job.cancelRequested()) {
+                    try {
+                        tasks.check(job.claim(), false);
+                    } catch (BusinessException denied) {
+                        if (denied.getCode() != 403 && denied.getCode() != 404 && denied.getCode() != 410) {
+                            throw denied;
+                        }
+                        job = jobs.requestStop(job.claim());
+                    }
+                }
                 audio.step(job, input, directory.path);
             } else if (job.cancelRequested()) {
                 tasks.finish(job.claim(), "CANCELLED", "本地处理已停止", null, false);
@@ -84,12 +94,23 @@ public class CanvasMediaWorker {
                 }
                 var current = jobs.get(job.id());
                 var intent = jobs.submission(job.id(), "audio");
-                boolean held = intent.isPresent() && tasks.received(job.id()) == null;
-                String status = intent.isPresent() ? intent.get()
-                        .providerId() == null ? "UNKNOWN_SUBMISSION" : "NEEDS_REVIEW"
-                        : current.cancelRequested() ? "CANCELLED" : "FAILED";
+                boolean unknown = intent.isPresent() && tasks.received(job.id()) == null;
+                if (unknown && intent.get().providerId() != null && current.deadline().isAfter(jobs.now())
+                        && failure instanceof BusinessException denied
+                        && (denied.getCode() == 403 || denied.getCode() == 404 || denied.getCode() == 410)) {
+                    jobs.requestStop(job.claim());
+                    tasks.waitNext(job.claim(), "停止后续处理，继续查询原音频任务", false);
+                    return;
+                }
+                if (unknown && intent.get().providerId() != null && current.deadline().isAfter(jobs.now())
+                        && !(failure instanceof BusinessException)) {
+                    tasks.waitNext(job.claim(), "查询暂不可用，稍后查询原音频任务", true);
+                    return;
+                }
+                String status = unknown ? "UNKNOWN_SUBMISSION" : current.cancelRequested() ? "CANCELLED" : "FAILED";
                 String message = failure.getMessage() == null ? "媒体处理失败" : failure.getMessage();
-                tasks.finish(job.claim(), status, message.substring(0, Math.min(message.length(), 2000)), null, held);
+                tasks.finish(job.claim(), status, (unknown ? "远端结果未知：" : "")
+                        + message.substring(0, Math.min(message.length(), 2000)), null, false);
             } catch (RuntimeException fenced) {
                 log.debug("画布媒体任务已停止或已接管 [jobId={}]", job.id(), fenced);
             }

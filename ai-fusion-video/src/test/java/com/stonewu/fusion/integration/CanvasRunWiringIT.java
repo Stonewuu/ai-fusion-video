@@ -1132,7 +1132,7 @@ class CanvasRunWiringIT {
         assertThat(scenario.posts).hasValue(1);
     }
 
-    @Test void anUnknownAudioReceiptCanBeRecordedAndRecoveredWithoutSubmittingAgain() throws Exception {
+    @Test void unknownAudioEndsLocallyAndRetainsItsRecordWithoutResubmitting() throws Exception {
         var f = fixture();
         var scenario = new AudioScenario(true);
         AUDIO.put("audio-" + f.id, scenario);
@@ -1142,19 +1142,14 @@ class CanvasRunWiringIT {
         create(f, List.of(node(source, "video", Map.of("resourceId", media)), node(music, "sfxGeneration", Map.of("apiConfigId", f.id, "operation", "sfx", "prompt", "audio-" + f.id))),
                 List.of(edge(source, "media", music, "video", 0)));
         String run = start(f, plan(f, "ALL", List.of(), Map.of()));
-        var unknown = awaitState(f, run, "UNKNOWN_SUBMISSION");
-        var nodeRun = nodeResult(unknown, music);
-        String path = "/api/canvas-runs/" + run + "/nodes/" + nodeRun.path("id").asText() + "/media";
-        var detail = ok(get(f, path));
-        assertThat(detail.path("actions").toString()).contains("RECORD_RECEIPT");
-        scenario.complete.set(true);
-        ok(post(f, path + "/review", Map.of("expectedRevision", detail.path("revision").asLong(), "action", "RECORD_RECEIPT",
-                "providerTaskId", "audio-" + f.id, "note", "测试供应商已确认原任务标识", "scope", scope(f))));
-        var done = awaitState(f, run, "SUCCEEDED");
-        assertThat(nodeResult(done, music).at("/outputs/values/audio/0/data/content/kind").asText()).isEqualTo("AUDIO");
+        var nodeRun = nodeResult(awaitState(f, run, "PARTIAL_FAILED"), music);
+        String job = nodeRun.path("externalId").asText();
+        var record = ok(get(f, "/api/execution-records/CANVAS_MEDIA/" + job));
+        assertThat(record.at("/task/remoteUnknown").asBoolean()).isTrue();
+        assertThat(record.at("/task/localFinished").asBoolean()).isTrue();
+        assertThat(record.path("capacityHeld").asBoolean()).isFalse();
+        assertThat(nodeRun.at("/outputs/values")).isEmpty();
         assertThat(scenario.posts).hasValue(1);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_media_job_event WHERE job_id = ? AND event_type = 'CANVAS_MEDIA_REVIEW'", Integer.class,
-                nodeRun.path("externalId").asText())).isEqualTo(1);
     }
 
     @Test void textGenerationPublishesOnePersistentResultAndContinuesTheDag() {
@@ -1195,29 +1190,27 @@ class CanvasRunWiringIT {
         assertThat(scenario.posts).hasValue(2);
     }
 
-    @Test void uncertainTextCallHoldsCapacityUntilExplicitReviewAndNeverReposts() {
+    @Test void uncertainTextReleasesCapacityAndAllowsAnotherRunWithoutReposting() {
         var f = fixture();
         var scenario = textModel(f, 0, false, "stop");
         String generate = id();
         create(f, List.of(node(generate, "textGeneration", Map.of("modelId", f.id, "prompt", "text-" + f.id))), List.of());
         String run = start(f, plan(f, "ALL", List.of(), Map.of()));
-        var unknown = awaitState(f, run, "UNKNOWN_SUBMISSION");
-        var nodeRun = nodeResult(unknown, generate);
-        String path = "/api/canvas-runs/" + run + "/nodes/" + nodeRun.path("id").asText() + "/text";
-        var detail = ok(get(f, path));
-        assertThat(detail.path("remoteCapacityHeld").asBoolean()).isTrue();
-        assertThat(detail.path("actions").toString()).contains("CONFIRM_FINISHED").doesNotContain("USE_RECEIVED");
-        ok(post(f, path + "/review", Map.of("expectedRevision", detail.path("revision").asLong(), "action", "CONFIRM_FINISHED",
-                "note", "已在本地测试供应商确认原调用结束", "scope", scope(f))));
-        awaitState(f, run, "FAILED");
+        var nodeRun = nodeResult(awaitState(f, run, "FAILED"), generate);
+        var detail = ok(get(f, "/api/canvas-runs/" + run + "/nodes/" + nodeRun.path("id").asText() + "/text"));
+        assertThat(detail.path("status").asText()).isEqualTo("UNKNOWN_SUBMISSION");
+        assertThat(detail.path("remoteCapacityHeld").asBoolean()).isFalse();
+        assertThat(detail.path("actions")).isEmpty();
+        var record = ok(get(f, "/api/execution-records/TEXT/" + nodeRun.path("externalId").asText()));
+        assertThat(record.at("/task/remoteUnknown").asBoolean()).isTrue();
+        assertThat(record.at("/task/localFinished").asBoolean()).isTrue();
         assertThat(scenario.posts).hasValue(1);
-        assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_canvas_text_job WHERE id = ?", Boolean.class, nodeRun.path("externalId").asText())).isFalse();
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM afv_canvas_text_event WHERE job_id = ? AND event_type = 'CANVAS_TEXT_REVIEW'", Integer.class,
-                nodeRun.path("externalId").asText())).isEqualTo(1));
+        scenario.status = 200;
+        awaitState(f, start(f, plan(f, "ALL", List.of(), Map.of())), "SUCCEEDED");
+        assertThat(scenario.posts).hasValue(2);
     }
 
-    @Test void aLateTextResponseSurvivesLeaseHandoffButRequiresReviewBeforePublishing() throws Exception {
+    @Test void aLateTextResponseIsRetainedWithoutRestartingTheEndedRun() throws Exception {
         var f = fixture();
         var scenario = textModel(f, 200, true, "stop");
         String generate = id();
@@ -1227,7 +1220,7 @@ class CanvasRunWiringIT {
             assertThat(scenario.entered.await(20, TimeUnit.SECONDS)).isTrue();
             String job = jdbc.queryForObject("SELECT id FROM afv_canvas_text_job WHERE run_id = ?", String.class, run);
             jdbc.update("UPDATE afv_canvas_text_job SET lease_until = TIMESTAMPADD(SECOND, -1, UTC_TIMESTAMP(6)) WHERE id = ?", job);
-            var unknown = awaitState(f, run, "UNKNOWN_SUBMISSION");
+            var unknown = awaitState(f, run, "FAILED");
             scenario.release.countDown();
             await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForObject(
                     "SELECT result_json IS NOT NULL FROM afv_canvas_text_job WHERE id = ?", Boolean.class, job)).isTrue());
@@ -1235,31 +1228,28 @@ class CanvasRunWiringIT {
             String path = "/api/canvas-runs/" + run + "/nodes/" + nodeResult(unknown, generate).path("id").asText() + "/text";
             var detail = ok(get(f, path));
             assertThat(detail.path("receivedText").asText()).isEqualTo("模型返回文本");
-            ok(post(f, path + "/review", Map.of("expectedRevision", detail.path("revision").asLong(), "action", "USE_RECEIVED",
-                    "note", "确认使用原调用的迟到响应", "scope", scope(f))));
-            var done = awaitState(f, run, "SUCCEEDED");
-            assertThat(nodeResult(done, generate).at("/outputs/values/text/0/text").asText()).isEqualTo("模型返回文本");
+            assertThat(detail.path("actions")).isEmpty();
+            assertThat(detail.path("remoteCapacityHeld").asBoolean()).isFalse();
+            var done = awaitState(f, run, "FAILED");
+            assertThat(nodeResult(done, generate).at("/outputs/values")).isEmpty();
             assertThat(scenario.posts).hasValue(1);
         } finally { scenario.release.countDown(); }
     }
 
-    @Test void truncatedTextIsPreservedAndCanOnlyContinueAfterTheUserAdoptsIt() {
+    @Test void truncatedTextIsPreservedButNeverPublishedToDownstreamNodes() {
         var f = fixture();
         var scenario = textModel(f, 200, false, "length");
         String generate = id(), next = id();
         create(f, List.of(node(generate, "textGeneration", Map.of("modelId", f.id, "prompt", "text-" + f.id)),
                 node(next, "textCombine", Map.of())), List.of(edge(generate, "text", next, "texts", 0)));
         String run = start(f, plan(f, "ALL", List.of(), Map.of()));
-        var waiting = awaitState(f, run, "NEEDS_REVIEW");
-        assertThat(nodeResult(waiting, next).path("status").asText()).isEqualTo("WAITING_INPUT");
-        String path = "/api/canvas-runs/" + run + "/nodes/" + nodeResult(waiting, generate).path("id").asText() + "/text";
-        var detail = ok(get(f, path));
+        var done = awaitState(f, run, "FAILED");
+        var detail = ok(get(f, "/api/canvas-runs/" + run + "/nodes/" + nodeResult(done, generate).path("id").asText() + "/text"));
         assertThat(detail.path("completeResponse").asBoolean()).isFalse();
+        assertThat(detail.path("receivedText").asText()).isEqualTo("模型返回文本");
         assertThat(detail.path("remoteCapacityHeld").asBoolean()).isFalse();
-        ok(post(f, path + "/review", Map.of("expectedRevision", detail.path("revision").asLong(), "action", "USE_RECEIVED",
-                "note", "已检查截断内容，本次明确采用", "scope", scope(f))));
-        var done = awaitState(f, run, "SUCCEEDED");
-        assertThat(nodeResult(done, next).at("/outputs/values/text/0/text").asText()).isEqualTo("模型返回文本");
+        assertThat(detail.path("actions")).isEmpty();
+        assertThat(nodeResult(done, next).at("/outputs/values")).isEmpty();
         assertThat(scenario.posts).hasValue(1);
     }
 
@@ -1295,51 +1285,37 @@ class CanvasRunWiringIT {
         } finally { scenario.release.countDown(); }
     }
 
-    @Test void revokedTextOwnerCanBeReconciledOnlyByFreshAdminWithVersionedIdempotentEvidence() {
+    @Test void revokedTextOwnerIsReclaimedAutomaticallyAndRecordsRemainOwnerOnly() throws Exception {
         var f = fixture();
         var admin = recoveryAdmin();
-        var scenario = textModel(f, 0, false, "stop");
+        var scenario = textModel(f, 200, true, "stop");
         String text = id();
         create(f, List.of(node(text, "textGeneration", Map.of("modelId", f.id, "prompt", "text-" + f.id))), List.of());
         String run = start(f, plan(f, "ALL", List.of(), Map.of()));
-        var unknown = awaitState(f, run, "UNKNOWN_SUBMISSION");
-        String job = nodeResult(unknown, text).path("externalId").asText();
-        String path = "/api/system/execution-recovery/TEXT/" + job;
-        assertThat(get(f, "/api/system/execution-recovery").getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        var before = ok(get(admin, path));
-        assertThat(before.path("canResolve").asBoolean()).isFalse();
-        var activeDecision = recoveryDecision(admin, before, id());
-        assertThat(post(admin, path + "/confirm-finished", activeDecision).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        jdbc.update("UPDATE sys_user SET status = 0 WHERE id = ?", f.id);
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForObject(
-                "SELECT status FROM afv_canvas_run WHERE id = ?", String.class, run)).isEqualTo("NEEDS_REVIEW"));
-        var pending = ok(get(admin, path));
-        assertThat(pending.path("canResolve").asBoolean()).isTrue();
-        assertThat(pending.toString()).doesNotContain("text-" + f.id, "test-key", "input_json", "result_json", "providerHash");
-        var decision = recoveryDecision(admin, pending, id());
-        var missingEvidence = new HashMap<>(decision);
-        missingEvidence.put("providerFinished", false);
-        assertThat(post(admin, path + "/confirm-finished", missingEvidence).getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
-        var stale = new HashMap<>(decision);
-        stale.put("expectedRevision", pending.path("revision").asLong() - 1);
-        assertThat(post(admin, path + "/confirm-finished", stale).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        var receipt = ok(post(admin, path + "/confirm-finished", decision));
-        assertThat(ok(post(admin, path + "/confirm-finished", decision))).isEqualTo(receipt);
-        var changed = new HashMap<>(decision); changed.put("note", "改写同一决定");
-        assertThat(post(admin, path + "/confirm-finished", changed).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForObject(
-                "SELECT status FROM afv_canvas_run WHERE id = ?", String.class, run)).isEqualTo("CANCELLED"));
-        assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_canvas_text_job WHERE id = ?", Boolean.class, job)).isFalse();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_execution_recovery_decision WHERE job_id = ?", Integer.class, job)).isEqualTo(1);
-        assertThat(ok(get(admin, "/api/system/execution-recovery/history")).toString()).contains(receipt.path("decisionId").asText());
-        assertThat(scenario.posts).hasValue(1);
-        jdbc.update("UPDATE sys_user_role SET deleted = TRUE WHERE user_id = ?", admin.id);
-        assertThat(get(admin, "/api/system/execution-recovery").getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+        try {
+            assertThat(scenario.entered.await(20, TimeUnit.SECONDS)).isTrue();
+            String job = jdbc.queryForObject("SELECT id FROM afv_canvas_text_job WHERE run_id = ?", String.class, run);
+            jdbc.update("UPDATE sys_user SET status = 0 WHERE id = ?", f.id);
+            jdbc.update("UPDATE afv_canvas_text_job SET lease_until = TIMESTAMPADD(SECOND, -1, UTC_TIMESTAMP(6)) WHERE id = ?", job);
+            await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
+                assertThat(jdbc.queryForObject("SELECT status FROM afv_canvas_run WHERE id = ?", String.class, run)).isEqualTo("CANCELLED");
+                assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_canvas_text_job WHERE id = ?", Boolean.class, job)).isFalse();
+            });
+            assertThat(get(admin, "/api/execution-records/TEXT/" + job).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_execution_recovery_decision WHERE job_id = ?", Integer.class, job)).isZero();
+            jdbc.update("UPDATE sys_user SET status = 1 WHERE id = ?", f.id);
+            var record = ok(get(f, "/api/execution-records/TEXT/" + job));
+            assertThat(record.at("/task/localFinished").asBoolean()).isTrue();
+            assertThat(record.at("/task/remoteUnknown").asBoolean()).isTrue();
+            assertThat(record.toString()).doesNotContain("text-" + f.id, "test-key", "result_json");
+            assertThat(scenario.posts).hasValue(1);
+        } finally {
+            scenario.release.countDown();
+        }
     }
 
-    @Test void revokedBatchWaitsForEveryOriginalChildAndNeverPublishesAdminAdoptedOutput() {
+    @Test void unknownBatchChildrenReleaseCapacityAndEndWithoutPublishing() {
         var f = fixture();
-        var admin = recoveryAdmin();
         var scenario = textModel(f, 0, false, "stop");
         jdbc.update("UPDATE afv_ai_model SET max_concurrency = 2 WHERE id = ?", f.id);
         String first = id(), second = id(), batch = id();
@@ -1347,50 +1323,35 @@ class CanvasRunWiringIT {
                         node(batch, "foreach", batch("textGeneration", Map.of("modelId", f.id), "prompt", "text", "text", "text", 2))),
                 List.of(edge(first, "text", batch, "items", 0), edge(second, "text", batch, "items", 1)));
         String run = start(f, plan(f, "ALL", List.of(), Map.of()));
-        await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM afv_canvas_text_job WHERE run_id = ? AND status = 'UNKNOWN_SUBMISSION'", Integer.class, run)).isEqualTo(2));
-        jdbc.update("UPDATE sys_user SET status = 0 WHERE id = ?", f.id);
-        var jobs = jdbc.queryForList("SELECT id FROM afv_canvas_text_job WHERE run_id = ? ORDER BY id", String.class, run);
-        recover(admin, "TEXT", jobs.getFirst());
-        assertThat(jdbc.queryForObject("SELECT status FROM afv_canvas_run WHERE id = ?", String.class, run)).isNotEqualTo("CANCELLED");
-        recover(admin, "TEXT", jobs.getLast());
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForObject(
-                "SELECT status FROM afv_canvas_run WHERE id = ?", String.class, run)).isEqualTo("CANCELLED"));
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_canvas_node_run WHERE run_id = ? AND node_id = ? AND status <> 'CANCELLED'", Integer.class, run, batch)).isZero();
+        awaitState(f, run, "PARTIAL_FAILED");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_canvas_text_job WHERE run_id = ? AND status = 'UNKNOWN_SUBMISSION' AND permit_held = FALSE", Integer.class, run)).isEqualTo(2);
         assertThat(jdbc.queryForObject("SELECT JSON_LENGTH(output_json, '$.values') FROM afv_canvas_node_run WHERE run_id = ? AND node_id = ? AND parent_node_run_id IS NULL", Integer.class, run, batch)).isZero();
         assertThat(scenario.posts).hasValue(2);
     }
 
-    @Test void revokedImageGenerationReleasesOnlyConfirmedJobAndPreservesOriginalExecutionIdentity() {
+    @Test void unknownImageGenerationPreservesIdentityAndLateReceiptWithoutHoldingCapacity() {
         var f = fixture();
         var admin = recoveryAdmin();
         model(f);
         String generate = id(), prompt = "recovery-unknown-" + f.id;
         create(f, List.of(node(generate, "imageGeneration", Map.of("modelId", f.id, "prompt", prompt))), List.of());
         String run = start(f, plan(f, "ALL", List.of(), Map.of()));
-        var unknown = awaitState(f, run, "UNKNOWN_SUBMISSION");
-        String submission = nodeResult(unknown, generate).path("externalId").asText();
+        String submission = nodeResult(awaitState(f, run, "FAILED"), generate).path("externalId").asText();
         String job = jdbc.queryForObject("SELECT id FROM afv_remote_generation_job WHERE submission_id = ?", String.class, submission);
         String context = jdbc.queryForObject("SELECT context_json FROM afv_generation_submission WHERE id = ?", String.class, submission);
         jdbc.update("UPDATE sys_user SET status = 0 WHERE id = ?", f.id);
-        String path = "/api/system/execution-recovery/GENERATION/" + job;
-        var beforeReceipt = ok(get(admin, path));
         String attempt = jdbc.queryForObject("SELECT active_attempt_id FROM afv_remote_generation_job WHERE id = ?", String.class, job);
         generationAttempts.acknowledge(attempt, GenerationProviderReceipt.accepted("late-accepted-original"));
-        // 迟到回执本身不递增旧执行行版本，所以还必须绑定完整证据摘要。
-        assertThat(post(admin, path + "/confirm-finished", recoveryDecision(admin, beforeReceipt, id())).getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
-        recover(admin, "GENERATION", job);
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForObject("SELECT status FROM afv_canvas_run WHERE id = ?", String.class, run)).isEqualTo("CANCELLED"));
+        assertThat(get(admin, "/api/execution-records/GENERATION/" + job).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(jdbc.queryForObject("SELECT context_json FROM afv_generation_submission WHERE id = ?", String.class, submission)).isEqualTo(context);
         assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_remote_generation_job WHERE id = ?", Boolean.class, job)).isFalse();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_image_item i JOIN afv_generation_submission s ON s.task_id = i.task_id WHERE s.id = ? AND i.image_url IS NOT NULL", Integer.class, submission)).isZero();
         assertThat(POSTS.get(prompt)).hasValue(1);
     }
 
-    @Test void revokedCanvasAudioCanEndWithoutReadingOrAdoptingItsPrivateInputs() throws Exception {
+    @Test void revokedCanvasAudioObservesOriginalTaskWithoutPublishingOutputs() throws Exception {
         var f = fixture();
-        var admin = recoveryAdmin();
-        var scenario = new AudioScenario(true);
+        var scenario = new AudioScenario(false);
         AUDIO.put("recovery-audio-" + f.id, scenario);
         audioModel(f);
         String source = id(), music = id();
@@ -1398,14 +1359,16 @@ class CanvasRunWiringIT {
         create(f, List.of(node(source, "video", Map.of("resourceId", media)), node(music, "musicGeneration", Map.of("apiConfigId", f.id, "operation", "music", "prompt", "recovery-audio-" + f.id))),
                 List.of(edge(source, "media", music, "video", 0)));
         String run = start(f, plan(f, "ALL", List.of(), Map.of()));
-        var unknown = awaitState(f, run, "UNKNOWN_SUBMISSION");
-        String job = nodeResult(unknown, music).path("externalId").asText();
+        await().atMost(Duration.ofSeconds(20)).until(() -> scenario.posts.get() == 1);
+        String job = jdbc.queryForObject("SELECT external_id FROM afv_canvas_node_run WHERE run_id = ? AND node_id = ?", String.class, run, music);
         jdbc.update("UPDATE sys_user SET status = 0 WHERE id = ?", f.id);
-        var view = ok(get(admin, "/api/system/execution-recovery/CANVAS_MEDIA/" + job));
-        assertThat(view.toString()).doesNotContain(media, "source.mp4", "recovery-audio-" + f.id);
-        recover(admin, "CANVAS_MEDIA", job);
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForObject("SELECT status FROM afv_canvas_run WHERE id = ?", String.class, run)).isEqualTo("CANCELLED"));
-        assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_canvas_media_job WHERE job_id = ?", Boolean.class, job)).isFalse();
+        scenario.complete.set(true);
+        jdbc.update("UPDATE afv_media_job SET next_run_at = UTC_TIMESTAMP(6) WHERE id = ?", job);
+        await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
+            assertThat(jdbc.queryForObject("SELECT status FROM afv_canvas_run WHERE id = ?", String.class, run)).isEqualTo("CANCELLED");
+            assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_canvas_media_job WHERE job_id = ?", Boolean.class, job)).isFalse();
+        });
+        assertThat(jdbc.queryForObject("SELECT JSON_LENGTH(output_json, '$.values') FROM afv_canvas_node_run WHERE run_id = ? AND node_id = ?", Integer.class, run, music)).isZero();
         assertThat(scenario.posts).hasValue(1);
     }
 
@@ -1416,7 +1379,7 @@ class CanvasRunWiringIT {
         jdbc.update("UPDATE afv_api_config SET status = 0 WHERE platform = 'sonilo' AND id <> ?", f.id);
         caches.getCache("episodeBgmConfig").clear();
         String key = "orphan-episode-" + f.id;
-        var scenario = new AudioScenario(true);
+        var scenario = new AudioScenario(false);
         AUDIO.put(key, scenario);
         String previousPrompt = bgmProperties.getMusicPrompt();
         bgmProperties.setMusicPrompt(key);
@@ -1427,11 +1390,12 @@ class CanvasRunWiringIT {
             jdbc.update("INSERT INTO afv_storyboard_episode(id, storyboard_id, title) VALUES (?, ?, '撤权分集合成验证')", episode, board);
             jdbc.update("INSERT INTO afv_storyboard_item(id, storyboard_id, storyboard_episode_id, video_url) VALUES (?, ?, ?, ?)", shot, board, episode, "media://" + media);
             String job = ok(post(f, "/api/storyboard/episode/" + episode + "/compose-video", Map.of("version", 0, "requestId", id(), "includeBgm", true))).asText();
-            await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> assertThat(ok(get(f, "/api/media-jobs/" + job)).path("status").asText()).isEqualTo("NEEDS_REVIEW"));
+            await().atMost(Duration.ofSeconds(20)).until(() -> scenario.posts.get() == 1);
             String context = jdbc.queryForObject("SELECT context_json FROM afv_media_job WHERE id = ?", String.class, job);
             jdbc.update("UPDATE sys_user SET status = 0 WHERE id = ?", f.id);
             scenario.complete.set(true);
-            recover(admin, "EPISODE_AUDIO", job);
+            jdbc.update("UPDATE afv_media_job SET next_run_at = UTC_TIMESTAMP(6) WHERE id = ?", job);
+            await().atMost(Duration.ofSeconds(20)).untilAsserted(() -> assertThat(jdbc.queryForObject("SELECT status FROM afv_media_job WHERE id = ?", String.class, job)).isEqualTo("CANCELLED"));
             assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_episode_audio_job WHERE job_id = ?", Boolean.class, job)).isFalse();
             assertThat(jdbc.queryForObject("SELECT context_json FROM afv_media_job WHERE id = ?", String.class, job)).isEqualTo(context);
             assertThat(jdbc.queryForObject("SELECT version FROM afv_storyboard_episode WHERE id = ?", Integer.class, episode)).isEqualTo(1);
@@ -1447,7 +1411,7 @@ class CanvasRunWiringIT {
         }
     }
 
-    @Test void responseArrivingAfterRevocationIsAuditedButAdminCannotAdoptItIntoTheCanvas() throws Exception {
+    @Test void responseArrivingAfterRevocationIsRecordedWithoutPublishing() throws Exception {
         var f = fixture();
         var admin = recoveryAdmin();
         var scenario = textModel(f, 200, true, "stop");
@@ -1459,12 +1423,9 @@ class CanvasRunWiringIT {
             jdbc.update("UPDATE sys_user SET status = 0 WHERE id = ?", f.id);
             scenario.release.countDown();
             await().atMost(Duration.ofSeconds(12)).untilAsserted(() -> assertThat(jdbc.queryForObject(
-                    "SELECT status FROM afv_canvas_text_job WHERE run_id = ?", String.class, run)).isEqualTo("NEEDS_REVIEW"));
+                    "SELECT status FROM afv_canvas_text_job WHERE run_id = ?", String.class, run)).isEqualTo("FAILED"));
             String job = jdbc.queryForObject("SELECT id FROM afv_canvas_text_job WHERE run_id = ?", String.class, run);
-            var view = ok(get(admin, "/api/system/execution-recovery/TEXT/" + job));
-            assertThat(view.path("remote").get(0).path("responseRecorded").asBoolean()).isTrue();
-            assertThat(view.toString()).doesNotContain("模型返回文本", "text-" + f.id);
-            recover(admin, "TEXT", job);
+            assertThat(get(admin, "/api/execution-records/TEXT/" + job).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
             await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForObject("SELECT status FROM afv_canvas_run WHERE id = ?", String.class, run)).isEqualTo("CANCELLED"));
             assertThat(jdbc.queryForObject("SELECT JSON_LENGTH(output_json, '$.values') FROM afv_canvas_node_run WHERE run_id = ? AND node_id = ?", Integer.class, run, text)).isZero();
             assertThat(jdbc.queryForObject("SELECT result_json IS NOT NULL FROM afv_canvas_text_job WHERE id = ?", Boolean.class, job)).isTrue();
@@ -1480,15 +1441,6 @@ class CanvasRunWiringIT {
         headers.setBearerAuth(tokens.createToken(user, "recovery-admin-" + user, null).getAccessToken());
         headers.setContentType(MediaType.APPLICATION_JSON);
         return new Fixture(user, null, headers);
-    }
-    private Map<String, Object> recoveryDecision(Fixture admin, JsonNode target, String request) {
-        return Map.of("adminUserId", admin.id, "requestId", request, "expectedRevision", target.path("revision").asLong(),
-                "expectedFactsHash", target.path("factsHash").asText(),
-                "note", "受控测试：已核实原供应商调用结束，仅清理执行状态", "providerFinished", true);
-    }
-    private JsonNode recover(Fixture admin, String kind, String id) {
-        String path = "/api/system/execution-recovery/" + kind + "/" + id;
-        return ok(post(admin, path + "/confirm-finished", recoveryDecision(admin, ok(get(admin, path)), id())));
     }
 
     private record Fixture(long id, String canvas, HttpHeaders headers) { }

@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.media.job;
 
 import com.stonewu.fusion.service.canvas.model.CanvasErrorCode;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.service.canvas.model.CanvasException;
 import com.stonewu.fusion.service.media.model.MediaException;
 import jakarta.annotation.PreDestroy;
@@ -71,6 +72,16 @@ public class MediaJobWorker {
         var claim = job.claim();
         active.set(claim);
         try (var directory = new WorkDirectory()) {
+            if (!job.cancelRequested()) {
+                try {
+                    jobs.check(claim);
+                } catch (BusinessException denied) {
+                    if (denied.getCode() != 403 && denied.getCode() != 404 && denied.getCode() != 410) {
+                        throw denied;
+                    }
+                    job = jobs.requestStop(claim);
+                }
+            }
             if (job.cancelRequested()) {
                 bgm.observeCancellation(claim);
                 return true;
@@ -91,6 +102,12 @@ public class MediaJobWorker {
             String message = failure.getMessage() == null ? "媒体处理失败" : failure.getMessage();
             var current = jobs.get(job.id());
             boolean unresolved = !audio.unresolved(job.id()).isEmpty();
+            if (unresolved && current.deadline().isAfter(jobs.now()) && failure instanceof BusinessException denied
+                    && (denied.getCode() == 403 || denied.getCode() == 404 || denied.getCode() == 410)) {
+                jobs.requestStop(claim);
+                audio.waitNext(claim, "停止后续处理，继续查询原音频任务", 1, false);
+                return true;
+            }
             if (unresolved && failure instanceof MediaException media && media.getErrorCode()
                     .equals("MEDIA_AUDIO_QUERY_FAILED")) {
                 try {
@@ -101,29 +118,27 @@ public class MediaJobWorker {
                 }
             }
             if (unresolved) {
-                status = "NEEDS_REVIEW";
-                message = "原音频请求尚未确认结束，额度保留。" + message;
+                status = "UNKNOWN_SUBMISSION";
+                message = "远端结果未知，已结束本地等待。" + message;
             } else if (current.cancelRequested()) {
                 status = "CANCELLED";
-                message = "已停止后续处理；没有仍待核实的音频请求";
+                message = "原音频请求已结束，后续处理已停止";
             } else if (failure instanceof CanvasException canvas && canvas.getErrorCode() == CanvasErrorCode.VERSION_CONFLICT) {
                 status = "CONFLICT";
                 message = "合成期间分镜已修改，成片已保留，没有覆盖当前版本";
             } else if (audio.hasSuccessfulResult(
                     job.id()) && !(failure instanceof MediaException media && media.getErrorCode()
                     .equals("MEDIA_AUDIO_PROVIDER_FAILED"))) {
-                status = "NEEDS_REVIEW";
-                message = "原音频响应已保存，可核实后继续登记。" + message;
+                status = "FAILED";
+                message = "原音频响应已保存，后续处理未完成。" + message;
             } else if (failure instanceof MediaException media && (media.getErrorCode()
                     .equals("MEDIA_SUBMISSION_UNKNOWN")
                     || media.getErrorCode().equals("MEDIA_PROVIDER_WAIT_EXPIRED"))) {
-                status = "NEEDS_REVIEW";
+                status = "UNKNOWN_SUBMISSION";
             }
             log.warn("媒体任务结束: id={}, status={}, reason={}", job.id(), status, message);
             if (completion.recordFailure(claim, message)) {
-                if (!status.equals("NEEDS_REVIEW")) {
-                    completion.cleanBusinessStatus(claim);
-                }
+                completion.cleanBusinessStatus(claim);
                 completion.terminal(claim, status, message);
             }
         } finally {

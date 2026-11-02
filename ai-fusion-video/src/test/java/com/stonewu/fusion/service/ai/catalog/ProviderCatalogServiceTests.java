@@ -26,19 +26,36 @@ class ProviderCatalogServiceTests {
     ProviderCatalogServiceTests() throws Exception {
     }
 
+    /** 隐藏平台不进入配置目录，已保存配置仍能按原平台校验。 */
+    @Test
+    void hidesProviderWithoutBreakingSavedBindings() throws Exception {
+        var json = new ObjectMapper();
+        Map<String, Object> definition = json.convertValue(catalog.require("metaso"), new TypeReference<>() {});
+        definition.put("hidden", true);
+        var hidden = json.convertValue(definition, ProviderDefinition.class);
+        var source = mock(ObjectMapper.class);
+        doReturn(List.of(hidden, catalog.require("infistar")))
+                .when(source).readValue(any(InputStream.class), any(TypeReference.class));
+        var updated = new ProviderCatalogService(source);
+        assertThat(updated.list()).extracting(ProviderDefinition::id).containsExactly("infistar");
+        var config = ApiConfig.builder().providerId("metaso").platform("openai_compatible")
+                .apiKey("fixture-key").status(1).build();
+        assertThatCode(() -> updated.validateBinding(config)).doesNotThrowAnyException();
+    }
+
     /** 终止赞助只影响展示，不能放宽密钥要求或关闭提供商的快速配置能力。 */
     @Test
     void removingSponsorshipKeepsProviderConfigurationContract() throws Exception {
         var json = new ObjectMapper();
-        Map<String, Object> definition = json.convertValue(catalog.require("metaso"), new TypeReference<>() {});
+        Map<String, Object> definition = json.convertValue(catalog.require("infistar"), new TypeReference<>() {});
         definition.put("sponsored", false);
         var independent = json.convertValue(definition, ProviderDefinition.class);
         var source = mock(ObjectMapper.class);
         doReturn(List.of(independent)).when(source).readValue(any(InputStream.class), any(TypeReference.class));
         var updated = new ProviderCatalogService(source);
-        assertThat(updated.require("metaso").sponsored()).isFalse();
-        assertThat(updated.require("metaso").quickSetup()).isTrue();
-        var config = ApiConfig.builder().providerId("metaso").platform("openai_compatible").build();
+        assertThat(updated.require("infistar").sponsored()).isFalse();
+        assertThat(updated.require("infistar").quickSetup()).isTrue();
+        var config = ApiConfig.builder().providerId("infistar").platform("openai_compatible").build();
         assertThatThrownBy(() -> updated.validateBinding(config)).hasMessageContaining("API Key");
         config.setStatus(0);
         assertThatCode(() -> updated.validateBinding(config)).doesNotThrowAnyException();

@@ -15,6 +15,7 @@ public record ProviderDefinition(
         String vendor,
         String hint,
         boolean sponsored,
+        boolean hidden,
         boolean quickSetup,
         String credentialUrl,
         String documentationUrl,

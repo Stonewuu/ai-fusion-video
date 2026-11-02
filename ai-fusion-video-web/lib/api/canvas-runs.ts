@@ -267,38 +267,9 @@ export const canvasRunApi = {
     http.get(
       `/api/canvas-runs/${encodeURIComponent(runId)}/nodes/${encodeURIComponent(nodeId)}/text`,
     ),
-  reviewText: (
-    runId: string,
-    nodeId: string,
-    request: {
-      expectedRevision: number;
-      action: CanvasTextReviewAction;
-      note: string;
-      scope: GenerationScope;
-    },
-  ): Promise<CanvasTextExecution> =>
-    http.post(
-      `/api/canvas-runs/${encodeURIComponent(runId)}/nodes/${encodeURIComponent(nodeId)}/text/review`,
-      request,
-    ),
   media: (runId: string, nodeId: string): Promise<CanvasMediaExecution> =>
     http.get(
       `/api/canvas-runs/${encodeURIComponent(runId)}/nodes/${encodeURIComponent(nodeId)}/media`,
-    ),
-  reviewMedia: (
-    runId: string,
-    nodeId: string,
-    request: {
-      expectedRevision: number;
-      action: CanvasMediaReviewAction;
-      note: string;
-      providerTaskId?: string;
-      scope: GenerationScope;
-    },
-  ): Promise<CanvasMediaExecution> =>
-    http.post(
-      `/api/canvas-runs/${encodeURIComponent(runId)}/nodes/${encodeURIComponent(nodeId)}/media/review`,
-      request,
     ),
   plan: (id: string, request: CanvasRunPlanRequest): Promise<CanvasRunPlan> =>
     http.post(`${path(id)}/run-plans`, request),

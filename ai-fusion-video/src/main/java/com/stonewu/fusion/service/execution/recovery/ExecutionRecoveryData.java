@@ -23,26 +23,4 @@ public final class ExecutionRecoveryData {
                          String canvasId, String runId, boolean capacityHeld, boolean cancelled, List<Remote> remote) {
     }
 
-    public record View(Kind kind, String id, String status, long revision, long actorUserId, Long actorTeamId,
-                       Long projectId, String canvasId, boolean capacityHeld, boolean cancelRequested,
-                       List<Remote> remote, String factsHash, boolean canResolve, String reason) {
-    }
-
-    public record Decision(@NotNull @Positive Long adminUserId,
-                           @NotBlank @Pattern(regexp = "[A-Za-z0-9._:-]{1,128}") String requestId,
-                           @NotNull @PositiveOrZero Long expectedRevision,
-                           @NotBlank @Pattern(regexp = "[a-f0-9]{64}") String expectedFactsHash,
-                           @NotBlank @Size(max = 2000) String note,
-                           @AssertTrue boolean providerFinished) {
-    }
-
-    public record Receipt(String decisionId, Kind kind, String jobId, String status, long revision) {
-    }
-
-    public record History(String decisionId, long adminUserId, Kind kind, String jobId,
-                          long actorUserId, String note, Instant createdAt) {
-    }
-
-    public record Page(List<View> items, boolean hasMore, int page) {
-    }
 }

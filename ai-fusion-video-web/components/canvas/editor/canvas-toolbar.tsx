@@ -4,7 +4,7 @@ import { Plus, Undo2, Redo2, MousePointer2, Hand } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCanvas } from "../canvas-provider";
 import type { CanvasAlignment } from "@/lib/canvas/layout-actions";
-import type { CanvasRelationScope } from "@/lib/canvas/relations";
+import type { CanvasRelationAvailability, CanvasRelationScope } from "@/lib/canvas/relations";
 import { CanvasSegmentedControl } from "../workspace/segmented-control";
 import {
   CanvasToolbarAction,
@@ -32,9 +32,14 @@ export function CanvasToolbar(props: {
   onMinimap: () => void;
   relations: CanvasRelationScope;
   onRelations: (scope: CanvasRelationScope) => void;
+  relationAvailability: CanvasRelationAvailability;
+  relationLoading: boolean;
+  relationError: string | null;
+  onReloadRelations: () => void;
   onAdd: () => void;
   onFit: () => void;
   onArrange: (mode: CanvasAlignment) => void;
+  arranging: boolean;
   onSearch: () => void;
   mode: "select" | "pan";
   onMode: (value: "select" | "pan") => void;

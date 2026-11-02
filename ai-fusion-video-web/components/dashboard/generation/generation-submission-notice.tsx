@@ -22,7 +22,9 @@ export function GenerationSubmissionNotice({
 }) {
   const [clearing, setClearing] = useState(false);
   const [withdrawing, setWithdrawing] = useState(false);
-  if (submission.ready && !submission.pending && !submission.error) return null;
+  if (!submission.pending && !submission.error) {
+    return null;
+  }
   return (
     <section
       role="status"
@@ -37,9 +39,7 @@ export function GenerationSubmissionNotice({
             ? submission.busy
               ? "正在确认提交…"
               : "上次提交需要确认"
-            : submission.error
-              ? "暂时无法提交"
-              : "正在确认账号与团队…"}
+            : "暂时无法提交"}
         </h2>
         {submission.pending && (
           <p className="text-xs text-muted-foreground">
@@ -72,7 +72,9 @@ export function GenerationSubmissionNotice({
               disabled={submission.busy}
               onClick={() =>
                 void submission.retry().then((receipt) => {
-                  if (receipt) onConfirmed();
+                  if (receipt) {
+                    onConfirmed();
+                  }
                 })
               }
             >
@@ -103,7 +105,9 @@ export function GenerationSubmissionNotice({
       <Dialog
         open={withdrawing}
         onOpenChange={(open) => {
-          if (!submission.busy) setWithdrawing(open);
+          if (!submission.busy) {
+            setWithdrawing(open);
+          }
         }}
       >
         <DialogContent>

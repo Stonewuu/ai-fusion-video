@@ -125,14 +125,9 @@ public class GenerationJobLifecycle {
         // 清理已失去业务权限的运行只写自身任务，不发布业务内容。
         lockTask(submission);
         var job = jobs.leased(claim, true);
-        boolean review = state.equals("UNKNOWN_SUBMISSION") || state.equals("NEEDS_REVIEW");
-        if (review) {
-            remoteJobs.markReview(state, code, message, job.id());
-        } else {
-            terminalRow(job.id(), state, code, message);
-            for (long itemId : job.itemIds()) {
-                itemStates.failTaskItem(submission.kind(), itemId, submission.taskId(), message);
-            }
+        terminalRow(job.id(), state.equals("NEEDS_REVIEW") ? "FAILED" : state, code, message);
+        for (long itemId : job.itemIds()) {
+            itemStates.failTaskItem(submission.kind(), itemId, submission.taskId(), message);
         }
         aggregate(submission.id());
     }

@@ -40,9 +40,10 @@ public class ProviderCatalogService {
         }
     }
 
-    @Cacheable(value = "providerCatalog", key = "'catalog-v1'")
+    @Cacheable(value = "providerCatalog", key = "'catalog-v3'")
     public List<ProviderDefinition> list() {
         return providers.values().stream()
+                .filter(provider -> !provider.hidden())
                 .sorted(Comparator.comparing(ProviderDefinition::sponsored).reversed()
                         .thenComparing(ProviderDefinition::id))
                 .toList();

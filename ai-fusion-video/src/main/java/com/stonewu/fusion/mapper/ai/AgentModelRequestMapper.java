@@ -8,8 +8,6 @@ import org.apache.ibatis.annotations.Param;
 
 @Mapper
 public interface AgentModelRequestMapper extends BaseMapper<AgentModelRequestEntity> {
-    long uncertainForConversation(@Param("conversationId") String conversationId);
-
     long countHeldForModel(@Param("modelId") long modelId);
 
     int admit(@Param("id") String id, @Param("runId") String runId, @Param("modelId") long modelId,

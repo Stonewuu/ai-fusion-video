@@ -72,7 +72,7 @@ public class CanvasMcpWorker {
             }
             if (job.startedAt() != null) {
                 tasks.finish(job.claim(), "UNKNOWN_SUBMISSION",
-                        "原 MCP 请求已发送但没有完整响应，请核实原调用；不会自动重发", true);
+                        "远端结果未知，原 MCP 请求不会自动重发", false);
                 return;
             }
             if (cancelled(job)) {
@@ -103,11 +103,11 @@ public class CanvasMcpWorker {
                 var current = repository.get(job.id(), false);
                 boolean unknown = current.startedAt() != null && current.result() == null;
                 String state = unknown ? "UNKNOWN_SUBMISSION" : cancelled(
-                        current) ? "CANCELLED" : current.result() != null ? "NEEDS_REVIEW" : "FAILED";
-                String message = unknown ? "MCP 调用缺少完整响应，请核实原请求；系统不会重新提交"
+                        current) ? "CANCELLED" : "FAILED";
+                String message = unknown ? "远端结果未知，MCP 调用未取得完整响应，已结束本地等待"
                         : state.equals("CANCELLED") ? "MCP 后续执行已停止"
                         : failure instanceof BusinessException ? failure.getMessage() : "MCP 执行未完成，请核对操作契约和远端服务";
-                tasks.finish(job.claim(), state, message, unknown);
+                tasks.finish(job.claim(), state, message, false);
             } catch (RuntimeException fenced) {
                 log.debug("MCP 任务已被其他工作者接管 [jobId={}]", job.id());
             }

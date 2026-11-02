@@ -113,22 +113,21 @@ class CanvasMcpWiringIT {
         String text = "丢回执-" + f.user(), node = id(); var scenario = REMOTE.scenario(text, "drop");
         create(f, List.of(node(node, "mcpTool", config(contract, "NONE", "", json(Map.of("text", text))))), List.of());
         String run = start(f, plan(f));
-        var unknown = awaitState(f, run, "UNKNOWN_SUBMISSION");
+        var unknown = awaitState(f, run, "FAILED");
         var execution = nodeResult(unknown, node);
         String path = detailPath(run, execution);
         var detail = ok(get(f, path));
         assertThat(REMOTE.request(text).at("/params/arguments/requestKey").asText()).isEqualTo(detail.path("id").asText());
         assertThat(REMOTE.request(text).path("params").path("_meta").path("aiFusionVideo.canvasCallId").asText()).isEqualTo(detail.path("id").asText());
         assertThat(scenario.calls()).hasValue(1);
-        assertThat(detail.path("remoteCapacityHeld").asBoolean()).isTrue();
-        var decision = decision(f, detail, "CONFIRM_FINISHED");
-        var receipt = ok(post(f, path + "/review", decision));
-        assertThat(ok(post(f, path + "/review", decision))).isEqualTo(receipt);
+        assertThat(detail.path("status").asText()).isEqualTo("UNKNOWN_SUBMISSION");
+        assertThat(detail.path("remoteCapacityHeld").asBoolean()).isFalse();
+        assertThat(detail.path("actions")).isEmpty();
         awaitState(f, run, "FAILED");
         assertThat(scenario.calls()).hasValue(1);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_canvas_mcp_decision WHERE job_id=?", Integer.class, detail.path("id").asText())).isEqualTo(1);
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_canvas_mcp_decision WHERE job_id=?", Integer.class, detail.path("id").asText())).isZero();
     }
-    @Test void lateReplyFromOldWorkerCannotPublishUntilUserAdoptsOriginalResult() throws Exception {
+    @Test void lateReplyFromOldWorkerIsRetainedWithoutPublishingOrRestartingTheTask() throws Exception {
         var f = fixture(); var contract = contract(f, "READ_ONLY", "READ_ONLY", "", null);
         String text = "迟到回执-" + f.user(), node = id(); var scenario = REMOTE.scenario(text, "hold");
         create(f, List.of(node(node, "mcpTool", config(contract, "NONE", "", json(Map.of("text", text))))), List.of());
@@ -137,15 +136,16 @@ class CanvasMcpWiringIT {
             assertThat(scenario.entered().await(20, TimeUnit.SECONDS)).isTrue();
             String job = jdbc.queryForObject("SELECT id FROM afv_canvas_mcp_job WHERE run_id=?", String.class, run);
             jdbc.update("UPDATE afv_canvas_mcp_job SET lease_until=TIMESTAMPADD(SECOND,-1,UTC_TIMESTAMP(6)) WHERE id=?", job);
-            var unknown = awaitState(f, run, "UNKNOWN_SUBMISSION");
+            var unknown = awaitState(f, run, "FAILED");
             scenario.release().countDown();
             await().atMost(Duration.ofSeconds(8)).untilAsserted(() -> assertThat(jdbc.queryForObject("SELECT result_json IS NOT NULL FROM afv_canvas_mcp_job WHERE id=?", Boolean.class, job)).isTrue());
             assertThat(jdbc.queryForObject("SELECT status FROM afv_canvas_mcp_job WHERE id=?", String.class, job)).isEqualTo("UNKNOWN_SUBMISSION");
             String path = detailPath(run, nodeResult(unknown, node));
             var detail = ok(get(f, path));
-            assertThat(detail.path("actions").toString()).contains("USE_RECEIVED");
-            ok(post(f, path + "/review", decision(f, detail, "USE_RECEIVED")));
-            assertThat(nodeResult(awaitState(f, run, "SUCCEEDED"), node).at("/outputs/values/text/0/text").asText()).contains(text);
+            assertThat(detail.path("actions")).isEmpty();
+            assertThat(detail.path("remoteCapacityHeld").asBoolean()).isFalse();
+            assertThat(nodeResult(awaitState(f, run, "FAILED"), node).at("/outputs/values")).isEmpty();
+            assertThat(detail.at("/received/response").toString()).contains(text);
             assertThat(scenario.calls()).hasValue(1);
         } finally { scenario.release().countDown(); }
     }
@@ -223,26 +223,29 @@ class CanvasMcpWiringIT {
         } finally { firstRemote.release().countDown(); }
     }
 
-    @Test void administratorCanOnlySettleAnUncertainCallAfterTheOriginalIdentityLosesPermission() {
-        var f = fixture(); var admin = recoveryAdmin(); var contract = contract(f, "READ_ONLY", "READ_ONLY", "", null);
-        String text = "管理员核实-" + f.user(), node = id(); var scenario = REMOTE.scenario(text, "drop");
+    @Test void revokedOwnerNeedsNoManualSettlementAndOtherUsersCannotReadTheRecord() throws Exception {
+        var f = fixture();
+        var admin = recoveryAdmin();
+        var contract = contract(f, "READ_ONLY", "READ_ONLY", "", null);
+        String text = "撤权自动处理-" + f.user(), node = id();
+        var scenario = REMOTE.scenario(text, "hold");
         create(f, List.of(node(node, "mcpTool", config(contract, "NONE", "", json(Map.of("text", text))))), List.of());
         String run = start(f, plan(f));
-        var unknown = awaitState(f, run, "UNKNOWN_SUBMISSION");
-        String job = nodeResult(unknown, node).path("externalId").asText();
-        String endpoint = "/api/system/execution-recovery/MCP/" + job;
-        assertThat(get(f, endpoint).getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
-        assertThat(ok(get(admin, endpoint)).path("canResolve").asBoolean()).isFalse();
-        jdbc.update("UPDATE sys_user SET status=0 WHERE id=?", f.user());
-        var target = ok(get(admin, endpoint));
-        assertThat(target.path("canResolve").asBoolean()).isTrue();
-        var decision = Map.of("adminUserId", admin.user(), "requestId", id(), "expectedRevision", target.path("revision").asLong(),
-                "expectedFactsHash", target.path("factsHash").asText(), "note", "已在本机 MCP 服务核实原调用结束", "providerFinished", true);
-        ok(post(admin, endpoint + "/confirm-finished", decision));
-        assertThat(jdbc.queryForObject("SELECT status FROM afv_canvas_mcp_job WHERE id=?", String.class, job)).isEqualTo("CANCELLED");
-        assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_canvas_mcp_job WHERE id=?", Boolean.class, job)).isFalse();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_execution_recovery_decision WHERE execution_kind='MCP' AND job_id=?", Integer.class, job)).isEqualTo(1);
-        assertThat(scenario.calls()).hasValue(1);
+        try {
+            assertThat(scenario.entered().await(20, TimeUnit.SECONDS)).isTrue();
+            jdbc.update("UPDATE sys_user SET status=0 WHERE id=?", f.user());
+            String job = jdbc.queryForObject("SELECT id FROM afv_canvas_mcp_job WHERE run_id=?", String.class, run);
+            jdbc.update("UPDATE afv_canvas_mcp_job SET lease_until=TIMESTAMPADD(SECOND,-1,UTC_TIMESTAMP(6)) WHERE id=?", job);
+            await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> {
+                assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_canvas_mcp_job WHERE id=?", Boolean.class, job)).isFalse();
+                assertThat(jdbc.queryForObject("SELECT status FROM afv_canvas_run WHERE id=?", String.class, run)).isEqualTo("CANCELLED");
+            });
+            assertThat(get(admin, "/api/execution-records/MCP/" + job).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+            assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_execution_recovery_decision WHERE job_id=?", Integer.class, job)).isZero();
+            assertThat(scenario.calls()).hasValue(1);
+        } finally {
+            scenario.release().countDown();
+        }
     }
 
     record Fixture(long user, String canvas, HttpHeaders headers) { }

@@ -38,12 +38,12 @@ public class AgentModelRequestEntity {
     private Long requestEpoch;
 
     /**
-     * 模型调用状态
+     * 模型请求状态，未知结果与本地并发占用分别记录
      */
     private String status;
 
     /**
-     * 是否仍占用模型并发额度
+     * 是否仍占用本地模型并发名额
      */
     private Boolean permitHeld;
 

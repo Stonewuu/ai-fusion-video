@@ -1,5 +1,4 @@
 import { http } from "./client";
-import type { GenerationScope } from "./generation-execution";
 import type { CanvasRunState } from "./canvas-runs";
 
 export interface McpJsonSchema {
@@ -48,7 +47,5 @@ export const canvasMcpApi = {
   save: (request: McpContractSave): Promise<McpContract> => http.post("/api/canvas-mcp/contracts", request),
   remove: (id: string, expectedVersion: number): Promise<boolean> => http.delete(`/api/canvas-mcp/contracts/${id}`, { params: { expectedVersion } }),
   execution: (runId: string, nodeId: string): Promise<McpExecution> => http.get(`/api/canvas-runs/${runId}/nodes/${nodeId}/mcp`),
-  review: (runId: string, nodeId: string, request: {
-    requestId: string; expectedRevision: number; action: McpReviewAction; note: string; providerFinished: boolean; scope: GenerationScope;
-  }): Promise<McpExecution> => http.post(`/api/canvas-runs/${runId}/nodes/${nodeId}/mcp/review`, request),
+
 };

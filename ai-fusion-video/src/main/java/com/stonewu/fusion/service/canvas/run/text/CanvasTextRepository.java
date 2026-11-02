@@ -102,7 +102,7 @@ public class CanvasTextRepository {
     public void finish(Job job, String state, String message, boolean permit) {
         String phase = switch (state) {
             case "SUCCEEDED" -> "文本生成完成";
-            case "NEEDS_REVIEW", "UNKNOWN_SUBMISSION" -> "等待核实原调用";
+            case "UNKNOWN_SUBMISSION" -> "远端结果未知";
             case "CANCELLED" -> "文本任务已停止";
             default -> "文本生成未完成";
         };

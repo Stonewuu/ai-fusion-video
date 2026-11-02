@@ -191,27 +191,37 @@ class ComfyUiWorkflowTestWiringIT {
         assertThat(f.remote.posts.get()).isZero();
     }
 
-    @Test void explicitRecheckContinuesTheOriginalRemoteTaskAndKeepsAnAuditEvent() {
+    @Test void repeatedQueryFailuresRecoverAutomaticallyWithoutAnotherSubmission() {
         var f = fixture();
         f.remote.queryFailure.set(true);
         String id = ok(post("/version/test", f.request(), f)).path("id").asText();
         awaitSubmitted(f);
-        // 供应商收到 POST 时，工作者可能尚未提交等待阶段；此时注入的错误计数会被正常受理清零。
         await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForObject(
                 "SELECT phase = 'POLLING' AND status = 'WAITING' FROM afv_media_job WHERE id = ?", Boolean.class, id)).isTrue());
         jdbc.update("UPDATE afv_comfyui_test_run SET consecutive_errors = 7 WHERE job_id = ?", id);
         jdbc.update("UPDATE afv_media_job SET next_run_at = UTC_TIMESTAMP(6) WHERE id = ?", id);
-        var review = awaitState(f, id, "NEEDS_REVIEW");
-        assertThat(review.path("permitHeld").asBoolean()).isTrue();
-        assertThat(review.path("availableActions").toString()).contains("RECHECK");
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> assertThat(jdbc.queryForObject(
+                "SELECT consecutive_errors FROM afv_comfyui_test_run WHERE job_id = ?", Integer.class, id)).isGreaterThanOrEqualTo(8));
+        assertThat(ok(get("/tests/" + id, f)).path("availableActions")).isEmpty();
         f.remote.queryFailure.set(false);
         f.remote.complete.set(true);
-        ok(post("/tests/" + id + "/review", Map.of("scope", Map.of("userId", f.user), "expectedRevision", review.path("revision").asLong(),
-                "action", "RECHECK", "note", "在目标 ComfyUI 确认原任务已完成，继续查询原编号"), f));
+        jdbc.update("UPDATE afv_media_job SET next_run_at = UTC_TIMESTAMP(6) WHERE id = ?", id);
         awaitState(f, id, "SUCCEEDED");
         assertThat(f.remote.posts.get()).isEqualTo(1);
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> assertThat(jdbc.queryForObject(
-                "SELECT COUNT(*) FROM afv_media_job_event WHERE job_id = ? AND event_type = 'COMFY_TEST_REVIEW'", Integer.class, id)).isEqualTo(1));
+    }
+
+    @Test void expiredQueryReleasesCapacityAndPreservesUnknownRemoteStatus() {
+        var f = fixture();
+        String id = ok(post("/version/test", f.request(), f)).path("id").asText();
+        awaitSubmitted(f);
+        jdbc.update("UPDATE afv_media_job SET deadline_at = TIMESTAMPADD(SECOND, -1, UTC_TIMESTAMP(6)), next_run_at = UTC_TIMESTAMP(6) WHERE id = ?", id);
+        var done = awaitState(f, id, "UNKNOWN_SUBMISSION");
+        assertThat(done.path("permitHeld").asBoolean()).isFalse();
+        assertThat(done.path("availableActions")).isEmpty();
+        var record = ok(http.exchange("/api/execution-records/COMFY_TEST/" + id, HttpMethod.GET, new HttpEntity<>(f.headers), JsonNode.class));
+        assertThat(record.at("/task/remoteUnknown").asBoolean()).isTrue();
+        assertThat(record.at("/task/localFinished").asBoolean()).isTrue();
+        assertThat(f.remote.posts.get()).isEqualTo(1);
     }
 
     @Test void withdrawingAcceptedRequestCancelsItsOriginalJobAndCannotCreateAnother() {
@@ -239,31 +249,25 @@ class ComfyUiWorkflowTestWiringIT {
         awaitState(owner, id, "CANCELLED");
     }
 
-    @Test void anotherAdminCanCloseARevokedTestOwnerWithoutPublishingOrChangingWorkflowContent() {
+    @Test void revokedTestOwnerIsStoppedAutomaticallyWithoutPublishingWorkflowContent() {
         var f = fixture();
-        var admin = fixture();
+        var other = fixture();
         String id = ok(post("/version/test", f.request(), f)).path("id").asText();
         awaitSubmitted(f);
         String context = jdbc.queryForObject("SELECT context_json FROM afv_media_job WHERE id = ?", String.class, id);
         jdbc.update("UPDATE sys_user_role SET deleted = TRUE WHERE user_id = ?", f.user);
         await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(jdbc.queryForObject(
-                "SELECT status FROM afv_media_job WHERE id = ?", String.class, id)).isEqualTo("NEEDS_REVIEW"));
-        String path = "/api/system/execution-recovery/COMFY_TEST/" + id;
-        var view = ok(http.exchange(path, HttpMethod.GET, new HttpEntity<>(admin.headers), JsonNode.class));
-        assertThat(view.path("canResolve").asBoolean()).isTrue();
-        assertThat(view.toString()).doesNotContain(f.prompt, "test-key", "workflowHash", "inputSummary");
+                "SELECT cancel_requested FROM afv_media_job WHERE id = ?", Boolean.class, id)).isTrue());
         f.remote.complete.set(true);
-        var request = Map.of("adminUserId", admin.user, "requestId", UUID.randomUUID().toString(), "expectedRevision", view.path("revision").asLong(),
-                "expectedFactsHash", view.path("factsHash").asText(),
-                "note", "模拟管理员已核实原试运行结束", "providerFinished", true);
-        var receipt = ok(http.postForEntity(path + "/confirm-finished", new HttpEntity<>(request, admin.headers), JsonNode.class));
-        assertThat(ok(http.postForEntity(path + "/confirm-finished", new HttpEntity<>(request, admin.headers), JsonNode.class))).isEqualTo(receipt);
-        assertThat(jdbc.queryForObject("SELECT status FROM afv_media_job WHERE id = ?", String.class, id)).isEqualTo("CANCELLED");
+        jdbc.update("UPDATE afv_media_job SET next_run_at = UTC_TIMESTAMP(6) WHERE id = ?", id);
+        await().atMost(Duration.ofSeconds(15)).untilAsserted(() -> assertThat(jdbc.queryForObject(
+                "SELECT status FROM afv_media_job WHERE id = ?", String.class, id)).isEqualTo("CANCELLED"));
         assertThat(jdbc.queryForObject("SELECT context_json FROM afv_media_job WHERE id = ?", String.class, id)).isEqualTo(context);
         assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_comfyui_test_run WHERE job_id = ?", Boolean.class, id)).isFalse();
         assertThat(workflows.getVersion(f.version).getTestStatus()).isEqualTo(4);
         assertThat(workflows.getVersion(f.version).getPublished()).isFalse();
         assertThat(jdbc.queryForObject("SELECT workflow_hash FROM afv_comfyui_workflow_version WHERE id = ?", String.class, f.version)).isEqualTo(f.hash);
+        assertThat(http.exchange("/api/execution-records/COMFY_TEST/" + id, HttpMethod.GET, new HttpEntity<>(other.headers), JsonNode.class).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
         assertThat(f.remote.posts).hasValue(1);
     }
 

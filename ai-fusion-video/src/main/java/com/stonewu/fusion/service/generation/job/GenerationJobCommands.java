@@ -72,84 +72,25 @@ public class GenerationJobCommands {
         remoteJobs.lock(jobId);
         var job = jobs.get(jobId);
         if (decision.action() == null) {
-            throw GenerationJobException.invalid("请选择核实操作");
+            throw GenerationJobException.invalid("请选择处理操作");
         }
         if (job.revision() != decision.expectedRevision()) {
             throw new GenerationJobException(409, "GENERATION_VERSION_CONFLICT", "任务状态已变化，请重新核对");
         }
         if (!job.requiresReview() && !job.state().equals("FAILED")) {
-            throw GenerationJobException.invalid("当前任务不处于可核实或恢复的状态");
+            throw GenerationJobException.invalid("当前任务不能重新保存结果");
         }
         if (decision.note() == null || decision.note().isBlank() || decision.note().length() > 2000) {
-            throw GenerationJobException.invalid("请填写核实依据（不超过 2000 字符）");
+            throw GenerationJobException.invalid("处理说明不能为空且不能超过 2000 字符");
         }
         attemptRows.lockHistory(jobId);
         var history = attempts.forJob(jobId);
         if (!policy.allowed(job, history).contains(decision.action())) {
-            throw GenerationJobException.invalid("此核实操作已不适用，请刷新任务状态");
+            throw GenerationJobException.invalid("当前无法重新保存结果，请刷新任务状态");
         }
-        switch (decision.action()) {
-            case RESTORE_ACCEPTED_RECEIPT -> {
-                var receipt = policy.lateReceipts(job, history).getFirst();
-                resolveAttempt(job, decision, actor);
-                remoteJobs.restoreReceipt(receipt.id(), jobId);
-            }
-            case RECHECK -> {
-                if (job.activeAttemptId() == null) {
-                    throw GenerationJobException.invalid("此执行没有已提交的请求");
-                }
-                var attempt = attempts.get(job.activeAttemptId());
-                if (!attempt.acknowledged() && attempt.providerTaskId() == null) {
-                    throw GenerationJobException.invalid("供应商未返回可查询标识，请先在供应商侧核实受理情况");
-                }
-                remoteJobs.recheck(jobId);
-                for (long itemId : job.itemIds()) {
-                    itemStates.resetFailed(submission.kind(), itemId);
-                }
-            }
-            case RETRY_INGEST -> {
-                if (job.result() == null || job.result()
-                        .state() != RemoteGenerationResult.State.SUCCEEDED || job.cancelRequested()) {
-                    throw GenerationJobException.invalid("没有可恢复接收的成功结果");
-                }
-                remoteJobs.retryIngest(jobId);
-                for (long itemId : job.itemIds()) {
-                    itemStates.resetFailed(submission.kind(), itemId);
-                }
-            }
-            case CONFIRM_NOT_ACCEPTED_AND_RETRY -> {
-                if (job.cancelRequested()) {
-                    throw GenerationJobException.invalid("已请求取消的执行不能重新提交，请新建生成任务");
-                }
-                if (job.activeAttemptId() == null) {
-                    throw GenerationJobException.invalid("没有需要核实的外部提交");
-                }
-                attemptRows.lock(job.activeAttemptId());
-                var attempt = attempts.get(job.activeAttemptId());
-                if (attempt.acknowledged()) {
-                    throw GenerationJobException.invalid("供应商已确认受理，不能将其改为未受理后重发");
-                }
-                resolveAttempt(job, decision, actor);
-                remoteJobs.retrySubmission(jobId);
-                for (long itemId : job.itemIds()) {
-                    itemStates.resetFailed(submission.kind(), itemId);
-                }
-            }
-            case CONFIRM_PROVIDER_FINISHED -> {
-                if (!job.requiresReview()) {
-                    throw GenerationJobException.invalid("只有状态待核实的任务需要确认远端结束");
-                }
-                resolveAttempt(job, decision, actor);
-                String reason = "已核实远端结束，未取得可用结果";
-                String pendingPrefix = "请求结果未确认，不能自动重发：";
-                if (job.errorMessage() != null && job.errorMessage().startsWith(pendingPrefix)) {
-                    reason = job.errorMessage().substring(pendingPrefix.length());
-                }
-                remoteJobs.confirmFinished(job.cancelRequested() ? "CANCELLED" : "FAILED", reason, jobId);
-                for (long itemId : job.itemIds()) {
-                    itemStates.failPending(submission.kind(), itemId, reason);
-                }
-            }
+        remoteJobs.retryIngest(jobId);
+        for (long itemId : job.itemIds()) {
+            itemStates.resetFailed(submission.kind(), itemId);
         }
         lifecycle.aggregate(submission.id());
         long revision = jobs.submission(submission.id()).revision();
@@ -159,12 +100,7 @@ public class GenerationJobCommands {
                 "actorUserId", actor.userId(), "note", decision.note()));
     }
 
-    private void resolveAttempt(RemoteGenerationJob job, Review decision, CanvasActor actor) {
-        if (job.activeAttemptId() == null) {
-            return;
-        }
-        attemptRows.resolve(decision.action().name(), decision.note(), actor.userId(), job.activeAttemptId());
-    }
+
 
     private void control(GenerationSubmission submission, CanvasActor actor) {
         access.requireRead(submission.kind(), submission.taskId(), actor);
@@ -178,7 +114,7 @@ public class GenerationJobCommands {
         submissions.lock(submission.id());
     }
 
-    public enum Action {RECHECK, RETRY_INGEST, RESTORE_ACCEPTED_RECEIPT, CONFIRM_NOT_ACCEPTED_AND_RETRY, CONFIRM_PROVIDER_FINISHED}
+    public enum Action {RETRY_INGEST}
 
     public record Review(long expectedRevision, Action action, String note) {
     }

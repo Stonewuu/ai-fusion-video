@@ -114,8 +114,8 @@ public class RemoteGenerationWorker {
                 return;
             }
             if (jobs.now().isAfter(job.deadline()) && !job.phase().equals("INGESTING")) {
-                lifecycle.fail(claim, preparing ? "FAILED" : "NEEDS_REVIEW", "GENERATION_DEADLINE_EXCEEDED",
-                        preparing ? "准备超过等待期限，未提交供应商" : "等待超过期限，供应商任务仍需核实；没有自动重发");
+                lifecycle.fail(claim, preparing ? "FAILED" : "UNKNOWN_SUBMISSION", "GENERATION_DEADLINE_EXCEEDED",
+                        preparing ? "准备超过等待期限，未提交供应商" : "远端结果未知，已结束本地等待，原请求不会自动重发");
                 return;
             }
             ApiConfig api = models.forExecution(submission);
@@ -132,7 +132,7 @@ public class RemoteGenerationWorker {
                     job = attempts.applyReceipt(claim);
                 } else if (attempt.providerTaskId() == null) {
                     lifecycle.fail(claim, "UNKNOWN_SUBMISSION", "UNKNOWN_SUBMISSION",
-                            "提交意图已保存，但未取得回执；请核实供应商后再决定是否重试");
+                            "远端结果未知，未取得可查询的受理回执，原请求不会自动重发");
                     return;
                 } else {
                     // 客户端预先分配的任务 ID 只能用于查询对账，不能假设重复 POST 幂等。
@@ -248,24 +248,24 @@ public class RemoteGenerationWorker {
             if (current.phase().equals("SUBMITTING")) {
                 var intent = attempts.get(current.activeAttemptId());
                 if (intent.providerTaskId() != null || intent.acknowledged()) {
-                    jobs.waitForNextPoll(claim, 5, "SUBMITTING", code, "正在根据已保存的提交记录核实受理状态");
+                    jobs.waitForNextPoll(claim, 5, "SUBMITTING", code, "正在查询原请求的受理状态");
                 } else {
                     lifecycle.fail(claim, "UNKNOWN_SUBMISSION", "UNKNOWN_SUBMISSION",
                             "请求结果未确认，不能自动重发：" + message);
                 }
             } else if (code.equals("GENERATION_LATE_RECEIPT")) {
-                lifecycle.fail(claim, "NEEDS_REVIEW", code, message);
+                lifecycle.fail(claim, "UNKNOWN_SUBMISSION", code, "远端结果未知：" + message);
             } else if (current.phase().equals("NEW") || current.phase().equals("PREPARING")) {
                 lifecycle.fail(claim, current.cancelRequested() ? "CANCELLED" : "FAILED", code, message);
             } else if (code.equals("PROVIDER_TASK_UNKNOWN") || code.equals(
                     "GENERATION_PROVIDER_CHANGED") || code.equals("GENERATION_PROVIDER_UNAVAILABLE") || code.equals(
                     "GENERATION_MODEL_DISABLED")) {
-                lifecycle.fail(claim, "NEEDS_REVIEW", code, message);
-            } else if (current.consecutiveErrors() < 8) {
+                lifecycle.fail(claim, current.result() == null ? "UNKNOWN_SUBMISSION" : "FAILED", code, message);
+            } else if (!current.phase().equals("INGESTING") || current.consecutiveErrors() < 8) {
                 int delay = Math.min(60, 1 << Math.min(6, current.consecutiveErrors() + 1));
                 jobs.waitForNextPoll(claim, delay, current.phase(), code, message);
             } else {
-                lifecycle.fail(claim, current.phase().equals("INGESTING") ? "FAILED" : "NEEDS_REVIEW", code, message);
+                lifecycle.fail(claim, "FAILED", code, message);
             }
         } catch (GenerationJobException lost) {
             if (!lost.getErrorCode().equals("GENERATION_LEASE_LOST")) {

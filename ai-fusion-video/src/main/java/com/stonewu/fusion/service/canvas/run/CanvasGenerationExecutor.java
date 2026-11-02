@@ -177,7 +177,7 @@ public class CanvasGenerationExecutor implements Executor {
             }
         }
         if (requireResult && output.values().stream().allMatch(List::isEmpty)) {
-            throw CanvasRunException.invalid("生成任务没有已登记的输出，请核实原任务");
+            throw CanvasRunException.invalid("生成任务没有已登记的输出");
         }
         return new Ports(output);
     }

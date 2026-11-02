@@ -39,9 +39,4 @@ public class MediaJobController {
         return CommonResult.success(audio.detail(id, actors.current()));
     }
 
-    @PostMapping("/{id}/audio/review")
-    public CommonResult<EpisodeAudioReviewService.View> review(@PathVariable String id,
-                                                               @RequestBody @Valid EpisodeAudioReviewService.Review request) {
-        return CommonResult.success(audio.review(id, request, actors.current()));
-    }
 }

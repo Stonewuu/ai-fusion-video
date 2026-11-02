@@ -1,5 +1,10 @@
 "use client";
 import { canvasAriaLabels } from "@/lib/canvas/accessibility-labels";
+import {
+  CANVAS_FIT_MAX_ZOOM,
+  CANVAS_MAX_ZOOM,
+  CANVAS_MIN_ZOOM,
+} from "@/lib/canvas/viewport-limits";
 
 import { useEffect, useMemo, useState } from "react";
 import { useTheme } from "next-themes";
@@ -246,15 +251,17 @@ export function CanvasCheckpointPreview({
                   edgesReconnectable={false}
                   deleteKeyCode={null}
                   onNodeClick={(_event, node) => setSelected(node.id)}
+                  minZoom={CANVAS_MIN_ZOOM}
+                  maxZoom={CANVAS_MAX_ZOOM}
                   fitView
-                  fitViewOptions={{ padding: 0.18, maxZoom: 1 }}
+                  fitViewOptions={{ padding: 0.18, minZoom: CANVAS_MIN_ZOOM, maxZoom: CANVAS_FIT_MAX_ZOOM }}
                 >
                   <Background />
                   <div role="group" aria-label="版本预览缩放控制">
                     <Controls
                       aria-label=""
                       showInteractive={false}
-                      fitViewOptions={{ padding: 0.18, maxZoom: 1 }}
+                      fitViewOptions={{ padding: 0.18, minZoom: CANVAS_MIN_ZOOM, maxZoom: CANVAS_FIT_MAX_ZOOM }}
                     />
                   </div>
                 </ReactFlow>

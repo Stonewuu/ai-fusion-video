@@ -43,4 +43,6 @@ public interface CanvasNodeRunMapper extends BaseMapper<CanvasNodeRunEntity> {
                   @Param("epoch") long epoch);
 
     boolean hasActiveNodes(@Param("canvasId") String canvasId, @Param("nodeIds") List<String> nodeIds);
+
+    boolean hasUnknownRemote(@Param("nodeRunIds") List<String> nodeRunIds);
 }

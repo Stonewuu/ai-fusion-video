@@ -1,7 +1,11 @@
 "use client";
 import { useMemo, useState } from "react";
 import type { Edge } from "@xyflow/react";
-import { canvasBusinessRelations, type CanvasRelationScope } from "@/lib/canvas/relations";
+import {
+  canvasBusinessRelations,
+  type CanvasRelationAvailability,
+  type CanvasRelationScope,
+} from "@/lib/canvas/relations";
 import type { CanvasGraph } from "@/lib/canvas/types";
 import { useCanvasLibrary } from "../library/use-library";
 
@@ -12,12 +16,28 @@ export function useCanvasBusinessRelations(
   const [scope, setScope] = useState<CanvasRelationScope>(
     "hidden",
   );
-  const library = useCanvasLibrary(scope !== "hidden");
+  const hasResourcePair = useMemo(
+    () => graph.nodes.filter((node) => node.resource).length >= 2,
+    [graph.nodes],
+  );
+  const library = useCanvasLibrary(hasResourcePair);
+  const layoutRelations = useMemo(
+    () => canvasBusinessRelations(graph, library.entries, "all"),
+    [graph, library.entries],
+  );
+  const allRelations = useMemo(
+    () => layoutRelations.filter((relation) => !hidden.has(relation.source) && !hidden.has(relation.target)),
+    [layoutRelations, hidden],
+  );
+  const available = useMemo<CanvasRelationAvailability>(() => ({
+    structure: allRelations.some((relation) => relation.category === "structure"),
+    assets: allRelations.some((relation) => relation.category === "assets"),
+  }), [allRelations]);
   const edges = useMemo<Edge[]>(
     () =>
       scope === "hidden"
         ? []
-        : canvasBusinessRelations(graph, library.entries, scope).map(
+        : allRelations.filter((relation) => scope === "all" || relation.category === scope).map(
             (relation) => ({
               ...relation,
               type: "default",
@@ -26,8 +46,6 @@ export function useCanvasBusinessRelations(
               selectable: false,
               reconnectable: false,
               focusable: false,
-              hidden:
-                hidden.has(relation.source) || hidden.has(relation.target),
               style: {
                 stroke: "var(--muted-foreground)",
                 strokeDasharray: "4 5",
@@ -36,13 +54,16 @@ export function useCanvasBusinessRelations(
               labelBgStyle: { fill: "var(--card)" },
             }),
           ),
-    [graph, library.entries, scope, hidden],
+    [allRelations, scope],
   );
   return {
     scope,
     setScope,
+    available,
+    layoutRelations,
     edges,
-    error: library.error,
+    error: hasResourcePair ? library.error : null,
     loading: library.loading,
+    refresh: library.refresh,
   };
 }

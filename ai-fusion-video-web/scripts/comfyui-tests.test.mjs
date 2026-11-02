@@ -106,7 +106,7 @@ test("cancel request and unresolved remote status remain distinct from confirmed
       phase: "POLLING",
       cancelRequested: true,
     }),
-    "需要核实",
+    "自动处理中",
   );
   assert.equal(
     comfyUiTestStatus({ status: "CANCELLED", cancelRequested: true }),

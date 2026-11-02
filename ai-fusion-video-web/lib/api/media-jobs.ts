@@ -1,12 +1,11 @@
 import { http } from "./client";
-import type { GenerationScope } from "./generation-execution";
 
 export interface MediaJob {
   id: string;
   kind: string;
   projectId: number;
   targetId: number;
-  status: "QUEUED" | "RUNNING" | "WAITING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "CONFLICT" | "NEEDS_REVIEW";
+  status: "QUEUED" | "RUNNING" | "WAITING" | "SUCCEEDED" | "FAILED" | "CANCELLED" | "CONFLICT" | "NEEDS_REVIEW" | "UNKNOWN_SUBMISSION";
   phase: string;
   error: string | null;
   results: { video?: string; baseVideo?: string; music?: string; sfx?: string };
@@ -18,7 +17,6 @@ export type EpisodeAudioReviewAction = "RECHECK" | "RECORD_RECEIPT" | "RETRY_ING
 export interface EpisodeAudioReview {
   jobId: string;
   revision: number;
-  factsHash: string;
   status: MediaJob["status"];
   cancelRequested: boolean;
   capacityHeld: boolean;
@@ -32,8 +30,4 @@ export const mediaJobsApi = {
   list: (projectId: number, episodeId: number): Promise<MediaJob[]> => http.get("/api/media-jobs", { params: { projectId, episodeId } }),
   cancel: (id: string): Promise<boolean> => http.post(`/api/media-jobs/${id}/cancel`),
   audio: (id: string, signal?: AbortSignal): Promise<EpisodeAudioReview> => http.get(`/api/media-jobs/${id}/audio`, { signal }),
-  reviewAudio: (id: string, request: {
-    expectedRevision: number; expectedFactsHash: string; action: EpisodeAudioReviewAction; note: string;
-    step: string | null; providerTaskId: string | null; confirmedEnded: boolean; scope: GenerationScope;
-  }): Promise<EpisodeAudioReview> => http.post(`/api/media-jobs/${id}/audio/review`, request),
 };

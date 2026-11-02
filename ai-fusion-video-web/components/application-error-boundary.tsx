@@ -15,7 +15,7 @@ export function ApplicationErrorBoundary({
 
   return (
     <ClientErrorBoundary
-      key={pathname}
+      resetKey={pathname}
       context="应用页面运行异常"
       fallback={(error, reset) => (
         <ErrorRecoveryPanel

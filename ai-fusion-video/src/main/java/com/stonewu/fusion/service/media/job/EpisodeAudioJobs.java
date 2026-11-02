@@ -112,7 +112,7 @@ public class EpisodeAudioJobs {
                         hash)
                 .set(EpisodeAudioJobEntity::getConsecutiveErrors, 0));
         audioJobs.update(Wrappers.<EpisodeAudioJobEntity>lambdaUpdate().eq(EpisodeAudioJobEntity::getJobId, id)
-                .set(EpisodeAudioJobEntity::getPermitHeld, !unresolved(id).isEmpty()));
+                .set(EpisodeAudioJobEntity::getPermitHeld, !jobs.get(id).terminal() && !unresolved(id).isEmpty()));
         mediaJobs.advanceRevision(id);
     }
 
@@ -121,9 +121,8 @@ public class EpisodeAudioJobs {
         var job = jobs.observe(claim);
         audioJobs.pollResult(job.id(), failedQuery);
         int errors = audioJobs.selectById(job.id()).getConsecutiveErrors();
-        boolean review = errors >= 8;
-        mediaJobs.waitForAudio(review ? "NEEDS_REVIEW" : "WAITING", review ? "音频任务等待核实" : phase,
-                review ? "连续查询原音频任务失败，请核实供应商是否已结束" : null,
+        mediaJobs.waitForAudio("WAITING", phase,
+                failedQuery ? "原音频任务查询暂不可用，将继续自动查询" : null,
                 Math.max(1, Math.min(60, failedQuery ? 3 + errors * 3 : seconds)), job.id());
         notifications.progress(jobs.get(job.id()));
     }

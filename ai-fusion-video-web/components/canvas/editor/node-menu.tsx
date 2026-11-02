@@ -5,12 +5,14 @@ import { CanvasNodeTypeIcon } from "../shared/canvas-node-icon";
 
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Search, ArrowRight, X } from "lucide-react";
+import { Search, Plus, X } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { compatibleNodes, type CompatibleNode } from "@/lib/canvas/graph";
 import { canvasCategories, canvasPortLabels } from "@/lib/canvas/labels";
 import type { CanvasAddIntent, CanvasCapability } from "@/lib/canvas/types";
+import { cn } from "@/lib/utils";
 import { useCanvas } from "../canvas-provider";
 
 export type CanvasNodeChoice = {
@@ -47,22 +49,27 @@ export function CanvasNodeMenu({
   const [menuPosition, setMenuPosition] = useState(intent.screen);
   useLayoutEffect(() => {
     const element = menu.current;
-    if (!element) return;
+    if (!element) {
+      return;
+    }
     const update = () => {
       const anchor = intent.anchor?.getBoundingClientRect();
       const width = element.offsetWidth;
       const height = element.offsetHeight;
       const left = Math.max(8, Math.min(anchor?.left ?? intent.screen.x, window.innerWidth - width - 8));
       let top = anchor ? anchor.bottom + 8 : intent.screen.y;
-      if (anchor && top + height > window.innerHeight - 8 && anchor.top - height - 8 >= 8)
+      if (anchor && top + height > window.innerHeight - 8 && anchor.top - height - 8 >= 8) {
         top = anchor.top - height - 8;
+      }
       top = Math.max(8, Math.min(top, window.innerHeight - height - 8));
       setMenuPosition((current) => current.x === left && current.y === top ? current : { x: left, y: top });
     };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(element);
-    if (intent.anchor) observer.observe(intent.anchor);
+    if (intent.anchor) {
+      observer.observe(intent.anchor);
+    }
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
     return () => {
@@ -77,11 +84,12 @@ export function CanvasNodeMenu({
   const output = catalog.nodes
     .find((item) => item.kind === source?.kind)
     ?.outputs.find((port) => port.id === intent.source?.portId);
+  const outputLabel = output ? canvasPortLabels[output.id] ?? output.label : null;
   const stale =
     !!intent.source &&
     (!source || source.configVersion !== intent.source.configVersion);
   const choices = useMemo<CanvasNodeChoice[]>(() => {
-    if (intent.source)
+    if (intent.source) {
       return source && output
         ? compatibleNodes(
             source,
@@ -94,6 +102,7 @@ export function CanvasNodeMenu({
               connection,
             }))
         : [];
+    }
     return catalog.nodes
       .filter(
         (item) => !item.requiresProject || snapshot.document.projectId !== null,
@@ -127,8 +136,9 @@ export function CanvasNodeMenu({
   useEffect(() => {
     menu.current?.querySelector("input")?.focus();
     const outside = (event: PointerEvent) => {
-      if (event.target instanceof Node && !menu.current?.contains(event.target))
+      if (event.target instanceof Node && !menu.current?.contains(event.target)) {
         onClose(false);
+      }
     };
     document.addEventListener("pointerdown", outside);
     return () => {
@@ -143,13 +153,18 @@ export function CanvasNodeMenu({
   return createPortal(
     <div
       ref={menu}
-      className="canvas-node-menu fixed z-70 flex w-80 max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-border/40 bg-popover/80 shadow-xl backdrop-blur-xl"
-      style={{ left: menuPosition.x, top: menuPosition.y, maxHeight: Math.min(420, window.innerHeight - 16) }}
+      className={cn(
+        "canvas-node-menu fixed z-70 flex max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-border/40 bg-popover/80 shadow-xl backdrop-blur-xl",
+        intent.source ? "w-88" : "w-80",
+      )}
+      style={{ left: menuPosition.x, top: menuPosition.y, maxHeight: Math.min(intent.source ? 520 : 420, window.innerHeight - 16) }}
       role="dialog"
       aria-label={intent.source ? "添加后续节点" : "添加节点"}
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={(event) => {
-        if (event.nativeEvent.isComposing) return;
+        if (event.nativeEvent.isComposing) {
+          return;
+        }
         if (event.key === "Escape") {
           event.preventDefault();
           event.stopPropagation();
@@ -158,8 +173,9 @@ export function CanvasNodeMenu({
         if (
           event.target instanceof Element &&
           event.target.closest("[data-categories]")
-        )
+        ) {
           return;
+        }
         if (event.key === "ArrowDown" || event.key === "ArrowUp") {
           event.preventDefault();
           setActive((current) =>
@@ -183,7 +199,7 @@ export function CanvasNodeMenu({
         }
       }}
     >
-      <div className="space-y-2 border-b border-border/20 p-3">
+      <div className="flex shrink-0 flex-col gap-2 border-b border-border/20 p-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-medium">
             {intent.source ? "添加后续节点" : "添加节点"}
@@ -199,15 +215,18 @@ export function CanvasNodeMenu({
           </Button>
         </div>
         {source && output && (
-          <p className="truncate text-xs text-muted-foreground">
-            {source.title} · {canvasPortLabels[output.id] ?? output.label}
+          <p
+            className="truncate text-xs text-muted-foreground"
+            title={`来自「${source.title}」的${outputLabel}输出`}
+          >
+            来自「{source.title}」的{outputLabel}输出
           </p>
         )}
-        <p className="text-xs text-muted-foreground">
-          {intent.source
-            ? "按内容类型匹配，添加后自动连线，再到右侧配置。"
-            : "选择类型直接添加，随后在右侧填写内容或配置模型。"}
-        </p>
+        {!intent.source && (
+          <p className="text-xs text-muted-foreground">
+            选择类型直接添加，随后在右侧填写内容或配置模型。
+          </p>
+        )}
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
           <Input
@@ -228,32 +247,40 @@ export function CanvasNodeMenu({
           />
         </div>
         <div
-          className="flex flex-wrap gap-2"
+          className={cn(
+            "gap-2",
+            intent.source ? "grid grid-cols-3" : "flex flex-wrap",
+          )}
           data-categories
           aria-label="节点分类"
         >
           {[...(!intent.source ? ["common"] : []), null, ...categories].map(
-            (value) => (
-              <Button
-                key={value ?? "all"}
-                size="xs"
-                variant={
-                  !search.trim() && category === value ? "secondary" : "ghost"
-                }
-                aria-pressed={!search.trim() && category === value}
-                onClick={() => {
-                  setSearch("");
-                  setCategory(value);
-                  setActive(0);
-                }}
-              >
-                {value === "common"
-                  ? "常用"
-                  : value
-                    ? canvasCategories[value]
-                    : "全部"}
-              </Button>
-            ),
+            (value) => {
+              const label = value === "common"
+                ? "常用"
+                : value
+                  ? canvasCategories[value]
+                  : "全部";
+              return (
+                <Button
+                  key={value ?? "all"}
+                  size="xs"
+                  className={intent.source ? "min-w-0 w-full" : undefined}
+                  variant={
+                    !search.trim() && category === value ? "secondary" : "ghost"
+                  }
+                  title={label}
+                  aria-pressed={!search.trim() && category === value}
+                  onClick={() => {
+                    setSearch("");
+                    setCategory(value);
+                    setActive(0);
+                  }}
+                >
+                  <span className="truncate">{label}</span>
+                </Button>
+              );
+            },
           )}
         </div>
       </div>
@@ -265,37 +292,54 @@ export function CanvasNodeMenu({
         <div
           id="canvas-node-options"
           role="listbox"
-          className="min-h-0 overflow-y-auto p-2"
+          className="flex min-h-0 flex-col gap-2 overflow-y-auto p-2"
         >
-          {filtered.map((choice, optionIndex) => (
-            <Button
-              key={`${choice.capability.kind}:${choice.connection?.port.id ?? ""}`}
-              id={`canvas-node-option-${optionIndex}`}
-              data-option-index={optionIndex}
-              variant={optionIndex === index ? "secondary" : "ghost"}
-              className="w-full justify-start"
-              size="sm"
-              role="option"
-              title={nodeGuidance[choice.capability.kind]}
-              aria-selected={optionIndex === index}
-              onPointerMove={() => setActive(optionIndex)}
-              onClick={() => onChoose(choice)}
-            >
-              <CanvasNodeTypeIcon capability={choice.capability} aria-hidden style={{ color: canvasNodeColor(choice.capability.kind) }} />
-              <span className="min-w-0 flex-1 truncate text-left">
-                {choice.capability.label}
-                {choice.connection &&
-                  ` · ${canvasPortLabels[choice.connection.port.id] ?? choice.connection.port.label}`}
-              </span>
-              {choice.connection ? (
-                <ArrowRight />
-              ) : (
-                <span className="text-xs text-muted-foreground">
-                  {canvasCategories[choice.capability.category]}
+          {filtered.map((choice, optionIndex) => {
+            const inputLabel = choice.connection
+              ? canvasPortLabels[choice.connection.port.id] ?? choice.connection.port.label
+              : null;
+            return (
+              <Button
+                type="button"
+                key={`${choice.capability.kind}:${choice.connection?.port.id ?? ""}`}
+                id={`canvas-node-option-${optionIndex}`}
+                data-option-index={optionIndex}
+                variant={optionIndex === index ? "secondary" : "ghost"}
+                size={choice.connection ? "default" : "sm"}
+                className="w-full justify-start"
+                role="option"
+                tabIndex={-1}
+                title={choice.connection
+                  ? `添加「${choice.capability.label}」，连接到「${inputLabel}」输入\n${nodeGuidance[choice.capability.kind]}`
+                  : nodeGuidance[choice.capability.kind]}
+                aria-selected={optionIndex === index}
+                onPointerMove={() => setActive(optionIndex)}
+                onClick={() => onChoose(choice)}
+              >
+                <CanvasNodeTypeIcon capability={choice.capability} aria-hidden style={{ color: canvasNodeColor(choice.capability.kind) }} />
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                  <span className="min-w-0 truncate">
+                    {choice.capability.label}
+                  </span>
+                  {choice.connection && (
+                    <Badge
+                      variant="secondary"
+                      className="min-w-0 max-w-40 font-normal text-muted-foreground"
+                    >
+                      <span className="truncate">接入：{inputLabel}</span>
+                    </Badge>
+                  )}
                 </span>
-              )}
-            </Button>
-          ))}
+                {choice.connection ? (
+                  <Plus aria-hidden />
+                ) : (
+                  <span className="text-xs text-muted-foreground">
+                    {canvasCategories[choice.capability.category]}
+                  </span>
+                )}
+              </Button>
+            );
+          })}
           {!filtered.length && (
             <p className="p-3 text-sm text-muted-foreground">
               {intent.source ? "没有找到匹配的后续步骤。请换一个关键词，或选择其他输出连接点。" : "没有找到匹配的节点。试试“图片”“分镜”或切换分类。"}

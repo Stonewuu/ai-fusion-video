@@ -69,8 +69,8 @@ public class CanvasTextWorker {
                 return;
             }
             if (job.startedAt() != null) {
-                tasks.finish(job.claim(), "UNKNOWN_SUBMISSION", "原文本请求已发送但响应尚未保存，请核实供应商记录",
-                        true);
+                tasks.finish(job.claim(), "UNKNOWN_SUBMISSION", "远端结果未知，原文本请求不会自动重发",
+                        false);
                 return;
             }
             if (cancelled(job)) {
@@ -100,11 +100,11 @@ public class CanvasTextWorker {
                 }
                 boolean uncertain = current.startedAt() != null && current.result() == null;
                 String state = uncertain ? "UNKNOWN_SUBMISSION" : cancelled(current) ? "CANCELLED"
-                        : current.result() != null ? "NEEDS_REVIEW" : "FAILED";
-                String message = uncertain ? "文本调用没有保存完整响应，请核实原请求；系统不会自动再次生成"
+                        : "FAILED";
+                String message = uncertain ? "远端结果未知，文本调用未取得完整响应，已结束本地等待"
                         : state.equals("CANCELLED") ? "文本任务已停止"
                         : failure instanceof BusinessException ? failure.getMessage() : "文本处理未完成，请检查模型配置后重新确认";
-                tasks.finish(job.claim(), state, message, uncertain);
+                tasks.finish(job.claim(), state, message, false);
             } catch (RuntimeException fenced) {
                 log.debug("文本任务已被接管或暂停 [jobId={}]", job.id());
             }
@@ -118,7 +118,7 @@ public class CanvasTextWorker {
         if (cancelled(job)) {
             tasks.finish(claim, "CANCELLED", "原文本调用已结束，取消后不发布结果", false);
         } else if (!job.result().path("complete").asBoolean() && !job.resultAccepted()) {
-            tasks.finish(claim, "NEEDS_REVIEW", "模型返回了截断或不完整的文本，请预览后决定是否采用", false);
+            tasks.finish(claim, "FAILED", "模型返回了截断或不完整的文本，未继续执行后续任务", false);
         } else {
             tasks.finish(claim, "SUCCEEDED", null, false);
         }

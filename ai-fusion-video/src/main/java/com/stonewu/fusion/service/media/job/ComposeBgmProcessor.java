@@ -183,7 +183,7 @@ public class ComposeBgmProcessor {
         }
         if (!jobs.now().isBefore(job.deadline()) || !jobs.now()
                 .isBefore(audio.pollDeadline(job.id(), step, settings.timeoutSeconds()))) {
-            throw new MediaException(409, "MEDIA_PROVIDER_WAIT_EXPIRED", "原音频请求超过观察时限，请核实供应商任务");
+            throw new MediaException(409, "MEDIA_PROVIDER_WAIT_EXPIRED", "原音频请求超过等待期限，远端结果未知");
         }
         try {
             var queried = sonilo.tryQueryTask(config, submission.providerId());
@@ -202,7 +202,7 @@ public class ComposeBgmProcessor {
             return response;
         }
         if (!List.of("pending", "processing", "queued", "running").contains(status)) {
-            throw new MediaException(409, "MEDIA_AUDIO_STATUS_UNKNOWN", "供应商音频状态未知，请核实原调用");
+            throw new MediaException(409, "MEDIA_AUDIO_STATUS_UNKNOWN", "供应商未返回可识别的音频状态，远端结果未知");
         }
         audio.waitNext(claim, job.cancelRequested() ? "供应商不支持取消，等待原音频请求结束"
                 : step.equals("music") ? "等待配乐生成" : "等待音效生成", settings.pollSeconds(), false);
@@ -213,7 +213,7 @@ public class ComposeBgmProcessor {
         ApiConfig config = configs.getById(settings.apiConfigId());
         if (config == null || !Integer.valueOf(1).equals(config.getStatus()) || !json.hash(config)
                 .equals(settings.configHash())) {
-            throw new MediaException(409, "MEDIA_AUDIO_CONFIG_CHANGED", "原配乐服务配置已变化，请先核实已有调用");
+            throw new MediaException(409, "MEDIA_AUDIO_CONFIG_CHANGED", "原配乐服务配置已变化，无法继续查询原调用");
         }
         return config;
     }

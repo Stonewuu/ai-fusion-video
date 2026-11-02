@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.execution.ExecutionRecordMapper">
+    <sql id="records">
+        SELECT 'GENERATION' kind, j.id, CASE WHEN s.kind = 'IMAGE' THEN '图片生成' ELSE '视频生成' END title,
+            j.state status, j.error_message message, j.created_at, j.updated_at
+        FROM afv_remote_generation_job j JOIN afv_generation_submission s ON s.id = j.submission_id
+        WHERE s.actor_user_id = #{userId}
+        UNION ALL
+        SELECT 'TEXT', t.id, '画布文本生成', t.status, t.error_msg, t.created_at, t.updated_at
+        FROM afv_canvas_text_job t JOIN afv_canvas_run r ON r.id = t.run_id WHERE r.actor_user_id = #{userId}
+        UNION ALL
+        SELECT 'MCP', t.id, '外部工具调用', t.status, t.error_msg, t.created_at, t.updated_at
+        FROM afv_canvas_mcp_job t WHERE t.user_id = #{userId}
+        UNION ALL
+        SELECT 'AGENT_MODEL', m.id, '智能体模型调用', m.status, r.error_message, m.created_at, m.updated_at
+        FROM afv_agent_model_request m JOIN afv_agent_run r ON r.run_id = m.run_id WHERE r.user_id = #{userId}
+        UNION ALL
+        SELECT 'CANVAS_MEDIA', j.id, '画布音频与媒体', j.status, j.error_msg, j.created_at, j.updated_at
+        FROM afv_media_job j JOIN afv_canvas_media_job c ON c.job_id = j.id WHERE j.actor_user_id = #{userId}
+        UNION ALL
+        SELECT 'COMFY_TEST', j.id, 'ComfyUI 试运行', j.status, j.error_msg, j.created_at, j.updated_at
+        FROM afv_media_job j JOIN afv_comfyui_test_run c ON c.job_id = j.id WHERE j.actor_user_id = #{userId}
+        UNION ALL
+        SELECT 'EPISODE_AUDIO', j.id, '分集合成与配乐', j.status, j.error_msg, j.created_at, j.updated_at
+        FROM afv_media_job j JOIN afv_episode_audio_job a ON a.job_id = j.id WHERE j.actor_user_id = #{userId}
+    </sql>
+    <select id="list" resultType="com.stonewu.fusion.mapper.execution.ExecutionRecordMapper$Row">
+        SELECT * FROM (<include refid="records"/>) execution_records
+        WHERE status IN ('UNKNOWN_SUBMISSION', 'NEEDS_REVIEW', 'FAILED', 'PARTIAL_FAILED', 'CONFLICT', 'CANCELLED')
+        ORDER BY updated_at DESC, kind, id LIMIT #{limit} OFFSET #{offset}
+    </select>
+    <select id="get" resultType="com.stonewu.fusion.mapper.execution.ExecutionRecordMapper$Row">
+        SELECT * FROM (<include refid="records"/>) execution_records WHERE kind = #{kind} AND id = #{id}
+    </select>
+</mapper>

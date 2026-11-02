@@ -8,9 +8,7 @@ import com.stonewu.fusion.mapper.canvas.CanvasNodeRunMapper;
 import com.stonewu.fusion.mapper.execution.ExecutionRecoveryMapper;
 import com.stonewu.fusion.mapper.execution.ExecutionRecoveryMapper.Observation;
 import com.stonewu.fusion.mapper.generation.GenerationAttemptMapper;
-import com.stonewu.fusion.mapper.generation.GenerationSubmissionMapper;
 import com.stonewu.fusion.mapper.media.EpisodeAudioJobMapper;
-import com.stonewu.fusion.mapper.media.MediaJobSubmissionMapper;
 import com.stonewu.fusion.service.canvas.model.CanvasActor;
 import com.stonewu.fusion.service.generation.job.GenerationJobRepository;
 import com.stonewu.fusion.service.media.job.EpisodeAudioJobs;
@@ -28,19 +26,15 @@ import static com.stonewu.fusion.service.execution.recovery.ExecutionRecoveryDat
 public class ExecutionRecoveryTargets {
     private final ExecutionRecoveryMapper recovery;
     private final GenerationAttemptMapper attempts;
-    private final GenerationSubmissionMapper submissions;
     private final CanvasNodeRunMapper nodes;
     private final CanvasMediaJobMapper canvasMedia;
     private final ComfyUiTestRunMapper comfy;
     private final EpisodeAudioJobMapper audioRows;
-    private final MediaJobSubmissionMapper mediaSubmissions;
     private final GenerationJobRepository generations;
     private final MediaJobRepository media;
     private final EpisodeAudioJobs audio;
 
-    public List<Ref> candidates(int page) {
-        return recovery.candidates(page * 50);
-    }
+
 
     public Target get(Ref ref) {
         if (ref.kind() == Kind.AGENT_MODEL) {
@@ -110,38 +104,7 @@ public class ExecutionRecoveryTargets {
                 job.context().canvasId(), run, held, job.cancelRequested(), remote);
     }
 
-    /**
-     * 先锁管理员与原用户，再按画布→运行→项目→任务→子执行的顺序锁定。
-     */
-    public Target lock(Target before) {
-        if (before.canvasId() != null) {
-            recovery.lockCanvas(before.canvasId());
-        }
-        if (before.runId() != null) {
-            recovery.lockRun(before.runId());
-        }
-        if (before.projectId() != null) {
-            recovery.lockProject(before.projectId());
-        }
-        if (before.kind() == Kind.GENERATION) {
-            var submission = generations.submission(generations.get(before.id()).submissionId());
-            recovery.lockGenerationTask(submission.kind(), submission.taskId());
-            submissions.lock(submission.id());
-            recovery.lockExecution(before.kind(), before.id());
-            attempts.lockHistory(before.id());
-        } else {
-            if (before.kind() == Kind.COMFY_TEST) {
-                recovery.lockWorkflow(comfy.selectById(before.id()).getWorkflowId());
-            }
-            recovery.lockExecution(before.kind(), before.id());
-            if (before.kind() == Kind.COMFY_TEST) {
-                comfy.lock(before.id());
-            } else if (before.kind() == Kind.CANVAS_MEDIA || before.kind() == Kind.EPISODE_AUDIO) {
-                mediaSubmissions.lockAttempts(before.id());
-            }
-        }
-        return get(new Ref(before.kind(), before.id()));
-    }
+
 
     private Target observed(Kind kind, Observation row, String step) {
         if (row == null) {
@@ -166,6 +129,6 @@ public class ExecutionRecoveryTargets {
     }
 
     private static MediaException missing() {
-        return new MediaException(404, "RECOVERY_TASK_NOT_FOUND", "待核实执行不存在或类型不符");
+        return new MediaException(404, "RECOVERY_TASK_NOT_FOUND", "任务记录不存在或类型不符");
     }
 }

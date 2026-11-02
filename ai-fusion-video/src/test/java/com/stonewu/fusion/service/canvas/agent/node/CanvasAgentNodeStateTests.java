@@ -11,6 +11,10 @@ import org.springframework.beans.factory.ObjectProvider;
 import com.stonewu.fusion.mapper.canvas.CanvasAgentNodeJobMapper;
 import com.stonewu.fusion.mapper.generation.GenerationSubmissionMapper;
 import com.stonewu.fusion.entity.generation.GenerationSubmissionEntity;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.junit.jupiter.api.BeforeAll;
 
 import java.util.List;
 
@@ -20,6 +24,44 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class CanvasAgentNodeStateTests {
+    @BeforeAll
+    static void initializeMapperMetadata() {
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""),
+                GenerationSubmissionEntity.class);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"FAILED", "CANCELLED"})
+    void endedAgentKeepsItsTerminalStateWhenTheRemoteModelResultIsUnknown(String status) {
+        var run = mock(CanvasRunData.Run.class);
+        var node = mock(CanvasRunData.NodeRun.class);
+        when(node.id()).thenReturn("node");
+        when(node.externalId()).thenReturn("agent");
+        var jobs = mock(CanvasAgentNodeRepository.class);
+        var job = mock(CanvasAgentNodeRepository.Job.class);
+        when(job.agentRunId()).thenReturn("agent");
+        when(jobs.find("node", false)).thenReturn(job);
+        var agents = mock(AgentRunRepository.class);
+        var agent = mock(AgentRun.class);
+        when(agent.getRunId()).thenReturn("agent");
+        when(agent.getStatus()).thenReturn(status);
+        when(agent.getErrorMessage()).thenReturn("模型连接中断");
+        when(agents.findRun("agent")).thenReturn(agent);
+        var nodes = mock(CanvasAgentNodeJobMapper.class);
+        when(nodes.unknownModelRequestIds("node")).thenReturn(List.of("unknown-call"));
+        var outputs = mock(CanvasAgentNodeOutputs.class);
+        when(outputs.preview(run, node)).thenReturn(CanvasRunData.Ports.empty());
+        var executor = new CanvasAgentNodeExecutor(mock(CanvasAgentNodeJobs.class), jobs, agents, outputs,
+                mock(GenerationJobRepository.class), mock(ObjectProvider.class), nodes,
+                mock(GenerationSubmissionMapper.class));
+
+        var result = executor.step(run, node, mock(CanvasRunData.Claim.class));
+
+        assertThat(result.state().name()).isEqualTo(status);
+        assertThat(result.state().terminal()).isTrue();
+        assertThat(result.error()).isEqualTo("模型连接中断");
+    }
+
     @ParameterizedTest
     @ValueSource(strings = {"UNKNOWN_SUBMISSION", "NEEDS_REVIEW"})
     void unfinishedGenerationExplainsWhereToRecoverInsteadOfShowingAnUnexplainedAgentWait(String state) {

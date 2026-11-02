@@ -55,6 +55,44 @@ const nodeDraftTools = load("lib/canvas/node-draft.ts");
 const fieldPresentation = load("lib/canvas/field-presentation.ts");
 const nodeExecution = load("lib/canvas/node-execution.ts");
 const { createCanvasNodeRunStore } = load("lib/canvas/node-run-store.ts");
+const { canvasSelectionChain } = load("lib/canvas/selection-chain.ts");
+
+test("画布链路高亮只沿上游和下游延伸，不扩展到兄弟分支或汇合节点的其他输入", () => {
+  const edges = [
+    { id: "root-parent", source: "root", target: "parent" },
+    { id: "parent-focus", source: "parent", target: "focus" },
+    { id: "parent-sibling", source: "parent", target: "sibling" },
+    { id: "sibling-leaf", source: "sibling", target: "sibling-leaf" },
+    { id: "focus-child", source: "focus", target: "child" },
+    { id: "other-child", source: "other", target: "child" },
+    { id: "child-leaf", source: "child", target: "leaf" },
+    { id: "parent-leaf", source: "parent", target: "leaf" },
+  ];
+  const highlighted = canvasSelectionChain(edges, ["focus"]);
+  assert.deepEqual([...highlighted.nodeIds].sort(), ["child", "focus", "leaf", "parent", "root"]);
+  assert.deepEqual([...highlighted.edgeIds].sort(), ["child-leaf", "focus-child", "parent-focus", "root-parent"]);
+
+  const multiSelection = canvasSelectionChain(edges, ["focus", "sibling"]);
+  assert.deepEqual([...multiSelection.nodeIds].sort(), ["child", "focus", "leaf", "parent", "root", "sibling", "sibling-leaf"]);
+  assert.equal(multiSelection.nodeIds.has("other"), false);
+});
+
+test("画布链路高亮能遍历一万个节点，不依赖递归调用深度", () => {
+  const edges = Array.from({ length: 9999 }, (_, index) => ({
+    id: `edge-${index}`,
+    source: `node-${index}`,
+    target: `node-${index + 1}`,
+  }));
+  const downstream = canvasSelectionChain(edges, ["node-0"]);
+  assert.equal(downstream.nodeIds.size, 10000);
+  assert.equal(downstream.edgeIds.size, 9999);
+  assert.equal(downstream.nodeIds.has("node-9999"), true);
+
+  const upstream = canvasSelectionChain(edges, ["node-9999"]);
+  assert.equal(upstream.nodeIds.size, 10000);
+  assert.equal(upstream.edgeIds.size, 9999);
+  assert.equal(upstream.nodeIds.has("node-0"), true);
+});
 
 test("direct node runs traverse execution dependencies and reuse only current successful ancestors", () => {
   const graph = { nodes: [], edges: [
@@ -236,12 +274,19 @@ test("recovery reuses current successful outputs and never resends unresolved su
 });
 
 test("completed agent text does not hide a generation that is still running or needs recovery", () => {
-  const execution = { unresolvedModelCalls: 0, tasks: [{ status: "COMPLETED" }], generations: [{ state: "UNKNOWN_SUBMISSION" }] };
+  const execution = { unknownModelCalls: 0, tasks: [{ status: "COMPLETED" }], generations: [{ state: "UNKNOWN_SUBMISSION" }] };
   for (const state of ["UNKNOWN_SUBMISSION", "NEEDS_REVIEW", "RUNNING", "QUEUED"]) {
     assert.equal(canvasAgentExecutionFinished({ ...execution, generations: [{ state }] }), false);
   }
   assert.equal(canvasAgentExecutionFinished({ ...execution, generations: [{ state: "SUCCEEDED" }] }), true);
-  assert.equal(canvasAgentExecutionFinished({ ...execution, generations: [], unresolvedModelCalls: 1 }), false);
+});
+
+test("远端结果未知的记录不阻止智能体结束，仍在执行的子任务继续等待", () => {
+  for (const status of ["COMPLETED", "FAILED", "CANCELLED"]) {
+    const execution = { unknownModelCalls: 1, tasks: [{ status }], generations: [] };
+    assert.equal(canvasAgentExecutionFinished(execution), true);
+    assert.equal(canvasAgentExecutionFinished({ ...execution, tasks: [...execution.tasks, { status: "RUNNING" }] }), false);
+  }
 });
 
 test("error presentation removes stack traces, credentials and implementation notices without hiding validation", () => {
@@ -268,11 +313,11 @@ test("model errors explain the local action without sending the creator to setti
   assert.doesNotMatch(userFacingError("原模型调用仍需核实，请先在执行核实中确认远端已结束"), /系统设置|前往/);
 });
 
-test("unconfirmed provider rejection keeps the review guidance without exposing gateway diagnostics", () => {
+test("unconfirmed provider response points to its record without manual review", () => {
   const message = userFacingError("请求结果未确认，不能自动重发：agnes_25 视频任务提交失败: HTTP 503 video queue is full, please retry later (request id: provider-request-private)");
-  assert.match(message, /视频服务繁忙.*受理状态尚未确认.*核实.*避免重复生成/);
+  assert.match(message, /远端结果未知.*运行与通知.*查看记录/);
   assert.doesNotMatch(message, /agnes_25|HTTP|provider-request-private|queue|已结束|重新运行/);
-  assert.match(userFacingError("请求结果未确认：HTTP request failed with status 503"), /受理状态尚未确认.*避免重复提交/);
+  assert.match(userFacingError("请求结果未确认：HTTP request failed with status 503"), /远端结果未知.*运行与通知.*查看记录/);
 });
 
 test("explicit provider failure preserves the actual reason and does not ask for review", () => {
@@ -524,7 +569,7 @@ test("copying grouped nodes preserves business references and creates independen
   assert.deepEqual({ x: single.layout.x, y: single.layout.y }, { x: 168, y: 288 });
 });
 
-test("grouping respects world coordinates and automatic arrangement leaves locked nodes unchanged", () => {
+test("grouping respects world coordinates and alignment leaves locked nodes unchanged", () => {
   const a = { ...node("a"), layout: { ...node("a").layout, x: 100, y: 80 } };
   const b = { ...node("b"), layout: { ...node("b").layout, x: 500, y: 300 } };
   const locked = { ...node("locked"), layout: { ...node("locked").layout, locked: true, x: 99 } };
@@ -534,81 +579,8 @@ test("grouping respects world coordinates and automatic arrangement leaves locke
   const aLayout = grouped.find(operation => operation.nodeId === "a").layout;
   assert.equal(group.layout.x + aLayout.x, 100);
   assert.equal(group.layout.y + aLayout.y, 80);
-  assert.ok(layouts.arrangeCanvasNodes(graph, [], "arrange").every(operation => operation.nodeId !== "locked"));
+  assert.ok(layouts.arrangeCanvasNodes(graph, [], "left").every(operation => operation.nodeId !== "locked"));
   assert.throws(() => layouts.groupCanvasNodes(graph, ["a", "locked"]));
-});
-
-test("automatic layout follows links instead of source order and aligns measured ports", () => {
-  const a = { ...node("a"), layout: { ...node("a").layout, x: 900, y: 100 } };
-  const b = { ...node("b"), layout: { ...node("b").layout, x: 0, y: 400 } };
-  const c = { ...node("c"), layout: { ...node("c").layout, x: 400, y: 40 } };
-  const graph = { schemaVersion: 1, projectId: null, nodes: [c, b, a], edges: [edge("ab", "a", "out", "b", "in"), edge("bc", "b", "out", "c", "in")] };
-  const geometry = {
-    a: { width: 300, height: 160, inputs: {}, outputs: { out: 140 } },
-    b: { width: 620, height: 400, inputs: { in: 365 }, outputs: { out: 365 } },
-    c: { width: 300, height: 210, inputs: { in: 185 }, outputs: {} },
-  };
-  const positions = new Map(layouts.arrangeCanvasNodes(graph, [], "arrange", geometry).map(operation => [operation.nodeId, operation.layout]));
-  assert.ok(positions.get("b").x >= positions.get("a").x + geometry.a.width + 64);
-  assert.ok(positions.get("c").x >= positions.get("b").x + geometry.b.width + 64);
-  assert.equal(positions.get("a").y + 140, positions.get("b").y + 365);
-  assert.equal(positions.get("b").y + 365, positions.get("c").y + 185);
-});
-
-test("automatic layout keeps a main chain straight and gives branches separate nonoverlapping lanes", () => {
-  const nodes = ["a", "b", "c", "d", "x", "y"].map(id => node(id));
-  const graph = { schemaVersion: 1, projectId: null, nodes, edges: [edge("ab", "a", "out", "b", "in"), edge("ac", "a", "out", "c", "in"), edge("bd", "b", "out", "d", "in"), edge("cd", "c", "out", "d", "in"), edge("xy", "x", "out", "y", "in"), edge("ab2", "a", "other", "b", "other")] };
-  const positions = new Map(layouts.arrangeCanvasNodes(graph, [], "arrange").map(operation => [operation.nodeId, operation.layout]));
-  assert.equal(positions.get("a").y, positions.get("b").y);
-  assert.equal(positions.get("b").y, positions.get("d").y);
-  assert.ok(positions.get("c").y >= positions.get("b").y + 280 + 64);
-  assert.ok(positions.get("d").x > positions.get("c").x);
-  assert.equal(positions.get("x").y, positions.get("y").y);
-  assert.ok(positions.get("x").y > positions.get("c").y + 280);
-});
-
-test("automatic layout preserves group-relative coordinates, locked nodes and unrelated edges", () => {
-  const group = { ...node("group", "group"), layout: { ...node("group").layout, x: 1000, y: 700 } };
-  const a = { ...node("a"), layout: { ...node("a").layout, x: 40, y: 80, parentId: "group" } };
-  const b = { ...node("b"), layout: { ...node("b").layout, x: 40, y: 380, parentId: "group" } };
-  const locked = { ...node("fixed"), layout: { ...node("fixed").layout, locked: true } };
-  const graph = { schemaVersion: 1, projectId: null, nodes: [group, a, b, locked], edges: [edge("ab", "a", "out", "b", "in"), { ...edge("ba", "b", null, "a", null), kind: "annotation" }] };
-  const operations = layouts.arrangeCanvasNodes(graph, ["a", "b", "fixed"], "arrange");
-  assert.deepEqual(operations.map(operation => operation.nodeId), ["a", "b"]);
-  assert.equal(operations[0].layout.x, 40);
-  assert.equal(operations[0].layout.y, 80);
-  assert.equal(operations[1].layout.y, 80);
-  assert.equal(operations[1].layout.parentId, "group");
-  assert.ok(operations[1].layout.x > operations[0].layout.x);
-  assert.equal(locked.layout.x, 0);
-  assert.equal(graph.edges.length, 2);
-});
-
-test("automatic layout reports a cyclic selected topology without emitting unbounded coordinates", () => {
-  const graph = { schemaVersion: 1, projectId: null, nodes: [node("a"), node("b")], edges: [edge("ab", "a", "out", "b", "in"), edge("ba", "b", "out", "a", "in")] };
-  assert.throws(() => layouts.arrangeCanvasNodes(graph, [], "arrange"), /循环/);
-});
-
-test("generated result references and annotation chains stay beside their source", () => {
-  const nodes = [node("result"), node("a"), node("b"), node("note")];
-  const edges = [edge("ab", "a", "out", "b", "in"), { ...edge("result", "b", null, "result", null), kind: "reference" }, { ...edge("note", "result", null, "note", null), kind: "annotation" }];
-  const graph = { schemaVersion: 1, projectId: null, nodes, edges };
-  const positions = new Map(layouts.arrangeCanvasNodes(graph, [], "arrange").map(operation => [operation.nodeId, operation.layout]));
-  for (const [source, target] of [["a", "b"], ["b", "result"], ["result", "note"]]) {
-    assert.ok(positions.get(target).x > positions.get(source).x);
-    assert.equal(positions.get(target).y, positions.get(source).y);
-  }
-  assert.deepEqual(graph.edges, edges);
-});
-
-test("cyclic annotations cannot reverse execution direction or prevent arranging", () => {
-  const graph = { schemaVersion: 1, projectId: null, nodes: [node("a"), node("b"), node("c")], edges: [
-    { ...edge("back", "c", null, "a", null), kind: "annotation" },
-    edge("ab", "a", "out", "b", "in"), edge("bc", "b", "out", "c", "in"),
-  ] };
-  const positions = new Map(layouts.arrangeCanvasNodes(graph, [], "arrange").map(operation => [operation.nodeId, operation.layout]));
-  assert.ok(positions.get("a").x < positions.get("b").x && positions.get("b").x < positions.get("c").x);
-  assert.equal(graph.edges.length, 3);
 });
 
 test("selection toolbar follows the selection and stays inside the canvas near every edge", () => {
@@ -627,14 +599,6 @@ test("selection toolbar follows the selection and stays inside the canvas near e
     assert.ok(position.left >= 8 && position.left + size.width <= bounds.width - 8);
     assert.ok(position.top >= 8 && position.top + size.height <= bounds.height - 8);
   }
-});
-
-test("unconnected media packs into rows instead of creating a tall column", () => {
-  const graph = { schemaVersion: 1, projectId: null, nodes: ["a", "b", "c", "d"].map(id => node(id)), edges: [] };
-  const positions = new Map(layouts.arrangeCanvasNodes(graph, [], "arrange").map(operation => [operation.nodeId, operation.layout]));
-  assert.equal(positions.get("a").y, positions.get("b").y);
-  assert.equal(positions.get("c").y, positions.get("d").y);
-  assert.ok(positions.get("c").y > positions.get("a").y + 280);
 });
 
 test("business save acknowledgements preserve typing and reverts made while a request was pending", () => {

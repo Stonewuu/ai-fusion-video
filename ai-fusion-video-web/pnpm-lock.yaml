@@ -59,6 +59,9 @@ importers:
       cn:
         specifier: ^0.4.0
         version: 0.4.0
+      elkjs:
+        specifier: 0.11.1
+        version: 0.11.1
       framer-motion:
         specifier: ^12.36.0
         version: 12.36.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.3(react@19.2.3))(react@19.2.3)

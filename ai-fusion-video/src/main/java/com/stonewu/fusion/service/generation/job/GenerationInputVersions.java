@@ -46,7 +46,7 @@ public class GenerationInputVersions {
     public void validate(Map<String, Integer> versions, CanvasActor actor) {
         if (versions == null) {
             throw new GenerationJobException(409, "GENERATION_INPUT_SNAPSHOT_MISSING",
-                    "此执行缺少输入媒体版本快照，请核实原任务后重新提交");
+                    "此执行缺少输入媒体版本快照，已停止后续处理");
         }
         for (var entry : versions.entrySet()) {
             var resource = resources.get(entry.getKey(), actor);

@@ -3,7 +3,6 @@ import { generationTerminalStates } from "@/lib/generation-execution-view";
 
 export function canvasAgentExecutionFinished(execution: CanvasAgentExecution) {
   return (
-    execution.unresolvedModelCalls === 0 &&
     execution.tasks.every((task) =>
       ["COMPLETED", "FAILED", "CANCELLED"].includes(task.status),
     ) &&

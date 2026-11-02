@@ -21,7 +21,7 @@ public final class ProviderJobStates {
             case "pending", "queued", "running", "in_progress", "processing", "submitted", "waiting", "created" ->
                     RemoteGenerationResult.pending(interval);
             case "unknown", "not_found" -> throw new GenerationJobException(409, "PROVIDER_TASK_UNKNOWN",
-                    "供应商暂时无法确认此任务，需要核实受理状态");
+                    "供应商暂时无法确认此任务的状态");
             default -> throw new GenerationJobException(502, "PROVIDER_STATUS_INVALID", "供应商返回了未登记的任务状态");
         };
     }

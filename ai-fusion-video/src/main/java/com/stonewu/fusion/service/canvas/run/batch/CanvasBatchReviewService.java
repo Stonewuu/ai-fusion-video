@@ -96,7 +96,7 @@ public class CanvasBatchReviewService {
         var all = runs.nodes(runId);
         var items = CanvasBatchItems.latest(all, node.id());
         if (items.isEmpty() || items.stream().anyMatch(item -> !item.status().terminal())) {
-            throw CanvasRunException.conflict("仍有子项未结束，请先核实原任务");
+            throw CanvasRunException.conflict("仍有子项未结束，请等待原任务自动处理");
         }
         var checkpoint = node.checkpoint().deepCopy();
         var decision = new LinkedHashMap<String, Object>(

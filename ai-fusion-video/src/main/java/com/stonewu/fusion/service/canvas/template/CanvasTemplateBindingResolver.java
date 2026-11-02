@@ -10,6 +10,8 @@ import com.stonewu.fusion.service.canvas.model.CanvasGraph;
 import com.stonewu.fusion.service.canvas.model.CanvasNode;
 import com.stonewu.fusion.service.canvas.model.CanvasNodeKind;
 import com.stonewu.fusion.service.canvas.run.mcp.CanvasMcpContracts;
+import com.stonewu.fusion.service.canvas.run.mcp.CanvasMcpPlanner;
+import com.stonewu.fusion.service.canvas.run.mcp.CanvasMcpData.Contract;
 import com.stonewu.fusion.service.media.MediaAccessPolicy;
 import com.stonewu.fusion.service.media.MediaResourceQueries;
 import com.stonewu.fusion.service.media.model.MediaResource;
@@ -28,6 +30,7 @@ public class CanvasTemplateBindingResolver {
     private final CanvasModelCatalog models;
     private final CanvasModelGraphPolicy modelPolicy;
     private final CanvasMcpContracts contracts;
+    private final CanvasMcpPlanner mcpPlanner;
     private final MediaResourceQueries media;
     private final MediaAccessPolicy mediaAccess;
     private final CanvasProjectForkSources scopes;
@@ -129,13 +132,16 @@ public class CanvasTemplateBindingResolver {
         modelPolicy.validateDraft(graph);
         for (var node : nodes) {
             if (node.kind() == CanvasNodeKind.MCP_TOOL && node.config().hasNonNull("contractId")) {
-                contracts.freeze(node, actor);
+                var contract = json.read(contracts.freeze(node, actor).toString(), Contract.class);
+                boolean dynamic = graph.edges().stream().anyMatch(edge -> edge.targetNodeId().equals(node.id())
+                        && edge.targetPort().equals("input"));
+                mcpPlanner.validateTemplate(node, contract, dynamic);
             }
             if (node.kind() == CanvasNodeKind.FOREACH && node.config().path("operationKind").asText().equals("mcpTool")
                     && node.config().path("operationConfig").hasNonNull("contractId")) {
                 var body = new CanvasNode(node.id(), CanvasNodeKind.MCP_TOOL, 1, node.title(), node.layout(),
                         providers.config(node, true), null, 0, 0);
-                contracts.freeze(body, actor);
+                mcpPlanner.validateTemplate(body, json.read(contracts.freeze(body, actor).toString(), Contract.class), true);
             }
         }
         return new Resolved(template, graph, Map.copyOf(files), List.copyOf(notices), Map.copyOf(names), actor);

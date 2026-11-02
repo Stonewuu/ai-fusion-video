@@ -1,6 +1,6 @@
 import type { CanvasGraph, CanvasNode, CanvasOperation } from "./types";
 import { worldPosition } from "./graph";
-import { arrangeCanvasPaths, type CanvasGeometry } from "./auto-layout";
+import type { CanvasGeometry } from "./layout/types";
 
 export function deleteCanvasSelection(
   graph: CanvasGraph,
@@ -131,7 +131,7 @@ export type CanvasAlignment =
 export function arrangeCanvasNodes(
   graph: CanvasGraph,
   selection: string[],
-  mode: CanvasAlignment,
+  mode: Exclude<CanvasAlignment, "arrange">,
   geometry: CanvasGeometry = {},
 ): CanvasOperation[] {
   const selected = new Set(
@@ -143,7 +143,9 @@ export function arrangeCanvasNodes(
       !node.layout.locked &&
       !hasSelectedParent(node, selected, graph),
   );
-  if (!nodes.length) throw new Error("没有可移动的节点");
+  if (!nodes.length) {
+    throw new Error("没有可移动的节点");
+  }
   const positions = new Map(
     nodes.map((node) => [node.id, worldPosition(node, graph.nodes)]),
   );
@@ -154,15 +156,17 @@ export function arrangeCanvasNodes(
       ? positions.get(a.id)!.y - positions.get(b.id)!.y
       : positions.get(a.id)!.x - positions.get(b.id)!.x,
   );
-  const arranged =
-    mode === "arrange" ? arrangeCanvasPaths(graph, nodes, geometry) : null;
   let cursor = 0;
   return order.map((node) => {
     const original = positions.get(node.id)!;
     let x = original.x;
     let y = original.y;
-    if (mode === "left") x = left;
-    if (mode === "top") y = top;
+    if (mode === "left") {
+      x = left;
+    }
+    if (mode === "top") {
+      y = top;
+    }
     if (mode === "horizontal") {
       x = left + cursor;
       y = top;
@@ -172,9 +176,6 @@ export function arrangeCanvasNodes(
       x = left;
       y = top + cursor;
       cursor += (geometry[node.id]?.height ?? node.layout.height ?? 280) + 64;
-    }
-    if (mode === "arrange") {
-      ({ x, y } = arranged!.get(node.id)!);
     }
     const parent = node.layout.parentId
       ? graph.nodes.find((item) => item.id === node.layout.parentId)

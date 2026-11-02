@@ -250,7 +250,7 @@ test("review, cancellation and partial completion never appear as successful or 
   );
   assert.equal(
     labels.getTaskStatus({ ...task, status: 4 }).label,
-    "受理情况待核实",
+    "远端结果未知",
   );
   assert.equal(
     labels.getTaskStatus({ status: 4, execution: { state: "CANCELLED" } })

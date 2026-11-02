@@ -37,7 +37,7 @@ public interface CanvasAgentNodeJobMapper extends BaseMapper<CanvasAgentNodeJobE
 
     List<String> agentRunIds(@Param("nodeRunId") String nodeRunId);
 
-    List<String> unresolvedModelIds(@Param("nodeRunId") String nodeRunId);
+    List<String> unknownModelRequestIds(@Param("nodeRunId") String nodeRunId);
 
     List<String> childStates(@Param("nodeRunId") String nodeRunId, @Param("runId") String runId);
 

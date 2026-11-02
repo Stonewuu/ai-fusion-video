@@ -7,6 +7,7 @@ import {
   Search,
   SlidersHorizontal,
   Wand2,
+  X,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -16,7 +17,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import type { CanvasRelationScope } from "@/lib/canvas/relations";
+import type { CanvasRelationAvailability, CanvasRelationScope } from "@/lib/canvas/relations";
 import { RelationVisibilityControls } from "./relation-visibility-controls";
 
 export function CanvasToolbarAction({
@@ -71,11 +72,13 @@ export function CanvasViewActions({
   onFit,
   onArrange,
   editable,
+  arranging,
 }: {
   onSearch: () => void;
   onFit: () => void;
   onArrange: () => void;
   editable: boolean;
+  arranging: boolean;
 }) {
   return (
     <>
@@ -95,9 +98,9 @@ export function CanvasViewActions({
       />
       <span className="hidden @md:inline-flex">
         <CanvasToolbarAction
-          icon={Wand2}
-          label="自动整理"
-          title="按连线从左到右整理，优先保持同一链路水平"
+          icon={arranging ? X : Wand2}
+          label={arranging ? "取消整理" : "自动整理"}
+          title={arranging ? "正在整理，点击取消" : "按执行链路和项目关系整理选区，未选择时整理全部"}
           onClick={onArrange}
           disabled={!editable}
         />
@@ -128,86 +131,105 @@ function MinimapToggle({ checked, onToggle, fullWidth = false }: {
 export function CanvasViewSettings({
   relations,
   onRelations,
+  relationAvailability,
+  relationLoading,
+  relationError,
+  onReloadRelations,
   minimap,
   onMinimap,
   onSearch,
   onArrange,
   editable,
+  arranging,
 }: {
   relations: CanvasRelationScope;
   onRelations: (scope: CanvasRelationScope) => void;
+  relationAvailability: CanvasRelationAvailability;
+  relationLoading: boolean;
+  relationError: string | null;
+  onReloadRelations: () => void;
   minimap: boolean;
   onMinimap: () => void;
   onSearch: () => void;
   onArrange: () => void;
   editable: boolean;
+  arranging: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const handoffFocus = useRef(false);
   return (
-    <div className="pointer-events-auto shrink-0 rounded-2xl border border-border/40 bg-popover/90 p-1 shadow-sm backdrop-blur-xl">
-      <div className="hidden items-center gap-2 @5xl:flex">
+    <div className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-2xl border border-border/40 bg-popover/90 p-1 shadow-sm backdrop-blur-xl">
+      <div className="hidden @5xl:block">
         <MinimapToggle checked={minimap} onToggle={onMinimap} />
-        <RelationVisibilityControls
-          value={relations}
-          onChange={onRelations}
-        />
       </div>
-      <div className="@5xl:hidden">
-        <Popover
-          open={open}
-          onOpenChange={(next) => {
-            if (next) handoffFocus.current = false;
-            setOpen(next);
-          }}
+      <Popover
+        open={open}
+        onOpenChange={(next) => {
+          if (next) {
+            handoffFocus.current = false;
+          }
+          setOpen(next);
+        }}
+      >
+        <PopoverTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="显示与工具"
+              title="显示与工具"
+            />
+          }
         >
-          <PopoverTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="显示与工具"
-                title="显示与工具"
-              />
-            }
-          >
-            <SlidersHorizontal />
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            finalFocus={() => !handoffFocus.current}
-            className="w-80 max-w-[calc(100vw-2rem)] border border-border/40"
-          >
-            <PopoverTitle>显示与工具</PopoverTitle>
-            <RelationVisibilityControls value={relations} onChange={onRelations} expanded />
-            <MinimapToggle checked={minimap} onToggle={onMinimap} fullWidth />
-            <div className="grid grid-cols-2 gap-2 border-t border-border/20 pt-4">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  handoffFocus.current = true;
-                  setOpen(false);
-                  onSearch();
-                }}
-              >
-                <Search />
-                查找
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setOpen(false);
-                  onArrange();
-                }}
-                disabled={!editable}
-              >
-                <Wand2 />
-                自动整理
-              </Button>
+          <SlidersHorizontal />
+        </PopoverTrigger>
+        <PopoverContent
+          align="end"
+          finalFocus={() => !handoffFocus.current}
+          className="max-h-[calc(100vh-2rem)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto border border-border/40"
+        >
+          <PopoverTitle>显示与工具</PopoverTitle>
+          <MinimapToggle checked={minimap} onToggle={onMinimap} fullWidth />
+          {relationLoading && (
+            <p role="status" className="text-xs text-muted-foreground">正在读取项目关系…</p>
+          )}
+          {relationError && (
+            <div className="flex flex-col gap-2">
+              <p role="alert" className="text-xs text-destructive">{relationError}</p>
+              <Button variant="outline" onClick={onReloadRelations}>重新读取项目关系</Button>
             </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+          )}
+          <RelationVisibilityControls
+            value={relations}
+            onChange={onRelations}
+            available={relationAvailability}
+          />
+          <div className="grid grid-cols-2 gap-2 border-t border-border/20 pt-4">
+            <Button
+              variant="outline"
+              onClick={() => {
+                handoffFocus.current = true;
+                setOpen(false);
+                onSearch();
+              }}
+            >
+              <Search />
+              查找
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setOpen(false);
+                onArrange();
+              }}
+              disabled={!editable}
+            >
+              {arranging ? <X /> : <Wand2 />}
+              {arranging ? "取消整理" : "自动整理"}
+            </Button>
+          </div>
+        </PopoverContent>
+      </Popover>
     </div>
   );
 }

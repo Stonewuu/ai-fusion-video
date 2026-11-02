@@ -177,7 +177,7 @@ class MediaJobIT extends MediaResourceTestContext {
         verifyNoInteractions(sonilo, fetcher);
     }
 
-    @Test void unacknowledgedPaidSubmissionRequiresReviewAndIsNeverAutomaticallyRepeated() throws Exception {
+    @Test void unacknowledgedPaidSubmissionEndsLocallyAndIsNeverAutomaticallyRepeated() throws Exception {
         enableBgm();
         var fixture = episode(false);
         String id = compose.submitCompose(fixture.episode(), 0, id(), USER, true);
@@ -186,7 +186,7 @@ class MediaJobIT extends MediaResourceTestContext {
         jobs.prepareSubmission(claim, "music");
         expire(id);
         worker.runOne();
-        assertThat(jobs.get(id).status()).as(jobs.get(id).error()).isEqualTo("NEEDS_REVIEW");
+        assertThat(jobs.get(id).status()).as(jobs.get(id).error()).isEqualTo("UNKNOWN_SUBMISSION");
         assertThat(jobs.get(id).checkpoint().path("baseVideo").asText()).startsWith("media://");
         verifyNoInteractions(sonilo, fetcher);
     }
@@ -240,7 +240,7 @@ class MediaJobIT extends MediaResourceTestContext {
         verifyNoInteractions(fetcher);
     }
 
-    @Test void unknownCancellationKeepsCapacityAndRequiresExplicitFinishedEvidence() throws Exception {
+    @Test void unknownCancellationReleasesCapacityAndPreservesTheMissingReceipt() {
         enableBgm();
         var fixture = episode(false);
         String id = compose.submitCompose(fixture.episode(), 0, id(), USER, true);
@@ -249,20 +249,12 @@ class MediaJobIT extends MediaResourceTestContext {
         context.getBean(MediaJobQueries.class).cancel(id, OWNER);
         expire(id);
         worker.runOne();
-        assertThat(jobs.get(id).status()).isEqualTo("NEEDS_REVIEW");
-        assertThat(audio.reserved(id)).isTrue();
-        var request = review(id, EpisodeAudioReviewService.Action.CONFIRM_FINISHED, null, null, false);
-        assertThatThrownBy(() -> reviews.review(id, request, OWNER)).hasMessageContaining("明确确认");
-        var accepted = review(id, EpisodeAudioReviewService.Action.CONFIRM_FINISHED, null, null, true);
-        assertThatThrownBy(() -> reviews.review(id, accepted, OTHER)).isInstanceOf(RuntimeException.class);
-        reviews.review(id, accepted, OWNER);
-        reviews.review(id, accepted, OWNER);
+        assertThat(jobs.get(id).status()).isEqualTo("UNKNOWN_SUBMISSION");
         assertThat(audio.reserved(id)).isFalse();
-        worker.runOne();
-        assertThat(jobs.get(id).status()).isEqualTo("CANCELLED");
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_async_outbox WHERE aggregate_id = ? AND event_type = 'EPISODE_AUDIO_REVIEW'", Integer.class, id)).isEqualTo(1);
-        context.getBean(GenerationOutbox.class).dispatch();
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_media_job_event WHERE job_id = ?", Integer.class, id)).isEqualTo(1);
+        assertThat(audio.unresolved(id)).hasSize(1);
+        assertThat(reviews.detail(id, OWNER).actions()).isEmpty();
+        assertThatThrownBy(() -> reviews.detail(id, OTHER)).isInstanceOf(RuntimeException.class);
+        assertThat(jobs.get(id).checkpoint().has("video")).isFalse();
         verifyNoInteractions(sonilo, fetcher);
     }
 
@@ -334,84 +326,82 @@ class MediaJobIT extends MediaResourceTestContext {
         verify(sonilo, times(1)).submitSfxTask(eq(config), any(), isNull());
     }
 
-    @Test void failedIngestionResumesSavedResponseWithoutQueryOrPostAndKeepsTargetVersion() throws Exception {
+    @Test void failedIngestionRetainsTheReceivedResultWithoutHoldingCapacityOrReposting() throws Exception {
         var config = enableBgm();
         var fixture = episode(false);
         String id = compose.submitCompose(fixture.episode(), 0, id(), USER, true);
         when(sonilo.submitMusicTask(eq(config), any(), any())).thenReturn("saved-response");
         successfulAudio(config, "saved-response");
-        doThrow(MediaException.invalid("下载暂时失败")).when(fetcher).copyPublic(anyString(), any(), any());
+        doThrow(MediaException.invalid("下载失败")).when(fetcher).copyPublic(anyString(), any(), any());
         worker.runOne();
-        assertThat(jobs.get(id).status()).isEqualTo("NEEDS_REVIEW");
+        assertThat(jobs.get(id).status()).isEqualTo("FAILED");
         assertThat(audio.reserved(id)).isFalse();
-        assertThat(jdbc.queryForObject("SELECT version FROM afv_storyboard_episode WHERE id = ?", Integer.class, fixture.episode())).isEqualTo(1);
-        copyAudio();
-        reviews.review(id, review(id, EpisodeAudioReviewService.Action.RETRY_INGEST, null, null, false), OWNER);
+        assertThat(audio.result(id, "music").path("status").asText()).isEqualTo("succeeded");
+        assertThat(jdbc.queryForObject("SELECT composed_video_url FROM afv_storyboard_episode WHERE id = ?", String.class, fixture.episode())).isNull();
         worker.runOne();
-        assertThat(jobs.get(id).status()).as(jobs.get(id).error()).isEqualTo("SUCCEEDED");
         verify(sonilo, times(1)).submitMusicTask(eq(config), any(), any());
         verify(sonilo, times(1)).tryQueryTask(config, "saved-response");
     }
 
-    @Test void queryFailuresBackOffThenKeepReviewAndCapacityWithoutReposting() {
+    @Test void queryFailuresContinueUntilDeadlineThenReleaseCapacityWithoutReposting() {
         var config = enableBgm();
         String id = compose.submitCompose(episode(false).episode(), 0, id(), USER, true);
         when(sonilo.submitMusicTask(eq(config), any(), any())).thenReturn("query-failed");
         when(sonilo.tryQueryTask(config, "query-failed")).thenThrow(new IllegalStateException("模拟查询失败"));
-        for (int index = 0; index < 8; index++) {
+        for (int index = 0; index < 9; index++) {
             due(id);
             worker.runOne();
             assertThat(audio.reserved(id)).isTrue();
-            assertThat(jobs.get(id).status()).isEqualTo(index == 7 ? "NEEDS_REVIEW" : "WAITING");
+            assertThat(jobs.get(id).status()).isEqualTo("WAITING");
         }
+        jdbc.update("UPDATE afv_media_job SET deadline_at = TIMESTAMPADD(SECOND, -1, UTC_TIMESTAMP(6)), next_run_at = UTC_TIMESTAMP(6) WHERE id = ?", id);
+        worker.runOne();
+        assertThat(jobs.get(id).status()).isEqualTo("UNKNOWN_SUBMISSION");
+        assertThat(audio.reserved(id)).isFalse();
         verify(sonilo, times(1)).submitMusicTask(eq(config), any(), any());
-        verify(sonilo, times(8)).tryQueryTask(config, "query-failed");
+        verify(sonilo, times(9)).tryQueryTask(config, "query-failed");
     }
 
-    @Test void receiptRecoveryObservesOnlyOriginalRequestAndDoesNotPermitStaleDecision() throws Exception {
-        var config = enableBgm();
-        String id = compose.submitCompose(episode(false).episode(), 0, id(), USER, true);
+    @Test void unknownReceiptAllowsTheNextComposeWithoutRepeatingTheOriginalRequest() {
+        enableBgm();
+        var fixture = episode(false);
+        String id = compose.submitCompose(fixture.episode(), 0, id(), USER, true);
         var claim = jobs.claim("receipt-lost").orElseThrow().claim();
         jobs.prepareSubmission(claim, "music");
         expire(id);
         worker.runOne();
-        var stale = review(id, EpisodeAudioReviewService.Action.CONFIRM_FINISHED, null, null, true);
-        var request = review(id, EpisodeAudioReviewService.Action.RECORD_RECEIPT, "music", "restored-original", false);
-        reviews.review(id, request, OWNER);
-        reviews.review(id, request, OWNER);
-        assertThatThrownBy(() -> reviews.review(id, stale, OWNER)).isInstanceOf(MediaException.class);
-        successfulAudio(config, "restored-original");
+        assertThat(jobs.get(id).status()).isEqualTo("UNKNOWN_SUBMISSION");
+        assertThat(audio.reserved(id)).isFalse();
+        int version = jdbc.queryForObject("SELECT version FROM afv_storyboard_episode WHERE id = ?", Integer.class, fixture.episode());
+        String next = compose.submitCompose(fixture.episode(), version, id(), USER, false);
         worker.runOne();
-        assertThat(jobs.get(id).status()).as(jobs.get(id).error()).isEqualTo("SUCCEEDED");
-        verify(sonilo, never()).submitMusicTask(any(), any(), any());
-        verify(sonilo, times(1)).tryQueryTask(config, "restored-original");
+        assertThat(jobs.get(next).status()).isEqualTo("SUCCEEDED");
+        assertThat(jobs.get(id).status()).isEqualTo("UNKNOWN_SUBMISSION");
+        verifyNoInteractions(sonilo);
     }
 
-    @Test void lateReceiptWithoutRevisionChangeAndLateResultInvalidateOwnerDecision() {
+    @Test void lateEvidenceNeverReacquiresReleasedCapacityOrRestartsAnEndedTask() {
         enableBgm();
         String id = compose.submitCompose(episode(false).episode(), 0, id(), USER, true);
-        var claim = jobs.claim("owner-review-evidence").orElseThrow().claim();
+        var claim = jobs.claim("late-evidence").orElseThrow().claim();
         var intent = jobs.prepareSubmission(claim, "music");
         expire(id);
         worker.runOne();
-        var beforeReceipt = review(id, EpisodeAudioReviewService.Action.CONFIRM_FINISHED, null, null, true);
+        assertThat(jobs.get(id).status()).isEqualTo("UNKNOWN_SUBMISSION");
         jobs.acknowledge(intent.attempt(), "original-late-receipt");
-        assertThat(jobs.get(id).revision()).isEqualTo(beforeReceipt.expectedRevision());
-        assertThatThrownBy(() -> reviews.review(id, beforeReceipt, OWNER)).hasMessageContaining("已变化");
-        assertThat(audio.reserved(id)).isTrue();
-        var beforeResult = review(id, EpisodeAudioReviewService.Action.CONFIRM_FINISHED, null, null, true);
+        assertThat(audio.reserved(id)).isFalse();
         audio.received(id, "music", intent.attempt(), json.object(Map.of("status", "failed")));
-        assertThatThrownBy(() -> reviews.review(id, beforeResult, OWNER)).hasMessageContaining("已变化");
-        reviews.review(id, review(id, EpisodeAudioReviewService.Action.CONFIRM_FINISHED, null, null, true), OWNER);
+        long revision = jobs.get(id).revision();
+        audio.received(id, "music", intent.attempt(), json.object(Map.of("status", "failed")));
         worker.runOne();
-        assertThat(jobs.get(id).status()).isEqualTo("CANCELLED");
+        assertThat(jobs.get(id).status()).isEqualTo("UNKNOWN_SUBMISSION");
+        assertThat(jobs.get(id).revision()).isEqualTo(revision);
+        assertThat(audio.reserved(id)).isFalse();
+        assertThat(audio.result(id, "music").path("status").asText()).isEqualTo("failed");
         verifyNoInteractions(sonilo, fetcher);
     }
 
-    private EpisodeAudioReviewService.Review review(String id, EpisodeAudioReviewService.Action action, String step, String receipt, boolean ended) {
-        var detail = reviews.detail(id, OWNER);
-        return new EpisodeAudioReviewService.Review(detail.revision(), detail.factsHash(), action, "受控测试：已核实原供应商记录", step, receipt, ended, new GenerationClientScope(71L, null));
-    }
+
     private void successfulAudio(ApiConfig config, String remote) throws Exception {
         var response = JSONUtil.parseObj("{\"status\":\"succeeded\"}");
         when(sonilo.tryQueryTask(config, remote)).thenReturn(response);

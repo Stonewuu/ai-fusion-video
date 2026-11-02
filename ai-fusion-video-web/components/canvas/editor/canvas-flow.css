@@ -71,6 +71,24 @@
 .fusion-canvas .canvas-node-heading {
   background: color-mix(in srgb, var(--canvas-tone) 9%, var(--card));
 }
+.fusion-canvas .react-flow__node-canvas,
+.fusion-canvas .react-flow__edge {
+  transition: opacity 150ms ease-out;
+}
+.fusion-canvas.canvas-chain-active
+  .react-flow__node-canvas:not(.canvas-chain-node):not(:focus-within) {
+  opacity: 0.4;
+}
+.fusion-canvas.canvas-chain-active
+  .react-flow__edge:not(.canvas-chain-edge):not(.selected):not(:focus-visible) {
+  opacity: 0.18;
+}
+.fusion-canvas .canvas-chain-node .canvas-node-surface:not([data-invalid]) {
+  border-color: var(--canvas-tone);
+}
+.fusion-canvas .canvas-chain-node .canvas-node-heading {
+  background: color-mix(in srgb, var(--canvas-tone) 15%, var(--card));
+}
 .fusion-canvas .canvas-node-surface[data-invalid] {
   border-color: var(--destructive);
 }
@@ -123,6 +141,11 @@
 }
 .fusion-canvas .react-flow__edge.selected .react-flow__edge-path {
   stroke-width: 3;
+}
+/* 移动时让连线、标签和重连手柄的鼠标事件落到画布，避免连线的 nopan 标记阻止平移。 */
+.fusion-canvas[data-panning] .react-flow__edge,
+.fusion-canvas[data-panning] .react-flow__edge * {
+  pointer-events: none;
 }
 .fusion-canvas .react-flow__edge-textbg {
   fill: var(--card);

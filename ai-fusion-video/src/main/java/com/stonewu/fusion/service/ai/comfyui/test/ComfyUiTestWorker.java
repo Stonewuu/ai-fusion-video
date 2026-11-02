@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.comfyui.test;
 
 import com.stonewu.fusion.repository.media.MediaResourceRepository;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiGenerationExecutor;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiOutputResolver;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiStoredOutput;
@@ -120,11 +121,26 @@ public class ComfyUiTestWorker {
                 return;
             }
             if (!run.job().deadline().isAfter(jobs.now())) {
-                runs.finish(claim, run.submittedAt() == null ? "FAILED" : "NEEDS_REVIEW",
-                        "自动等待已到期，请核实远端状态后继续", run.submittedAt() != null && run.result() == null);
+                boolean unknown = run.submittedAt() != null && run.result() == null;
+                runs.finish(claim, unknown ? "UNKNOWN_SUBMISSION" : "FAILED",
+                        unknown ? "远端结果未知，已结束试运行的本地等待" : "试运行处理超过等待期限", false);
                 return;
             }
-            fence.requireWorkflowTester(run.job().context().actor());
+            if (!run.job().cancelRequested()) {
+                try {
+                    fence.requireWorkflowTester(run.job().context().actor());
+                } catch (BusinessException denied) {
+                    if (denied.getCode() != 403 && denied.getCode() != 404 && denied.getCode() != 410) {
+                        throw denied;
+                    }
+                    jobs.requestStop(claim);
+                    run = runs.get(claim.id());
+                    if (run.submittedAt() == null) {
+                        runs.finish(claim, "CANCELLED", "试运行权限已失效，未提交供应商", false);
+                        return;
+                    }
+                }
+            }
             var api = service.requireApi(run.apiConfigId(), run.apiConfigHash());
             var snapshot = json.read(json.write(run.job().input()), ComfyUiTestSnapshot.class);
             var context = snapshot.execution(api);
@@ -190,12 +206,15 @@ public class ComfyUiTestWorker {
                     if (failure instanceof MediaException media && media.getErrorCode()
                             .equals("MEDIA_INGEST_IN_PROGRESS")) {
                         runs.waiting(claim, "INGESTING", 10, message);
+                    } else if (current.consecutiveErrors() < 7 && current.job().deadline().isAfter(jobs.now())
+                            && !(failure instanceof BusinessException)) {
+                        runs.waiting(claim, "INGESTING", Math.min(60, 2 << current.consecutiveErrors()), message);
                     } else {
-                        runs.finish(claim, "NEEDS_REVIEW", "远端已完成，结果保存需要处理：" + message, false);
+                        runs.finish(claim, "FAILED", "远端已完成，结果保存未完成：" + message, false);
                     }
-                } else if (current.consecutiveErrors() >= 7 || (failure instanceof MediaException media
-                        && (media.getCode() == 403 || media.getErrorCode().startsWith("COMFY_TEST_PROVIDER")))) {
-                    runs.finish(claim, "NEEDS_REVIEW", "远端状态需要核实：" + message, true);
+                } else if (failure instanceof MediaException media
+                        && (media.getCode() == 403 || media.getErrorCode().startsWith("COMFY_TEST_PROVIDER"))) {
+                    runs.finish(claim, "UNKNOWN_SUBMISSION", "远端结果未知：" + message, false);
                 } else {
                     runs.waiting(claim, "POLLING", Math.min(60, 2 << Math.min(5, current.consecutiveErrors())),
                             message);

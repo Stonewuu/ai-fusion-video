@@ -6,21 +6,37 @@ import { notifyClientError } from "@/lib/client-error";
 interface ClientErrorBoundaryProps {
   children: ReactNode;
   context: string;
+  /** 切换页面时清除旧错误，同时保留正常子树的组件状态。 */
+  resetKey?: string;
   fallback?: ReactNode | ((error: Error, reset: () => void) => ReactNode);
   onError?: (error: Error, info: ErrorInfo) => void;
 }
 
 interface ClientErrorBoundaryState {
   error: Error | null;
+  resetKey?: string;
 }
 
 export class ClientErrorBoundary extends Component<
   ClientErrorBoundaryProps,
   ClientErrorBoundaryState
 > {
-  state: ClientErrorBoundaryState = { error: null };
+  state: ClientErrorBoundaryState = {
+    error: null,
+    resetKey: this.props.resetKey,
+  };
 
-  static getDerivedStateFromError(error: Error): ClientErrorBoundaryState {
+  static getDerivedStateFromProps(
+    props: ClientErrorBoundaryProps,
+    state: ClientErrorBoundaryState
+  ): Partial<ClientErrorBoundaryState> | null {
+    if (props.resetKey !== state.resetKey) {
+      return { error: null, resetKey: props.resetKey };
+    }
+    return null;
+  }
+
+  static getDerivedStateFromError(error: Error): Partial<ClientErrorBoundaryState> {
     return { error };
   }
 

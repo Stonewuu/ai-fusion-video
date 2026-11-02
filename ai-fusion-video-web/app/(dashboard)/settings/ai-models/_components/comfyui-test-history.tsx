@@ -10,7 +10,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
+import { ExecutionRecordButton } from "@/components/dashboard/notification-panel/execution-record-button";
 import type {
   ComfyUiTestAction,
   ComfyUiTestRun,
@@ -20,12 +20,6 @@ import {
   comfyUiTestStatus,
 } from "@/lib/comfyui-test-request";
 import { ComfyUiTestOutput } from "./comfyui-test-output";
-
-const actions: Record<ComfyUiTestAction, string> = {
-  RECHECK: "查询原任务",
-  RETRY_INGEST: "继续保存结果",
-  CONFIRM_FINISHED: "确认远端已结束",
-};
 
 export function ComfyUiTestHistory({
   runs,
@@ -46,18 +40,7 @@ export function ComfyUiTestHistory({
     note: string,
   ) => Promise<boolean>;
 }) {
-  const [decision, setDecision] = useState<{
-    run: ComfyUiTestRun;
-    action: ComfyUiTestAction | "CANCEL";
-  } | null>(null);
-  const [note, setNote] = useState("");
-  const choose = (
-    run: ComfyUiTestRun,
-    action: ComfyUiTestAction | "CANCEL",
-  ) => {
-    setDecision({ run, action });
-    setNote("");
-  };
+  const [decision, setDecision] = useState<ComfyUiTestRun | null>(null);
   return (
     <div className="space-y-4">
       <h4 className="text-sm font-medium">试运行记录</h4>
@@ -83,7 +66,7 @@ export function ComfyUiTestHistory({
                     variant="ghost"
                     size="sm"
                     disabled={busy}
-                    onClick={() => choose(run, "CANCEL")}
+                    onClick={() => setDecision(run)}
                   >
                     取消试运行
                   </Button>
@@ -100,29 +83,17 @@ export function ComfyUiTestHistory({
             {run.error && (
               <p className="text-sm text-destructive">{run.error}</p>
             )}
-            {run.permitHeld && run.status === "NEEDS_REVIEW" && (
-              <p className="text-xs text-muted-foreground">
-                仍保留此供应商的试运行占用，核实远端状态后才能继续。
-              </p>
-            )}
-            {run.availableActions.length > 0 && (
-              <div className="flex flex-wrap gap-2">
-                {run.availableActions.map((action) => (
-                  <Button
-                    key={action}
-                    variant="outline"
-                    size="sm"
-                    disabled={busy}
-                    onClick={() => {
-                      if (action === "CONFIRM_FINISHED") choose(run, action);
-                      else void onReview(run, action, action === "RECHECK" ? "用户请求继续查询原任务" : "用户请求继续保存原任务结果");
-                    }}
-                  >
-                    {actions[action]}
-                  </Button>
-                ))}
-              </div>
-            )}
+            <div className="flex flex-wrap gap-2">
+              {run.availableActions.includes("RETRY_INGEST") && (
+                <Button variant="outline" size="sm" disabled={busy}
+                  onClick={() => void onReview(run, "RETRY_INGEST", "重新保存已收到的结果")}>
+                  重新保存结果
+                </Button>
+              )}
+              {["UNKNOWN_SUBMISSION", "FAILED", "NEEDS_REVIEW"].includes(run.status) && (
+                <ExecutionRecordButton target={{ kind: "COMFY_TEST", id: run.id }} />
+              )}
+            </div>
             <details className="text-xs text-muted-foreground">
               <summary className="cursor-pointer rounded-lg focus-visible:outline-2 focus-visible:outline-ring">
                 任务信息
@@ -163,68 +134,26 @@ export function ComfyUiTestHistory({
         ))}
       </div>
       {decision && (
-        <Dialog
-          open
-          onOpenChange={(open) => {
-            if (!open && !busy) setDecision(null);
-          }}
-        >
-          <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden">
-            <DialogHeader className="shrink-0">
-              <DialogTitle>
-                {decision.action === "CANCEL"
-                  ? "取消试运行"
-                  : actions[decision.action]}
-              </DialogTitle>
+        <Dialog open onOpenChange={(open) => {
+          if (!open && !busy) {
+            setDecision(null);
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>取消试运行</DialogTitle>
               <DialogDescription>
-                {decision.action === "CANCEL"
-                  ? "停止尚未提交的任务；已经受理的任务会请求远端取消，实际结束前仍保留占用。"
-                  : decision.action === "CONFIRM_FINISHED"
-                    ? "请先在 ComfyUI 确认任务已经结束。这会结束本地跟踪并释放占用；再次试运行会创建新的付费请求。"
-                    : "使用原任务与输入继续查询或保存结果，不会重新提交工作流。"}
+                停止尚未提交的任务；已经受理的任务会请求远端取消，超时后结束本地等待。
               </DialogDescription>
             </DialogHeader>
-            {decision.action !== "CANCEL" && (
-              <Textarea
-                className="min-h-24 max-h-60 overflow-y-auto"
-                aria-label="核实说明"
-                value={note}
-                maxLength={2000}
-                onChange={(event) => setNote(event.target.value)}
-                placeholder="记录核实依据"
-              />
-            )}
-            {error && (
-              <p role="alert" className="text-sm text-destructive">
-                {error}
-              </p>
-            )}
-            <DialogFooter className="shrink-0">
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => setDecision(null)}
-              >
-                返回
-              </Button>
-              <Button
-                disabled={
-                  busy || (decision.action !== "CANCEL" && !note.trim())
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            <DialogFooter>
+              <Button variant="outline" disabled={busy} onClick={() => setDecision(null)}>返回</Button>
+              <Button variant="destructive" disabled={busy} onClick={async () => {
+                if (await onCancel(decision)) {
+                  setDecision(null);
                 }
-                onClick={async () => {
-                  const done =
-                    decision.action === "CANCEL"
-                      ? await onCancel(decision.run)
-                      : await onReview(
-                          decision.run,
-                          decision.action,
-                          note.trim(),
-                        );
-                  if (done) setDecision(null);
-                }}
-              >
-                {busy ? "处理中…" : "确认"}
-              </Button>
+              }}>{busy ? "处理中…" : "取消试运行"}</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>

@@ -18,7 +18,7 @@
     "lint": "eslint",
     "test:storyboard": "node --test scripts/storyboard-refresh.test.mjs",
     "clean": "rimraf .next",
-    "test:canvas": "node --test scripts/canvas-editor.test.mjs",
+    "test:canvas": "node --test scripts/canvas-editor.test.mjs scripts/canvas-layout.test.mjs",
     "test:generation": "node --test scripts/generation-execution.test.mjs"
   },
   "dependencies": {
@@ -39,6 +39,7 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn": "^0.4.0",
+    "elkjs": "0.11.1",
     "framer-motion": "^12.36.0",
     "lucide-react": "^0.577.0",
     "motion": "^12.38.0",

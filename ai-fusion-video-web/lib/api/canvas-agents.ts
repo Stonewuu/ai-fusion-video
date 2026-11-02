@@ -22,8 +22,8 @@ export interface CanvasAgentExecution {
   conversationId: string;
   canControl: boolean;
   maxAgentRuns: number;
-  unresolvedModelCalls: number;
-  unresolvedModelRequestIds: string[];
+  unknownModelCalls: number;
+  unknownModelRequestIds: string[];
   tasks: CanvasAgentTask[];
   generations: Pick<
     GenerationExecution,

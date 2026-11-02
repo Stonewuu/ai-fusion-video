@@ -1,6 +1,15 @@
 package com.stonewu.fusion.integration;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.baomidou.mybatisplus.core.toolkit.Wrappers;
+import com.stonewu.fusion.entity.ai.AgentModelRequestEntity;
+import com.stonewu.fusion.entity.ai.AgentRun;
+import com.stonewu.fusion.mapper.ai.AgentModelRequestMapper;
+import com.stonewu.fusion.mapper.ai.AgentModelCallUsageMapper;
+import com.stonewu.fusion.mapper.ai.AgentRunMapper;
+import com.stonewu.fusion.service.execution.ExecutionRecordQueries;
+import com.stonewu.fusion.service.execution.recovery.ExecutionRecoveryData.Kind;
+import com.stonewu.fusion.repository.ai.AgentModelCallUsageRepository;
 import io.agentscope.core.message.ContentBlock;
 import io.agentscope.extensions.model.openai.formatter.OpenAIMessageConverter;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -38,8 +47,6 @@ import com.stonewu.fusion.service.ai.run.model.StartAgentExecutionCommand;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
 import com.stonewu.fusion.service.ai.agentscope.context.AuthenticatedUserContext;
 import com.stonewu.fusion.service.canvas.run.text.CanvasTextRepository;
-import com.stonewu.fusion.service.execution.recovery.ExecutionRecoveryService;
-import com.stonewu.fusion.service.execution.recovery.ExecutionRecoveryData;
 import org.springframework.transaction.support.TransactionTemplate;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.model.ChatUsage;
@@ -118,6 +125,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.CompletableFuture;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 import static org.awaitility.Awaitility.await;
@@ -141,9 +150,13 @@ class CanvasAgentWiringIT {
     @Autowired JdbcTemplate jdbc;
     @Autowired AiModelService modelService;
     @Autowired AgentModelRequests modelRequests;
+    @Autowired AgentModelRequestMapper modelRequestRows;
+    @Autowired AgentModelCallUsageMapper modelUsageRows;
+    @Autowired AgentRunMapper agentRunRows;
+    @Autowired ExecutionRecordQueries executionRecords;
+    @Autowired AgentModelCallUsageRepository usageLedger;
     @Autowired CanvasTextRepository textJobs;
     @Autowired TransactionTemplate transactions;
-    @Autowired ExecutionRecoveryService recovery;
     @Autowired CanvasAgentNodeQueries agentDetails;
     @Autowired ResourceEventProjectionService resourceEvents;
     @MockitoSpyBean RunExecutionSupervisor supervisor;
@@ -411,8 +424,9 @@ class CanvasAgentWiringIT {
         var textClaim = transactions.execute(status -> textJobs.claim("quota-test"));
         assertThat(textClaim).isEmpty();
         modelRequests.uncertain(call, true);
-        assertThat(modelRequests.admit(UUID.randomUUID().toString(), model, runtime(second), AgentKernelKey.modelRecordFingerprint(model))).isEmpty();
-        assertThatThrownBy(() -> modelRequests.admit(UUID.randomUUID().toString(), model, runtime(f), AgentKernelKey.modelRecordFingerprint(model))).hasMessageContaining("原模型调用仍需核实");
+        var following = modelRequests.admit(UUID.randomUUID().toString(), model, runtime(f),
+                AgentKernelKey.modelRecordFingerprint(model)).orElseThrow();
+        modelRequests.completed(following, null);
         jdbc.update("UPDATE afv_agent_run SET owner_epoch=owner_epoch+1 WHERE run_id=?", f.runId());
         assertThatThrownBy(() -> modelRequests.admit(UUID.randomUUID().toString(), model, runtime(f), AgentKernelKey.modelRecordFingerprint(model))).hasMessageContaining("身份已失效");
         jdbc.update("UPDATE afv_canvas_text_job SET status='UNKNOWN_SUBMISSION',permit_held=TRUE WHERE id=?", textId);
@@ -660,23 +674,164 @@ class CanvasAgentWiringIT {
         assertThat(modelRequests.admit(UUID.randomUUID().toString(), model, runtime(f), AgentKernelKey.modelRecordFingerprint(model))).isPresent();
     }
 
-    @Test void uncertainModelCallRequiresAuditedAdminConfirmationAndDoesNotReplayTheProvider() throws Exception {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void interruptedModelCallReleasesLocalCapacityAndKeepsItsUnknownRemoteResult(boolean cancelled) throws Exception {
         var f = fixture();
         var model = model(f);
         var call = modelRequests.admit(UUID.randomUUID().toString(), model, runtime(f), AgentKernelKey.modelRecordFingerprint(model)).orElseThrow();
+        modelRequests.uncertain(call, cancelled);
+        var observed = modelRequestRows.selectById(call.id());
+        modelRequests.uncertain(call, cancelled);
+        modelRequests.reconcile();
+
+        var retained = modelRequestRows.selectById(call.id());
+        assertThat(retained.getStatus()).isEqualTo("UNKNOWN_SUBMISSION");
+        assertThat(retained.getPermitHeld()).isFalse();
+        assertThat(retained.getResponseReceivedAt()).isNull();
+        assertThat(retained.getRevision()).isEqualTo(observed.getRevision());
+        assertThat(modelUsageRows.selectByRunAndCall(f.runId(), call.id()).getStatus())
+                .isEqualTo(cancelled ? "CANCELLED" : "FAILED");
+        assertThat(usageLedger.claimSettlementBatch("unknown-result", Duration.ofMinutes(1), 500))
+                .noneMatch(row -> row.getModelCallId().equals(call.id()));
+        assertThat(executionRecords.list(f.user(), 0).items())
+                .anyMatch(row -> row.id().equals(call.id()) && row.remoteUnknown() && row.localFinished());
+        assertThat(executionRecords.get(f.user(), Kind.AGENT_MODEL, call.id()).capacityHeld()).isFalse();
+
+        var next = modelRequests.admit(UUID.randomUUID().toString(), model, runtime(f),
+                AgentKernelKey.modelRecordFingerprint(model)).orElseThrow();
+        assertThat(next.id()).isNotEqualTo(call.id());
+        assertThat(modelRequestRows.countHeldForModel(model.getId())).isEqualTo(1);
+        assertThat(modelRequestRows.selectById(call.id()).getStatus()).isEqualTo("UNKNOWN_SUBMISSION");
+        verify(providers, never()).provisionSingleRequestModel(any(AiModel.class));
+    }
+
+    @Test
+    void disconnectedProfessionalNodeFinishesAndRetainsUnknownCallsWhileANewRunSucceeds() throws Exception {
+        var f = fixture();
+        var model = model(f);
+        var calls = new AtomicInteger();
+        when(providers.provisionSingleRequestModel(any(AiModel.class))).thenAnswer(invocation ->
+                new AiProviderService.AgentScopeModelProvision(new ChatModelBase() {
+                    @Override
+                    public String getModelName() {
+                        return "interrupted-node";
+                    }
+
+                    @Override
+                    protected Flux<ChatResponse> doStream(List<Msg> messages, List<ToolSchema> schema,
+                                                          GenerateOptions options) {
+                        if (calls.incrementAndGet() == 1) {
+                            return Flux.error(new IllegalStateException("测试模型连接中断"));
+                        }
+                        return Flux.just(ChatResponse.builder().content(List.of(TextBlock.builder()
+                                .text("新任务已完成").build())).finishReason("stop").build());
+                    }
+                }, AgentKernelKey.modelRecordFingerprint(invocation.getArgument(0))));
+        var input = nodes("$agent", "中断后继续运行");
+        ((ObjectNode) input.get(0).path("node")).put("kind", "agent")
+                .set("config", mapper.valueToTree(Map.of("agentType", "story_to_script", "modelId", model.getId(),
+                        "inputType", "text", "resultType", "text", "instruction", "概括输入文本", "maxAgentRuns", 1)));
+        String nodeId = mapper.valueToTree(mutations.apply(input, invocation(f, "interrupted-agent")))
+                .path("idMappings").path("$agent").asText();
+        var planRequest = new CanvasRunData.PlanRequest(canvases.snapshot(f.canvas(), actor(f)).document().revision(),
+                CanvasRunData.Scope.SINGLE, List.of(nodeId), Map.of(), new CanvasRunData.Budget(2, 0, 0, 1, 1),
+                new GenerationClientScope(f.user(), null));
+        var plan = canvasRuns.plan(f.canvas(), planRequest, actor(f));
+        assertThat(plan.issues()).isEmpty();
+        var failed = canvasRuns.start(f.canvas(), new CanvasRunData.Start("interrupted-node", plan.id(), plan.hash(),
+                new GenerationClientScope(f.user(), null)), ResourceCommandContext.user(actor(f), f.canvas()));
+        await().atMost(Duration.ofSeconds(25)).untilAsserted(() ->
+                assertThat(canvasRuns.view(failed.id(), actor(f)).status()).isEqualTo(CanvasRunData.State.FAILED));
+        var detail = agentDetails.detail(failed.id(), failed.nodes().getFirst().id(), actor(f));
+        assertThat(detail.unknownModelCalls()).isEqualTo(1);
+        assertThat(detail.unknownModelRequestIds()).singleElement().satisfies(id -> {
+            assertThat(modelRequestRows.selectById(id).getStatus()).isEqualTo("UNKNOWN_SUBMISSION");
+            assertThat(modelRequestRows.selectById(id).getPermitHeld()).isFalse();
+        });
+        assertThat(calls).hasValue(1);
+
+        var nextPlan = canvasRuns.plan(f.canvas(), planRequest, actor(f));
+        var succeeded = canvasRuns.start(f.canvas(), new CanvasRunData.Start("next-node", nextPlan.id(), nextPlan.hash(),
+                new GenerationClientScope(f.user(), null)), ResourceCommandContext.user(actor(f), f.canvas()));
+        await().atMost(Duration.ofSeconds(25)).untilAsserted(() ->
+                assertThat(canvasRuns.view(succeeded.id(), actor(f)).status()).isEqualTo(CanvasRunData.State.SUCCEEDED));
+        assertThat(calls).hasValue(2);
+        assertThat(canvasRuns.view(failed.id(), actor(f)).status()).isEqualTo(CanvasRunData.State.FAILED);
+        assertThat(agentDetails.detail(failed.id(), failed.nodes().getFirst().id(), actor(f)).unknownModelCalls())
+                .isEqualTo(1);
+        assertThat(modelRequestRows.countHeldForModel(model.getId())).isZero();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"lease-expired", "owner-changed", "run-ended", "historical-unknown"})
+    void reconciliationReleasesOrphanedModelCapacityWithoutChangingTheUnknownResult(String scenario) throws Exception {
+        var f = fixture();
+        var model = model(f);
+        var call = modelRequests.admit(UUID.randomUUID().toString(), model, runtime(f),
+                AgentKernelKey.modelRecordFingerprint(model)).orElseThrow();
+        var activeFixture = fixture();
+        var activeModel = model(activeFixture);
+        var active = modelRequests.admit(UUID.randomUUID().toString(), activeModel, runtime(activeFixture),
+                AgentKernelKey.modelRecordFingerprint(activeModel)).orElseThrow();
+        var update = Wrappers.<AgentRun>lambdaUpdate().eq(AgentRun::getRunId, f.runId());
+        switch (scenario) {
+            case "lease-expired" -> agentRunRows.update(update
+                    .set(AgentRun::getLeaseUntil, LocalDateTime.now(ZoneOffset.UTC).minusMinutes(1)));
+            case "owner-changed" -> agentRunRows.update(update.set(AgentRun::getOwnerEpoch, 2L));
+            case "run-ended" -> agentRunRows.update(update.set(AgentRun::getStatus, "FAILED"));
+            case "historical-unknown" -> modelRequestRows.update(Wrappers.<AgentModelRequestEntity>lambdaUpdate()
+                    .eq(AgentModelRequestEntity::getId, call.id())
+                    .set(AgentModelRequestEntity::getStatus, "UNKNOWN_SUBMISSION"));
+            default -> throw new AssertionError("未定义的回收场景：" + scenario);
+        }
+
+        modelRequests.reconcile();
+        var observed = modelRequestRows.selectById(call.id());
+        // 结束模拟失联的运行，避免其他定时维护继续处理这条测试记录。
+        agentRunRows.update(Wrappers.<AgentRun>lambdaUpdate().eq(AgentRun::getRunId, f.runId())
+                .set(AgentRun::getStatus, "FAILED"));
+        modelRequests.reconcile();
+
+        assertThat(observed.getStatus()).isEqualTo("UNKNOWN_SUBMISSION");
+        assertThat(observed.getPermitHeld()).isFalse();
+        assertThat(observed.getResponseReceivedAt()).isNull();
+        assertThat(modelRequestRows.selectById(call.id()).getRevision()).isEqualTo(observed.getRevision());
+        assertThat(modelRequestRows.countHeldForModel(model.getId())).isZero();
+        assertThat(modelRequestRows.selectById(active.id()).getStatus()).isEqualTo("RUNNING");
+        assertThat(modelRequestRows.countHeldForModel(activeModel.getId())).isEqualTo(1);
+        verify(providers, never()).provisionSingleRequestModel(any(AiModel.class));
+    }
+
+    @Test
+    void lateModelResponseUpdatesOnlyItsOriginalUsageAndDoesNotReleaseTheNextRequest() throws Exception {
+        var f = fixture();
+        var model = model(f);
+        var call = modelRequests.admit(UUID.randomUUID().toString(), model, runtime(f),
+                AgentKernelKey.modelRecordFingerprint(model)).orElseThrow();
         modelRequests.uncertain(call, false);
-        assertThatThrownBy(() -> recovery.get(ExecutionRecoveryData.Kind.AGENT_MODEL, call.id(), f.user())).hasMessageContaining("管理员");
-        Long role = jdbc.queryForObject("SELECT id FROM sys_role WHERE UPPER(code)='ADMIN' AND deleted=FALSE", Long.class);
-        jdbc.update("INSERT INTO sys_user_role(user_id,role_id) VALUES(?,?)", f.user(), role);
-        var pending = recovery.get(ExecutionRecoveryData.Kind.AGENT_MODEL, call.id(), f.user());
-        assertThat(pending.canResolve()).isTrue();
-        var request = new ExecutionRecoveryData.Decision(f.user(), "review-" + call.id(), pending.revision(), pending.factsHash(),
-                "测试供应商已确认原调用终止", true);
-        var receipt = recovery.confirm(ExecutionRecoveryData.Kind.AGENT_MODEL, call.id(), request, f.user());
-        assertThat(receipt.status()).isEqualTo("CANCELLED");
-        assertThat(recovery.confirm(ExecutionRecoveryData.Kind.AGENT_MODEL, call.id(), request, f.user())).isEqualTo(receipt);
-        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_execution_recovery_decision WHERE job_id=?", Long.class, call.id())).isEqualTo(1);
-        assertThat(jdbc.queryForObject("SELECT permit_held FROM afv_agent_model_request WHERE id=?", Boolean.class, call.id())).isFalse();
+        agentRunRows.update(Wrappers.<AgentRun>lambdaUpdate().eq(AgentRun::getRunId, f.runId())
+                .set(AgentRun::getStatus, "FAILED"));
+        var nextFixture = fixture();
+        var next = modelRequests.admit(UUID.randomUUID().toString(), model, runtime(nextFixture),
+                AgentKernelKey.modelRecordFingerprint(model)).orElseThrow();
+
+        modelRequests.completed(call, ChatUsage.builder().inputTokens(12).outputTokens(7).build());
+        modelRequests.uncertain(call, false);
+        modelRequests.reconcile();
+
+        var original = modelRequestRows.selectById(call.id());
+        assertThat(original.getStatus()).isEqualTo("COMPLETED");
+        assertThat(original.getResponseReceivedAt()).isNotNull();
+        assertThat(original.getPermitHeld()).isFalse();
+        var usage = modelUsageRows.selectByRunAndCall(f.runId(), call.id());
+        assertThat(usage.getInputTokens()).isEqualTo(12);
+        assertThat(usage.getOutputTokens()).isEqualTo(7);
+        assertThat(agentRunRows.selectByRunId(f.runId()).getStatus()).isEqualTo("FAILED");
+        assertThat(modelRequestRows.selectById(next.id()).getStatus()).isEqualTo("RUNNING");
+        assertThat(modelRequestRows.countHeldForModel(model.getId())).isEqualTo(1);
+        assertThat(usageLedger.claimSettlementBatch("late-response", Duration.ofMinutes(1), 500))
+                .anyMatch(row -> row.getModelCallId().equals(call.id()) && row.getInputTokens() == 12);
     }
 
     @Test void currentModelAndApiChangesStopNewRequestsBeforeReservingQuota() throws Exception {

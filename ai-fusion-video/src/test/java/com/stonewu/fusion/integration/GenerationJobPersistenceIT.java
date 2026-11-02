@@ -272,7 +272,7 @@ class GenerationJobPersistenceIT {
     }
 
     @Test
-    void unknownSubmissionKeepsRemotePermitAndCannotBeAutomaticallyReclaimed() {
+    void legacyUnknownSubmissionIsClaimedForAutomaticSettlementWithTheOriginalAttempt() {
         insert("READY");
         var ambiguous = jobs.claim("worker-a").orElseThrow();
         attempts.begin(ambiguous.claim(), GenerationPreparedRequest.ordinary());
@@ -280,8 +280,11 @@ class GenerationJobPersistenceIT {
                 "UPDATE afv_remote_generation_job SET state = 'UNKNOWN_SUBMISSION', lease_until = NULL WHERE id = ?",
                 ambiguous.id());
         insert("READY");
-        assertThat(jobs.claim("worker-b")).isEmpty();
-        assertThat(jobs.get(ambiguous.id()).permitHeld()).isTrue();
+        var recovery = jobs.claim("worker-b").orElseThrow();
+        assertThat(recovery.id()).isEqualTo(ambiguous.id());
+        assertThat(recovery.activeAttemptId()).isEqualTo(jobs.get(ambiguous.id()).activeAttemptId());
+        assertThat(recovery.epoch()).isGreaterThan(ambiguous.epoch());
+        assertThat(recovery.phase()).isEqualTo("SUBMITTING");
     }
 
     @Test
