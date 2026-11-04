@@ -57,7 +57,7 @@ class InfistarModelDefaultsTests {
                 .resolution(config.getStr("defaultResolution")).build();
         int[] size = support.resolveConfiguredSize(task, config);
         var context = new OpenAiCompatibleImageProtocolContext(AiModel.builder().code(code).build(), api,
-                code, task.getPrompt(), size[0], size[1], 1, List.of(), config, false);
+                code, task.getPrompt(), size[0], size[1], 1, List.of(), config, false, task.getResolution(), task.getRatio());
         var request = new OpenAiImageProtocolAdapter(support).buildRequest(context);
         var buffer = new Buffer();
         request.body().writeTo(buffer);
@@ -82,7 +82,7 @@ class InfistarModelDefaultsTests {
         var task = ImageTask.builder().prompt("海景").resolution(tier).ratio(ratio).build();
         int[] size = support.resolveConfiguredSize(task, config);
         var context = new OpenAiCompatibleImageProtocolContext(AiModel.builder().code(code).build(), api,
-                code, task.getPrompt(), size[0], size[1], 1, List.of(), config, false);
+                code, task.getPrompt(), size[0], size[1], 1, List.of(), config, false, task.getResolution(), task.getRatio());
         var buffer = new Buffer();
         new OpenAiImageProtocolAdapter(support).buildRequest(context).body().writeTo(buffer);
         assertThat(JSONUtil.parseObj(buffer.readUtf8()).getStr("size")).isEqualTo(expectedSize);

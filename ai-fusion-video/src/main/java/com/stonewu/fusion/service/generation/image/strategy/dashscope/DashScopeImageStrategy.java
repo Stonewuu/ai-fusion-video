@@ -324,6 +324,10 @@ public class DashScopeImageStrategy implements ImageGenerationStrategy {
     private String resolveSizeText(ImageTask task, JSONObject config, int width, int height) {
         if (task != null && StrUtil.isNotBlank(task.getResolution())) {
             String resolution = task.getResolution().trim();
+            if (task.getWidth() != null && task.getHeight() != null && config != null
+                    && config.getJSONObject("supportedSizes") != null && config.getJSONObject("supportedSizes").containsKey(resolution)) {
+                return task.getWidth() + "*" + task.getHeight();
+            }
             if (resolution.matches("\\d+[xX*]\\d+")) {
                 return resolution.replace('x', '*').replace('X', '*');
             }

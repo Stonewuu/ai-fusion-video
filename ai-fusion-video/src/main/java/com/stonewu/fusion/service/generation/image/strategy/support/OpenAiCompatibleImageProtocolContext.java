@@ -24,7 +24,9 @@ public record OpenAiCompatibleImageProtocolContext(
         int count,
         List<String> imageUrls,
         JSONObject modelConfig,
-        boolean asyncMode
+        boolean asyncMode,
+        String resolution,
+        String ratio
 ) {
 
     public OpenAiCompatibleImageProtocolContext {
@@ -40,6 +42,6 @@ public record OpenAiCompatibleImageProtocolContext(
     public OpenAiCompatibleImageProtocolContext withCount(int requestCount) {
         return new OpenAiCompatibleImageProtocolContext(
                 model, apiConfig, modelCode, prompt, width, height, requestCount,
-                imageUrls, modelConfig, asyncMode);
+                imageUrls, modelConfig, asyncMode, resolution, ratio);
     }
 }

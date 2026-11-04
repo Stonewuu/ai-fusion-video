@@ -99,6 +99,7 @@
       "supportTransparentBackground": false,
       "asyncMode": false,
       "supportCustomSize": true,
+      "supportAutoSize": true,
       "sizeMultiple": 16,
       "maxEdge": 3840,
       "maxAspectRatio": 3,
@@ -106,6 +107,10 @@
       "defaultHeight": 1024,
       "minPixels": 655360,
       "maxPixels": 8294400,
+      "defaultAspectRatio": "1:1",
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "supportedResolutions": ["1K", "2K", "4K", "auto"],
       "supportedAspectRatios": ["auto", "1:1", "3:2", "2:3", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "21:9", "9:21"],
       "supportedSizes": {
         "1K": {
@@ -139,6 +144,13 @@
           "9:21": "1152x2688"
         },
         "4K": {
+          "1:1": "2880x2880",
+          "3:2": "3456x2304",
+          "2:3": "2304x3456",
+          "4:3": "3264x2448",
+          "3:4": "2448x3264",
+          "5:4": "3200x2560",
+          "4:5": "2560x3200",
           "16:9": "3840x2160",
           "9:16": "2160x3840",
           "2:1": "3840x1920",

@@ -41,6 +41,7 @@ import { GenerationSubmissionNotice } from "./generation/generation-submission-n
 import { useGenerationSubmission } from "./generation/use-generation-submission";
 import { useGenerationHistory } from "./generation/use-generation-history";
 import { generationSubmitRequest } from "./generation/generation-submit-request";
+import { resolutionChoices } from "@/lib/image-output-sizes";
 import { useReferenceImageUploadAvailability } from "./generation/use-reference-image-upload-availability";
 
 interface GenerationWorkbenchProps {
@@ -177,6 +178,12 @@ function GenerationWorkbenchContent({ mode }: GenerationWorkbenchProps) {
   const updateForm = (patch: Partial<GenerationFormState>) => {
     setForm((current) => {
       const next = { ...current, ...patch };
+      if (mode === "image" && capabilities && patch.ratio !== undefined) {
+        const choices = resolutionChoices(capabilities, next.ratio);
+        if (!choices.includes(next.resolution)) {
+          next.resolution = choices[0] ?? "";
+        }
+      }
       if (mode === "video" && capabilities?.videoRules) {
         const allowed = videoRatioOptions(
           capabilities.supportedAspectRatios,
@@ -521,6 +528,8 @@ function GenerationWorkbenchContent({ mode }: GenerationWorkbenchProps) {
       }
     } else if (!form.prompt.trim()) {
       return "请输入提示词";
+    } else if (capabilities.supportedResolutions.length && !resolutionChoices(capabilities, form.ratio).includes(form.resolution)) {
+      return "请选择当前画面比例支持的分辨率";
     }
     const referenceImages = clean(form.referenceImages);
     if (
@@ -558,7 +567,6 @@ function GenerationWorkbenchContent({ mode }: GenerationWorkbenchProps) {
     if (!receipt) {
       return;
     }
-    toast.success("任务已提交，可关闭页面，稍后在创作记录查看结果");
     setForm((current) =>
       current === originalForm
         ? {

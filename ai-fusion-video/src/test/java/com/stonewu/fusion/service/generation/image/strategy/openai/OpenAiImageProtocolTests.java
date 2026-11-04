@@ -12,6 +12,8 @@ import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
 import okhttp3.OkHttpClient;
 import okio.Buffer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -32,8 +34,9 @@ class OpenAiImageProtocolTests {
             );
     private final OpenAiImageProtocolAdapter adapter = new OpenAiImageProtocolAdapter(support);
 
-    @Test
-    void generationsRequestContainsOnlyOfficialOpenAiFields() throws IOException {
+    @ParameterizedTest
+    @ValueSource(strings = {"gpt-image-2", "pro/gpt-image-2.5-sunburst", "gpt-image-2.5-flare-2026-09-08"})
+    void generationsRequestContainsOnlySupportedImageFields(String modelCode) throws IOException {
         JSONObject config = JSONUtil.parseObj("""
                 {
                   "quality": "high",
@@ -43,6 +46,7 @@ class OpenAiImageProtocolTests {
                   "outputCompression": 90,
                   "responseFormat": "b64_json",
                   "style": "natural",
+                  "service_tier": "priority",
                   "user": "user-123",
                   "resolution": "2K",
                   "maskUrl": "https://example.com/mask.png"
@@ -50,13 +54,13 @@ class OpenAiImageProtocolTests {
                 """);
 
         JSONObject body = JSONUtil.parseObj(readBody(adapter.buildRequest(
-                context("gpt-image-2", List.of(), config))));
+                context(modelCode, List.of(), config))));
 
         assertThat(adapter.getProtocol()).isEqualTo("openai");
-        assertThat(body.keySet()).contains(
+        assertThat(body.keySet()).containsExactlyInAnyOrder(
                 "model", "prompt", "n", "size", "quality", "background", "moderation",
-                "output_format", "output_compression", "response_format", "style", "user");
-        assertThat(body.keySet()).doesNotContain("image_urls", "resolution", "mask_url", "extra_body");
+                "output_format", "user");
+        assertThat(body.getStr("model")).isEqualTo(modelCode);
     }
 
     @Test
@@ -82,8 +86,9 @@ class OpenAiImageProtocolTests {
         assertThat(body).doesNotContain("name=\"style\"");
     }
 
-    @Test
-    void gptImage2EditsOmitUnsupportedInputFidelity() throws IOException {
+    @ParameterizedTest
+    @ValueSource(strings = {"gpt-image-2", "pro/gpt-image-2.5-sunburst"})
+    void gptImage2EditsOmitUnsupportedInputFidelity(String modelCode) throws IOException {
         JSONObject config = JSONUtil.parseObj("""
                 {
                   "inputFidelity": "high"
@@ -91,7 +96,7 @@ class OpenAiImageProtocolTests {
                 """);
 
         String body = readBody(adapter.buildRequest(context(
-                "gpt-image-2",
+                modelCode,
                 List.of("data:image/png;base64,cmVmZXJlbmNl"),
                 config
         )));
@@ -129,8 +134,9 @@ class OpenAiImageProtocolTests {
         assertThat(body.keySet()).doesNotContain("image_urls");
     }
 
-    @Test
-    void gptImage2UrlCapableEditsJsonOmitsUnsupportedInputFidelity() throws IOException {
+    @ParameterizedTest
+    @ValueSource(strings = {"gpt-image-2", "pro/gpt-image-2.5-flare"})
+    void gptImage2UrlCapableEditsJsonOmitsUnsupportedInputFidelity(String modelCode) throws IOException {
         JSONObject config = JSONUtil.parseObj("""
                 {
                   "referenceImageInputFormats": ["url"],
@@ -139,7 +145,7 @@ class OpenAiImageProtocolTests {
                 """);
 
         JSONObject body = JSONUtil.parseObj(readBody(adapter.buildRequest(context(
-                "gpt-image-2",
+                modelCode,
                 List.of("https://cdn.example.com/reference.png"),
                 config
         ))));
@@ -174,7 +180,7 @@ class OpenAiImageProtocolTests {
                 1,
                 imageUrls,
                 config,
-                false
+                false, null, null
         );
     }
 

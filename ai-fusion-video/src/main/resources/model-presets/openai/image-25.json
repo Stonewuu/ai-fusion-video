@@ -1,0 +1,216 @@
+[
+  {
+    "code": "gpt-image-2.5-sunburst",
+    "name": "GPT Image 2.5 Sunburst",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "适合精细生成和编辑，支持多张参考图、透明背景和自定义尺寸。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考",
+      "透明背景",
+      "自定义尺寸"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url",
+        "data_uri"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 16,
+      "supportTransparentBackground": true,
+      "asyncMode": false,
+      "supportCustomSize": true,
+      "supportAutoSize": true,
+      "sizeMultiple": 16,
+      "maxEdge": 3840,
+      "maxAspectRatio": 3,
+      "minPixels": 655360,
+      "maxPixels": 8294400,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "defaultAspectRatio": "1:1",
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K",
+        "auto"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "4:3",
+        "3:4",
+        "5:4",
+        "4:5",
+        "16:9",
+        "9:16",
+        "2:1",
+        "1:2",
+        "21:9",
+        "9:21",
+        "auto"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "2:3": "1024x1536",
+          "3:2": "1536x1024",
+          "4:3": "1024x768",
+          "3:4": "768x1024",
+          "5:4": "1280x1024",
+          "4:5": "1024x1280",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "2:1": "2048x1024",
+          "1:2": "1024x2048",
+          "21:9": "2016x864",
+          "9:21": "864x2016"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "2:3": "1360x2048",
+          "3:2": "2048x1360",
+          "4:3": "2048x1536",
+          "3:4": "1536x2048",
+          "5:4": "2560x2048",
+          "4:5": "2048x2560",
+          "16:9": "2048x1152",
+          "9:16": "1152x2048",
+          "2:1": "2688x1344",
+          "1:2": "1344x2688",
+          "21:9": "2688x1152",
+          "9:21": "1152x2688"
+        },
+        "4K": {
+          "1:1": "2880x2880",
+          "2:3": "2304x3456",
+          "3:2": "3456x2304",
+          "4:3": "3264x2448",
+          "3:4": "2448x3264",
+          "5:4": "3200x2560",
+          "4:5": "2560x3200",
+          "16:9": "3840x2160",
+          "9:16": "2160x3840",
+          "2:1": "3840x1920",
+          "1:2": "1920x3840",
+          "21:9": "3840x1648",
+          "9:21": "1648x3840"
+        }
+      }
+    }
+  },
+  {
+    "code": "gpt-image-2.5-flare",
+    "name": "GPT Image 2.5 Flare",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai",
+    "modelType": 2,
+    "description": "适合快速生成和编辑，支持多张参考图、透明背景和自定义尺寸。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考",
+      "透明背景",
+      "自定义尺寸"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url",
+        "data_uri"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 16,
+      "supportTransparentBackground": true,
+      "asyncMode": false,
+      "supportCustomSize": true,
+      "supportAutoSize": true,
+      "sizeMultiple": 16,
+      "maxEdge": 3840,
+      "maxAspectRatio": 3,
+      "minPixels": 655360,
+      "maxPixels": 8294400,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "defaultAspectRatio": "1:1",
+      "defaultResolution": "1K",
+      "defaultSizeTier": "1K",
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K",
+        "auto"
+      ],
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "4:3",
+        "3:4",
+        "5:4",
+        "4:5",
+        "16:9",
+        "9:16",
+        "2:1",
+        "1:2",
+        "21:9",
+        "9:21",
+        "auto"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "2:3": "1024x1536",
+          "3:2": "1536x1024",
+          "4:3": "1024x768",
+          "3:4": "768x1024",
+          "5:4": "1280x1024",
+          "4:5": "1024x1280",
+          "16:9": "1536x864",
+          "9:16": "864x1536",
+          "2:1": "2048x1024",
+          "1:2": "1024x2048",
+          "21:9": "2016x864",
+          "9:21": "864x2016"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "2:3": "1360x2048",
+          "3:2": "2048x1360",
+          "4:3": "2048x1536",
+          "3:4": "1536x2048",
+          "5:4": "2560x2048",
+          "4:5": "2048x2560",
+          "16:9": "2048x1152",
+          "9:16": "1152x2048",
+          "2:1": "2688x1344",
+          "1:2": "1344x2688",
+          "21:9": "2688x1152",
+          "9:21": "1152x2688"
+        },
+        "4K": {
+          "1:1": "2880x2880",
+          "2:3": "2304x3456",
+          "3:2": "3456x2304",
+          "4:3": "3264x2448",
+          "3:4": "2448x3264",
+          "5:4": "3200x2560",
+          "4:5": "2560x3200",
+          "16:9": "3840x2160",
+          "9:16": "2160x3840",
+          "2:1": "3840x1920",
+          "1:2": "1920x3840",
+          "21:9": "3840x1648",
+          "9:21": "1648x3840"
+        }
+      }
+    }
+  }
+]

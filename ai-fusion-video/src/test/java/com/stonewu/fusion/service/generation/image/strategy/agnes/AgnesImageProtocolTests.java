@@ -60,6 +60,16 @@ class AgnesImageProtocolTests {
         }
     }
 
+    @Test
+    void sendsRequestedTierAndRatioWithoutReconstructingThemFromDefaultPixels() throws IOException {
+        var config = JSONUtil.parseObj("{\"supportedResolutions\":[\"1K\",\"2K\"],\"supportedAspectRatios\":[\"1:1\",\"9:16\"]}");
+        var task = new OpenAiCompatibleImageProtocolContext(null, ApiConfig.builder().apiUrl("https://example.com").build(),
+                "agnes-image-2.5-flash", "小猫", 1024, 1024, 1, List.of(), config, false, "2K", "9:16");
+        var body = JSONUtil.parseObj(readBody(agnesAdapter.buildRequest(task)));
+        assertThat(body.getStr("size")).isEqualTo("2K");
+        assertThat(body.getStr("ratio")).isEqualTo("9:16");
+    }
+
     private OpenAiCompatibleImageProtocolContext context(String modelCode,
                                                           int width,
                                                           int height,
@@ -78,7 +88,7 @@ class AgnesImageProtocolTests {
                 1,
                 List.of("data:image/png;base64,cmVmZXJlbmNl"),
                 config,
-                false
+                false, null, null
         );
     }
 

@@ -2,6 +2,7 @@
 
 import type { AiModel } from "@/lib/api/ai-model";
 import type { GenerationCapabilities } from "@/lib/generation-capabilities";
+import { GenerationImageOutputPickers } from "./generation-image-output-pickers";
 import { GenerationModelPicker } from "./generation-model-picker";
 import { GenerationDurationSlider } from "./generation-duration-slider";
 import { GenerationQuickSelect } from "./generation-quick-select";
@@ -41,34 +42,40 @@ export function GenerationQuickSettings({
         onChange={onModelChange}
       />
 
-      <GenerationQuickSelect
-        value={form.ratio}
-        placeholder="比例"
-        options={videoRatioOptions(
-          capabilities?.supportedAspectRatios || [],
-          capabilities?.videoRules,
-          videoInputState(form),
-        ).map((value) => ({
-          value,
-          label: value === "adaptive" ? "自适应比例" : `比例 ${value}`,
-          menuLabel: value === "adaptive" ? "自适应" : value,
-        }))}
-        onChange={(ratio) => onFormChange({ ratio })}
-      />
+      {mode === "image" ? (
+        <GenerationImageOutputPickers compact capabilities={capabilities} form={form} onChange={onFormChange} />
+      ) : (
+        <>
+          <GenerationQuickSelect
+            value={form.ratio}
+            placeholder="比例"
+            options={videoRatioOptions(
+              capabilities?.supportedAspectRatios || [],
+              capabilities?.videoRules,
+              videoInputState(form),
+            ).map((value) => ({
+              value,
+              label: value === "adaptive" || value === "auto" ? "自适应比例" : `比例 ${value}`,
+              menuLabel: value === "adaptive" || value === "auto" ? "自适应" : value,
+            }))}
+            onChange={(ratio) => onFormChange({ ratio })}
+          />
 
-      <GenerationQuickSelect
-        value={form.resolution}
-        placeholder="分辨率"
-        options={(capabilities?.supportedResolutions || []).map((value) => ({
-          value,
-          label: value,
-        }))}
-        contentClassName="min-w-28"
-        onChange={(resolution) => {
-          const duration = capabilities ? videoDurationForResolution(form.duration, capabilities, resolution) : form.duration;
-          onFormChange({ resolution, duration });
-        }}
-      />
+          <GenerationQuickSelect
+            value={form.resolution}
+            placeholder="分辨率"
+            options={(capabilities?.supportedResolutions ?? []).map((value) => ({
+              value,
+              label: value,
+            }))}
+            contentClassName="min-w-28"
+            onChange={(resolution) => {
+              const duration = capabilities ? videoDurationForResolution(form.duration, capabilities, resolution) : form.duration;
+              onFormChange({ resolution, duration });
+            }}
+          />
+        </>
+      )}
 
       <GenerationQuickSelect
         value={String(form.count)}

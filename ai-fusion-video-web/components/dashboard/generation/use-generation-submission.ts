@@ -150,7 +150,9 @@ export function useGenerationSubmission(mode: WorkbenchMode) {
             publish(null);
             return null;
           }
-          publish(pending);
+          if (action !== "submit") {
+            publish(pending);
+          }
           try {
             const receipt =
               action === "withdraw"

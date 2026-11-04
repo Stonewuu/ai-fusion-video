@@ -12,6 +12,8 @@ import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.ai.ModelPresetService;
+import com.stonewu.fusion.service.ai.model.GptImageModel;
+import com.stonewu.fusion.service.generation.image.ImageOutputDimensions;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
 import com.stonewu.fusion.service.storage.StorageConfigService;
 import com.stonewu.fusion.service.system.PresetArtStyleResourceResolver;
@@ -82,19 +84,11 @@ public class OpenAiCompatibleImageProtocolSupport {
             root.put("prompt", StrUtil.blankToDefault(context.prompt(), ""));
             root.put("model", StrUtil.blankToDefault(context.modelCode(), DEFAULT_IMAGE_MODEL));
             root.put("n", Math.max(context.count(), 1));
-            root.put("size", mapSize(context.modelCode(), context.width(), context.height(), context.modelConfig()));
-            appendOptionalString(root, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
-            appendOptionalString(root, "background", getString(context.modelConfig(), "background"));
-            appendOptionalString(root, "moderation", getString(context.modelConfig(), "moderation"));
-            appendOptionalString(root, "output_format",
-                    getString(context.modelConfig(), "outputFormat", "output_format"));
-            appendOptionalInteger(root, "output_compression",
-                    getInteger(context.modelConfig(), "outputCompression", "output_compression"));
-            appendOptionalString(root, "response_format",
-                    getString(context.modelConfig(), "responseFormat", "response_format"));
-            appendOptionalString(root, "style", getString(context.modelConfig(), "style"));
-            appendOptionalString(root, "user", getString(context.modelConfig(), "user", "endUser", "end_user"));
+            root.put("size", openAiSize(context));
+            root.setAll(openAiOptions(context));
             return jsonRequest(resolveImagesGenerateUrl(context.apiConfig()), root);
+        } catch (BusinessException e) {
+            throw e;
         } catch (Exception e) {
             throw new RuntimeException("构建 OpenAI 图片请求失败: " + e.getMessage(), e);
         }
@@ -118,8 +112,7 @@ public class OpenAiCompatibleImageProtocolSupport {
                         .forEach(imageUrlArray::add);
             }
             appendOptionalString(root, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
-            appendOptionalString(root, "resolution",
-                    getString(context.modelConfig(), "resolution", "defaultResolution"));
+            appendOptionalString(root, "resolution", newApiResolution(context));
             appendOptionalString(root, "background", getString(context.modelConfig(), "background"));
             appendOptionalString(root, "moderation", getString(context.modelConfig(), "moderation"));
             appendOptionalString(root, "output_format",
@@ -145,8 +138,10 @@ public class OpenAiCompatibleImageProtocolSupport {
             root.put("model", StrUtil.blankToDefault(context.modelCode(), DEFAULT_IMAGE_MODEL));
             root.put("prompt", StrUtil.blankToDefault(context.prompt(), ""));
 
-            AgnesImageSize requestSize = resolveAgnesImageSize(
-                    context.modelCode(), context.width(), context.height(), context.modelConfig());
+            AgnesImageSize requestSize = isTier(context.resolution()) && StrUtil.isNotBlank(context.ratio())
+                    && hasTierResolution(context.modelConfig())
+                    ? new AgnesImageSize(context.resolution(), context.ratio())
+                    : resolveAgnesImageSize(context.modelCode(), context.width(), context.height(), context.modelConfig());
             root.put("size", requestSize.size());
             if (StrUtil.isNotBlank(requestSize.ratio())) {
                 root.put("ratio", requestSize.ratio());
@@ -190,19 +185,8 @@ public class OpenAiCompatibleImageProtocolSupport {
         if (supportsReferenceImageUrlInput(context.modelConfig())) {
             return buildOpenAiJsonEditsRequest(context);
         }
-        MultipartBody.Builder builder = createEditsRequestBuilder(context);
-        appendOptionalFormField(builder, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
-        appendOptionalFormField(builder, "background", getString(context.modelConfig(), "background"));
-        appendOptionalFormField(builder, "moderation", getString(context.modelConfig(), "moderation"));
-        appendOptionalFormField(builder, "output_format",
-                getString(context.modelConfig(), "outputFormat", "output_format"));
-        appendOptionalFormField(builder, "output_compression",
-                getString(context.modelConfig(), "outputCompression", "output_compression"));
-        if (!"gpt-image-2".equalsIgnoreCase(StrUtil.trim(context.modelCode()))) {
-            appendOptionalFormField(builder, "input_fidelity",
-                    getString(context.modelConfig(), "inputFidelity", "input_fidelity"));
-        }
-        appendOptionalFormField(builder, "user", getString(context.modelConfig(), "user", "endUser", "end_user"));
+        MultipartBody.Builder builder = createEditsRequestBuilder(context, openAiSize(context));
+        openAiOptions(context).properties().forEach(entry -> builder.addFormDataPart(entry.getKey(), entry.getValue().asText()));
         appendReferenceImages(builder, context);
         return new OpenAiCompatibleImageRequest(resolveImagesEditUrl(context.apiConfig()), builder.build());
     }
@@ -214,11 +198,10 @@ public class OpenAiCompatibleImageProtocolSupport {
         if (supportsReferenceImageUrlInput(context.modelConfig())) {
             return buildNewApiJsonEditsRequest(context);
         }
-        MultipartBody.Builder builder = createEditsRequestBuilder(context);
+        MultipartBody.Builder builder = createEditsRequestBuilder(context, mapSize(context.modelCode(), context.width(), context.height(), context.modelConfig()));
 
         appendOptionalFormField(builder, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
-        appendOptionalFormField(builder, "resolution",
-                getString(context.modelConfig(), "resolution", "defaultResolution"));
+        appendOptionalFormField(builder, "resolution", newApiResolution(context));
         appendOptionalFormField(builder, "background", getString(context.modelConfig(), "background"));
         appendOptionalFormField(builder, "moderation", getString(context.modelConfig(), "moderation"));
         appendOptionalFormField(builder, "output_format",
@@ -234,19 +217,8 @@ public class OpenAiCompatibleImageProtocolSupport {
     private OpenAiCompatibleImageRequest buildOpenAiJsonEditsRequest(
             OpenAiCompatibleImageProtocolContext context) {
         try {
-            ObjectNode root = createJsonEditsRoot(context);
-            appendOptionalString(root, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
-            appendOptionalString(root, "background", getString(context.modelConfig(), "background"));
-            appendOptionalString(root, "moderation", getString(context.modelConfig(), "moderation"));
-            appendOptionalString(root, "output_format",
-                    getString(context.modelConfig(), "outputFormat", "output_format"));
-            appendOptionalInteger(root, "output_compression",
-                    getInteger(context.modelConfig(), "outputCompression", "output_compression"));
-            if (!"gpt-image-2".equalsIgnoreCase(StrUtil.trim(context.modelCode()))) {
-                appendOptionalString(root, "input_fidelity",
-                        getString(context.modelConfig(), "inputFidelity", "input_fidelity"));
-            }
-            appendOptionalString(root, "user", getString(context.modelConfig(), "user", "endUser", "end_user"));
+            ObjectNode root = createJsonEditsRoot(context, openAiSize(context));
+            root.setAll(openAiOptions(context));
             return jsonRequest(resolveImagesEditUrl(context.apiConfig()), root);
         } catch (IOException e) {
             throw new RuntimeException("构建 OpenAI 图片编辑 JSON 请求失败: " + e.getMessage(), e);
@@ -256,10 +228,9 @@ public class OpenAiCompatibleImageProtocolSupport {
     private OpenAiCompatibleImageRequest buildNewApiJsonEditsRequest(
             OpenAiCompatibleImageProtocolContext context) {
         try {
-            ObjectNode root = createJsonEditsRoot(context);
+            ObjectNode root = createJsonEditsRoot(context, mapSize(context.modelCode(), context.width(), context.height(), context.modelConfig()));
             appendOptionalString(root, "quality", getString(context.modelConfig(), "quality", "imageQuality"));
-            appendOptionalString(root, "resolution",
-                    getString(context.modelConfig(), "resolution", "defaultResolution"));
+            appendOptionalString(root, "resolution", newApiResolution(context));
             appendOptionalString(root, "background", getString(context.modelConfig(), "background"));
             appendOptionalString(root, "moderation", getString(context.modelConfig(), "moderation"));
             appendOptionalString(root, "output_format",
@@ -273,12 +244,12 @@ public class OpenAiCompatibleImageProtocolSupport {
         }
     }
 
-    private ObjectNode createJsonEditsRoot(OpenAiCompatibleImageProtocolContext context) {
+    private ObjectNode createJsonEditsRoot(OpenAiCompatibleImageProtocolContext context, String size) {
         ObjectNode root = OBJECT_MAPPER.createObjectNode();
         root.put("model", StrUtil.blankToDefault(context.modelCode(), DEFAULT_IMAGE_MODEL));
         root.put("prompt", StrUtil.blankToDefault(context.prompt(), ""));
         root.put("n", Math.max(context.count(), 1));
-        root.put("size", mapSize(context.modelCode(), context.width(), context.height(), context.modelConfig()));
+        root.put("size", size);
         var images = root.putArray("images");
         context.imageUrls().stream()
                 .filter(StrUtil::isNotBlank)
@@ -293,14 +264,13 @@ public class OpenAiCompatibleImageProtocolSupport {
                 .anyMatch("url"::equalsIgnoreCase);
     }
 
-    private MultipartBody.Builder createEditsRequestBuilder(OpenAiCompatibleImageProtocolContext context) {
+    private MultipartBody.Builder createEditsRequestBuilder(OpenAiCompatibleImageProtocolContext context, String size) {
         MultipartBody.Builder builder = new MultipartBody.Builder()
                 .setType(MultipartBody.FORM)
                 .addFormDataPart("model", StrUtil.blankToDefault(context.modelCode(), DEFAULT_IMAGE_MODEL))
                 .addFormDataPart("prompt", StrUtil.blankToDefault(context.prompt(), ""))
                 .addFormDataPart("n", String.valueOf(Math.max(context.count(), 1)))
-                .addFormDataPart("size",
-                        mapSize(context.modelCode(), context.width(), context.height(), context.modelConfig()));
+                .addFormDataPart("size", size);
         return builder;
     }
 
@@ -613,6 +583,54 @@ public class OpenAiCompatibleImageProtocolSupport {
 
     private boolean isTier(String value) {
         return StrUtil.isNotBlank(value) && value.trim().matches("\\d+[kK]");
+    }
+
+    private String newApiResolution(OpenAiCompatibleImageProtocolContext context) {
+        String configured = getString(context.modelConfig(), "resolution", "defaultResolution");
+        return configured != null && isTier(context.resolution()) ? context.resolution() : configured;
+    }
+
+    private String openAiSize(OpenAiCompatibleImageProtocolContext context) {
+        JSONObject config = context.modelConfig();
+        if (GptImageModel.presetCode(context.modelCode()) == null) {
+            return mapSize(context.modelCode(), context.width(), context.height(), config);
+        }
+        if ("auto".equals(context.resolution()) && Boolean.TRUE.equals(getBoolean(config, "supportAutoSize"))) {
+            return "auto";
+        }
+        int width = context.width();
+        int height = context.height();
+        ImageOutputDimensions.validateGptSize(width, height);
+        String size = width + "x" + height;
+        if (!isValidConfiguredCustomSize(width, height, config)
+                || Boolean.FALSE.equals(getBoolean(config, "supportCustomSize")) && !isConfiguredSizeSupported(config, size)) {
+            throw new BusinessException(400, "当前模型配置不支持所选图片尺寸 " + size);
+        }
+        return size;
+    }
+
+    private ObjectNode openAiOptions(OpenAiCompatibleImageProtocolContext context) {
+        JSONObject config = context.modelConfig();
+        ObjectNode options = OBJECT_MAPPER.createObjectNode();
+        boolean currentGpt = GptImageModel.presetCode(context.modelCode()) != null;
+        appendOptionalString(options, "quality", getString(config, "quality", "imageQuality"));
+        appendOptionalString(options, "background", getString(config, "background"));
+        appendOptionalString(options, "moderation", getString(config, "moderation"));
+        String format = getString(config, "outputFormat", "output_format");
+        appendOptionalString(options, "output_format", format);
+        if (!currentGpt || "jpeg".equalsIgnoreCase(format) || "webp".equalsIgnoreCase(format)) {
+            appendOptionalInteger(options, "output_compression", getInteger(config, "outputCompression", "output_compression"));
+        }
+        if (!currentGpt) {
+            if (context.hasReferenceImages()) {
+                appendOptionalString(options, "input_fidelity", getString(config, "inputFidelity", "input_fidelity"));
+            } else {
+                appendOptionalString(options, "response_format", getString(config, "responseFormat", "response_format"));
+                appendOptionalString(options, "style", getString(config, "style"));
+            }
+        }
+        appendOptionalString(options, "user", getString(config, "user", "endUser", "end_user"));
+        return options;
     }
 
     private String mapSize(String modelCode, int width, int height, JSONObject config) {

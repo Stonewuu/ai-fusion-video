@@ -28,6 +28,8 @@ import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.io.IOException;
@@ -102,8 +104,9 @@ class OpenAiAndAgnesImageStrategyTests {
         }
     }
 
-    @Test
-    void generateSupportsOpenAiCompatibleImagePathAndUrlResponse() throws Exception {
+    @ParameterizedTest
+    @CsvSource({"gpt-image-2,1024,1024", "pro/gpt-image-2.5-sunburst,1152,2048"})
+    void generateSupportsOpenAiCompatibleImagePathAndUrlResponse(String modelCode, int width, int height) throws Exception {
         AtomicReference<String> requestPath = new AtomicReference<>();
         AtomicReference<String> requestBody = new AtomicReference<>();
 
@@ -132,12 +135,14 @@ class OpenAiAndAgnesImageStrategyTests {
                 .autoAppendV1Path(false)
                 .build();
 
-        List<String> urls = generate(strategy, "a test prompt", "gpt-image-2", 1024, 1024, 1, null, apiConfig);
+        List<String> urls = generate(strategy, "a test prompt", modelCode, width, height, 1, null, apiConfig);
 
         assertThat(urls).containsExactly(providerUrl("generated.png"));
         assertThat(requestPath.get()).isEqualTo("/images/generations");
-        assertThat(requestBody.get()).contains("\"model\":\"gpt-image-2\"");
-        assertThat(requestBody.get()).contains("\"size\":\"1024x1024\"");
+        var sent = JSONUtil.parseObj(requestBody.get());
+        assertThat(sent.keySet()).containsExactlyInAnyOrder("model", "prompt", "n", "size");
+        assertThat(sent.getStr("model")).isEqualTo(modelCode);
+        assertThat(sent.getStr("size")).isEqualTo(width + "x" + height);
     }
 
     @ParameterizedTest

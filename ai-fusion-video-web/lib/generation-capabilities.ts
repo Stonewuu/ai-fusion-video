@@ -1,5 +1,6 @@
 import type { AiModel, ComfyUiInputCapability, ModelPreset } from "@/lib/api/ai-model";
 import { videoRulesOf, type VideoModelRules } from "@/lib/video-model-rules";
+import { imageOutputOptions, resolutionChoices, type ImageSizeTable } from "@/lib/image-output-sizes";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -22,6 +23,9 @@ export interface GenerationCapabilities {
   maxReferenceAudios: number;
   supportedAspectRatios: string[];
   supportedResolutions: string[];
+  imageSizes?: ImageSizeTable;
+  pixelResolutionTiers?: string[];
+  supportAutoSize?: boolean;
   minDuration: number;
   maxDuration: number;
   maxDurationByResolution?: Record<string, number>;
@@ -104,25 +108,6 @@ function strings(config: JsonRecord, fallback: string[], ...keys: string[]) {
   return fallback;
 }
 
-function sizeStrings(config: JsonRecord) {
-  const value = config.supportedSizes;
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    return [];
-  }
-  const result = new Set<string>();
-  for (const sizeMap of Object.values(value as JsonRecord)) {
-    if (!sizeMap || typeof sizeMap !== "object" || Array.isArray(sizeMap)) {
-      continue;
-    }
-    for (const item of Object.values(sizeMap as JsonRecord)) {
-      if (typeof item === "string" && item.trim()) {
-        result.add(item.trim());
-      }
-    }
-  }
-  return [...result];
-}
-
 export function generationCapabilityError(model: AiModel): string | null {
   if (model.capabilityError) {
     return model.capabilityError;
@@ -150,6 +135,13 @@ export function resolveGenerationCapabilities(
 ): GenerationCapabilities {
   const config = resolvedGenerationConfig(model, presets);
   const imageModel = model.modelType === 2;
+  const advertised = strings(config, [], "supportedResolutions", "resolutions");
+  const output = imageModel ? imageOutputOptions(config, advertised) : {
+    supportedResolutions: advertised.length ? advertised : ["720p", "1080p"],
+  };
+  const mappedRatios = "imageSizes" in output && output.imageSizes
+    ? [...new Set(Object.values(output.imageSizes).flatMap((sizes) => Object.keys(sizes)))] : [];
+  const ratios = strings(config, mappedRatios.length ? mappedRatios : ["1:1", "4:3", "3:4", "16:9", "9:16"], "supportedAspectRatios");
   const videoRules = videoRulesOf(config);
   const referenceImageInputFormats = strings(
     config,
@@ -211,21 +203,9 @@ export function resolveGenerationCapabilities(
     maxImageInputs: inputMaximum(config, "maxImageInputs", "maxImages"),
     maxReferenceVideos: inputMaximum(config, "maxReferenceVideos", "maxRefVideos"),
     maxReferenceAudios: inputMaximum(config, "maxReferenceAudios", "maxRefAudios"),
-    supportedAspectRatios: strings(
-      config,
-      ["1:1", "4:3", "3:4", "16:9", "9:16"],
-      "supportedAspectRatios",
-    ),
-    supportedResolutions: strings(
-      config,
-      imageModel
-        ? sizeStrings(config).slice(0, 12).length
-          ? sizeStrings(config).slice(0, 12)
-          : ["1024x1024"]
-        : ["720p", "1080p"],
-      "supportedResolutions",
-      "resolutions",
-    ),
+    ...output,
+    supportedAspectRatios: imageModel && output.supportedResolutions.length
+      ? ratios.filter((ratio) => resolutionChoices(output, ratio).length > 0) : ratios,
     minDuration: num(config, 3, "minDuration"),
     maxDuration: num(config, 10, "maxDuration"),
     maxDurationByResolution: config.maxDurationByResolution as Record<string, number> | undefined,
@@ -236,7 +216,7 @@ export function resolveGenerationCapabilities(
       config.defaultDuration === -1 && videoRules?.automaticDuration
         ? -1
         : num(config, 5, "defaultDuration"),
-    defaultAspectRatio: videoRules?.defaultRatio,
+    defaultAspectRatio: imageModel && typeof config.defaultAspectRatio === "string" ? config.defaultAspectRatio : videoRules?.defaultRatio,
     defaultResolution:
       typeof config.defaultResolution === "string"
         ? config.defaultResolution

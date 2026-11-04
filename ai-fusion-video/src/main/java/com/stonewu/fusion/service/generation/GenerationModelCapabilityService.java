@@ -13,6 +13,8 @@ import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowCapabilities;
 import com.stonewu.fusion.service.ai.model.AiModelMetadata;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
+import com.stonewu.fusion.service.ai.model.GptImageModel;
+import com.stonewu.fusion.service.generation.image.ImageOutputDimensions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
@@ -177,6 +179,12 @@ public class GenerationModelCapabilityService {
             return;
         }
         JSONObject config = getMergedModelConfig(model);
+        if (model.getComfyuiWorkflowId() == null) {
+            boolean openAiImage = GptImageModel.presetCode(model.getCode()) != null
+                    && "openai".equalsIgnoreCase(StrUtil.isNotBlank(model.getModelProtocol())
+                    ? model.getModelProtocol().trim() : aiModelMetadataResolver.resolve(model, platform).modelProtocol());
+            ImageOutputDimensions.normalize(task, config, openAiImage);
+        }
         ImageModelCapability capability = imageCapability(config);
         List<String> referenceImages = parseJsonUrls(task.getRefImageUrls(), "refImageUrls");
 
@@ -357,6 +365,10 @@ public class GenerationModelCapabilityService {
                 .set("asyncMode", Boolean.TRUE.equals(getBoolean(config,
                         "asyncMode", "useAsyncMode", "asyncTaskMode", "enableAsyncTask", "asyncEnabled")))
                 .set("supportedAspectRatios", getStringList(config, "supportedAspectRatios"))
+                .set("supportedResolutions", getStringList(config, "supportedResolutions"))
+                .set("defaultResolution", config.getStr("defaultResolution"))
+                .set("defaultAspectRatio", config.getStr("defaultAspectRatio"))
+                .set("supportAutoSize", config.getBool("supportAutoSize"))
                 .set("supportedSizes", copyJsonObject(config, "supportedSizes"))
                 .set("defaultWidth", getInteger(config, "defaultWidth"))
                 .set("defaultHeight", getInteger(config, "defaultHeight"))

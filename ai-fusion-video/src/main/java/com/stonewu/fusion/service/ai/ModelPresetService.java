@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.stonewu.fusion.service.ai.model.GptImageModel;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.io.Resource;
@@ -130,6 +131,12 @@ public class ModelPresetService {
         JSONObject directPreset = presets.get(modelCode);
         if (directPreset != null && modelType.equals(directPreset.getInt("modelType"))) {
             return modelCode;
+        }
+        if (modelType == 2) {
+            String imagePreset = GptImageModel.presetCode(modelCode);
+            if (imagePreset != null) {
+                return imagePreset;
+            }
         }
         return presetCodesByModelKey.get(modelKey(modelCode, modelType));
     }

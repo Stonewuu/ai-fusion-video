@@ -46,6 +46,45 @@ const { resolveGenerationCapabilities, workflowInputIssue } = load(
   "lib/generation-capabilities.ts",
 );
 const videoRules = load("lib/video-model-rules.ts");
+const { resolutionChoices } = load("lib/image-output-sizes.ts");
+
+test("GPT 图片模型的每个固定比例都能选择三个档位，提交时保留档位和比例", () => {
+  const presets = ["openai/image.json", "openai/image-25.json"].flatMap((file) =>
+    JSON.parse(fs.readFileSync(path.resolve(root, "../ai-fusion-video/src/main/resources/model-presets", file), "utf8")),
+  );
+  const ratios = ["1:1", "2:3", "3:2", "4:3", "3:4", "5:4", "4:5", "16:9", "9:16", "2:1", "1:2", "21:9", "9:21"];
+  for (const code of ["gpt-image-2", "gpt-image-2.5-sunburst", "gpt-image-2.5-flare"]) {
+    const capability = resolveGenerationCapabilities({ modelType: 2, capabilityPresetCode: code }, presets);
+    const form = labels.generationFormForModel(forms.EMPTY_GENERATION_FORM, capability);
+    assert.deepEqual([form.ratio, form.resolution], ["1:1", "1K"]);
+    assert.deepEqual(new Set(capability.supportedAspectRatios), new Set([...ratios, "auto"]));
+    for (const ratio of ratios) {
+      assert.deepEqual(resolutionChoices(capability, ratio), ["1K", "2K", "4K"]);
+    }
+    assert.deepEqual(resolutionChoices(capability, "auto"), ["auto"]);
+    const request = requests.generationSubmitRequest("image", { ...form, ratio: "9:16", resolution: "2K" }, 15, capability);
+    assert.deepEqual([request.ratio, request.resolution], ["9:16", "2K"]);
+    assert.equal(capability.imageSizes["2K"]["9:16"], "1152x2048");
+  }
+});
+
+test("按模型声明的格式提交图片尺寸，切换比例时只显示可用档位", () => {
+  const presets = JSON.parse(fs.readFileSync(path.resolve(root, "../ai-fusion-video/src/main/resources/model-presets/agnes/image.json"), "utf8"));
+  const exact = resolveGenerationCapabilities({ modelType: 2, capabilityPresetCode: "agnes-image-2.0-flash" }, presets);
+  const form = { ...forms.EMPTY_GENERATION_FORM, ratio: "3:4", resolution: "standard" };
+  assert.deepEqual(resolutionChoices(exact, "3:4"), ["standard"]);
+  assert.equal(requests.generationSubmitRequest("image", form, 7, exact).resolution, "768x1024");
+
+  const config = { supportedAspectRatios: ["9:16", "1:1"], supportedResolutions: ["2K", "4K"] };
+  const native = resolveGenerationCapabilities({ modelType: 2, generationConfig: config }, []);
+  const portrait = { ...form, ratio: "9:16", resolution: "2K" };
+  const request = requests.generationSubmitRequest("image", portrait, 7, native);
+  assert.deepEqual([request.resolution, request.ratio], ["2K", "9:16"]);
+  const limited = resolveGenerationCapabilities({ modelType: 2, generationConfig: { ...config,
+    supportedSizes: { "2K": { "9:16": "1152x2048" }, "4K": { "1:1": "2880x2880" } } } }, []);
+  assert.deepEqual(resolutionChoices(limited, "9:16"), ["2K"]);
+  assert.deepEqual(resolutionChoices(limited, "1:1"), ["4K"]);
+});
 
 test("ComfyUI uses the server result instead of stale model flags and preset counts", () => {
   const model = { modelType: 2, comfyuiWorkflowId: 12, capabilityPresetCode: "old",

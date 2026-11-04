@@ -106,7 +106,7 @@ class NewApiImageProtocolTests {
                 1,
                 imageUrls,
                 config,
-                false
+                false, null, null
         );
     }
 

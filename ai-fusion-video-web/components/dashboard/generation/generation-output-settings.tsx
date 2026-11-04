@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { GenerationDurationSlider } from "./generation-duration-slider";
 import type { GenerationFormState, WorkbenchMode } from "./generation-types";
 import { parseLimit } from "./generation-utils";
+import { GenerationImageOutputPickers } from "./generation-image-output-pickers";
 
 interface GenerationOutputSettingsProps {
   mode: WorkbenchMode;
@@ -49,7 +50,7 @@ function ChoiceGroup({
                 : "border-border/40 bg-background/65 text-muted-foreground hover:border-primary/20 hover:bg-background hover:text-foreground",
             )}
           >
-            {option === "adaptive" ? "自适应" : option}
+            {option === "adaptive" || option === "auto" ? "自适应" : option}
           </button>
         ))}
       </div>
@@ -162,25 +163,33 @@ export function GenerationOutputSettings({
       </div>
 
       <div className="mt-3 space-y-3.5">
-        <ChoiceGroup
-          label="画面比例"
-          value={form.ratio}
-          options={videoRatioOptions(
-            capabilities?.supportedAspectRatios || [],
-            capabilities?.videoRules,
-            videoInputState(form),
-          )}
-          onChange={(ratio) => onChange({ ratio })}
-        />
-        <ChoiceGroup
-          label="分辨率"
-          value={form.resolution}
-          options={capabilities?.supportedResolutions || []}
-          onChange={(resolution) => {
-            const duration = capabilities ? videoDurationForResolution(form.duration, capabilities, resolution) : form.duration;
-            onChange({ resolution, duration });
-          }}
-        />
+        {mode === "image" ? (
+          <div className="grid grid-cols-2 gap-3">
+            <GenerationImageOutputPickers capabilities={capabilities} form={form} onChange={onChange} />
+          </div>
+        ) : (
+          <>
+            <ChoiceGroup
+              label="画面比例"
+              value={form.ratio}
+              options={videoRatioOptions(
+                capabilities?.supportedAspectRatios || [],
+                capabilities?.videoRules,
+                videoInputState(form),
+              )}
+              onChange={(ratio) => onChange({ ratio })}
+            />
+            <ChoiceGroup
+              label="分辨率"
+              value={form.resolution}
+              options={(capabilities?.supportedResolutions ?? [])}
+              onChange={(resolution) => {
+                const duration = capabilities ? videoDurationForResolution(form.duration, capabilities, resolution) : form.duration;
+                onChange({ resolution, duration });
+              }}
+            />
+          </>
+        )}
 
         <div className="grid gap-2 sm:grid-cols-2">
           <Stepper

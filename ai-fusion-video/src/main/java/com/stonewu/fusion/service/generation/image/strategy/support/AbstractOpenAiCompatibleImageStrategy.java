@@ -22,7 +22,6 @@ import okhttp3.Request;
 import okhttp3.Response;
 
 import java.io.IOException;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -59,9 +58,7 @@ public abstract class AbstractOpenAiCompatibleImageStrategy implements ImageGene
     @Override
     public int batchSize(ImageTask task, AiModel model, ApiConfig apiConfig) {
         var config = protocolSupport.resolveModelConfig(model.getCode(), model);
-        int[] size = protocolSupport.resolveConfiguredSize(task, config);
-        var context = buildContext(model, apiConfig, model.getCode(), task.getPrompt(), size[0], size[1],
-                task.getCount(), parseRefImageUrls(task.getRefImageUrls()), config);
+        var context = buildContext(model, apiConfig, task, config);
         return protocolAdapter.isSingleImagePerRequest(context) ? 1 : task.getCount();
     }
 
@@ -69,9 +66,7 @@ public abstract class AbstractOpenAiCompatibleImageStrategy implements ImageGene
     public PreparedGenerationCall prepare(ImageTask task, AiModel model, ApiConfig apiConfig) {
         validateApiConfig(apiConfig);
         JSONObject config = protocolSupport.resolveModelConfig(model.getCode(), model);
-        int[] size = protocolSupport.resolveConfiguredSize(task, config);
-        var context = buildContext(model, apiConfig, model.getCode(), task.getPrompt(), size[0], size[1],
-                task.getCount(), parseRefImageUrls(task.getRefImageUrls()), config);
+        var context = buildContext(model, apiConfig, task, config);
         var protocolRequest = protocolAdapter.buildRequest(context);
         var request = new Request.Builder().url(protocolRequest.url())
                 .addHeader("Authorization", "Bearer " + apiConfig.getApiKey()).post(protocolRequest.body()).build();
@@ -142,18 +137,13 @@ public abstract class AbstractOpenAiCompatibleImageStrategy implements ImageGene
         }
     }
 
-    private OpenAiCompatibleImageProtocolContext buildContext(AiModel model,
-                                                              ApiConfig apiConfig,
-                                                              String modelCode,
-                                                              String prompt,
-                                                              int width,
-                                                              int height,
-                                                              int count,
-                                                              List<String> imageUrls,
+    private OpenAiCompatibleImageProtocolContext buildContext(AiModel model, ApiConfig apiConfig, ImageTask task,
                                                               JSONObject modelConfig) {
+        int[] size = protocolSupport.resolveConfiguredSize(task, modelConfig);
         return new OpenAiCompatibleImageProtocolContext(
-                model, apiConfig, modelCode, prompt, width, height, Math.max(count, 1),
-                imageUrls, modelConfig, protocolSupport.isAsyncMode(modelConfig));
+                model, apiConfig, model.getCode(), task.getPrompt(), size[0], size[1], Math.max(task.getCount(), 1),
+                parseRefImageUrls(task.getRefImageUrls()), modelConfig, protocolSupport.isAsyncMode(modelConfig),
+                task.getResolution(), StrUtil.blankToDefault(task.getRatio(), task.getAspectRatio()));
     }
 
 

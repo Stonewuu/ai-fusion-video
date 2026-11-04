@@ -29,6 +29,8 @@ export function generationSubmitRequest(
   if (mode === "image") {
     const input: Omit<ImageGenerationSubmitReq, "requestId" | "scope"> = {
       ...common,
+      resolution: capabilities?.pixelResolutionTiers?.includes(form.resolution)
+        ? capabilities.imageSizes?.[form.resolution]?.[form.ratio] : common.resolution,
       refImageUrls: referenceImages.length
         ? JSON.stringify(referenceImages)
         : undefined,
