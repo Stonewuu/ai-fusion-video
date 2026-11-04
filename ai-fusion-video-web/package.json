@@ -18,7 +18,7 @@
     "lint": "eslint",
     "test:storyboard": "node --test scripts/storyboard-refresh.test.mjs",
     "clean": "rimraf .next",
-    "test:canvas": "node --test scripts/canvas-editor.test.mjs scripts/canvas-layout.test.mjs",
+    "test:canvas": "node --test scripts/canvas-editor.test.mjs scripts/canvas-layout.test.mjs scripts/canvas-layout-worker.test.mjs",
     "test:generation": "node --test scripts/generation-execution.test.mjs"
   },
   "dependencies": {

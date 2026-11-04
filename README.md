@@ -62,6 +62,23 @@
         <p><a href="https://hub.ll2.cn?p=mj5f" target="_blank" rel="noopener noreferrer"><strong>注册 LL2 →</strong></a></p>
       </td>
     </tr>
+    <tr>
+      <td width="180" align="center" valign="middle">
+        <a href="https://metaso.cn/minimax-h3/?s=fusioi" target="_blank" rel="noopener noreferrer">
+          <img src="assets/sponsors/metasota-logo.png" alt="秘塔科技 Logo" width="160" />
+        </a>
+      </td>
+      <td valign="top">
+        <p><strong>感谢 <a href="https://metaso.cn/minimax-h3/?s=fusioi" target="_blank" rel="noopener noreferrer">秘塔</a> 赞助本项目！｜MiniMax H3 视频生成 API</strong></p>
+        <p>
+          秘塔科技提供高性价比的 MiniMax H3 视频生成服务：<br />
+          480P 仅 <strong>0.06 元/秒</strong>，768P 仅 <strong>0.09 元/秒</strong>，
+          1080P（非超分）仅 <strong>0.14 元/秒</strong>，2K 仅 <strong>0.15 元/秒</strong>。
+        </p>
+        <p>支持生成 30 秒视频，支持多参考和音画同步。API 兼容 OpenAI 协议，支持 ComfyUI，无需自行部署 GPU。</p>
+        <p>🎁 通过 <a href="https://metaso.cn/minimax-h3/?s=fusioi" target="_blank" rel="noopener noreferrer"><strong>融光专属链接</strong></a> 注册，即可领取赠送额度及专属优惠。</p>
+      </td>
+    </tr>
   </tbody>
 </table>
 

@@ -1,10 +1,9 @@
-import ELK, { type ElkNode } from "elkjs/lib/elk.bundled.js";
+import type { ELK, ElkNode } from "elkjs/lib/elk-api.js";
 import { LAYER_GAP, NODE_GAP, type LayoutScope, type Point } from "./types";
 
-const elk = new ELK({ algorithms: ["layered"] });
 const portId = (id: string, output: boolean, port: string) => JSON.stringify([id, output, port]);
 
-export async function layeredPlacement(scope: LayoutScope) {
+export async function layeredPlacement(scope: LayoutScope, engine: Pick<ELK, "layout">) {
   const graph: ElkNode = {
     id: "canvas-layout",
     layoutOptions: {
@@ -55,7 +54,7 @@ export async function layeredPlacement(scope: LayoutScope) {
       },
     })),
   };
-  const result = await elk.layout(graph);
+  const result = await engine.layout(graph);
   const positions = new Map<string, Point>();
   for (const node of result.children!) {
     if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) {

@@ -1,3 +1,4 @@
+import type { ELK } from "elkjs/lib/elk-api.js";
 import { buildLayoutScopes } from "./layout/model";
 import { layeredPlacement } from "./layout/elk-layout";
 import { constrainPlacement } from "./layout/constraints";
@@ -8,11 +9,11 @@ import { LayoutConstraintError, type LayoutRequest, type LayoutResult } from "./
 
 export type { CanvasGeometry, CanvasNodeGeometry } from "./layout/types";
 
-export async function autoArrangeCanvas(request: LayoutRequest): Promise<LayoutResult> {
+export async function autoArrangeCanvas(request: LayoutRequest, engine: Pick<ELK, "layout">): Promise<LayoutResult> {
   const scopes = buildLayoutScopes(request);
   const layers = [];
   for (const scope of scopes) {
-    layers.push(await layeredPlacement(scope));
+    layers.push(await layeredPlacement(scope, engine));
   }
   let best: { result: LayoutResult; quality: number[] } | null = null;
   const failures: string[] = [];

@@ -14,8 +14,8 @@ export function load(relative) {
   if (cache.has(file)) {
     return cache.get(file).exports;
   }
-  const module = { exports: {} };
-  cache.set(file, module);
+  const loadedModule = { exports: {} };
+  cache.set(file, loadedModule);
   const compiled = ts.transpileModule(fs.readFileSync(file, "utf8"), {
     compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true },
   }).outputText;
@@ -28,10 +28,13 @@ export function load(relative) {
     }
     return require(name);
   };
-  vm.runInThisContext(`(function(require,module,exports){${compiled}\n})`, { filename: file })(localRequire, module, module.exports);
-  return module.exports;
+  vm.runInThisContext(`(function(require,module,exports){${compiled}\n})`, { filename: file })(localRequire, loadedModule, loadedModule.exports);
+  return loadedModule.exports;
 }
-const { autoArrangeCanvas, autoLayoutOperations } = load("lib/canvas/auto-layout.ts");
+const { autoArrangeCanvas: arrangeWithEngine, autoLayoutOperations } = load("lib/canvas/auto-layout.ts");
+const ELK = require("elkjs/lib/elk.bundled.js");
+const engine = new ELK({ algorithms: ["layered"] });
+const autoArrangeCanvas = (input) => arrangeWithEngine(input, engine);
 const { layoutWorldBoxes } = load("lib/canvas/layout/model.ts");
 const { overlaps, boundsOf } = load("lib/canvas/layout/types.ts");
 

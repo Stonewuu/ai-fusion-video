@@ -12,7 +12,7 @@ self.onmessage = async (event: MessageEvent<LayoutWorkerMessage>) => {
   try {
     const { mode, request } = event.data;
     const result = mode === "arrange"
-      ? await (await import("../auto-layout")).autoArrangeCanvas(request)
+      ? await (await import("./elk-engine")).arrangeWithBrowserEngine(request)
       : { positions: {}, routes: routeCanvasEdges(request) };
     self.postMessage({ result } satisfies LayoutWorkerResponse);
   } catch (error) {

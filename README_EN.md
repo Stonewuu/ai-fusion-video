@@ -62,6 +62,23 @@ Thank you to the following sponsors for supporting AI Fusion Video!
         <p><a href="https://hub.ll2.cn?p=mj5f" target="_blank" rel="noopener noreferrer"><strong>Sign up for LL2 →</strong></a></p>
       </td>
     </tr>
+    <tr>
+      <td width="180" align="center" valign="middle">
+        <a href="https://metaso.cn/minimax-h3/?s=fusioi" target="_blank" rel="noopener noreferrer">
+          <img src="assets/sponsors/metasota-logo.png" alt="MetaSota logo" width="160" />
+        </a>
+      </td>
+      <td valign="top">
+        <p><strong>Thank you to <a href="https://metaso.cn/minimax-h3/?s=fusioi" target="_blank" rel="noopener noreferrer">MetaSota</a> for sponsoring this project! | MiniMax H3 Video Generation API</strong></p>
+        <p>
+          MetaSota offers MiniMax H3 video generation at the following rates:<br />
+          480p: <strong>CNY 0.06/s</strong>; 768p: <strong>CNY 0.09/s</strong>;
+          1080p (without upscaling): <strong>CNY 0.14/s</strong>; 2K: <strong>CNY 0.15/s</strong>.
+        </p>
+        <p>Generate 30-second videos with multiple reference inputs and synchronized audio. The OpenAI-compatible API also works with ComfyUI, so you don’t need to deploy your own GPU.</p>
+        <p>🎁 Sign up through the <a href="https://metaso.cn/minimax-h3/?s=fusioi" target="_blank" rel="noopener noreferrer"><strong>exclusive AI-FUSION-VIDEO link</strong></a> to claim bonus credits and special offers.</p>
+      </td>
+    </tr>
   </tbody>
 </table>
 
