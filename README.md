@@ -125,6 +125,10 @@
 
 本仓库包含 Java 后端、Next.js 前端和 Docker Compose 部署配置。首次启动后，按照初始化向导创建管理员账号即可开始使用。
 
+## 产品视频
+
+https://github.com/user-attachments/assets/acd181a0-541c-4163-a000-fa9ed72a5106
+
 ## 功能
 
 ### 无限画布

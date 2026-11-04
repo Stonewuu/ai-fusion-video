@@ -125,6 +125,10 @@ AI Fusion Video is an Agent-driven platform for video creators. It brings projec
 
 This repository includes a Java backend, a Next.js frontend, and Docker Compose deployment files. After the first launch, follow the setup wizard to create an administrator account and start using the platform.
 
+## Product Video
+
+https://github.com/user-attachments/assets/acd181a0-541c-4163-a000-fa9ed72a5106
+
 ## Features
 
 ### Infinite canvas
