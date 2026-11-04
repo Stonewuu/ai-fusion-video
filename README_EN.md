@@ -127,6 +127,26 @@ This repository includes a Java backend, a Next.js frontend, and Docker Compose 
 
 ## Features
 
+### Infinite canvas
+
+Bring scripts, storyboards, characters, and media together on one canvas. Connect the steps you need to generate images and videos, assemble shots, and export the finished video. You can preview reference images and play clips directly in their nodes.
+
+Use Auto Arrange to tidy a busy canvas. Save a workflow as a reusable template, or share the canvas with teammates to edit together, leave comments, and save versions.
+
+### AI Fusion Video Assistant (融光助手)
+
+Open the assistant in a project or on the canvas. Reference a script, storyboard, asset, or selected node when asking it to revise content, plan shots, or generate media. You can also attach images, video, audio, or files when the selected model supports them. Replies appear as they are generated, and you can pick up the conversation after refreshing or returning to it.
+
+In Agent Settings, choose your usual instructions, tools, and default Skills. The assistant follows the permissions you select for the conversation, can use external tools connected through MCP or delegate tasks to other agents, and shows progress in the chat.
+
+### ComfyUI workflows
+
+Connect a ComfyUI instance under Settings → AI Configuration. Import the workflow exported from ComfyUI in API JSON format, map its prompt, reference media, and outputs, then validate and test it. Publish the workflow and link it to an image or video model.
+
+Select that model in the generation tools or on the canvas to run the workflow. The form shows which inputs you need and how many reference images it accepts.
+
+### Other features
+
 | Area | What you can do |
 | --- | --- |
 | Projects and teams | Manage creative projects, project members, and collaboration roles |
@@ -134,15 +154,8 @@ This repository includes a Java backend, a Next.js frontend, and Docker Compose 
 | Storyboarding | Build storyboards from scripts and edit shot content, reference assets, and generation results |
 | Image and video generation | Generate images and video from text or reference assets while tracking background job progress |
 | Asset management | Organize project assets and reusable image and video resources |
-| Agent workspace | Use streaming chat, multimodal context, tool permissions, Skills, MCP, and sub-Agents |
 | Models and storage | Configure text, image, and video models centrally, with local or object storage |
 | System administration | Use the setup wizard, manage users and roles, reset passwords, and check for updates |
-
-### Agents and tools
-
-The built-in Agent workspace can hold ongoing conversations grounded in project content, accept multimodal inputs such as images, video, audio, and files, and display reasoning, tool calls, and task status in the interface.
-
-Agents run on AgentScope with support for Skills, MCP, and sub-Agents. Conversations and run state are persisted, while model capabilities and tool permissions can be configured per conversation for multi-step creative work.
 
 ### Model and generation protocols
 
