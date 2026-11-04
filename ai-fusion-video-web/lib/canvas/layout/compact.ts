@@ -1,9 +1,27 @@
-import { boundsOf, LAYER_GAP, NODE_GAP, type LayoutScope, type LayoutUnit, type Point } from "./types";
+import { boundsOf, LAYER_GAP, NODE_GAP, type LayoutLink, type LayoutScope, type LayoutUnit, type Point } from "./types";
 import { balancedLayers } from "./balanced-layers";
+import { groupParallelInputs, type InputDestination } from "./input-groups";
 
 // 保留 ELK 排好的层内顺序，在相邻层之间对齐端口并收紧空白。
 // 单调回归同时满足整列的不重叠约束，不逐个挪节点制造越来越高的新行。
 export function compactPlacement(scope: LayoutScope, input: Map<string, Point>, balanced = false) {
+  const units = new Map(scope.units.map((node) => [node.id, node]));
+  const incoming = new Map(scope.units.map((node) => [node.id, [] as LayoutLink[]]));
+  const outgoing = new Map(scope.units.map((node) => [node.id, [] as LayoutLink[]]));
+  for (const link of scope.links) {
+    incoming.get(link.target)!.push(link);
+    outgoing.get(link.source)!.push(link);
+  }
+  const destinations = new Map<string, InputDestination>();
+  for (const node of scope.units) {
+    const links = outgoing.get(node.id)!.filter((link) => link.kind === "execution");
+    if (node.movable && links.length === 1 && !incoming.get(node.id)!.some((link) => link.kind === "execution")) {
+      const link = links[0];
+      destinations.set(node.id, {
+        target: link.target, portY: units.get(link.target)!.inputs[link.targetPort].y, index: link.inputIndex ?? 0,
+      });
+    }
+  }
   let columns: { right: number; nodes: LayoutUnit[]; height: number }[] = [];
   for (const node of [...scope.units].sort((a, b) => input.get(a.id)!.x - input.get(b.id)!.x || a.id.localeCompare(b.id))) {
     const point = input.get(node.id)!;
@@ -19,10 +37,13 @@ export function compactPlacement(scope: LayoutScope, input: Map<string, Point>, 
     column.nodes.sort((a, b) => input.get(a.id)!.y - input.get(b.id)!.y || a.id.localeCompare(b.id));
     column.height = column.nodes.reduce((sum, node) => sum + node.height + NODE_GAP, -NODE_GAP);
   }
-  if (balanced) {
-    columns = balancedLayers(scope, input);
-  }
   const original = boundsOf(scope.units.map((node) => ({ ...node, ...input.get(node.id)! })));
+  if (balanced) {
+    columns = balancedLayers(scope, input, destinations, original.width);
+  }
+  for (const column of columns) {
+    column.nodes = groupParallelInputs(column.nodes, destinations).flat();
+  }
   const height = Math.max(...columns.map((column) => column.height));
   const budget = Math.max(height, Math.min(original.height, height + Math.max(...scope.units.map((node) => node.height))));
   const positions = new Map<string, Point>();
@@ -35,12 +56,9 @@ export function compactPlacement(scope: LayoutScope, input: Map<string, Point>, 
       nodeColumn.set(node.id, index);
       y += node.height + NODE_GAP;
     }
-    const outgoing = scope.links.filter((link) => column.nodes.some((node) => node.id === link.source)).length;
-    x += Math.max(...column.nodes.map((node) => node.width)) + Math.max(LAYER_GAP, Math.min(240, outgoing * 4));
+    const edgeCount = column.nodes.reduce((sum, node) => sum + outgoing.get(node.id)!.length, 0);
+    x += Math.max(...column.nodes.map((node) => node.width)) + Math.max(LAYER_GAP, Math.min(240, edgeCount * 4));
   });
-  const units = new Map(scope.units.map((node) => [node.id, node]));
-  const incoming = new Map(scope.units.map((node) => [node.id, scope.links.filter((link) => link.target === node.id)]));
-  const outgoing = new Map(scope.units.map((node) => [node.id, scope.links.filter((link) => link.source === node.id)]));
   for (let pass = 0; pass < 4; pass++) {
     const forward = pass % 2 === 0;
     for (const column of forward ? columns : [...columns].reverse()) {
@@ -59,7 +77,7 @@ export function compactPlacement(scope: LayoutScope, input: Map<string, Point>, 
           const localPort = forward ? node.inputs[link.targetPort] : node.outputs[link.sourcePort];
           const otherPort = forward ? other.outputs[link.sourcePort] : other.inputs[link.targetPort];
           const importance = link.kind === "execution" ? 4 : link.kind === "structure" ? 2 : 1;
-          total += (positions.get(other.id)!.y + otherPort - localPort) * importance;
+          total += (positions.get(other.id)!.y + otherPort.y - localPort.y) * importance;
           weight += importance;
         }
         if (!weight) {

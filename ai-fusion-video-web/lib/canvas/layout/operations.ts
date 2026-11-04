@@ -2,7 +2,7 @@ import type { CanvasOperation } from "../types";
 import { layoutWorldBoxes } from "./model";
 import type { LayoutRequest, LayoutResult } from "./types";
 
-export function autoLayoutOperations(request: LayoutRequest, result: LayoutResult): CanvasOperation[] {
+export function autoLayoutOperations(request: LayoutRequest, result: Pick<LayoutResult, "positions">): CanvasOperation[] {
   const { boxes } = layoutWorldBoxes(request, result.positions);
   const operations: CanvasOperation[] = [];
   for (const node of request.graph.nodes) {

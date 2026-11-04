@@ -18,6 +18,7 @@ export function layoutLinks(request: LayoutRequest): LayoutLink[] {
       target: edge.targetNodeId,
       sourcePort: edge.kind === "execution" ? edge.sourcePort! : "annotation-out",
       targetPort: edge.kind === "execution" ? edge.targetPort! : "annotation-in",
+      inputIndex: edge.inputIndex,
       kind: edge.kind === "execution" ? "execution" : "reference",
       label: request.labels?.[edge.id] ?? (edge.kind === "execution" && edge.inputIndex !== null && edge.inputIndex > 0
         ? String(edge.inputIndex + 1) : ""),
@@ -26,6 +27,7 @@ export function layoutLinks(request: LayoutRequest): LayoutLink[] {
       ...relation,
       sourcePort: "annotation-out",
       targetPort: "annotation-in",
+      inputIndex: null,
       kind: relation.category === "structure" ? "structure" : "reference",
     })),
   ].sort((a, b) => a.id.localeCompare(b.id));

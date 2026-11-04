@@ -13,8 +13,8 @@ export interface Box extends Point {
 export interface CanvasNodeGeometry {
   width: number;
   height: number;
-  inputs: Record<string, number>;
-  outputs: Record<string, number>;
+  inputs: Record<string, Point>;
+  outputs: Record<string, Point>;
 }
 
 export type CanvasGeometry = Record<string, CanvasNodeGeometry>;
@@ -33,6 +33,7 @@ export interface LayoutLink {
   target: string;
   sourcePort: string;
   targetPort: string;
+  inputIndex: number | null;
   kind: "execution" | "structure" | "reference";
   label: string;
 }
@@ -46,11 +47,9 @@ export interface LayoutRequest {
   labels?: Record<string, string>;
 }
 
-export interface LayoutUnit extends Box {
+export interface LayoutUnit extends Box, CanvasNodeGeometry {
   id: string;
   movable: boolean;
-  inputs: Record<string, number>;
-  outputs: Record<string, number>;
 }
 
 export interface LayoutScope {
@@ -63,6 +62,7 @@ export interface LayoutScope {
 export interface EdgeRoute {
   points: Point[];
   label: Point | null;
+  obstructions: number;
 }
 
 export interface LayoutResult {
@@ -72,7 +72,6 @@ export interface LayoutResult {
 
 export const NODE_GAP = 48;
 export const LAYER_GAP = 96;
-export const ROUTE_MARGIN = 12;
 
 export class LayoutConstraintError extends Error {}
 

@@ -1,4 +1,10 @@
-import type { LayoutRequest } from "./types";
+import type { LayoutRelation, LayoutRequest } from "./types";
+
+export function layoutRelationsKey(relations: LayoutRelation[]) {
+  return JSON.stringify(relations
+    .map(({ id, source, target, category, label }) => [id, source, target, category, label])
+    .sort(([left], [right]) => left.localeCompare(right)));
+}
 
 export function layoutRequestKey(request: LayoutRequest) {
   return JSON.stringify([

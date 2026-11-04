@@ -21,7 +21,10 @@ export function captureLayoutGeometry(graph: CanvasGraph, catalog: CanvasCatalog
       const measured = output ? internal?.internals.handleBounds?.source : internal?.internals.handleBounds?.target;
       const handles = measured ?? declared.handles!.filter((handle) => handle.type === (output ? "source" : "target"));
       return Object.fromEntries(handles.filter((handle) => handle.id)
-        .map((handle) => [handle.id!, handle.y + handle.height! / 2]));
+        .map((handle) => [handle.id!, {
+          x: output ? handle.x + handle.width! : handle.x,
+          y: handle.y + handle.height! / 2,
+        }]));
     };
     geometry[node.id] = { width, height, inputs: handleMap(false), outputs: handleMap(true) };
   }

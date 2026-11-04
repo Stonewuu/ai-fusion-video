@@ -3,7 +3,6 @@
 import { Plus, Undo2, Redo2, MousePointer2, Hand } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useCanvas } from "../canvas-provider";
-import type { CanvasAlignment } from "@/lib/canvas/layout-actions";
 import type { CanvasRelationAvailability, CanvasRelationScope } from "@/lib/canvas/relations";
 import { CanvasSegmentedControl } from "../workspace/segmented-control";
 import {
@@ -38,8 +37,8 @@ export function CanvasToolbar(props: {
   onReloadRelations: () => void;
   onAdd: () => void;
   onFit: () => void;
-  onArrange: (mode: CanvasAlignment) => void;
-  arranging: boolean;
+  onArrange: () => void;
+  arrangeError: string | null;
   onSearch: () => void;
   mode: "select" | "pan";
   onMode: (value: "select" | "pan") => void;
@@ -54,6 +53,8 @@ export function CanvasToolbar(props: {
   const canRedo = useCanvas((state) => state.redoStack.length > 0);
   const undo = useCanvas((state) => state.undo);
   const redo = useCanvas((state) => state.redo);
+  const canArrange = editable && !props.relationLoading && !props.relationError;
+  const arrangeTitle = props.relationError ?? (props.relationLoading ? "正在读取项目关系" : props.arrangeError ?? "整理选中的节点，未选择时整理全部");
   return (
     <div
       className="@container pointer-events-none w-full"
@@ -99,14 +100,14 @@ export function CanvasToolbar(props: {
         </div>
         <CanvasViewActions
           {...props}
-          editable={!!editable}
-          onArrange={() => props.onArrange("arrange")}
+          editable={!!canArrange}
+          arrangeTitle={arrangeTitle}
         />
         </div>
         <CanvasViewSettings
           {...props}
-          editable={!!editable}
-          onArrange={() => props.onArrange("arrange")}
+          editable={!!canArrange}
+          arrangeTitle={arrangeTitle}
         />
       </div>
     </div>

@@ -7,7 +7,6 @@ import {
   Search,
   SlidersHorizontal,
   Wand2,
-  X,
   type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -72,13 +71,13 @@ export function CanvasViewActions({
   onFit,
   onArrange,
   editable,
-  arranging,
+  arrangeTitle,
 }: {
   onSearch: () => void;
   onFit: () => void;
   onArrange: () => void;
   editable: boolean;
-  arranging: boolean;
+  arrangeTitle: string;
 }) {
   return (
     <>
@@ -98,9 +97,9 @@ export function CanvasViewActions({
       />
       <span className="hidden @md:inline-flex">
         <CanvasToolbarAction
-          icon={arranging ? X : Wand2}
-          label={arranging ? "取消整理" : "自动整理"}
-          title={arranging ? "正在整理，点击取消" : "按执行链路和项目关系整理选区，未选择时整理全部"}
+          icon={Wand2}
+          label="自动整理"
+          title={arrangeTitle}
           onClick={onArrange}
           disabled={!editable}
         />
@@ -140,7 +139,7 @@ export function CanvasViewSettings({
   onSearch,
   onArrange,
   editable,
-  arranging,
+  arrangeTitle,
 }: {
   relations: CanvasRelationScope;
   onRelations: (scope: CanvasRelationScope) => void;
@@ -153,7 +152,7 @@ export function CanvasViewSettings({
   onSearch: () => void;
   onArrange: () => void;
   editable: boolean;
-  arranging: boolean;
+  arrangeTitle: string;
 }) {
   const [open, setOpen] = useState(false);
   const handoffFocus = useRef(false);
@@ -223,9 +222,10 @@ export function CanvasViewSettings({
                 onArrange();
               }}
               disabled={!editable}
+              title={arrangeTitle}
             >
-              {arranging ? <X /> : <Wand2 />}
-              {arranging ? "取消整理" : "自动整理"}
+              <Wand2 />
+              自动整理
             </Button>
           </div>
         </PopoverContent>

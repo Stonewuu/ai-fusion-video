@@ -1,10 +1,12 @@
 import { LAYER_GAP, NODE_GAP, type LayoutScope, type LayoutUnit, type Point } from "./types";
+import { groupParallelInputs, type InputDestination } from "./input-groups";
 
-export function balancedLayers(scope: LayoutScope, positions: Map<string, Point>) {
+export function balancedLayers(scope: LayoutScope, positions: Map<string, Point>,
+  destinations: Map<string, InputDestination>, layoutWidth: number) {
   const units = new Map(scope.units.map((node) => [node.id, node]));
   const incoming = new Map(scope.units.map((node) => [node.id, new Set<string>()]));
   const outgoing = new Map(scope.units.map((node) => [node.id, new Set<string>()]));
-  // ELK 已经处理了辅助关系的回路，沿它确定的方向安排层次；回边仍交给路由器绘制。
+  // ELK 已经处理了辅助关系的回路，沿它确定的方向安排层次。
   for (const link of scope.links) {
     if (positions.get(link.source)!.x < positions.get(link.target)!.x) {
       outgoing.get(link.source)!.add(link.target);
@@ -25,12 +27,18 @@ export function balancedLayers(scope: LayoutScope, positions: Map<string, Point>
       || positions.get(a.id)!.y - positions.get(b.id)!.y || a.id.localeCompare(b.id));
     const column = { right: 0, nodes: [] as LayoutUnit[], height: -NODE_GAP };
     const deferred: LayoutUnit[] = [];
-    for (const node of ready) {
-      if (column.nodes.length && column.height + NODE_GAP + node.height > height) {
-        deferred.push(node);
-      } else {
-        column.nodes.push(node);
-        column.height += NODE_GAP + node.height;
+    for (const group of groupParallelInputs(ready, destinations)) {
+      const groupHeight = group.reduce((sum, node) => sum + NODE_GAP + node.height, -NODE_GAP);
+      // 同一节点的并列输入尽量同列，只有整列会比画布还高时才分开排。
+      const batches = groupHeight <= Math.max(height, layoutWidth) ? [group] : group.map((node) => [node]);
+      for (const batch of batches) {
+        const addedHeight = batch.reduce((sum, node) => sum + NODE_GAP + node.height, 0);
+        if (column.nodes.length && column.height + addedHeight > height) {
+          deferred.push(...batch);
+        } else {
+          column.nodes.push(...batch);
+          column.height += addedHeight;
+        }
       }
     }
     for (const node of column.nodes) {

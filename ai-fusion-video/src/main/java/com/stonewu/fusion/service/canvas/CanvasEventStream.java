@@ -42,6 +42,7 @@ public class CanvasEventStream {
                             .subscribeOn(journal)
                             .flatMapMany(page -> batch(page, cursor, heartbeat)))
                     .repeat()
+                    .startWith(ServerSentEvent.<Object>builder().comment("canvas connected").build())
                     .onErrorResume(CanvasException.class, failure -> Flux.just(ServerSentEvent.<Object>builder()
                             .event("canvas.error").data(Map.of("errorCode", failure.getErrorCode(),
                                     "message", failure.getMessage(), "details", failure.getDetails())).build()))

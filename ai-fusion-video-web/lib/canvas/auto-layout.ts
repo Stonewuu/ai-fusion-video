@@ -3,7 +3,7 @@ import { buildLayoutScopes } from "./layout/model";
 import { layeredPlacement } from "./layout/elk-layout";
 import { constrainPlacement } from "./layout/constraints";
 import { compactPlacement } from "./layout/compact";
-import { routeCanvasEdges } from "./layout/routing";
+import { measureLayoutCurves } from "./layout/curves";
 import { compareQuality, layoutQuality } from "./layout/quality";
 import { LayoutConstraintError, type LayoutRequest, type LayoutResult } from "./layout/types";
 
@@ -31,7 +31,7 @@ export async function autoArrangeCanvas(request: LayoutRequest, engine: Pick<ELK
         continue;
       }
       candidates.add(key);
-      const result = { positions, routes: routeCanvasEdges(request, positions) };
+      const result = { positions, routes: measureLayoutCurves(request, positions) };
       const quality = layoutQuality(request, result);
       if (!best || compareQuality(quality, best.quality) < 0) {
         best = { result, quality };

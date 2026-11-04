@@ -8,6 +8,8 @@ import { useResourceChangeStore } from "@/lib/store/resource-change-store";
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import { useCanvas } from "../canvas-provider";
 
+const EMPTY_ENTRIES: CanvasLibraryEntry[] = [];
+
 export function useCanvasLibrary(enabled = true) {
   const projectId = useCanvas((state) => state.snapshot!.document.projectId);
   const revision = useResourceChangeStore((state) => state.cursor);
@@ -20,22 +22,27 @@ export function useCanvasLibrary(enabled = true) {
     error: string | null;
   } | null>(null);
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      return;
+    }
     let active = true;
     void loadCanvasLibrary(projectId)
       .then((entries) => {
-        if (active) setResult({ key, entries, error: null });
+        if (active) {
+          setResult({ key, entries, error: null });
+        }
       })
       .catch((failure) => {
-        if (active)
-          setResult({ key, entries: [], error: getApiErrorMessage(failure) });
+        if (active) {
+          setResult({ key, entries: EMPTY_ENTRIES, error: getApiErrorMessage(failure) });
+        }
       });
     return () => {
       active = false;
     };
   }, [projectId, key, enabled]);
   return {
-    entries: result?.key === key ? result.entries : [],
+    entries: result?.key === key ? result.entries : EMPTY_ENTRIES,
     error: result?.key === key ? result.error : null,
     loading: enabled && result?.key !== key,
     refresh: () => setAttempt((value) => value + 1),

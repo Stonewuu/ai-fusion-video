@@ -15,26 +15,25 @@ function request() {
   };
   const geometry = Object.fromEntries(nodes.map((node) => [node.id, {
     width: 300, height: 200,
-    inputs: { in: 100, "annotation-in": 100 }, outputs: { out: 100, "annotation-out": 100 },
+    inputs: { in: { x: -4, y: 100 }, "annotation-in": { x: -4, y: 100 } },
+    outputs: { out: { x: 304, y: 100 }, "annotation-out": { x: 304, y: 100 } },
   }]));
   return { graph: { schemaVersion: 1, projectId: null, nodes, edges: [edge] }, geometry, selection: [], relations: [], hidden: [] };
 }
 
 test("布局 Worker 在 self 环境下完成分层布局，ELK 消息不覆盖应用消息", async () => {
   const input = request();
-  const result = await runLayoutWorker(input, "arrange", new AbortController().signal);
+  const result = await runLayoutWorker(input, new AbortController().signal);
   assert.deepEqual(Object.keys(result.positions).sort(), ["a", "b"]);
   assert.ok(result.positions.a.x + 300 <= result.positions.b.x);
-  assert.ok(result.routes["a-b"].points.length >= 2);
   const placed = {
     ...input,
     graph: { ...input.graph, nodes: input.graph.nodes.map((node) => ({
       ...node, layout: { ...node.layout, ...result.positions[node.id] },
     })) },
   };
-  const routed = await runLayoutWorker(placed, "route", new AbortController().signal);
-  assert.deepEqual(routed.positions, {});
-  assert.ok(routed.routes["a-b"].points.length >= 2);
+  const repeated = await runLayoutWorker(placed, new AbortController().signal);
+  assert.deepEqual(repeated.positions, result.positions);
 });
 
 test("布局 Worker 将约束错误返回调用方，不伪造成功结果", async () => {
@@ -42,5 +41,5 @@ test("布局 Worker 将约束错误返回调用方，不伪造成功结果", asy
   input.graph.edges.push({
     ...input.graph.edges[0], id: "b-a", sourceNodeId: "b", targetNodeId: "a",
   });
-  await assert.rejects(runLayoutWorker(input, "arrange", new AbortController().signal), /执行连线形成循环/);
+  await assert.rejects(runLayoutWorker(input, new AbortController().signal), /执行连线形成循环/);
 });

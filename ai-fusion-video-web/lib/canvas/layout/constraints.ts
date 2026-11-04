@@ -1,7 +1,8 @@
 import { topologicalOrder } from "./model";
+import { balanceBranchSpacing } from "./branch-spacing";
 import { LAYER_GAP, NODE_GAP, LayoutConstraintError, overlaps, type Box, type LayoutLink, type LayoutScope, type Point } from "./types";
 
-// 分组收缩为一个矩形后可能产生回路。此处只对能保持先后顺序的边施加横向约束，回边仍保留并参与路由。
+// 分组收缩为一个矩形后可能产生回路。只有能保持先后顺序的边参与横向约束。
 function directionLinks(scope: LayoutScope) {
   const units = new Map(scope.units.map((unit) => [unit.id, unit]));
   const outgoing = new Map(scope.units.map((unit) => [unit.id, new Set<string>()]));
@@ -76,6 +77,7 @@ export function constrainPlacement(scope: LayoutScope, proposed: Map<string, Poi
     }
     positions.get(id)!.x = Math.max(lower, Math.min(positions.get(id)!.x, upper.get(id)!));
   }
+  balanceBranchSpacing(scope, positions);
   const occupied: Box[] = [...scope.obstacles, ...scope.units.filter((unit) => !unit.movable)];
   for (const node of [...moving].sort((a, b) => positions.get(a.id)!.y - positions.get(b.id)!.y || a.id.localeCompare(b.id))) {
     const position = positions.get(node.id)!;

@@ -1,8 +1,8 @@
 import type { LayoutRequest, LayoutResult } from "./types";
 import type { LayoutWorkerMessage, LayoutWorkerResponse } from "./worker";
 
-export function runLayoutWorker(request: LayoutRequest, mode: LayoutWorkerMessage["mode"], signal: AbortSignal) {
-  return new Promise<LayoutResult>((resolve, reject) => {
+export function runLayoutWorker(request: LayoutRequest, signal: AbortSignal) {
+  return new Promise<Pick<LayoutResult, "positions">>((resolve, reject) => {
     signal.throwIfAborted();
     const worker = new Worker(new URL("./worker.ts", import.meta.url), { type: "module" });
     const finish = () => {
@@ -31,6 +31,6 @@ export function runLayoutWorker(request: LayoutRequest, mode: LayoutWorkerMessag
       finish();
       reject(new Error("无法启动画布布局计算，请刷新页面后重试"));
     };
-    worker.postMessage({ request, mode } satisfies LayoutWorkerMessage);
+    worker.postMessage({ request } satisfies LayoutWorkerMessage);
   });
 }

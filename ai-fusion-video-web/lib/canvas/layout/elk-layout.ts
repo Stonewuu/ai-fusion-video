@@ -9,7 +9,7 @@ export async function layeredPlacement(scope: LayoutScope, engine: Pick<ELK, "la
     layoutOptions: {
       "elk.algorithm": "layered",
       "elk.direction": "RIGHT",
-      // 最终路径由避让器计算，ELK 只安排节点，不重复执行折线路由和标签排版。
+      // ELK 提供节点分层，随后按画布显示的贝塞尔曲线比较候选位置。
       "elk.edgeRouting": "POLYLINE",
       "elk.randomSeed": "1",
       "elk.padding": "[top=0,left=0,bottom=0,right=0]",
@@ -35,10 +35,10 @@ export async function layeredPlacement(scope: LayoutScope, engine: Pick<ELK, "la
       height: node.height,
       layoutOptions: { "elk.portConstraints": "FIXED_POS" },
       ports: [false, true].flatMap((output) => Object.entries(output ? node.outputs : node.inputs)
-        .map(([port, y]) => ({
+        .map(([port, point]) => ({
           id: portId(node.id, output, port),
-          x: output ? node.width : 0,
-          y,
+          x: point.x,
+          y: point.y,
           width: 0,
           height: 0,
           layoutOptions: { "elk.port.side": output ? "EAST" : "WEST" },

@@ -483,11 +483,16 @@ class CanvasPersistenceIT {
     }
 
     @Test
-    void liveStreamDeliversCommittedChangesThenTerminatesOnRevocation() {
+    void idleStreamConnectsBeforeTheFirstEditThenDeliversChangesAndRevocation() {
         String canvas = create();
         share(canvas, OTHER.userId(), false, false);
         CanvasEventStream stream = context.getBean(CanvasEventStream.class);
         StepVerifier.create(stream.open(canvas, OTHER, 1))
+                .assertNext(event -> {
+                    assertThat(event.comment()).isNotBlank();
+                    assertThat(event.id()).isNull();
+                    assertThat(event.data()).isNull();
+                })
                 .then(() -> edit(canvas, new CreateNode(text())))
                 .assertNext(event -> {
                     assertThat(event.event()).isEqualTo("canvas.graph.changed");

@@ -10,7 +10,6 @@ import { useCanvasFlowProjection } from "./use-flow-projection";
 import { useCanvasChainHighlight } from "./use-chain-highlight";
 import { useCanvasEdgeMarquee } from "./use-edge-marquee";
 import { useCanvasAutoLayout } from "./use-auto-layout";
-import { useCanvasEdgeRoutes } from "./use-edge-routes";
 
 import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
@@ -126,7 +125,6 @@ function CanvasFlowEditor({
   const [searching, setSearching] = useState(false);
   const [help, setHelp] = useState(false);
   const [pointerMode, setPointerMode] = useState<"select" | "pan">("select");
-  const [interacting, setInteracting] = useState(false);
   const panKeyPressed = useKeyPress("Space");
   const edgeMarquee = useCanvasEdgeMarquee(pointerMode === "select" && !panKeyPressed);
   const { initialView, fit, saveViewport } = useCanvasViewport(
@@ -237,17 +235,11 @@ function CanvasFlowEditor({
     () => [...edges, ...relations.edges],
     [edges, relations.edges],
   );
-  const routing = useCanvasEdgeRoutes({
-    graph: snapshot.graph, catalog, relations: relations.layoutRelations,
-    hidden, edges: flowEdges, measurements,
-    paused: interacting || !!pending || relations.loading,
-  });
   const automaticLayout = useCanvasAutoLayout({
     store, hidden, relations: relations.layoutRelations,
     relationLoading: relations.loading, relationError: relations.error,
-    onResult: routing.accept,
   });
-  const highlighted = useCanvasChainHighlight(nodes, routing.edges, selection);
+  const highlighted = useCanvasChainHighlight(nodes, flowEdges, selection);
   const {
     connect,
     onConnectEnd,
@@ -436,8 +428,8 @@ function CanvasFlowEditor({
             onReloadRelations={relations.refresh}
             onAdd={addAtCenter}
             onFit={() => fit()}
-            onArrange={automaticLayout.arranging ? automaticLayout.cancel : arrange}
-            arranging={automaticLayout.arranging}
+            onArrange={automaticLayout.arrange}
+            arrangeError={automaticLayout.error}
             onSearch={() => setSearching(true)}
           />
           {relations.scope !== "hidden" && (relations.error || relations.loading) && (
@@ -449,11 +441,6 @@ function CanvasFlowEditor({
             </p>
           )}
           <CanvasFlowNotices transfer={transfer} />
-          {routing.error && (
-            <p role="status" className="max-w-full rounded-2xl border border-border/40 bg-popover/90 px-3 py-2 text-xs text-muted-foreground shadow-sm backdrop-blur-xl">
-              连线避让未完成：{routing.error}
-            </p>
-          )}
         </div>
         <ReactFlow<CanvasFlowNode>
           className={highlighted.active ? "fusion-canvas canvas-chain-active" : "fusion-canvas"}
@@ -476,14 +463,8 @@ function CanvasFlowEditor({
             )
           }
           isValidConnection={isValidConnection}
-          onNodeDragStart={(...args) => {
-            setInteracting(true);
-            onNodeDragStart(...args);
-          }}
-          onNodeDragStop={(...args) => {
-            onNodeDragStop(...args);
-            setInteracting(false);
-          }}
+          onNodeDragStart={onNodeDragStart}
+          onNodeDragStop={onNodeDragStop}
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
           onPaneContextMenu={(event) => {
@@ -499,14 +480,8 @@ function CanvasFlowEditor({
             setIntent(null);
             setContext(null);
           }}
-          onMoveStart={() => {
-            setIntent(null);
-            setInteracting(true);
-          }}
-          onMoveEnd={(_event, viewport) => {
-            saveViewport(viewport);
-            setInteracting(false);
-          }}
+          onMoveStart={() => setIntent(null)}
+          onMoveEnd={(_event, viewport) => saveViewport(viewport)}
           onInit={() => {
             if (initialView.error) toast.error(initialView.error);
           }}
