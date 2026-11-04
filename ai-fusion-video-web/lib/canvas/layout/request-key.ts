@@ -2,7 +2,7 @@ import type { LayoutRelation, LayoutRequest } from "./types";
 
 export function layoutRelationsKey(relations: LayoutRelation[]) {
   return JSON.stringify(relations
-    .map(({ id, source, target, category, label }) => [id, source, target, category, label])
+    .map(({ id, source, target, label }) => [id, source, target, label])
     .sort(([left], [right]) => left.localeCompare(right)));
 }
 

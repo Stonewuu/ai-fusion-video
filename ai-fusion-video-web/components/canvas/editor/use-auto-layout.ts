@@ -9,12 +9,11 @@ import type { LayoutRelation, LayoutRequest } from "@/lib/canvas/layout/types";
 import type { CanvasStore } from "@/lib/store/canvas-store";
 import { captureLayoutGeometry, captureLayoutLabels } from "./layout-geometry";
 
-export function useCanvasAutoLayout({ store, hidden, relations, relationLoading, relationError }: {
+export function useCanvasAutoLayout({ store, hidden, relations, arrangeUnavailable }: {
   store: CanvasStore;
   hidden: Set<string>;
   relations: LayoutRelation[];
-  relationLoading: boolean;
-  relationError: string | null;
+  arrangeUnavailable: string | null;
 }) {
   const flow = useReactFlow();
   const active = useRef<AbortController | null>(null);
@@ -23,15 +22,12 @@ export function useCanvasAutoLayout({ store, hidden, relations, relationLoading,
   useEffect(() => () => active.current?.abort(), []);
   useEffect(() => {
     active.current?.abort("relations-changed");
-  }, [relationsKey, relationLoading, relationError]);
+  }, [relationsKey, arrangeUnavailable]);
 
   const arrange = async () => {
     const state = store.getState();
     const snapshot = state.snapshot!;
-    if (state.pending || !snapshot.permissions.canEdit || snapshot.document.archived) {
-      return;
-    }
-    if (relationLoading || relationError) {
+    if (state.pending || !snapshot.permissions.canEdit || snapshot.document.archived || arrangeUnavailable) {
       return;
     }
     active.current?.abort();

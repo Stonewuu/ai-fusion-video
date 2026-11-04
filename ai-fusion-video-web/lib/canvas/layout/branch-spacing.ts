@@ -1,4 +1,4 @@
-import { LAYER_GAP, NODE_GAP, type LayoutScope, type Point } from "./types";
+import { LAYER_GAP, type LayoutScope, type Point } from "./types";
 
 export function balanceBranchSpacing(scope: LayoutScope, positions: Map<string, Point>) {
   const units = new Map(scope.units.map((unit) => [unit.id, unit]));
@@ -22,7 +22,7 @@ export function balanceBranchSpacing(scope: LayoutScope, positions: Map<string, 
       let high = Math.min(right - LAYER_GAP, scope.bounds ? scope.bounds.x + scope.bounds.width - unit.width : Infinity);
       for (const other of scope.units) {
         const box = positions.get(other.id)!;
-        if (point.y + unit.height + NODE_GAP <= box.y || box.y + other.height + NODE_GAP <= point.y) {
+        if (point.y + unit.height <= box.y || box.y + other.height <= point.y) {
           continue;
         }
         if (box.x + other.width <= point.x) {

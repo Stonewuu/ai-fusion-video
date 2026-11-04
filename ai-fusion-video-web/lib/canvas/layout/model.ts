@@ -1,4 +1,5 @@
 import { canvasGraphHierarchy } from "../hierarchy";
+import { forwardLayoutLinks } from "./forward-links";
 import type { CanvasNode } from "../types";
 import {
   boundsOf,
@@ -19,7 +20,7 @@ export function layoutLinks(request: LayoutRequest): LayoutLink[] {
       sourcePort: edge.kind === "execution" ? edge.sourcePort! : "annotation-out",
       targetPort: edge.kind === "execution" ? edge.targetPort! : "annotation-in",
       inputIndex: edge.inputIndex,
-      kind: edge.kind === "execution" ? "execution" : "reference",
+      execution: edge.kind === "execution",
       label: request.labels?.[edge.id] ?? (edge.kind === "execution" && edge.inputIndex !== null && edge.inputIndex > 0
         ? String(edge.inputIndex + 1) : ""),
     })),
@@ -28,7 +29,7 @@ export function layoutLinks(request: LayoutRequest): LayoutLink[] {
       sourcePort: "annotation-out",
       targetPort: "annotation-in",
       inputIndex: null,
-      kind: relation.category === "structure" ? "structure" : "reference",
+      execution: false,
     })),
   ].sort((a, b) => a.id.localeCompare(b.id));
 }
@@ -77,11 +78,12 @@ export function topologicalOrder(ids: string[], links: LayoutLink[]) {
 }
 
 export function buildLayoutScopes(request: LayoutRequest): LayoutScope[] {
-  const { boxes, byId, ordered } = layoutWorldBoxes(request);
+  const { boxes, byId, ordered, childCounts } = layoutWorldBoxes(request);
   const links = layoutLinks(request);
-  topologicalOrder(ordered.map((node) => node.id), links.filter((link) => link.kind === "execution"));
+  topologicalOrder(ordered.map((node) => node.id), links.filter((link) => link.execution));
   const selected = new Set(request.selection.length ? request.selection : ordered.map((node) => node.id));
   const hidden = new Set(request.hidden);
+  const visibleLinks = links.filter((link) => !hidden.has(link.source) && !hidden.has(link.target));
   const ancestors = (node: CanvasNode) => {
     const result: string[] = [];
     let parent = node.layout.parentId;
@@ -110,7 +112,7 @@ export function buildLayoutScopes(request: LayoutRequest): LayoutScope[] {
     const siblings = ordered.filter((node) => node.layout.parentId === parentId);
     const siblingIds = new Set(siblings.map((node) => node.id));
     const endpoint = (id: string) => [id, ...parents.get(id)!].find((item) => siblingIds.has(item)) ?? id;
-    const scopedLinks = links.flatMap((link): LayoutLink[] => {
+    const scopedLinks = visibleLinks.flatMap((link): LayoutLink[] => {
       const source = endpoint(link.source);
       const target = endpoint(link.target);
       if (source === target || (!siblingIds.has(source) && !siblingIds.has(target))) {
@@ -127,7 +129,7 @@ export function buildLayoutScopes(request: LayoutRequest): LayoutScope[] {
       const node = byId.get(id)!;
       const box = boxes.get(id)!;
       // 分组整体移动。展开分组的占地包含超出边框的子节点，避免盖住相邻链路。
-      const descendants = node.kind === "group" && !node.layout.collapsed
+      const descendants = childCounts.has(id) && !node.layout.collapsed
         ? ordered.filter((child) => parents.get(child.id)!.includes(id)).map((child) => boxes.get(child.id)!) : [];
       const occupied = boundsOf([box, ...descendants]);
       if (movingIds.has(id) && (occupied.x < box.x || occupied.y < box.y)) {
@@ -146,13 +148,11 @@ export function buildLayoutScopes(request: LayoutRequest): LayoutScope[] {
       && !parents.get(node.id)!.some((id) => unitIds.has(id))
       && ![...movingIds].some((id) => parents.get(id)!.includes(node.id))).map((node) => boxes.get(node.id)!);
     const container = parentId ? boxes.get(parentId)! : null;
-    scopes.push({
-      units, links: scopedLinks, obstacles,
-      bounds: container ? {
-        x: container.x + 24, y: container.y + 64,
-        width: container.width - 48, height: container.height - 88,
-      } : null,
-    });
+    const bounds = container ? {
+      x: container.x + 24, y: container.y + 64,
+      width: container.width - 48, height: container.height - 88,
+    } : null;
+    scopes.push({ units, links: forwardLayoutLinks(units, scopedLinks, bounds), obstacles, bounds });
   }
   return scopes;
 }

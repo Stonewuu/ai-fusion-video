@@ -1,31 +1,29 @@
 import { LAYER_GAP, NODE_GAP, type LayoutScope, type LayoutUnit, type Point } from "./types";
 import { groupParallelInputs, type InputDestination } from "./input-groups";
+import { topologicalOrder } from "./model";
 
 export function balancedLayers(scope: LayoutScope, positions: Map<string, Point>,
   destinations: Map<string, InputDestination>, layoutWidth: number) {
   const units = new Map(scope.units.map((node) => [node.id, node]));
   const incoming = new Map(scope.units.map((node) => [node.id, new Set<string>()]));
   const outgoing = new Map(scope.units.map((node) => [node.id, new Set<string>()]));
-  // ELK 已经处理了辅助关系的回路，沿它确定的方向安排层次。
   for (const link of scope.links) {
-    if (positions.get(link.source)!.x < positions.get(link.target)!.x) {
-      outgoing.get(link.source)!.add(link.target);
-      incoming.get(link.target)!.add(link.source);
-    }
+    outgoing.get(link.source)!.add(link.target);
+    incoming.get(link.target)!.add(link.source);
   }
   const distance = new Map<string, number>();
-  for (const node of [...scope.units].sort((a, b) => positions.get(b.id)!.x - positions.get(a.id)!.x)) {
-    distance.set(node.id, 1 + Math.max(0, ...[...outgoing.get(node.id)!].map((id) => distance.get(id)!)));
+  for (const id of topologicalOrder([...units.keys()], scope.links).reverse()) {
+    distance.set(id, 1 + Math.max(0, ...[...outgoing.get(id)!].map((target) => distance.get(target)!)));
   }
   const area = scope.units.reduce((sum, node) => sum + (node.width + LAYER_GAP) * (node.height + NODE_GAP), 0);
   const height = Math.max(Math.sqrt(area / 1.6), ...scope.units.map((node) => node.height));
   const remaining = new Map([...incoming].map(([id, sources]) => [id, sources.size]));
   let ready = scope.units.filter((node) => remaining.get(node.id) === 0);
-  const columns: { right: number; nodes: LayoutUnit[]; height: number }[] = [];
+  const columns: { nodes: LayoutUnit[]; height: number }[] = [];
   while (ready.length) {
     ready.sort((a, b) => distance.get(b.id)! - distance.get(a.id)!
       || positions.get(a.id)!.y - positions.get(b.id)!.y || a.id.localeCompare(b.id));
-    const column = { right: 0, nodes: [] as LayoutUnit[], height: -NODE_GAP };
+    const column = { nodes: [] as LayoutUnit[], height: -NODE_GAP };
     const deferred: LayoutUnit[] = [];
     for (const group of groupParallelInputs(ready, destinations)) {
       const groupHeight = group.reduce((sum, node) => sum + NODE_GAP + node.height, -NODE_GAP);

@@ -23,7 +23,6 @@ export interface LayoutRelation {
   id: string;
   source: string;
   target: string;
-  category: "structure" | "assets";
   label: string;
 }
 
@@ -34,7 +33,7 @@ export interface LayoutLink {
   sourcePort: string;
   targetPort: string;
   inputIndex: number | null;
-  kind: "execution" | "structure" | "reference";
+  execution: boolean;
   label: string;
 }
 

@@ -39,6 +39,7 @@ export function CanvasToolbar(props: {
   onFit: () => void;
   onArrange: () => void;
   arrangeError: string | null;
+  arrangeUnavailable: string | null;
   onSearch: () => void;
   mode: "select" | "pan";
   onMode: (value: "select" | "pan") => void;
@@ -53,8 +54,8 @@ export function CanvasToolbar(props: {
   const canRedo = useCanvas((state) => state.redoStack.length > 0);
   const undo = useCanvas((state) => state.undo);
   const redo = useCanvas((state) => state.redo);
-  const canArrange = editable && !props.relationLoading && !props.relationError;
-  const arrangeTitle = props.relationError ?? (props.relationLoading ? "正在读取项目关系" : props.arrangeError ?? "整理选中的节点，未选择时整理全部");
+  const canArrange = editable && !props.arrangeUnavailable;
+  const arrangeTitle = props.arrangeUnavailable ?? props.arrangeError ?? "整理选中的节点，未选择时整理全部";
   return (
     <div
       className="@container pointer-events-none w-full"

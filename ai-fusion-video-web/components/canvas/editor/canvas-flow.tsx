@@ -236,8 +236,8 @@ function CanvasFlowEditor({
     [edges, relations.edges],
   );
   const automaticLayout = useCanvasAutoLayout({
-    store, hidden, relations: relations.layoutRelations,
-    relationLoading: relations.loading, relationError: relations.error,
+    store, hidden, relations: relations.visibleRelations,
+    arrangeUnavailable: relations.arrangeUnavailable,
   });
   const highlighted = useCanvasChainHighlight(nodes, flowEdges, selection);
   const {
@@ -430,6 +430,7 @@ function CanvasFlowEditor({
             onFit={() => fit()}
             onArrange={automaticLayout.arrange}
             arrangeError={automaticLayout.error}
+            arrangeUnavailable={relations.arrangeUnavailable}
             onSearch={() => setSearching(true)}
           />
           {relations.scope !== "hidden" && (relations.error || relations.loading) && (

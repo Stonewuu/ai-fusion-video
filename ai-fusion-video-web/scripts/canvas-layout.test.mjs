@@ -204,6 +204,44 @@ test("长短分支汇合时，短分支中间节点两侧留出相近的间距",
   assert.ok(Math.abs(left - right) <= 1, `左侧间距 ${left}，右侧间距 ${right}`);
 });
 
+test("同一组起终点决定排布，普通连线沿路径向右，换节点类型和存储顺序后结果一致", async () => {
+  const ids = [..."abcdefghijkl"];
+  const pairs = ["ae", "bf", "cg", "dh", "gi", "gh", "ij", "hj", "jk", "jl", "ek", "el", "fk", "fl"];
+  const input = request(ids.map((id, i) => node(id, { x: 800 - i * 73, y: (i % 3) * 90 })), pairs.map(([source, target]) => ({
+    ...edge(source, target, "reference"), sourcePort: null, targetPort: null, inputIndex: null,
+  })));
+  const result = await autoArrangeCanvas(input);
+  verify(input, result);
+  for (const [source, target] of pairs) {
+    assert.ok(result.positions[source].x + input.geometry[source].width < result.positions[target].x, `${source} → ${target} 应向右`);
+  }
+  assert.equal(new Set([..."abcd"].map((id) => result.positions[id].x)).size, 1, "同一流程的起点应在同一层");
+  assert.ok(Object.values(result.routes).every((route) => route.obstructions === 0), "这些连线可以绕开所有卡片");
+  for (const [source, target] of ["ae", "bf", "cg", "gi", "dh"]) {
+    assert.equal(result.positions[source].y, result.positions[target].y, `${source} → ${target} 应能沿同一行阅读`);
+  }
+  const changed = structuredClone(input);
+  changed.graph.nodes.reverse().forEach((item, index) => {
+    item.kind = ["text", "image", "video", "script", "storyboard", "asset"][index % 6];
+    item.title = `节点 ${index + 1}`;
+  });
+  changed.graph.edges.reverse();
+  assert.deepEqual((await autoArrangeCanvas(changed)).positions, result.positions);
+  assert.deepEqual((await autoArrangeCanvas(apply(input, result))).positions, result.positions);
+});
+
+test("固定两端不能同时满足的回向引用仍可保留，选区按可满足的连线排列", async () => {
+  const nodes = [
+    node("left", { x: 0, y: 40, locked: true }), node("middle", { x: 440, y: 400 }),
+    node("right", { x: 1000, y: 40, locked: true }), node("reference", { x: 100, y: 500, locked: true }),
+  ];
+  const input = request(nodes, [edge("left", "middle"), edge("middle", "right"), edge("middle", "reference", "reference")], { selection: ["middle"] });
+  const result = await autoArrangeCanvas(input);
+  assert.deepEqual(Object.keys(result.positions), ["middle"]);
+  assert.ok(result.positions.middle.x >= 396 && result.positions.middle.x <= 604);
+  assert.equal(Object.keys(result.routes).length, 3);
+});
+
 test("局部整理保留未选中和锁定节点，并利用边界连线安排选区", async () => {
   const input = request([node("a", { x: 0, y: 100, locked: true }), node("b", { x: 400, y: 600 }), node("c", { x: 1400, y: 100 }), node("obstacle", { x: 500, y: 100 })], [edge("a", "b"), edge("b", "c")], { selection: ["a", "b"] });
   const original = structuredClone(input);

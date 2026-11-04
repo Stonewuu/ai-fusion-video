@@ -48,10 +48,6 @@ export async function layeredPlacement(scope: LayoutScope, engine: Pick<ELK, "la
       id: link.id,
       sources: [portId(link.source, true, link.sourcePort)],
       targets: [portId(link.target, false, link.targetPort)],
-      layoutOptions: {
-        "elk.layered.priority.direction": String(link.kind === "execution" ? 1000 : link.kind === "structure" ? 100 : 1),
-        "elk.layered.priority.straightness": String(link.kind === "execution" ? 100 : 1),
-      },
     })),
   };
   const result = await engine.layout(graph);
