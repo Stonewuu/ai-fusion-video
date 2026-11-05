@@ -7,6 +7,7 @@ import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.mapper.ai.AgentModelRequestMapper;
 import com.stonewu.fusion.mapper.ai.AgentModelCallUsageMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
+import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.service.execution.ExecutionRecordQueries;
 import com.stonewu.fusion.service.execution.recovery.ExecutionRecoveryData.Kind;
 import com.stonewu.fusion.repository.ai.AgentModelCallUsageRepository;
@@ -149,6 +150,7 @@ class CanvasAgentWiringIT {
     @Autowired TokenService tokens;
     @Autowired JdbcTemplate jdbc;
     @Autowired AiModelService modelService;
+    @Autowired AiModelMapper modelRows;
     @Autowired AgentModelRequests modelRequests;
     @Autowired AgentModelRequestMapper modelRequestRows;
     @Autowired AgentModelCallUsageMapper modelUsageRows;
@@ -176,6 +178,50 @@ class CanvasAgentWiringIT {
     @Autowired AgentMessageAllocator messageAllocator;
     @MockitoBean AiProviderService providers;
     record Fixture(long user, long project, String canvas, CanvasAgentScope scope, String runId) { }
+
+    @Test
+    void emptyOptionalModelConfigurationCompletesTheScriptPipeline() throws Exception {
+        var fixture = fixture();
+        var configured = model(fixture);
+        modelRows.update(null, Wrappers.<AiModel>lambdaUpdate().eq(AiModel::getId, configured.getId())
+                .set(AiModel::getConfig, ""));
+        var calls = new AtomicInteger();
+        when(providers.provisionSingleRequestModel(any(AiModel.class))).thenAnswer(invocation ->
+                new AiProviderService.AgentScopeModelProvision(new ChatModelBase() {
+                    @Override
+                    public String getModelName() {
+                        return "empty-config-test";
+                    }
+
+                    @Override
+                    protected Flux<ChatResponse> doStream(List<Msg> messages, List<ToolSchema> tools,
+                                                          GenerateOptions options) {
+                        calls.incrementAndGet();
+                        return Flux.just(ChatResponse.builder().id("empty-config-response")
+                                .content(List.of(TextBlock.builder().text("模型调用已完成").build()))
+                                .usage(ChatUsage.builder().inputTokens(10).outputTokens(5).build())
+                                .finishReason("stop").build());
+                    }
+                }, AgentKernelKey.modelRecordFingerprint(invocation.getArgument(0))));
+        var request = new AiChatReqVO().setConversationId(UUID.randomUUID().toString())
+                .setModelId(configured.getId()).setProjectId(fixture.project()).setAgentType("script_full_parse")
+                .setToolExecutionMode("DEFAULT")
+                .setContext(Map.of("scriptId", String.valueOf(fixture.project())))
+                .setMessage("检查模型调用，保留现有剧本内容。");
+        var started = pipeline.start(request, fixture.user()).block(Duration.ofSeconds(15));
+
+        await().atMost(Duration.ofSeconds(30)).untilAsserted(() -> {
+            var run = agentRunRows.selectOne(Wrappers.<AgentRun>lambdaQuery().eq(AgentRun::getRunId, started.runId()));
+            assertThat(run.getStatus()).withFailMessage("运行失败原因：%s", run.getErrorMessage()).isEqualTo("COMPLETED");
+        });
+        assertThat(calls).hasValue(1);
+        assertThat(modelRows.selectById(configured.getId()).getConfig()).isEmpty();
+        assertThat(modelRequestRows.selectList(Wrappers.<AgentModelRequestEntity>lambdaQuery()
+                .eq(AgentModelRequestEntity::getRunId, started.runId()))).singleElement().satisfies(row -> {
+            assertThat(row.getStatus()).isEqualTo("COMPLETED");
+            assertThat(row.getPermitHeld()).isFalse();
+        });
+    }
 
     @Test void idsReceiptsAndAuditSurviveRepeatedAgentCallsAndStaleWorkersAreFenced() throws Exception {
         var f = fixture();

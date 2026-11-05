@@ -58,6 +58,11 @@ public final class AiModelRequestOptions {
         return value != null && value.isTextual() ? normalize(value.asText()) : null;
     }
 
+    /** 空配置表示没有附加参数，非空内容必须按模型配置规则解析。 */
+    public static String reasoningEffort(String configJson, ObjectMapper objectMapper) {
+        return reasoningEffort(parseConfig(configJson, objectMapper));
+    }
+
     private static ObjectNode parseConfig(String configJson, ObjectMapper objectMapper) {
         if (StrUtil.isBlank(configJson)) {
             return objectMapper.createObjectNode();
