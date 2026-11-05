@@ -9,6 +9,9 @@ import {
 } from "@/components/dashboard/generation-media-result";
 import { ToolMutationResult } from "@/components/dashboard/shared/tool-mutation-result";
 import { assetTypeNames } from "../shared/ai-task-display";
+import { ToolResultDisplay as SharedToolResultDisplay } from "../notification-panel/results";
+import { savedTextResult } from "../shared/text-read-result-model";
+import { SavedTextResult } from "../shared/text-read-result";
 
 // ========== 常量 ==========
 
@@ -282,6 +285,9 @@ function GenericResult({ data, toolName }: { data: unknown; toolName: string }) 
 // ========== 入口组件（按工具名路由）==========
 
 export function ToolResultDisplay({ toolName, result }: { toolName: string; result: string }) {
+  if (["read_script_content", "read_tool_result", "get_script", "get_project_script", "get_script_episode", "get_script_structure", "get_storyboard", "get_storyboard_scene_items", "await_generation_task", "get_generation_task"].includes(toolName)) {
+    return <SharedToolResultDisplay toolName={toolName} content={result} />;
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(result);
@@ -299,6 +305,10 @@ export function ToolResultDisplay({ toolName, result }: { toolName: string; resu
     return <p className="text-xs text-destructive">❌ {typeof msg === "string" ? msg : "操作失败"}</p>;
   }
 
+  const savedChars = savedTextResult(parsed);
+  if (savedChars !== null) {
+    return <SavedTextResult totalChars={savedChars} />;
+  }
   switch (toolName) {
     case "get_generation_model_capabilities":
       return <GenerationModelCapabilitiesResult data={parsed} />;

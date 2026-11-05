@@ -34,6 +34,8 @@ public class SaveStoryboardEpisodeToolExecutor implements ToolExecutor {
         return """
                 在指定分镜脚本下创建分镜集，或按明确 ID 和版本修改已有分镜集。
                 返回分镜集ID，后续可为该分镜集添加场次和镜头。
+                新建分集默认以 episodeNumber 作为 sortOrder，按集号排列，不受并行任务完成顺序影响。
+                手动调整已有分集顺序使用 manage_storyboard_children 的 REORDER，不修改集号来代替排序。
 
                 【参数说明】
                 - storyboardId：所属分镜脚本ID（必填）

@@ -161,8 +161,9 @@ public class GenerateImageToolExecutor implements ToolExecutor {
                     .set("taskId", accepted.publicTaskId())
                     .set("recordId", accepted.taskId())
                     .set("state", accepted.state())
+                    .set("waitTool", "await_generation_task")
                     .set("message",
-                            "生成已可靠受理。通过 get_generation_task 读取实际结果；尚未完成时不要将其报告为生成成功。")
+                            "生成已受理。调用 await_generation_task 等待此 submissionId 完成后再写回；排队或 SUBMITTING 不代表失败，不得重复提交。")
                     .toString();
 
         } catch (Exception e) {

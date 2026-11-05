@@ -168,6 +168,14 @@ interface ToolArgumentLabelContext {
   toolName?: string;
 }
 
+const TEXT_READ_ARGUMENT_LABELS: Readonly<Record<string, string>> = {
+  contentVersion: "内容版本",
+  field: "读取内容",
+  offset: "开始位置",
+  limit: "本次读取上限",
+  resultId: "结果编号",
+};
+
 const ARGUMENT_VALUE_LABELS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   action: {
     add: "新增",
@@ -237,6 +245,9 @@ const ARGUMENT_VALUE_LABELS: Readonly<Record<string, Readonly<Record<string, str
 const TOOL_ARGUMENT_VALUE_LABELS: Readonly<
   Record<string, Readonly<Record<string, Readonly<Record<string, string>>>>>
 > = {
+  read_script_content: {
+    field: { rawContent: "原文", content: "剧本正文" },
+  },
   save_project: {
     status: {
       0: "筹备中",
@@ -276,6 +287,10 @@ export function getToolArgumentLabel(
   key: string,
   context: ToolArgumentLabelContext = {},
 ): string {
+  if ((context.toolName === "read_script_content" || context.toolName === "read_tool_result")
+    && TEXT_READ_ARGUMENT_LABELS[key]) {
+    return TEXT_READ_ARGUMENT_LABELS[key];
+  }
   if (key === "resourceType" && context.toolName?.startsWith("delete_")) {
     return "删除对象";
   }
@@ -307,6 +322,14 @@ export function getToolArgumentValueLabel(
   toolName?: string,
 ): string | undefined {
   const normalizedValue = String(value);
+  if ((toolName === "read_script_content" || toolName === "read_tool_result") && typeof value === "number") {
+    if (key === "offset") {
+      return `第 ${(value + 1).toLocaleString("zh-CN")} 字起`;
+    }
+    if (key === "limit") {
+      return `${value.toLocaleString("zh-CN")} 字`;
+    }
+  }
   if (key === "resourceType") {
     const resourceLabel = getToolResourceLabel(toolName, normalizedValue);
     if (resourceLabel) return resourceLabel;

@@ -49,3 +49,9 @@
   `[过滤后的画风imagePrompt]，仅参考图片1的画风，绝不参考其中的任何物品和构图，[主体类型声明]，[身材比例/材质描述]，[细节描述]，[纯白背景提示词(角色/道具类必须带上)]`
 * **约束条件**：仅处理单个指定的 `itemId`。调用 `query_asset_items` 必须用 `assetId` 数字，禁止用 `assetName`。
 * **输出规范**：完成后以一句简洁中文总结，报错时用友好语言描述。
+
+## 等待生成与写回
+
+- `generate_image` 或 `generate_video` 返回 `pending` 和 `submissionId` 只代表受理，必须调用 `await_generation_task(submissionId)` 等待原任务，再使用其成功输出写回。
+- `SUBMITTING`、排队、生成中不能当作失败，也不能重新提交。等待会自动恢复，不用反复调用 `get_generation_task`。
+- `UNKNOWN_SUBMISSION`、`NEEDS_REVIEW` 或等待超时都不证明生成失败，应保留原受理编号并说明待核实，不能自动重试或报告已完成。只有成功输出并且写回成功后才能报告已绑定。

@@ -48,6 +48,35 @@ function load(relative) {
   return loadedModule.exports;
 }
 load(shared + "tool-call-argument-model.test.ts");
+load(shared + "text-read-result-model.test.ts");
+load(shared + "generation-task-summary.test.ts");
+load("app/(dashboard)/projects/[id]/scripts/_components/scene-scroll.test.ts");
+
+test("已受理的生成请求不会在图片卡片中显示生成成功", () => {
+  const { ImageGenerateResult, VideoGenerateResult } = load("components/dashboard/generation-media-result.tsx");
+  for (const component of [ImageGenerateResult, VideoGenerateResult]) {
+    const html = renderToStaticMarkup(React.createElement(component, { data: { status: "pending", state: "QUEUED" } }));
+    assert.match(html, /已受理，等待生成/);
+    assert.doesNotMatch(html, /生成成功/);
+  }
+});
+
+test("分镜目录显示集和场次数量，不把未查询的镜头详情显示为空", () => {
+  const { StoryboardResult } = load("components/dashboard/notification-panel/results/storyboard.tsx");
+  const html = renderToStaticMarkup(React.createElement(StoryboardResult, { toolName: "get_storyboard", data: {
+    scope: "overview", title: "分镜测试", totalItems: 2460, unassignedItems: 0,
+    episodes: [
+      { id: 11, title: "第一集", itemCount: 90, scenes: [{ id: 12, sceneNumber: "1-1", sceneHeading: "山门", itemCount: 20 }] },
+      { id: 21, title: "第二集", itemCount: 0, scenes: [] },
+      { id: 31, title: "第三集", itemCount: 0, scenes: [] },
+      { id: 41, title: "第四集", itemCount: 0, scenes: [] },
+    ],
+  } }));
+  assert.match(html, /2,460|第一集|山门|集与场次目录/);
+  assert.doesNotMatch(html, /暂无镜头数据/);
+  assert.match(html, /第四集/);
+});
+
 const { ToolCallArguments } = load(shared + "tool-call-arguments.tsx");
 const { ToolCallCard } = load(shared + "tool-call-card.tsx");
 const broken = '{"operations":[{"node":{"config":{"content":"雨夜';

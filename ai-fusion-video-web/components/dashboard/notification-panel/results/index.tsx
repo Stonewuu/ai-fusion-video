@@ -27,6 +27,9 @@ import { StoryboardResult } from "./storyboard";
 import { CanvasToolResult } from "./canvas";
 import { isCanvasTool } from "@/lib/canvas/tool-presentation";
 import { userFacingError } from "@/lib/user-facing-error";
+import { SavedTextResult, TextReadResult } from "../../shared/text-read-result";
+import { savedTextResult } from "../../shared/text-read-result-model";
+import { GenerationTaskResult } from "../../shared/generation-task-result";
 
 export function ToolResultDisplay({
   toolName,
@@ -75,9 +78,19 @@ export function ToolResultDisplay({
     );
   }
 
+  const savedChars = savedTextResult(parsed);
+  if (savedChars !== null) {
+    return <SavedTextResult totalChars={savedChars} />;
+  }
   if (isCanvasTool(toolName)) return <CanvasToolResult toolName={toolName} data={parsed} />;
 
   switch (toolName) {
+    case "get_generation_task":
+    case "await_generation_task":
+      return <GenerationTaskResult data={parsed} />;
+    case "read_script_content":
+    case "read_tool_result":
+      return <TextReadResult data={parsed} toolName={toolName} />;
     case "get_generation_model_capabilities":
       return <GenerationModelCapabilitiesResult data={parsed} />;
     case "generate_image":
@@ -91,6 +104,7 @@ export function ToolResultDisplay({
     case "batch_create_assets":
       return <BatchCreateResult data={parsed} />;
     case "get_project_script":
+    case "get_script":
       return <ScriptInfoResult data={parsed} />;
     case "get_script_structure":
       return <ScriptStructureResult data={parsed} />;
@@ -139,7 +153,6 @@ export function ToolResultDisplay({
           expanded={expanded}
         />
       );
-    case "get_script":
     case "get_asset":
     case "list_my_projects":
     default:

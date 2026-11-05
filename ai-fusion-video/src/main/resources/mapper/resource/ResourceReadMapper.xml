@@ -112,6 +112,14 @@
         SELECT COUNT(*) FROM <include refid="table"/> r <include refid="joins"/>
         WHERE r.storyboard_id = #{storyboardId} AND r.deleted = FALSE
     </select>
+    <select id="storyboardShotCounts" resultType="com.stonewu.fusion.mapper.resource.ResourceReadMapper$ShotCount">
+        <bind name="type" value="@com.stonewu.fusion.service.canvas.model.CanvasValueType@SHOT"/>
+        <bind name="historical" value="false"/>
+        SELECT r.storyboard_episode_id AS episode_id, r.storyboard_scene_id AS scene_id, COUNT(*) AS item_count
+        FROM afv_storyboard_item r <include refid="joins"/>
+        WHERE r.storyboard_id = #{storyboardId} AND r.deleted = FALSE
+        GROUP BY r.storyboard_episode_id, r.storyboard_scene_id
+    </select>
     <select id="lockProjectResources" resultType="com.stonewu.fusion.mapper.resource.ResourceReadMapper$Header">
         <bind name="historical" value="false"/>
         SELECT r.id, r.version, r.deleted, <include refid="projectColumn"/> AS project_id

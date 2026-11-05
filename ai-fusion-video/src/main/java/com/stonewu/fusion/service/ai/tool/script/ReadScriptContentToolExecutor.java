@@ -27,7 +27,7 @@ public class ReadScriptContentToolExecutor implements ToolExecutor {
                 "resourceId": {"type": "integer", "minimum": 1, "description": "查询结果中的业务对象 ID"},
                 "field": {"type": "string", "enum": ["rawContent", "content"], "description": "读取入口指定的正文字段"},
                 "offset": {"type": "integer", "minimum": 0, "description": "首次传 0，继续读取使用 nextOffset"},
-                "limit": {"type": "integer", "minimum": 1, "maximum": 8000, "description": "每段最多字符数，默认 4000"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 64000, "description": "每段最多字符数；省略时按模型配置容量分配，实际返回量受该容量约束，最多 64000 字符"},
                 "contentVersion": {"type": "string", "description": "读取入口或上一段返回的内容版本，继续读取时必传"}
               },
               "required": ["resourceType", "resourceId", "field"],
@@ -83,7 +83,7 @@ public class ReadScriptContentToolExecutor implements ToolExecutor {
                     || type == CanvasValueType.SCRIPT_EPISODE && field.equals("content")) {
                 throw ScriptFields.invalid("此对象不支持指定的正文字段");
             }
-            var request = TextPages.Request.from(params);
+            var request = TextPages.Request.from(params, context.getModel().getContextWindow());
             var snapshot = queries.get(type, id, context.requireMutationContext().actor());
             var value = snapshot.data().get(field);
             if (value == null || value.isNull()) {

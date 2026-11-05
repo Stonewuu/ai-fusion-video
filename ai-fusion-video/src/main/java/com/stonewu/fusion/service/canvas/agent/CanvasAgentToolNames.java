@@ -21,7 +21,7 @@ public final class CanvasAgentToolNames {
             "get_canvas_mcp_call");
 
     public static boolean requiresCanvas(String name) {
-        return name.equals("await_generation_task") || NAMES.contains(name) && !name.equals(
+        return NAMES.contains(name) && !name.equals(
                 "get_generation_model_capabilities");
     }
 }

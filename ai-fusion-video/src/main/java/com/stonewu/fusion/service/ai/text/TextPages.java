@@ -8,18 +8,18 @@ import com.stonewu.fusion.service.resource.ScriptFields;
  * 位置按 Unicode 字符计数，调用方直接使用返回的 nextOffset，不自行按字节或换行换算。
  */
 public final class TextPages {
-    public static final int DEFAULT_LIMIT = 4_000;
-    public static final int MAX_LIMIT = 8_000;
 
     private TextPages() {
     }
 
     public record Request(int offset, int limit, String contentVersion) {
-        public static Request from(JsonNode input) {
+        public static Request from(JsonNode input, Integer contextWindow) {
             int offset = input.hasNonNull("offset")
                     ? ScriptFields.integer(input.get("offset"), 0, Integer.MAX_VALUE, "offset") : 0;
+            int budget = ToolTextBudget.pageChars(contextWindow);
             int limit = input.hasNonNull("limit")
-                    ? ScriptFields.integer(input.get("limit"), 1, MAX_LIMIT, "limit") : DEFAULT_LIMIT;
+                    ? Math.min(ScriptFields.integer(input.get("limit"), 1, ToolTextBudget.MAX_PAGE_CHARS, "limit"), budget)
+                    : budget;
             JsonNode version = input.get("contentVersion");
             if (version != null && !version.isNull()
                     && (!version.isTextual() || !version.textValue().matches("[0-9a-f]{64}"))) {

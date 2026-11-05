@@ -1215,22 +1215,47 @@ class ResourceCommandIT {
     }
 
     @Test
-    void storyboardGlobalShotQueriesFollowEpisodeSceneAndShotOrder() {
+    void storyboardDefaultEpisodeOrderAndOverviewDoNotDependOnCreationOrder() {
         long board = storyboard();
         ObjectNode second = storyboardDraft(board, 0, 2);
         ((ObjectNode) second.path("scenes").get(0).path("shots").get(0)).put("content", "2A");
         ((ObjectNode) second.path("scenes").get(0).path("shots").get(1)).put("content", "2B");
-        commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.STORYBOARD_EPISODE, null, second), USER);
-        ObjectNode first = storyboardDraft(board, 1, 1).put("sortOrder", 0);
+        var secondEpisode = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.STORYBOARD_EPISODE, null, second), USER).result();
+        long secondId = secondEpisode.path("id").longValue();
+        int secondVersion = queries.get(CanvasValueType.STORYBOARD_EPISODE, secondId, ACTOR).header().version();
+        ObjectNode first = storyboardDraft(board, 1, 1);
         ((ObjectNode) first.path("scenes").get(0).path("shots").get(0)).put("content", "1A");
         ((ObjectNode) first.path("scenes").get(0).path("shots").get(1)).put("content", "1B");
-        commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.STORYBOARD_EPISODE, null, first), USER);
+        var firstEpisode = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.STORYBOARD_EPISODE, null, first), USER).result();
+        long firstId = firstEpisode.path("id").longValue();
+        assertThat(queries.get(CanvasValueType.STORYBOARD_EPISODE, secondId, ACTOR).header().version()).isEqualTo(secondVersion);
         var list = context.getBean(StoryboardResourceQueryService.class).children(CanvasValueType.SHOT, CanvasValueType.STORYBOARD, board, ACTOR);
         assertThat(list).extracting(item -> item.path("content").textValue()).containsExactly("1A", "1B", "2A", "2B");
         var statistics = context.getBean(StoryboardResourceQueryService.class).statistics(board, ACTOR);
         assertThat(statistics.episodeCount()).isEqualTo(2);
         assertThat(statistics.sceneCount()).isEqualTo(2);
         assertThat(statistics.itemCount()).isEqualTo(4);
+        var json = new CanvasJson(mapper);
+        var reads = new StoryboardToolQueries(context.getBean(StoryboardResourceQueryService.class), queries,
+                mock(SystemConfigService.class), json);
+        var invocation = ToolExecutionContext.forInvocation(51L, 1, 51L, USER);
+        var outline = json.read(reads.execute("get_storyboard", "{\"storyboardId\":" + board + "}", invocation), ObjectNode.class);
+        assertThat(outline.path("scope").asText()).isEqualTo("overview");
+        assertThat(outline.has("items")).isFalse();
+        assertThat(outline.path("totalItems").intValue()).isEqualTo(4);
+        assertThat(outline.path("episodes").get(0).path("id").longValue()).isEqualTo(firstId);
+        assertThat(outline.path("episodes").get(1).path("id").longValue()).isEqualTo(secondId);
+        assertThat(outline.path("episodes").get(0).path("itemCount").intValue()).isEqualTo(2);
+        assertThat(outline.path("episodes").get(0).path("scenes").get(0).path("itemCount").intValue()).isEqualTo(2);
+        var detail = json.read(reads.execute("get_storyboard", json.write(Map.of("storyboardId", board,
+                "storyboardEpisodeId", secondId)), invocation), ObjectNode.class);
+        assertThat(detail.path("items")).hasSize(2);
+        assertThat(detail.path("items").get(0).path("content").asText()).isEqualTo("2A");
+        commands.execute(new StoryboardChildrenCommand(UUID.randomUUID().toString(), CanvasValueType.STORYBOARD,
+                board, queries.get(CanvasValueType.STORYBOARD, board, ACTOR).header().version(),
+                StoryboardChildrenCommand.Mode.REORDER, List.of(), List.of(secondId, firstId)), USER);
+        assertThat(context.getBean(StoryboardResourceQueryService.class).children(CanvasValueType.STORYBOARD_EPISODE,
+                CanvasValueType.STORYBOARD, board, ACTOR)).extracting(item -> item.path("id").longValue()).containsExactly(secondId, firstId);
     }
 
     private ToolExecutionContext storyboardInvocation(String run, String call) {

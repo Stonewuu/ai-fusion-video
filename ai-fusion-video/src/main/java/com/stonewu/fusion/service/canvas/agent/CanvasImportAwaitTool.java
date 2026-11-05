@@ -1,9 +1,8 @@
 package com.stonewu.fusion.service.canvas.agent;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.canvas.CanvasJson;
-import com.stonewu.fusion.service.canvas.model.CanvasActor;
 
 import java.util.Map;
 
@@ -21,7 +20,7 @@ public final class CanvasImportAwaitTool extends CanvasAgentTool implements Canv
     }
 
     @Override
-    public Object poll(ObjectNode input, CanvasAgentScope scope, CanvasActor actor, AiModel model) {
-        return imports.poll(text(input, "importId"), scope, actor);
+    public Object poll(ObjectNode input, ToolExecutionContext context) {
+        return imports.poll(text(input, "importId"), context.getCanvasScope(), context.requireMutationContext().actor());
     }
 }

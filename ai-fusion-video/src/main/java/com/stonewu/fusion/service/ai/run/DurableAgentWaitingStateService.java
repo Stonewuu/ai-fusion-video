@@ -282,9 +282,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
             return false;
         }
         requireCheckpoint(run, checkpoint);
-        boolean canvasWait = "await_canvas_run".equals(pending.toolName()) && run.getCanvasScopeJson() != null;
-        LocalDateTime expiresAt = canvasWait
-                ? canvasWaitExpiry(pending.expiresAt(), run, now) : clampedExpiry(pending.expiresAt(), run, now);
+        boolean platformToolWait = "await_canvas_run".equals(pending.toolName());
+        LocalDateTime expiresAt = platformToolWait
+                ? toolWaitExpiry(pending.expiresAt(), run, now) : clampedExpiry(pending.expiresAt(), run, now);
         PendingExternalExecution normalized = new PendingExternalExecution(
                 pending.toolCallId(),
                 pending.toolName(),
@@ -322,7 +322,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 normalized.toolCallId(),
                 normalized.toolName(),
                 expiresAt,
-                canvasWait ? expiresAt : run.getDeadlineAt(),
+                platformToolWait ? expiresAt : run.getDeadlineAt(),
                 checkpoint.pausedThroughSequence(),
                 increment(sequence),
                 now);
@@ -332,7 +332,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         return true;
     }
 
-    private LocalDateTime canvasWaitExpiry(Instant requested, AgentRun run, LocalDateTime now) {
+    private LocalDateTime toolWaitExpiry(Instant requested, AgentRun run, LocalDateTime now) {
         if (runTimeout.isZero()) {
             return LocalDateTime.ofInstant(requested, ZoneOffset.UTC).truncatedTo(ChronoUnit.MILLIS);
         }
@@ -509,8 +509,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 null,
                 payload,
                 now);
-        if ("await_canvas_run".equals(pending.toolName()) && run.getCanvasScopeJson() != null) {
-            sequence = appendCanvasToolResults(run, pending, payload.path("result"), sequence, now);
+        if ("await_canvas_run".equals(pending.toolName())) {
+            sequence = appendExternalToolResults(run, pending, payload.path("result"), sequence, now);
         }
         if (runMapper.resumeExternal(
                 run.getId(),
@@ -524,7 +524,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
             throw conflict("外部执行请求已由其他节点处理");
         }
         LocalDateTime deadline = run.getDeadlineAt();
-        if ("await_canvas_run".equals(pending.toolName()) && run.getCanvasScopeJson() != null) {
+        if ("await_canvas_run".equals(pending.toolName())) {
             deadline = AgentExecutionLimits.deadlineFrom(now, runTimeout);
             if (!runTimeout.isZero() && deadline.isAfter(run.getStartedAt().plusHours(24))) {
                 deadline = run.getStartedAt().plusHours(24);
@@ -543,7 +543,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 deadline);
     }
 
-    private long appendCanvasToolResults(AgentRun run, PendingExternalExecution pending, JsonNode result,
+    private long appendExternalToolResults(AgentRun run, PendingExternalExecution pending, JsonNode result,
                                          long sequence, LocalDateTime now) {
         var calls = parseObject(pending.suspendedPayloadJson(), "suspendedPayloadJson").path("toolCalls");
         var results = result.path("results");
@@ -809,7 +809,8 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 ownerInstanceId,
                 ownerEpoch,
                 toInstant(leaseUntil),
-                toInstant(deadline), run.getCanvasScopeJson() != null);
+                toInstant(deadline), run.getCanvasScopeJson() != null
+                        || "WAITING_EXTERNAL".equals(run.getStatus()) && "await_canvas_run".equals(run.getWaitingToolName()));
     }
 
     private long nextSequence(AgentRun run) {

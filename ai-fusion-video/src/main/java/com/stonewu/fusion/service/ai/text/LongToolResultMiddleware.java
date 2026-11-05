@@ -24,12 +24,13 @@ import java.util.Map;
 import java.util.function.Function;
 
 public final class LongToolResultMiddleware implements MiddlewareBase {
-    public static final int MAX_INLINE_CHARS = 24_000;
     private final LongToolResultStore results;
+    private final int maxInlineChars;
     private final ObjectMapper json = new ObjectMapper();
 
-    public LongToolResultMiddleware(LongToolResultStore results) {
+    public LongToolResultMiddleware(LongToolResultStore results, Integer contextWindow) {
         this.results = results;
+        this.maxInlineChars = ToolTextBudget.inlineChars(contextWindow);
     }
 
     @Override
@@ -73,7 +74,7 @@ public final class LongToolResultMiddleware implements MiddlewareBase {
             }
         }
         String fullText = text.toString();
-        if (fullText.length() <= MAX_INLINE_CHARS) {
+        if (fullText.codePointCount(0, fullText.length()) <= maxInlineChars) {
             return result;
         }
         String hash = TextPages.version(fullText);

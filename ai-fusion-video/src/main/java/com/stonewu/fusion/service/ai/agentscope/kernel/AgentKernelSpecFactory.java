@@ -34,7 +34,7 @@ import java.util.stream.Collectors;
 public final class AgentKernelSpecFactory {
 
     public static final String DEFAULT_AGENT_KEY = "ai_assistant_agent";
-    public static final String TOOL_WHITELIST_VERSION = "afv-tools-v3";
+    public static final String TOOL_WHITELIST_VERSION = "afv-tools-v4";
     public static final String OWNER_USER_ID_VARIABLE = "agentWorkspaceUserId";
     public static final String MCP_CONFIG_FINGERPRINT_VARIABLE = "agentMcpConfigFingerprint";
     public static final String TOOL_EXECUTION_MODE_VARIABLE = "agentToolExecutionMode";
@@ -300,7 +300,7 @@ public final class AgentKernelSpecFactory {
             ToolSelection tools,
             String modelFingerprint,
             Integer maxIters) {
-        tools = withContentReaders(tools);
+        tools = withContentReaders(withGenerationWaiter(tools));
         String safePrompt = requireText(systemPrompt, "systemPrompt");
         if (!tools.whitelist().isEmpty()) {
             safePrompt += "\n\n" + AgentContentTools.INSTRUCTION;
@@ -344,6 +344,22 @@ public final class AgentKernelSpecFactory {
                         AgentKernelToolManifest.schemaSha256(schema.canonicalJson()), true, true));
             }
         }
+        return new ToolSelection(manifest, whitelist);
+    }
+
+    private ToolSelection withGenerationWaiter(ToolSelection tools) {
+        if (Collections.disjoint(tools.whitelist(), Set.of("generate_image", "generate_video"))
+                || tools.whitelist().contains("await_generation_task")) {
+            return tools;
+        }
+        var waiter = toolConfigService.getEnabledTools().stream()
+                .filter(tool -> tool.getToolName().equals("await_generation_task")).findFirst()
+                .orElseThrow(() -> new IllegalStateException("媒体生成需要已启用的等待结果工具"));
+        var schema = AgentScopeToolSchema.prepare(objectMapper, waiter.getParametersSchema(), waiter.getToolName());
+        var manifest = new ArrayList<>(tools.manifest());
+        var whitelist = new LinkedHashSet<>(tools.whitelist());
+        add(manifest, whitelist, new AgentKernelToolManifest(waiter.getToolName(),
+                AgentKernelToolManifest.schemaSha256(schema.canonicalJson()), waiter.isReadOnly(), waiter.isConcurrencySafe()));
         return new ToolSelection(manifest, whitelist);
     }
 

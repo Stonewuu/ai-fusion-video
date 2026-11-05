@@ -20,7 +20,7 @@ public class ReadToolResultToolExecutor implements ToolExecutor {
               "properties": {
                 "resultId": {"type": "string", "description": "超长工具结果返回的结果编号，不是文件路径"},
                 "offset": {"type": "integer", "minimum": 0, "description": "首次传 0，继续读取使用 nextOffset"},
-                "limit": {"type": "integer", "minimum": 1, "maximum": 8000, "description": "每段最多字符数，默认 4000"},
+                "limit": {"type": "integer", "minimum": 1, "maximum": 64000, "description": "每段最多字符数；省略时按模型配置容量分配，实际返回量受该容量约束，最多 64000 字符"},
                 "contentVersion": {"type": "string", "description": "继续读取时传入上一段返回的内容版本"}
               },
               "required": ["resultId"],
@@ -72,7 +72,7 @@ public class ReadToolResultToolExecutor implements ToolExecutor {
             ObjectNode params = json.read(input, ObjectNode.class);
             String resultId = params.path("resultId").asText();
             var page = results.read(context.getUserId().toString(), context.getAgentSessionId(), resultId,
-                    TextPages.Request.from(params));
+                    TextPages.Request.from(params, context.getModel().getContextWindow()));
             ObjectNode response = json.object(page);
             response.put("status", "success").put("resultId", resultId);
             return json.write(response);

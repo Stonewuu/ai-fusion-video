@@ -45,7 +45,7 @@ public class ToolExecutionContext {
     /** 当前运行的会话编号，由运行时提供，不接受模型参数。 */
     private String agentSessionId;
     /**
-     * 当前内核已固定的模型，仅用于校验工具的多模态结果投影。
+     * 当前内核已固定的模型，用于多模态结果校验与文本读取预算。
      */
     private AiModel model;
 

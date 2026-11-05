@@ -183,7 +183,8 @@ public final class AgentScopeHarnessFactory {
             }
             if (spec.toolWhitelist().contains(ReadToolResultToolExecutor.NAME)) {
                 builder.middleware(new LongToolResultMiddleware(
-                        Objects.requireNonNull(longToolResults, "长工具结果读取需要工作空间存储")));
+                        Objects.requireNonNull(longToolResults, "长工具结果读取需要工作空间存储"),
+                        spec.model().getContextWindow()));
             }
             boolean canvasBound = "true".equals(spec.promptVariables().get("canvasBound"))
                     || "true".equals(spec.promptVariables().get("canvasNodeExecution"));

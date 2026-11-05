@@ -291,7 +291,7 @@
     </select>
     <select id="waitingForCanvas" resultType="String">
         SELECT run_id FROM afv_agent_run WHERE status='WAITING_EXTERNAL'
-          AND waiting_tool_name='await_canvas_run' AND canvas_scope_json IS NOT NULL
+          AND waiting_tool_name='await_canvas_run'
           AND external_check_after &lt;= UTC_TIMESTAMP(3) AND wait_expires_at &gt; UTC_TIMESTAMP(3)
         ORDER BY external_check_after, id LIMIT 32
     </select>

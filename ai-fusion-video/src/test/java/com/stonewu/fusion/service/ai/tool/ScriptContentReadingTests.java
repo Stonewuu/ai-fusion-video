@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.tool;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.text.TextPages;
 import com.stonewu.fusion.service.ai.tool.script.ReadScriptContentToolExecutor;
@@ -40,6 +41,10 @@ class ScriptContentReadingTests {
     private final CanvasActor actor = new CanvasActor(7, null);
     private final ToolExecutionContext context = ToolExecutionContext.forInvocation(7L, 1, 7L,
             new ResourceCommandContext(actor, "agent", null, "run", "call", "worker", 1L));
+
+    ScriptContentReadingTests() {
+        context.setModel(AiModel.builder().contextWindow(128_000).build());
+    }
 
     @Test
     @DisplayName("查询返回可用的读取入口，长篇单行原文连续分页后逐字一致")
@@ -135,12 +140,32 @@ class ScriptContentReadingTests {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"{\"offset\":-1}", "{\"limit\":0}", "{\"limit\":8001}",
+    @ValueSource(strings = {"{\"offset\":-1}", "{\"limit\":0}", "{\"limit\":64001}",
             "{\"offset\":1}", "{\"offset\":0.5}", "{\"limit\":\"4000\"}"})
     @DisplayName("非法范围和没有内容版本的续读请求不得默认为成功")
     void invalidPaginationIsRejected(String input) {
-        assertThatThrownBy(() -> TextPages.Request.from(json.read(input, ObjectNode.class)))
+        assertThatThrownBy(() -> TextPages.Request.from(json.read(input, ObjectNode.class), 128_000))
                 .isInstanceOf(BusinessException.class);
+    }
+
+    @Test
+    @DisplayName("大容量模型减少长正文往返，小容量模型限制单次读取并保留完整续读位置")
+    void readingBudgetFollowsTheConfiguredModelAndKeepsExplicitSmallerRequests() {
+        String source = "剧情🌕".repeat(30_000);
+        when(queries.get(CanvasValueType.SCRIPT, 10, actor)).thenReturn(new ResourceSnapshot(null,
+                mapper.createObjectNode().put("rawContent", source).put("version", 1)));
+        String request = "{\"resourceType\":\"script\",\"resourceId\":10,\"field\":\"rawContent\"}";
+        context.setModel(AiModel.builder().contextWindow(1_000_000).build());
+        var large = json.read(reader.execute(request, context), ObjectNode.class);
+        assertThat(large.path("endOffset").intValue()).isEqualTo(64_000);
+        assertThat(large.path("nextOffset").intValue()).isEqualTo(64_000);
+        assertThat(large.path("totalChars").intValue()).isEqualTo(90_000);
+        assertThat(large.path("hasMore").booleanValue()).isTrue();
+        context.setModel(AiModel.builder().contextWindow(32_000).build());
+        var bounded = json.read(reader.execute(request.replace("}", ",\"limit\":64000}"), context), ObjectNode.class);
+        assertThat(bounded.path("endOffset").intValue()).isEqualTo(4_000);
+        var shortRead = json.read(reader.execute(request.replace("}", ",\"limit\":1000}"), context), ObjectNode.class);
+        assertThat(shortRead.path("endOffset").intValue()).isEqualTo(1_000);
     }
 
     @Test

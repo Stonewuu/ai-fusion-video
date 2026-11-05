@@ -56,7 +56,7 @@ class LongToolResultTests {
         Agent agent = mock(Agent.class);
         when(agent.getAgentState()).thenReturn(state);
         var observed = new AtomicReference<ReasoningInput>();
-        new LongToolResultMiddleware(results).onReasoning(agent,
+        new LongToolResultMiddleware(results, 128_000).onReasoning(agent,
                 RuntimeContext.builder().userId("7").sessionId("session").build(),
                 new ReasoningInput(List.of(message), List.of(), null), input -> {
                     observed.set(input);
@@ -97,6 +97,28 @@ class LongToolResultTests {
     }
 
     @Test
+    @DisplayName("模型容量足够时直接提供单集长结果，避免先存储再分段读取")
+    void largeContextKeepsUsefulEpisodeSizedResultsInline() {
+        String content = "镜头正文🌕".repeat(12_000);
+        Msg message = Msg.builder().role(MsgRole.TOOL).content(ToolResultBlock.of("call", "get_storyboard",
+                TextBlock.builder().text(content).build())).build();
+        AgentState state = AgentState.builder().build();
+        state.contextMutable().add(message);
+        Agent agent = mock(Agent.class);
+        when(agent.getAgentState()).thenReturn(state);
+        var observed = new AtomicReference<ReasoningInput>();
+        new LongToolResultMiddleware(results, 1_000_000).onReasoning(agent,
+                RuntimeContext.builder().userId("7").sessionId("session").build(),
+                new ReasoningInput(List.of(message), List.of(), null), input -> {
+                    observed.set(input);
+                    return Flux.empty();
+                }).blockLast();
+        var block = (ToolResultBlock) observed.get().messages().getFirst().getContent().getFirst();
+        assertThat(((TextBlock) block.getOutput().getFirst()).getText()).isEqualTo(content);
+        verify(workspace, never()).putArtifactIfAbsent(any(), anyString(), any());
+    }
+
+    @Test
     @DisplayName("保存失败必须停止处理并保留原状态，不能返回无法读取的占位内容")
     void storageFailureDoesNotDiscardCanonicalContentOrCallTheModel() {
         String content = "文".repeat(95910);
@@ -107,7 +129,7 @@ class LongToolResultTests {
         Agent agent = mock(Agent.class);
         when(agent.getAgentState()).thenReturn(state);
         doThrow(new IllegalStateException("存储不可用")).when(workspace).putArtifactIfAbsent(any(), anyString(), any());
-        assertThatThrownBy(() -> new LongToolResultMiddleware(results).onReasoning(agent,
+        assertThatThrownBy(() -> new LongToolResultMiddleware(results, 128_000).onReasoning(agent,
                 RuntimeContext.builder().userId("7").sessionId("session").build(),
                 new ReasoningInput(List.of(message), List.of(), null), input -> {
                     throw new AssertionError("保存失败时不能调用模型");

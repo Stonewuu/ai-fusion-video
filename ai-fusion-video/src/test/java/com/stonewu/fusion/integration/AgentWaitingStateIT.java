@@ -318,6 +318,27 @@ class AgentWaitingStateIT {
         verifyNoInteractions(signals);
     }
 
+    @Test
+    void ordinaryGenerationWaitIsDiscoveredWithoutCanvasAndResumedOnce() {
+        StartedAgentRun started = startRun(Duration.ofMinutes(2));
+        var pending = new PendingExternalExecution("generation-reply", "await_canvas_run",
+                "{\"toolCalls\":[{\"id\":\"wait-call\",\"name\":\"await_generation_task\",\"input\":{\"submissionId\":\"accepted\"}}]}",
+                started.deadline());
+        assertThat(await(waiting.enterWaitingExternal(started.runId(), started.ownerEpoch(),
+                checkpoint(run(started.runId())), pending))).isTrue();
+        assertThat(run(started.runId()).getCanvasScopeJson()).isNull();
+        assertThat(run(started.runId()).getOwnerInstanceId()).isNull();
+        assertThat(canvasWaits.waiting()).contains(started.runId());
+        assertThat(canvasWaits.deferCheck(started.runId())).isNotNull();
+        assertThat(canvasWaits.deferCheck(started.runId())).isNull();
+        var resume = new ResumeExternalCommand(started.runId(), USER_ID, "generation-waiter", pending.toolCallId(),
+                "{\"results\":[{\"toolCallId\":\"wait-call\",\"toolName\":\"await_generation_task\",\"result\":{\"state\":\"SUCCEEDED\"}}]}",
+                "waiting-node-a", Duration.ofSeconds(30));
+        assertThat(await(waiting.resumeExternal(resume)).runId()).isEqualTo(started.runId());
+        assertConflict(() -> await(waiting.resumeExternal(resume)));
+        assertThat(canvasWaits.dispatching("waiting-node-a")).contains(started.runId());
+    }
+
     private void assertCommittedVisibleEvent(String runId, long sequence) {
         AgentEvent event = eventMapper.selectOne(new LambdaQueryWrapper<AgentEvent>()
                 .eq(AgentEvent::getRunId, runId)

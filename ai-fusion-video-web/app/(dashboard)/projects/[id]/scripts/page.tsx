@@ -22,6 +22,7 @@ import { useScriptMutations } from "./_components/use-script-mutations";
 import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import { EpisodeTree } from "./_components/episode-tree";
 import { SceneList } from "./_components/scene-list";
+import { useSceneNavigation } from "./_components/use-scene-navigation";
 import { SceneDetail } from "./_components/scene-detail";
 import { ScriptOverview } from "./_components/script-overview";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
@@ -268,6 +269,7 @@ export default function ScriptTabPage() {
   };
 
   const selectEpisode = async (episodeId: number) => {
+    cancelSceneScroll();
     setActiveEpisodeId(episodeId);
     setSelectedSceneId(null);
     if (!expandedEpisodes.has(episodeId)) {
@@ -277,28 +279,15 @@ export default function ScriptTabPage() {
     await loadEpisodeScenes(episodeId);
   };
 
-  // 追踪用户滚动状态，避免点击滚动时触发 observer 误判
-  const isUserScrollRef = useRef(false);
-  const scrollContainerRef = useRef<HTMLDivElement>(null);
-
-  const scrollToScene = (sceneId: number) => {
-    isUserScrollRef.current = true;
-    setSelectedSceneId(sceneId);
-    const el = document.querySelector(`[data-scene-id="${sceneId}"]`);
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
-    // 滚动动画完成后恢复 observer
-    setTimeout(() => {
-      isUserScrollRef.current = false;
-    }, 600);
-  };
+  const { scrollContainerRef, isAutoScrollingRef, scrollToScene, cancelSceneScroll } = useSceneNavigation(
+    activeEpisodeId ? episodeScenes[activeEpisodeId] : undefined, setSelectedSceneId, !loading && !!script,
+    activeEpisodeId ? loadingEpisodes.has(activeEpisodeId) : false,
+  );
 
   const handleSelectScene = (sceneId: number, episodeId: number) => {
     selectEpisode(episodeId);
-    setSelectedSceneId(sceneId);
     setLeftSheetOpen(false);
-    setTimeout(() => scrollToScene(sceneId), 50);
+    scrollToScene(sceneId);
   };
 
   // ========== 增删操作 ==========
@@ -467,11 +456,15 @@ export default function ScriptTabPage() {
   // ========== 滚动监听：IntersectionObserver ==========
   useEffect(() => {
     const container = scrollContainerRef.current;
-    if (!container || activeScenes.length === 0) return;
+    if (!container || isActiveLoading || activeScenes.length === 0) {
+      return;
+    }
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (isUserScrollRef.current) return;
+        if (isAutoScrollingRef.current) {
+          return;
+        }
         // 找到最靠近顶部且可见的场次
         let topEntry: IntersectionObserverEntry | null = null;
         for (const entry of entries) {
@@ -493,17 +486,13 @@ export default function ScriptTabPage() {
       }
     );
 
-    // 延迟一点绑定，确保 DOM 已经渲染完毕
-    const timer = setTimeout(() => {
-      const elements = container.querySelectorAll("[data-scene-id]");
-      elements.forEach((el) => observer.observe(el));
-    }, 100);
+    const elements = container.querySelectorAll("[data-scene-id]");
+    elements.forEach((el) => observer.observe(el));
 
     return () => {
-      clearTimeout(timer);
       observer.disconnect();
     };
-  }, [activeScenes]);
+  }, [activeScenes, isActiveLoading, isAutoScrollingRef, scrollContainerRef]);
 
   // ========== 渲染 ==========
 
@@ -563,7 +552,7 @@ export default function ScriptTabPage() {
           <Sheet open={leftSheetOpen} onOpenChange={setLeftSheetOpen}>
             <SheetTrigger
               render={
-                <button className="xl:hidden p-1.5 -ml-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
+                <button aria-label="打开剧本目录" className="xl:hidden p-1.5 -ml-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
                   <Menu className="h-5 w-5" />
                 </button>
               }
@@ -595,7 +584,7 @@ export default function ScriptTabPage() {
           <Sheet open={rightSheetOpen} onOpenChange={setRightSheetOpen}>
             <SheetTrigger
               render={
-                <button className="p-1.5 -mr-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
+                <button aria-label="打开场景详情" className="p-1.5 -mr-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
                   <Info className="h-5 w-5" />
                 </button>
               }

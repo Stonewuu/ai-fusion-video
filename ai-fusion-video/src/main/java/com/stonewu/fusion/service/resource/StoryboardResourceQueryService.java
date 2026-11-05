@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.resource;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.stonewu.fusion.mapper.resource.ResourceReadMapper.ShotCount;
 import com.stonewu.fusion.repository.resource.StoryboardReadRepository;
 import com.stonewu.fusion.service.canvas.CanvasAccessPolicy;
 import com.stonewu.fusion.service.canvas.CanvasJson;
@@ -41,6 +42,11 @@ public class StoryboardResourceQueryService {
         resources.get(STORYBOARD, board, actor);
         return new StoryboardStatistics(boards.count(STORYBOARD_EPISODE, board), boards.count(STORYBOARD_SCENE, board),
                 boards.count(SHOT, board));
+    }
+
+    public List<ShotCount> shotCounts(long board, CanvasActor actor) {
+        resources.get(STORYBOARD, board, actor);
+        return boards.shotCounts(board);
     }
 
     public ObjectNode tree(CanvasValueType type, long id, int depth, CanvasActor actor) {

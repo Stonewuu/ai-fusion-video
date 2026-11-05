@@ -152,7 +152,7 @@ function ToolCallItem({
 
       {hasResult ? (
         <div className="border-t border-border/20 px-3 py-3">
-            <ToolResultViewport>
+            <ToolResultViewport collapsible={item.toolName !== "read_script_content" && item.toolName !== "read_tool_result"}>
               {(expanded) => result === null ? (
                 <p className="text-xs text-muted-foreground">
                   工具未返回结果

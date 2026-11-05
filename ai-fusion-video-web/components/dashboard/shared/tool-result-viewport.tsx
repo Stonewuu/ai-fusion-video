@@ -163,8 +163,10 @@ function FloatingCollapseButton({
 
 export function ToolResultViewport({
   children,
+  collapsible = true,
 }: {
   children: (expanded: boolean) => ReactNode;
+  collapsible?: boolean;
 }) {
   const resultRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -193,15 +195,15 @@ export function ToolResultViewport({
 
   return (
     <div ref={resultRef} className="relative">
-      <div className={cn("relative", !expanded && "max-h-64 overflow-hidden")}>
+      <div className={cn("relative", collapsible && !expanded && "max-h-64 overflow-hidden")}>
         <div ref={contentRef}>{children(expanded)}</div>
 
-        {!expanded && canExpand ? (
+        {collapsible && !expanded && canExpand ? (
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-20 bg-linear-to-t from-card via-card/90 to-transparent" />
         ) : null}
       </div>
 
-      {!expanded && canExpand ? (
+      {collapsible && !expanded && canExpand ? (
         <div className="pointer-events-none absolute inset-x-0 bottom-2 z-10 flex justify-center">
           <span className="pointer-events-auto inline-flex rounded-xl border border-border/30 bg-popover/70 backdrop-blur-sm shadow-sm">
             <Button
@@ -218,7 +220,7 @@ export function ToolResultViewport({
         </div>
       ) : null}
 
-      {expanded && canExpand ? (
+      {collapsible && expanded && canExpand ? (
         <FloatingCollapseButton resultRef={resultRef} onCollapse={collapse} />
       ) : null}
     </div>

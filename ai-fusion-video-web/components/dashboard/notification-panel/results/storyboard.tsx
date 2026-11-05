@@ -2,6 +2,7 @@
 
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { StoryboardShotList } from "./storyboard-shot-list";
+import { StoryboardOutlineResult } from "./storyboard-outline";
 
 export function StoryboardResult({
   data,
@@ -13,6 +14,9 @@ export function StoryboardResult({
   expanded?: boolean;
 }) {
   const obj = data as Record<string, unknown>;
+  if (obj.scope === "overview") {
+    return <StoryboardOutlineResult data={obj} />;
+  }
   const isSave = toolName.startsWith("save_") || toolName === "insert_storyboard_item";
 
   if (isSave) {
@@ -76,7 +80,8 @@ export function StoryboardResult({
   const totalItems = obj.totalItems as number | undefined;
   const items = obj.items as Array<Record<string, unknown>> | undefined;
   const shotItems = Array.isArray(items) ? items : [];
-  const displayTitle = title || sceneName;
+  const episode = (obj.episodes as Array<Record<string, unknown>> | undefined)?.[0];
+  const displayTitle = obj.scope === "episode" ? episode?.title as string : title || sceneName;
 
   return (
     <div className="space-y-1.5">

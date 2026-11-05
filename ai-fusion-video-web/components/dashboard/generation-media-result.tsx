@@ -1,6 +1,7 @@
 "use client";
 import { SafeImage } from "@/components/media/managed-image";
 import { ManagedVideo } from "@/components/media/managed-video";
+import { GenerationTaskResult } from "./shared/generation-task-result";
 
 
 import { useState } from "react";
@@ -88,6 +89,9 @@ export function ThumbImage({
 
 export function ImageGenerateResult({ data }: { data: unknown }) {
   const obj = data as Obj;
+  if (obj.status === "pending") {
+    return <GenerationTaskResult data={data} />;
+  }
   const resolved = resolveMediaUrl(obj.imageUrl as string);
   const prompt = obj.prompt as string | undefined;
   return (
@@ -104,6 +108,9 @@ export function ImageGenerateResult({ data }: { data: unknown }) {
 
 export function VideoGenerateResult({ data }: { data: unknown }) {
   const obj = data as Obj;
+  if (obj.status === "pending") {
+    return <GenerationTaskResult data={data} />;
+  }
   const videoUrl = resolveMediaUrl(obj.videoUrl as string);
   const coverUrl = resolveMediaUrl(obj.coverUrl as string);
   const prompt = obj.prompt as string | undefined;

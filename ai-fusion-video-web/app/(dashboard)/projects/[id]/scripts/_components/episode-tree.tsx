@@ -1,14 +1,12 @@
 "use client";
 
 import {
-  ChevronRight,
   Film,
   Clapperboard,
   Loader2,
   Plus,
   Trash2,
   GripVertical,
-  Sparkles,
   PanelLeftClose,
   PanelLeftOpen,
   RotateCw,
@@ -32,6 +30,7 @@ import {
   useSortable,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
+import { EpisodeTreeRow } from "./episode-tree-row";
 
 // ========== 可拖拽场次项 ==========
 
@@ -230,69 +229,17 @@ export function EpisodeTree({
           const isActive = ep.id === activeEpisodeId;
 
           return (
-            <div key={ep.id} className="group/ep mb-0.5">
-              <div
-                className={cn(
-                  "flex items-center rounded-lg transition-colors overflow-hidden",
-                  isActive ? "bg-primary/8" : "hover:bg-primary/5"
-                )}
-              >
-                <button
-                  onClick={() => onToggleEpisode(ep.id)}
-                  className={cn(
-                    "p-2 shrink-0 transition-colors",
-                    isActive ? "text-primary/60 hover:text-primary" : "text-muted-foreground/50 hover:text-foreground"
-                  )}
-                >
-                  <motion.div
-                    animate={{ rotate: expanded ? 90 : 0 }}
-                    transition={{ duration: 0.15, ease: "easeOut" }}
-                  >
-                    <ChevronRight className="h-3 w-3" />
-                  </motion.div>
-                </button>
-                <button
-                  onClick={() => {
-                    if (!expanded) onToggleEpisode(ep.id);
-                    onSelectEpisode(ep.id);
-                  }}
-                  className={cn(
-                    "flex-1 flex items-center gap-1.5 py-2 pr-2 min-w-0 text-left text-sm",
-                    isActive ? "text-primary font-medium" : "text-foreground/80 hover:text-foreground"
-                  )}
-                >
-                  <Film className={cn("h-3.5 w-3.5 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
-                  <span className={cn("font-medium truncate text-xs", isActive && "text-primary")}>
-                    {ep.title || `第 ${ep.episodeNumber} 集`}
-                  </span>
-                </button>
-                {onParseEpisode && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onParseEpisode(ep.id); }}
-                    className="p-1.5 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-purple-400 hover:text-purple-300 hover:bg-purple-500/10 transition-all"
-                    title="AI 解析该集"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                  </button>
-                )}
-                {onGenerateStoryboard && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); onGenerateStoryboard(ep.id); }}
-                    className="p-1.5 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all"
-                    title="AI 生成该集分镜"
-                  >
-                    <Film className="h-3 w-3" />
-                  </button>
-                )}
-                <button
-                  onClick={() => onDeleteEpisode(ep.id)}
-                  className="p-1.5 mr-1 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                  title="删除分集"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              </div>
-
+            <div key={ep.id} className="mb-0.5">
+              <EpisodeTreeRow
+                episode={ep}
+                expanded={expanded}
+                active={isActive}
+                onToggle={() => onToggleEpisode(ep.id)}
+                onSelect={() => onSelectEpisode(ep.id)}
+                onDelete={() => onDeleteEpisode(ep.id)}
+                onParse={onParseEpisode ? () => onParseEpisode(ep.id) : undefined}
+                onGenerateStoryboard={onGenerateStoryboard ? () => onGenerateStoryboard(ep.id) : undefined}
+              />
               <AnimatePresence initial={false}>
                 {expanded && (
                   <motion.div

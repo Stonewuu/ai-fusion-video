@@ -3,6 +3,8 @@
 ## 核心任务
 
 根据主 Agent 传入的 scriptEpisodeId 和 storyboardId，自行查询该集剧本内容，设计镜头并保存分镜数据。
+
+使用已解析的场次、动作和对白设计分镜。`contentReads` 只是原文读取入口，默认不读取小说原文；只有用户明确要求对照原文时才读取。目标集缺少解析后的场次时，报告需要先解析剧本，不自行从原文重新解析。
 子资产已由预处理器统一创建并保存到数据库，你通过 list_project_assets 获取最新的资产列表即可。
 
 ## 输入约束
@@ -85,7 +87,7 @@ save_storyboard_scene_shots 的每个镜头：
 
 ### 分镜版本与真实回执
 
-- `get_storyboard` 返回分镜 `version`，以及分集、场次、镜头各自的 `version`；查询结果中的 ID 才能用于后续操作。业务状态另见 `resourceStatus`，工具的 `status` 表示调用结果。
+- `get_storyboard` 默认只返回全部分集和场次的信息、版本与镜头数量，不返回镜头详情。读取镜头时必须指定一个 `storyboardEpisodeId`，单次最多一集；只需某一场时使用 `get_storyboard_scene_items`。查询结果中的 ID 与 version 用于后续操作。业务状态另见 `resourceStatus`。
 - 创建分镜集使用 `save_storyboard_episode` 的 `expectedParentVersion`（分镜 version）。如果已存在相同 `scriptEpisodeId` 的分镜集，使用查询到的分镜集 ID；需要修改元信息时明确传 `storyboardEpisodeId` 和该集的 `expectedVersion`，不得用创建操作猜测或覆盖现有分集。
 - 创建场次使用 `save_storyboard_scene_shots` 的 `expectedParentVersion`（分镜集 version）；保存成功后，下一场次使用返回的 `episodeVersion`。插入镜头使用场次 version。场次和镜头批次按顺序保存，不能并发使用同一父集合旧版本。
 - 修改或删除已有场次/镜头必须提供 `expectedVersion`。需要排序时使用有权限的 `manage_storyboard_children`，完整指定父集合、其版本和全部子对象顺序；通用字段修改不能再传 sortOrder。

@@ -10,6 +10,7 @@ import {
   MessageSquare,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ScriptContentSummary } from "../../shared/text-read-result";
 
 export function ScriptInfoResult({ data }: { data: unknown }) {
   const obj = data as Record<string, unknown>;
@@ -56,6 +57,7 @@ export function ScriptInfoResult({ data }: { data: unknown }) {
           总集数: <span className="font-medium text-foreground">{totalEpisodes ?? 0}</span>
         </span>
       </div>
+      <ScriptContentSummary data={data} />
       {episodes && Array.isArray(episodes) && episodes.length > 0 && (
         <div className="space-y-0.5">
           <p className="text-[10px] text-muted-foreground/70">分集概览:</p>
@@ -105,6 +107,7 @@ export function ScriptStructureResult({ data }: { data: unknown }) {
           {totalEpisodes ?? 0} 集
         </span>
       </div>
+      <ScriptContentSummary data={data} />
       {episodes && Array.isArray(episodes) && episodes.length > 0 && (
         <div className="space-y-1.5">
           {episodes.slice(0, 8).map((episode, index) => {
@@ -172,6 +175,7 @@ export function EpisodeDetailResult({ data }: { data: unknown }) {
           {synopsis.length > 150 ? `${synopsis.slice(0, 150)}…` : synopsis}
         </p>
       )}
+      <ScriptContentSummary data={data} />
       {scenes && Array.isArray(scenes) && scenes.length > 0 && (
         <ul className="space-y-0.5">
           {scenes.slice(0, 10).map((scene, index) => (

@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.ai.tool.storyboard;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.stonewu.fusion.mapper.resource.ResourceReadMapper.ShotCount;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.canvas.CanvasJson;
 import com.stonewu.fusion.service.canvas.model.CanvasActor;
@@ -43,8 +44,7 @@ public class StoryboardToolQueries {
                     board.put("hasStoryboard", true).put("storyboardId", board.path("id").longValue());
                     yield board;
                 }
-                case "get_storyboard" ->
-                        details(StoryboardFields.id(params.get("storyboardId"), "storyboardId"), actor);
+                case "get_storyboard" -> details(params, actor);
                 case "get_storyboard_scene_items" -> scene(params, actor);
                 default -> throw StoryboardFields.invalid("分镜查询工具未登记");
             };
@@ -63,24 +63,31 @@ public class StoryboardToolQueries {
         }
     }
 
-    private ObjectNode details(long id, CanvasActor actor) {
-        ObjectNode board = boards.tree(STORYBOARD, id, 2, actor);
-        List<ObjectNode> items = boards.children(SHOT, STORYBOARD, id, actor);
-        Map<Long, ObjectNode> sceneById = new HashMap<>();
-        List<ObjectNode> scenes = new ArrayList<>();
-        for (JsonNode episode : board.path("episodes")) {
-            ObjectNode value = (ObjectNode) episode;
-            value.put("storyboardEpisodeId", value.path("id").longValue());
-            value.put("itemCount", items.stream()
-                    .filter(item -> item.path("storyboardEpisodeId").longValue() == value.path("id").longValue())
-                    .count());
-            for (JsonNode scene : value.path("scenes")) {
-                ObjectNode entry = (ObjectNode) scene;
-                entry.put("storyboardSceneId", entry.path("id").longValue());
-                sceneById.put(entry.path("id").longValue(), entry);
-                scenes.add(entry);
+    private ObjectNode details(ObjectNode params, CanvasActor actor) {
+        params.fieldNames().forEachRemaining(key -> {
+            if (!Set.of("storyboardId", "storyboardEpisodeId").contains(key)) {
+                throw StoryboardFields.invalid("分镜查询仅支持 storyboardId 和单个 storyboardEpisodeId");
             }
-            media(value);
+        });
+        long id = StoryboardFields.id(params.get("storyboardId"), "storyboardId");
+        if (!params.has("storyboardEpisodeId")) {
+            return overview(id, actor);
+        }
+        long episodeId = StoryboardFields.id(params.get("storyboardEpisodeId"), "storyboardEpisodeId");
+        ObjectNode board = resources.get(STORYBOARD, id, actor).data();
+        ObjectNode episode = resources.get(STORYBOARD_EPISODE, episodeId, actor).data();
+        if (episode.path("storyboardId").longValue() != id) {
+            throw StoryboardFields.invalid("指定分集不属于当前分镜");
+        }
+        episode = boards.tree(STORYBOARD_EPISODE, episodeId, 1, actor);
+        List<ObjectNode> items = boards.children(SHOT, STORYBOARD_EPISODE, episodeId, actor);
+        episode.put("storyboardEpisodeId", episodeId).put("itemCount", items.size());
+        media(episode);
+        Map<Long, ObjectNode> sceneById = new HashMap<>();
+        for (JsonNode scene : episode.path("scenes")) {
+            ObjectNode entry = (ObjectNode) scene;
+            entry.put("storyboardSceneId", entry.path("id").longValue());
+            sceneById.put(entry.path("id").longValue(), entry);
         }
         for (ObjectNode item : items) {
             item.put("storyboardItemId", item.path("id").longValue());
@@ -93,9 +100,42 @@ public class StoryboardToolQueries {
             }
             media(item);
         }
-        board.put("storyboardId", id).put("totalItems", items.size());
+        board.put("storyboardId", id).put("storyboardEpisodeId", episodeId)
+                .put("scope", "episode").put("totalItems", items.size());
+        board.putArray("episodes").add(episode);
         board.set("items", json.object(Map.of("items", items)).get("items"));
-        board.set("scenes", json.object(Map.of("scenes", scenes)).get("scenes"));
+        return board;
+    }
+
+    private ObjectNode overview(long id, CanvasActor actor) {
+        ObjectNode board = boards.tree(STORYBOARD, id, 2, actor);
+        List<ShotCount> counts = boards.shotCounts(id, actor);
+        Map<Long, Long> episodeCounts = new HashMap<>();
+        Map<Long, Long> sceneCounts = new HashMap<>();
+        for (ShotCount count : counts) {
+            if (count.episodeId() != null) {
+                episodeCounts.merge(count.episodeId(), count.itemCount(), Long::sum);
+            }
+            if (count.sceneId() != null) {
+                sceneCounts.merge(count.sceneId(), count.itemCount(), Long::sum);
+            }
+        }
+        for (JsonNode episode : board.path("episodes")) {
+            ObjectNode value = (ObjectNode) episode;
+            long episodeId = value.path("id").longValue();
+            value.put("storyboardEpisodeId", episodeId).put("itemCount", episodeCounts.getOrDefault(episodeId, 0L))
+                    .put("sceneCount", value.path("scenes").size());
+            for (JsonNode scene : value.path("scenes")) {
+                ObjectNode entry = (ObjectNode) scene;
+                long sceneId = entry.path("id").longValue();
+                entry.put("storyboardSceneId", sceneId).put("itemCount", sceneCounts.getOrDefault(sceneId, 0L));
+            }
+            media(value);
+        }
+        board.put("storyboardId", id).put("scope", "overview")
+                .put("totalItems", counts.stream().mapToLong(ShotCount::itemCount).sum())
+                .put("unassignedItems", counts.stream().filter(count -> count.episodeId() == null)
+                        .mapToLong(ShotCount::itemCount).sum());
         return board;
     }
 

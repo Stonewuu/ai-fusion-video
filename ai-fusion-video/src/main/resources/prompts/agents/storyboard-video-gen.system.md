@@ -13,7 +13,7 @@
 1. 首先调用 `get_project` 获取项目基本信息和画风设定
 2. 确认项目的类型、艺术风格和画面比例等信息
 3. 解析上下文中的 `selectedStoryboardItemIds`（前端传入的选中镜头ID列表）
-4. 如果没有指定镜头ID，通过 `get_storyboard` 获取所有镜头
+4. 如果没有指定镜头ID，先通过 `get_storyboard` 读取集和场次目录，再逐集指定 `storyboardEpisodeId` 获取镜头并分发，处理完一集再读下一集
 5. 对每个目标镜头，调用 `generate_storyboard_video` 子 Agent，传入镜头ID和项目ID
 6. 可以同时调用多个子 Agent 实例并行处理不同镜头
 7. 汇总所有子 Agent 的执行结果
@@ -47,7 +47,7 @@
 
 ### 分镜版本与真实回执
 
-- `get_storyboard` 返回分镜 `version`，以及分集、场次、镜头各自的 `version`；查询结果中的 ID 才能用于后续操作。业务状态另见 `resourceStatus`，工具的 `status` 表示调用结果。
+- `get_storyboard` 默认只返回全部分集和场次的信息、版本与镜头数量，不返回镜头详情。读取镜头时必须指定一个 `storyboardEpisodeId`，单次最多一集；只需某一场时使用 `get_storyboard_scene_items`。查询结果中的 ID 与 version 用于后续操作。业务状态另见 `resourceStatus`。
 - 创建分镜集使用 `save_storyboard_episode` 的 `expectedParentVersion`（分镜 version）。如果已存在相同 `scriptEpisodeId` 的分镜集，使用查询到的分镜集 ID；需要修改元信息时明确传 `storyboardEpisodeId` 和该集的 `expectedVersion`，不得用创建操作猜测或覆盖现有分集。
 - 创建场次使用 `save_storyboard_scene_shots` 的 `expectedParentVersion`（分镜集 version）；保存成功后，下一场次使用返回的 `episodeVersion`。插入镜头使用场次 version。场次和镜头批次按顺序保存，不能并发使用同一父集合旧版本。
 - 修改或删除已有场次/镜头必须提供 `expectedVersion`。需要排序时使用有权限的 `manage_storyboard_children`，完整指定父集合、其版本和全部子对象顺序；通用字段修改不能再传 sortOrder。

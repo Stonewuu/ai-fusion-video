@@ -21,6 +21,11 @@ public class StoryboardCreation {
     private final StoryboardRelations relations;
 
     public long insert(ChangeSet change, ResourceHeader parent, ObjectNode input) {
+        if (parent.resourceType() == STORYBOARD && !input.has("sortOrder") && !input.has("insertAfterId")) {
+            // 并行创建按集号排序，不修改其他分集的版本，避免打断正在保存场次的任务。
+            int episodeNumber = StoryboardFields.integer(input.get("episodeNumber"), 1, 1_000_000, "episodeNumber");
+            return createAt(change, parent, input, episodeNumber);
+        }
         var existing = change.children(parent);
         ObjectNode draft = input.deepCopy();
         int index = draft.has("sortOrder") ? StoryboardFields.integer(draft.get("sortOrder"), 0, existing.size(),

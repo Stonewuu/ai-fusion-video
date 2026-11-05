@@ -37,4 +37,8 @@ public class StoryboardReadRepository {
         ResourceTables.of(type);
         return records.countStoryboardChildren(type, board);
     }
+
+    public List<ResourceReadMapper.ShotCount> shotCounts(long board) {
+        return records.storyboardShotCounts(board);
+    }
 }

@@ -52,7 +52,7 @@ public class GetGenerationTaskToolExecutor implements ToolExecutor {
 
     @Override
     public String getToolDescription() {
-        return "读取 generate_image 或 generate_video 返回的 submissionId，获取真实状态及已托管的全部结果。等待中不产生新的生成请求，不要反复查询或伪造完成。";
+        return "读取 generate_image 或 generate_video 返回的 submissionId，获取真实状态及已托管的全部结果。这是单次查询；需要等待完成时使用 await_generation_task，不要循环查询、重复提交或把 pending 当作失败。";
     }
 
     @Override

@@ -17,6 +17,8 @@ import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
+import com.stonewu.fusion.service.canvas.agent.CanvasGenerationAwaitTool;
+import com.stonewu.fusion.service.canvas.CanvasJson;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -141,6 +143,24 @@ class AgentKernelSpecFactoryTests {
                 request(), model, "root prompt", 42L);
 
         assertThat(first.key()).isNotEqualTo(second.key());
+    }
+
+    @Test
+    void selectingGenerationIncludesItsWaiterWithoutRequiringCanvasContext() {
+        ToolExecutor generator = mock(ToolExecutor.class);
+        when(generator.getToolName()).thenReturn("generate_image");
+        when(generator.isEnabled()).thenReturn(true);
+        when(generator.getParametersSchema()).thenReturn("{\"type\":\"object\",\"properties\":{}}");
+        var waiter = new CanvasGenerationAwaitTool(null, null, null, new CanvasJson(new ObjectMapper()));
+        var models = mock(AgentScopeModelFactory.class);
+        when(models.modelConfigFingerprint(model)).thenReturn("a".repeat(64));
+        var agents = AgentConfigurationTestSupport.agents(registry);
+        var configured = new AgentKernelSpecFactory(agents, new AiToolConfigService(List.of(generator, waiter), registry), models,
+                new AgentScopeV2Properties(), new ObjectMapper(), mcp, AgentConfigurationTestSupport.skills(agents));
+
+        var spec = configured.createRoot(request().setEnabledTools(List.of("generate_image")), model, "生成图片");
+
+        assertThat(spec.toolWhitelist()).containsExactlyInAnyOrder("generate_image", "await_generation_task", "read_tool_result");
     }
 
     @Test

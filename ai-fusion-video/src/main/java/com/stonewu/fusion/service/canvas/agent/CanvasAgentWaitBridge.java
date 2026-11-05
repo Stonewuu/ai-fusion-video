@@ -8,6 +8,7 @@ import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.ToolExecutorRegistry;
+import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.agentscope.kernel.AgentKernelSpecFactory;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.run.*;
@@ -18,6 +19,7 @@ import com.stonewu.fusion.service.ai.run.model.ResumeExternalCommand;
 import com.stonewu.fusion.service.canvas.CanvasJson;
 import com.stonewu.fusion.service.canvas.agent.node.CanvasAgentNodeTypes;
 import com.stonewu.fusion.service.canvas.model.CanvasActor;
+import com.stonewu.fusion.service.resource.model.ResourceCommandContext;
 import io.agentscope.core.message.Msg;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
@@ -81,10 +83,10 @@ public class CanvasAgentWaitBridge {
                 action.run();
             } catch (BusinessException failure) {
                 if (failure.getCode() != 409) {
-                    log.warn("画布助手恢复暂未完成 [{}]: {}", key, failure.getMessage());
+                    log.warn("智能体恢复暂未完成 [{}]: {}", key, failure.getMessage());
                 }
             } catch (RuntimeException failure) {
-                log.warn("画布助手恢复步骤失败 [{}]", key, failure);
+                log.warn("智能体恢复步骤失败 [{}]", key, failure);
             } finally {
                 active.remove(key);
                 slots.release();
@@ -128,8 +130,16 @@ public class CanvasAgentWaitBridge {
             var entry = results.addObject().put("toolCallId", toolId).put("toolName", name);
             try {
                 var actor = new CanvasActor(agent.getUserId(), agent.getActorTeamId());
+                // 等待时 owner 已释放；后台只读查询携带原运行范围，不伪造智能体写入租约。
+                var context = ToolExecutionContext.forInvocation(actor.userId(), actor.teamId() == null ? 1 : 2,
+                        actor.teamId() == null ? actor.userId() : actor.teamId(),
+                        new ResourceCommandContext(actor, "system", scope == null ? null : scope.canvasId(),
+                                id, toolId, null, null));
+                context.setCanvasScope(scope);
+                context.setModel(model);
+                context.setAgentSessionId(agent.getAgentStateSessionId());
                 var output = executor instanceof CanvasExternalTool external
-                        ? external.poll(json.object(call.path("input")), scope, actor, model)
+                        ? external.poll(json.object(call.path("input")), context)
                         : children.poll(id, toolId, name, scope, actor);
                 ready &= output != null;
                 if (output != null) {

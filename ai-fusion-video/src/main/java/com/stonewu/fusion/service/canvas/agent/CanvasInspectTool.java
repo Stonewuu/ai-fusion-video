@@ -2,9 +2,8 @@ package com.stonewu.fusion.service.canvas.agent;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.canvas.CanvasJson;
-import com.stonewu.fusion.service.canvas.model.CanvasActor;
 import io.agentscope.core.message.*;
 
 import java.util.ArrayList;
@@ -31,8 +30,8 @@ public final class CanvasInspectTool extends CanvasAgentTool implements CanvasEx
     }
 
     @Override
-    public Object poll(ObjectNode input, CanvasAgentScope scope, CanvasActor actor, AiModel model) {
-        return inspection.poll(input, scope, actor, model);
+    public Object poll(ObjectNode input, ToolExecutionContext context) {
+        return inspection.poll(input, context.getCanvasScope(), context.requireMutationContext().actor(), context.getModel());
     }
 
     @Override

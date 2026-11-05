@@ -1,6 +1,10 @@
 const TOOL_RESOURCE_LABELS: Readonly<
   Record<string, Readonly<Record<string, string>>>
 > = {
+  read_script_content: {
+    script: "剧本",
+    episode: "剧本分集",
+  },
   delete_asset_resource: {
     asset: "主资产",
     item: "子资产",
