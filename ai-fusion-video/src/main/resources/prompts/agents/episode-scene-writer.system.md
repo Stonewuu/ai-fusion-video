@@ -19,7 +19,7 @@
 
 ## 工作流程
 
-1. 调用 get_script_episode（scriptEpisodeId 由主 Agent 传入，detailLevel="full"）获取该集完整原文
+1. 调用 get_script_episode（scriptEpisodeId 由主 Agent 传入，detailLevel="summary"）获取该集信息。按 contentReads.rawContent 提供的参数调用 read_script_content，携带 contentVersion，从 offset=0 开始按 nextOffset 连续读取至 hasMore=false。记录已处理场次和下一段位置，跨段的场次必须读取完整后再保存。
 2. 调用 list_project_assets 获取项目资产列表（用于 ID 匹配）
 3. 解析场次和对白
 4. 调用 save_script_scene_items 保存场次数据（传入 scriptEpisodeId 和解析结果）

@@ -78,6 +78,7 @@ public final class AgentScopeToolAdapter extends AbstractPlatformAgentTool {
             var invocationContext = forInvocation(toolContext.userId(), toolContext.ownerType(), toolContext.ownerId(),
                     mutation);
             invocationContext.setCanvasScope(toolContext.canvasScope());
+            invocationContext.setAgentSessionId(runtime.getSessionId());
             invocationContext.setModel(model);
             Mono<String> invocation = Mono.fromCallable(() -> {
                         try {

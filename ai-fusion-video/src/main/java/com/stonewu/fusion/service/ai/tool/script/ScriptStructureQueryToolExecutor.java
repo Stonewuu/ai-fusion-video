@@ -42,6 +42,7 @@ public class ScriptStructureQueryToolExecutor implements ToolExecutor {
                 - outline（默认）：集列表和场次标题，快速了解骨架
                 - summary：集概述 + 场次概述（含场景描述和角色列表，不含对白），适合了解剧情上下文
                 - full：完整信息含所有对白，数据量大，慎用
+                剧本和分集正文通过 contentReads 提供入口，使用 read_script_content 分段读取。
                 """;
     }
 

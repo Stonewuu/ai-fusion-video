@@ -84,9 +84,9 @@ class AgentUserConfigurationTests {
         saved.put("42:writer", "{\"name\":\"我的编剧\",\"toolNames\":[],\"defaultSkills\":[],\"instructionTemplate\":\"\",\"maxIters\":0}");
         assertThat(agents.getConfigured("writer", 42L).getName()).isEqualTo("我的编剧");
         assertThat(agents.getConfigured("writer", 43L).getName()).isEqualTo("写作");
-        assertThat(registry.getByType("writer").getToolNames()).containsExactly("read_script");
+        assertThat(registry.getByType("writer").getToolNames()).containsExactly("read_script", "read_tool_result");
         var root = root(new AiChatReqVO().setAgentType("writer"));
-        assertThat(root.toolWhitelist()).containsExactly("delegate_review");
+        assertThat(root.toolWhitelist()).containsExactlyInAnyOrder("delegate_review", "read_tool_result");
         assertThat(root.maxIters()).isEqualTo(Integer.MAX_VALUE);
         saved.put("42:writer", "{\"toolsEnabled\":false}");
         assertThat(root(new AiChatReqVO().setAgentType("writer")).toolWhitelist()).isEmpty();

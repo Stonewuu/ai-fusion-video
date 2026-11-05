@@ -40,7 +40,8 @@ public class GetProjectScriptToolExecutor implements ToolExecutor {
     public String getToolDescription() {
         return """
                 查询指定项目的剧本元数据（一个项目只有一个剧本）。
-                返回剧本ID、标题、总集数、解析状态、故事梗概、原文内容以及分集概览。
+                返回剧本ID、标题、总集数、解析状态、故事梗概以及分集概览。
+                正文通过 contentReads 提供读取入口，使用 read_script_content 分段读取。
                 """;
     }
 

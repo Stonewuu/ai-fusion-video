@@ -9,6 +9,9 @@ import com.stonewu.fusion.service.ai.agentscope.state.StateStoreFailureGuard;
 import com.stonewu.fusion.service.ai.agentscope.state.StateStoreGuardedChatModel;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceBaseStore;
 import com.stonewu.fusion.service.ai.run.AgentExecutionLimits;
+import com.stonewu.fusion.service.ai.text.LongToolResultMiddleware;
+import com.stonewu.fusion.service.ai.text.LongToolResultStore;
+import com.stonewu.fusion.service.ai.tool.ReadToolResultToolExecutor;
 import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.state.AgentStateStore;
 import io.agentscope.core.tool.Toolkit;
@@ -37,6 +40,7 @@ public final class AgentScopeHarnessFactory {
     private final AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge;
     private final AgentScopeSkillRegistry skillRegistry;
     private final BaseStore workspaceStore;
+    private final LongToolResultStore longToolResults;
 
     @Autowired
     public AgentScopeHarnessFactory(
@@ -46,7 +50,8 @@ public final class AgentScopeHarnessFactory {
             StateStoreFailureGuard failures,
             AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
             ObjectProvider<AgentScopeSkillRegistry> skillRegistries,
-            ObjectProvider<AgentWorkspaceBaseStore> workspaceStores) {
+            ObjectProvider<AgentWorkspaceBaseStore> workspaceStores,
+            ObjectProvider<LongToolResultStore> longToolResults) {
         this(
                 modelFactory,
                 toolRegistry,
@@ -54,7 +59,7 @@ public final class AgentScopeHarnessFactory {
                 failures,
                 shutdownRecoveryBridge,
                 skillRegistries.getIfAvailable(AgentScopeHarnessFactory::disabledSkillRegistry),
-                workspaceStores.getIfAvailable());
+                workspaceStores.getIfAvailable(), longToolResults.getIfAvailable());
     }
 
     AgentScopeHarnessFactory(
@@ -76,6 +81,19 @@ public final class AgentScopeHarnessFactory {
             AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
             AgentScopeSkillRegistry skillRegistry,
             BaseStore workspaceStore) {
+        this(modelFactory, toolRegistry, stateStore, failures, shutdownRecoveryBridge, skillRegistry, workspaceStore,
+                null);
+    }
+
+    AgentScopeHarnessFactory(
+            AgentKernelModelFactory modelFactory,
+            AgentKernelToolRegistry toolRegistry,
+            AgentStateStore stateStore,
+            StateStoreFailureGuard failures,
+            AgentScopeShutdownRecoveryBridge shutdownRecoveryBridge,
+            AgentScopeSkillRegistry skillRegistry,
+            BaseStore workspaceStore,
+            LongToolResultStore longToolResults) {
         this.modelFactory = Objects.requireNonNull(modelFactory, "modelFactory must not be null");
         this.toolRegistry = Objects.requireNonNull(toolRegistry, "toolRegistry must not be null");
         this.stateStore = Objects.requireNonNull(stateStore, "stateStore must not be null");
@@ -85,6 +103,7 @@ public final class AgentScopeHarnessFactory {
         this.skillRegistry = Objects.requireNonNull(
                 skillRegistry, "skillRegistry must not be null");
         this.workspaceStore = workspaceStore;
+        this.longToolResults = longToolResults;
     }
 
     public AgentScopeHarnessFactory(
@@ -142,6 +161,7 @@ public final class AgentScopeHarnessFactory {
                     .toolExecutionConfig(ExecutionConfig.builder()
                             .timeout(AgentExecutionLimits.FRAMEWORK_TOOL_TIMEOUT).maxAttempts(1).build())
                     .disableFilesystemTools()
+                    .disableToolResultEviction()
                     .disableShellTool()
                     .disableWebTools()
                     .disableMemoryTools()
@@ -160,6 +180,10 @@ public final class AgentScopeHarnessFactory {
                         .isolationScope(IsolationScope.USER));
             } else {
                 builder.disableDefaultWorkspaceSkills();
+            }
+            if (spec.toolWhitelist().contains(ReadToolResultToolExecutor.NAME)) {
+                builder.middleware(new LongToolResultMiddleware(
+                        Objects.requireNonNull(longToolResults, "长工具结果读取需要工作空间存储")));
             }
             boolean canvasBound = "true".equals(spec.promptVariables().get("canvasBound"))
                     || "true".equals(spec.promptVariables().get("canvasNodeExecution"));

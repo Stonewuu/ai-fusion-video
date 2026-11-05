@@ -43,6 +43,7 @@ public class ScriptEpisodeDetailQueryToolExecutor implements ToolExecutor {
                 - full：返回完整内容含所有对白，数据量大
                 - scenes_only：仅返回 scriptSceneItemIds 指定场次的完整对白，适合按需查看前后衔接
                 返回值中包含 episode_version，调用 save_script_scene_items 时必须传入。
+                各种详细程度均通过 contentReads 提供分集原文入口，使用 read_script_content 分段读取。
                 """;
     }
 

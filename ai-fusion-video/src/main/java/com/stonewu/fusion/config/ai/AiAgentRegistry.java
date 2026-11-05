@@ -1,6 +1,7 @@
 package com.stonewu.fusion.config.ai;
 
 import com.stonewu.fusion.service.canvas.agent.CanvasAgentToolNames;
+import com.stonewu.fusion.service.ai.text.AgentContentTools;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.stereotype.Component;
 
@@ -668,6 +669,15 @@ public class AiAgentRegistry {
      * 注册 Agent 定义
      */
     public void register(AiAgentDefinition definition) {
+        if (Integer.valueOf(1).equals(definition.getEnableTools()) && definition.getToolNames() != null) {
+            var names = new ArrayList<>(definition.getToolNames());
+            for (String dependency : AgentContentTools.required(names)) {
+                if (!names.contains(dependency)) {
+                    names.add(dependency);
+                }
+            }
+            definition.setToolNames(List.copyOf(names));
+        }
         if (definition.getToolNames() != null && (definition.getToolNames()
                 .contains("generate_image") || definition.getToolNames().contains("generate_video"))) {
             var names = new ArrayList<>(definition.getToolNames());

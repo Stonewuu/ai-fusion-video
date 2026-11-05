@@ -42,6 +42,8 @@ public class ToolExecutionContext {
     private ResourceCommandContext mutationContext;
 
     private CanvasAgentScope canvasScope;
+    /** 当前运行的会话编号，由运行时提供，不接受模型参数。 */
+    private String agentSessionId;
     /**
      * 当前内核已固定的模型，仅用于校验工具的多模态结果投影。
      */

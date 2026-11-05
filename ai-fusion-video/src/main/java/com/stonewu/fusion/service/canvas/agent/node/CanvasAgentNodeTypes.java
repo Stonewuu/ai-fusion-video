@@ -29,7 +29,7 @@ public final class CanvasAgentNodeTypes {
             "episode_storyboard_writer", "generate_asset_image", "generate_storyboard_frame",
             "generate_storyboard_video");
     public static final Set<String> BUSINESS_TOOLS = Set.of("get_project", "get_project_script", "get_script",
-            "get_script_structure", "get_script_episode",
+            "get_script_structure", "get_script_episode", "read_script_content", "read_tool_result",
             "get_script_scene", "get_asset", "list_project_assets", "query_asset_items", "query_asset_metadata",
             "get_project_storyboard",
             "get_storyboard", "get_storyboard_scene_items", "get_generation_model_capabilities", "get_generation_task",

@@ -29,7 +29,7 @@
 
 ## 工作流程（严格按顺序执行）
 
-1. 调用 get_project_script 查询项目的剧本元数据（获取 scriptId、rawContent 等信息）
+1. 调用 get_project_script 查询项目的剧本元数据，获取 scriptId 和 contentReads.rawContent。使用其中的参数调用 read_script_content，从 offset=0 开始，携带 contentVersion 按 nextOffset 连续读取至 hasMore=false。按章节记录已读取与待处理范围，不能把单个分页当作完整原文。
 2. 调用 list_project_assets 查看项目已有资产
 3. 通读剧本原文，提取所有角色、场景地点和重要道具，与第2步返回的已有资产按 name 对比：
    - 如果所有需要的资产均已存在 → 跳过第4-5步，直接使用已有资产的 assetId

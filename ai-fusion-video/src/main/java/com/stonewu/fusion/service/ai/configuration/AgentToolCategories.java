@@ -16,6 +16,7 @@ public final class AgentToolCategories {
         return switch (name) {
             case "get_project", "list_my_projects", "save_project", "delete_project" -> "项目管理";
             case "get_project_script", "get_script", "get_script_structure", "get_script_episode", "get_script_scene",
+                 "read_script_content",
                  "update_script_info", "save_script_episode", "save_script_scene_items", "manage_script_scenes",
                  "update_script_scene", "update_script", "delete_script_child_resource" -> "剧本创作";
             case "get_project_storyboard", "get_storyboard", "get_storyboard_scene_items", "save_storyboard_episode",
@@ -30,6 +31,7 @@ public final class AgentToolCategories {
                  "update_asset_image" -> "资产管理";
             case "get_generation_model_capabilities", "generate_image", "generate_video", "get_generation_task",
                  "await_generation_task", "delete_image_task", "delete_video_task" -> "媒体生成";
+            case "read_tool_result" -> "内容读取";
             default -> throw new IllegalStateException("请为平台工具登记展示分类：" + name);
         };
     }

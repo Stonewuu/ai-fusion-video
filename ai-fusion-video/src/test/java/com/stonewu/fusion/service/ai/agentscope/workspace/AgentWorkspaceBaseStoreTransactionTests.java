@@ -9,6 +9,7 @@ import org.mockito.ArgumentCaptor;
 import static org.assertj.core.api.Assertions.assertThat;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.springframework.transaction.PlatformTransactionManager;
 
 import java.util.List;
 import java.util.Map;
@@ -26,7 +27,7 @@ class AgentWorkspaceBaseStoreTransactionTests {
     private final AgentWorkspaceConfigService configService = mock(AgentWorkspaceConfigService.class);
     private final AgentWorkspacePayloadService payloadService = mock(AgentWorkspacePayloadService.class);
     private final AgentWorkspaceBaseStore store = new AgentWorkspaceBaseStore(
-            entryMapper, configService, payloadService, new ObjectMapper());
+            entryMapper, configService, payloadService, new ObjectMapper(), mock(PlatformTransactionManager.class));
 
     @AfterEach
     void clearTransactionSynchronization() {

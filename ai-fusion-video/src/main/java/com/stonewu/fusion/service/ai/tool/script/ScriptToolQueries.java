@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
+import com.stonewu.fusion.service.ai.text.TextPages;
 import com.stonewu.fusion.service.canvas.CanvasJson;
 import com.stonewu.fusion.service.canvas.model.CanvasException;
 import com.stonewu.fusion.service.resource.ResourceQueryService;
@@ -41,6 +42,7 @@ public class ScriptToolQueries {
                 return json.write(Map.of("status", "empty", "message", "项目暂无剧本"));
             }
             aliases(result);
+            contentReads(result);
             String detail = params.path("detailLevel")
                     .asText(operation.equals("get_script_structure") ? "outline" : "summary");
             if (operation.equals("get_script_episode")) {
@@ -92,6 +94,29 @@ public class ScriptToolQueries {
 
     private long id(ObjectNode params, String name) {
         return ScriptFields.positiveId(params.get(name), name);
+    }
+
+    private void contentReads(ObjectNode item) {
+        String resourceType = item.has("scriptId") && item.has("episodeNumber") ? "episode" : "script";
+        ObjectNode reads = json.object(Map.of());
+        for (String field : List.of("rawContent", "content")) {
+            JsonNode value = item.remove(field);
+            if (value != null && value.isTextual()) {
+                String text = value.textValue();
+                reads.set(field, json.object(Map.of("readTool", ReadScriptContentToolExecutor.NAME,
+                        "resourceType", resourceType, "resourceId", item.path("id").longValue(), "field", field,
+                        "contentVersion", TextPages.version(text),
+                        "totalChars", text.codePointCount(0, text.length()), "offset", 0)));
+            }
+        }
+        if (!reads.isEmpty()) {
+            item.set("contentReads", reads);
+        }
+        for (String key : List.of("episodes", "scenes")) {
+            for (JsonNode child : item.path(key)) {
+                contentReads((ObjectNode) child);
+            }
+        }
     }
 
     private void aliases(ObjectNode item) {

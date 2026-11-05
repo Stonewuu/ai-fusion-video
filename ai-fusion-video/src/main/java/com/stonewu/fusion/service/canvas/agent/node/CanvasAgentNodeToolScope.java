@@ -45,6 +45,14 @@ public class CanvasAgentNodeToolScope implements AgentToolInvocationPolicy {
             throw new BusinessException(400, "画布专业节点查询资产时必须明确使用当前 projectId");
         }
         check(toolName, json.object(input), context, 0);
+        if (toolName.equals("read_script_content")) {
+            CanvasValueType type = switch (Objects.toString(input.get("resourceType"), "")) {
+                case "script" -> SCRIPT;
+                case "episode" -> SCRIPT_EPISODE;
+                default -> throw new BusinessException(400, "resourceType 必须为 script 或 episode");
+            };
+            read(type, json.object(input).path("resourceId"), context);
+        }
         if (toolName.equals("get_generation_task") || toolName.equals("await_generation_task")) {
             long count = submissions.selectCount(new LambdaQueryWrapper<GenerationSubmissionEntity>()
                     .eq(GenerationSubmissionEntity::getId, input.get("submissionId"))

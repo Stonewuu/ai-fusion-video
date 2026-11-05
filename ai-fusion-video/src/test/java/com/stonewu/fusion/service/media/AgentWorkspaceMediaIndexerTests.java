@@ -6,6 +6,10 @@ import com.stonewu.fusion.mapper.ai.AgentWorkspaceEntryMapper;
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspacePayloadService;
 import com.stonewu.fusion.service.media.lifecycle.AgentWorkspaceMediaIndexer;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeAll;
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 
 import java.util.List;
@@ -15,6 +19,11 @@ import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 class AgentWorkspaceMediaIndexerTests {
+    @BeforeAll
+    static void initializeMapperMetadata() {
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""),
+                AgentWorkspaceEntry.class);
+    }
     private final AgentWorkspaceEntryMapper entries = mock(AgentWorkspaceEntryMapper.class);
     private final AgentWorkspacePayloadService payloads = mock(AgentWorkspacePayloadService.class);
     private final AgentWorkspaceMediaIndexer indexer = new AgentWorkspaceMediaIndexer(entries, payloads,

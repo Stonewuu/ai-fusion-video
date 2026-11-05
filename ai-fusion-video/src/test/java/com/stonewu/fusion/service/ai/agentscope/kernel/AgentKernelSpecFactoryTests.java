@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.agentscope.kernel;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.config.ai.AiAgentDefinition;
 import com.stonewu.fusion.config.ai.AiAgentRegistry;
@@ -15,6 +16,7 @@ import com.stonewu.fusion.service.ai.agentscope.context.ProjectContext;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
 import com.stonewu.fusion.service.ai.agentscope.permission.ToolExecutionMode;
 import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuilder;
+import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -76,10 +78,13 @@ class AgentKernelSpecFactoryTests {
         AgentKernelSpec spec = factory.createRoot(
                 request(), model, "root prompt");
 
-        assertThat(spec.toolWhitelist()).containsExactly("search_assets");
-        assertThat(spec.toolManifest()).containsExactly(manifest);
-        assertThat(spec.key().toolManifestFingerprint())
-                .isEqualTo(AgentKernelKey.manifestFingerprint(List.of(manifest)));
+        assertThat(spec.toolWhitelist()).containsExactlyInAnyOrder("search_assets", "read_tool_result");
+        assertThat(spec.toolManifest()).contains(manifest).hasSize(2);
+        assertThat(spec.toolManifest()).filteredOn(item -> item.toolName().equals("read_tool_result"))
+                .singleElement().satisfies(item -> {
+                    assertThat(item.readOnly()).isTrue();
+                    assertThat(item.concurrencySafe()).isTrue();
+                });
     }
 
     @Test
@@ -100,8 +105,27 @@ class AgentKernelSpecFactoryTests {
                 request(), model, "root prompt", 43L);
 
         assertThat(AgentKernelSpecFactory.ownerUserId(first)).isEqualTo(42L);
-        assertThat(first.toolWhitelist()).containsExactly("private_search");
+        assertThat(first.toolWhitelist()).containsExactlyInAnyOrder("private_search", "read_tool_result");
         assertThat(first.key()).isNotEqualTo(second.key());
+    }
+
+    @Test
+    void selectingAScriptQueryAutomaticallyIncludesItsContentReaders() {
+        ToolExecutor query = mock(ToolExecutor.class);
+        when(query.getToolName()).thenReturn("get_script");
+        when(query.isEnabled()).thenReturn(true);
+        when(query.isReadOnly()).thenReturn(true);
+        when(query.getParametersSchema()).thenReturn("{\"type\":\"object\",\"properties\":{}}");
+        var models = mock(AgentScopeModelFactory.class);
+        when(models.modelConfigFingerprint(model)).thenReturn("a".repeat(64));
+        var agents = AgentConfigurationTestSupport.agents(registry);
+        var configured = new AgentKernelSpecFactory(agents, new AiToolConfigService(List.of(query), registry), models,
+                new AgentScopeV2Properties(), new ObjectMapper(), mcp, AgentConfigurationTestSupport.skills(agents));
+
+        var spec = configured.createRoot(request().setEnabledTools(List.of("get_script")), model, "查询剧本");
+
+        assertThat(spec.toolWhitelist()).containsExactlyInAnyOrder("get_script", "read_script_content", "read_tool_result");
+        assertThat(spec.systemPrompt()).contains("nextOffset", "contentVersion", "hasMore=false");
     }
 
     @Test
@@ -139,8 +163,8 @@ class AgentKernelSpecFactoryTests {
                 model,
                 "root prompt");
 
-        assertThat(spec.toolWhitelist()).containsExactly("inspect_media");
-        assertThat(spec.toolManifest()).containsExactly(inspect);
+        assertThat(spec.toolWhitelist()).containsExactlyInAnyOrder("inspect_media", "read_tool_result");
+        assertThat(spec.toolManifest()).contains(inspect).hasSize(2);
     }
 
     @Test
@@ -316,9 +340,18 @@ class AgentKernelSpecFactoryTests {
 
         AgentKernelSpec restored = toolFactory.restore(payload, model, "b".repeat(64));
 
-        assertThat(restored.toolWhitelist()).containsExactly("read_script");
+        assertThat(restored.toolWhitelist()).containsExactlyInAnyOrder("read_script", "read_tool_result");
         assertThat(restored.toolManifest()).containsExactlyElementsOf(original.toolManifest());
         assertThat(restored.key().modelConfigFingerprint()).isEqualTo("b".repeat(64));
+
+        var mapper = new ObjectMapper();
+        ObjectNode oldContract = mapper.valueToTree(payload);
+        for (var entry : oldContract.withArray("tools")) {
+            ((ObjectNode) entry).put("implementationVersion", "afv-tools-v2");
+        }
+        var oldPayload = mapper.convertValue(oldContract, AgentKernelSnapshotPayload.class);
+        assertThatThrownBy(() -> toolFactory.restore(oldPayload, model, "b".repeat(64)))
+                .hasMessageContaining("工具协议已更新", "重新发起任务");
 
         when(tool.isReadOnly()).thenReturn(false);
         assertThatThrownBy(() -> toolFactory.restore(payload, model, "b".repeat(64)))
