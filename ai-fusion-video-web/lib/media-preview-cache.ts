@@ -5,6 +5,7 @@ export interface PreviewSnapshot {
   view: MediaPreview | null;
   loading: boolean;
   error: string | null;
+  deleted?: boolean;
 }
 export const EMPTY_PREVIEW: PreviewSnapshot = {
   view: null,
@@ -27,6 +28,17 @@ const pendingStates = new Set(["QUEUED", "WAITING", "RUNNING"]);
 
 export function previewSnapshot(key: string) {
   return key ? (entries.get(key)?.snapshot ?? PENDING) : EMPTY_PREVIEW;
+}
+
+export function markMediaPreviewDeleted(id: string) {
+  for (const entry of entries.values()) {
+    if (entry.id === id) {
+      entry.controller.abort();
+      clearTimeout(entry.timer);
+      entry.snapshot = { view: null, error: "素材已永久删除", loading: false, deleted: true };
+      entry.listeners.forEach((notify) => notify());
+    }
+  }
 }
 function update(entry: Entry, snapshot: PreviewSnapshot) {
   if (
@@ -88,6 +100,7 @@ async function request(
         view: null,
         loading: false,
         error: getApiErrorMessage(failure),
+        deleted: getApiErrorStatus(failure) === 410,
       });
       const status = getApiErrorStatus(failure);
       if (

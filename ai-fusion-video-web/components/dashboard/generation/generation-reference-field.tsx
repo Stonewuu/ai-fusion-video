@@ -10,7 +10,6 @@ import {
   Loader2,
   Music2,
   Plus,
-  Trash2,
 } from "lucide-react";
 import { uploadFile } from "@/lib/api/storage";
 import { getApiErrorMessage } from "@/lib/api/api-error";
@@ -18,6 +17,7 @@ import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SafeImage } from "@/components/media/managed-image";
+import { MediaReferenceActions } from "@/components/media/media-reference-actions";
 
 type ReferenceMediaType = "image" | "video" | "audio";
 
@@ -133,17 +133,8 @@ export function GenerationReferenceField({
             ) : (
               <Music2 className="h-6 w-6 text-violet-500/70" />
             )}
-            <button
-              type="button"
-              onClick={() =>
-                onChange(values.filter((_, itemIndex) => itemIndex !== index))
-              }
-              title={`移除${label}`}
-              aria-label={`移除${label}`}
-              className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-lg bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
-            >
-              <Trash2 className="h-3 w-3" />
-            </button>
+            <MediaReferenceActions source={value} label={label}
+              onRemove={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))} />
           </div>
         ))}
 

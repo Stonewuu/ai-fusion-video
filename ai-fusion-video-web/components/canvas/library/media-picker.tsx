@@ -2,10 +2,12 @@
 import { canvasUploadFile } from "@/lib/canvas/files";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Upload, FileAudio, FileText, Loader2, Check } from "lucide-react";
+import { Upload, FileAudio, FileText, Loader2, Check, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MediaThumbnail } from "@/components/media/media-thumbnail";
+import { MediaDeleteDialog } from "@/components/media/media-delete-dialog";
+import { MEDIA_LIBRARY_CHANGED } from "@/lib/media-library-events";
 import {
   listManagedMedia,
   uploadMedia,
@@ -43,6 +45,7 @@ export function CanvasMediaPicker({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [deleting, setDeleting] = useState<ManagedMedia | null>(null);
   const input = useRef<HTMLInputElement>(null);
   const request = useRef(0);
   const [uploadRequest, setUploadRequest] = useState<{
@@ -82,6 +85,13 @@ export function CanvasMediaPicker({
     void load(1, controller.signal);
     return () => controller.abort();
   }, [load, mediaRevision]);
+  useEffect(() => {
+    const refresh = () => {
+      void load(1);
+    };
+    window.addEventListener(MEDIA_LIBRARY_CHANGED, refresh);
+    return () => window.removeEventListener(MEDIA_LIBRARY_CHANGED, refresh);
+  }, [load]);
   const upload = async (file: File) => {
     setUploading(true);
     setError(null);
@@ -185,8 +195,8 @@ export function CanvasMediaPicker({
       )}
       <div className="grid grid-cols-2 gap-3">
         {visible.map((media) => (
+          <div key={media.id} className="relative min-w-0">
           <button
-            key={media.id}
             type="button"
             onClick={() => onSelect(media)}
             disabled={disabled}
@@ -199,7 +209,7 @@ export function CanvasMediaPicker({
               event.dataTransfer.effectAllowed = "copy";
             }}
             className={cn(
-              "relative overflow-hidden rounded-xl border border-border/30 bg-card/50 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
+              "relative w-full overflow-hidden rounded-xl border border-border/30 bg-card/50 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
               value === media.id && "border-primary bg-primary/5",
             )}
             aria-label={`选择${media.name}`}
@@ -221,11 +231,19 @@ export function CanvasMediaPicker({
                 <FileText className="size-8 text-muted-foreground" />
               )}
             </div>
-            <p className="truncate px-3 py-2 text-xs">{media.name}</p>
+            <p className="truncate py-3 pl-3 pr-12 text-xs">{media.name}</p>
             {value === media.id && (
               <Check className="absolute right-2 top-2 size-4 text-primary" />
             )}
           </button>
+          {canEdit && (
+            <Button variant="destructive-ghost" size="icon-xs" className="absolute bottom-2 right-2"
+              aria-label={"删除素材 " + media.name} title="删除素材" disabled={disabled}
+              onClick={() => setDeleting(media)}>
+              <Trash2 />
+            </Button>
+          )}
+          </div>
         ))}
       </div>
       {!visible.length && !loading && !error && (
@@ -260,6 +278,8 @@ export function CanvasMediaPicker({
           刷新素材
         </Button>
       </div>
+      {deleting && <MediaDeleteDialog media={deleting} onClose={() => setDeleting(null)}
+        onDeleted={() => setItems((current) => current.filter((item) => item.id !== deleting.id))} />}
     </section>
   );
 }

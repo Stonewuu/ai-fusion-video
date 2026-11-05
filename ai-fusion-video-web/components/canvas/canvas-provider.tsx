@@ -27,6 +27,7 @@ import type { CanvasResourceRef } from "@/lib/canvas/types";
 import { useCanvasSaveRecovery } from "./use-save-recovery";
 import { subscribeAgentConfiguration } from "@/lib/agent-configuration-events";
 import { useAuthStore } from "@/lib/store/auth-store";
+import { MEDIA_LIBRARY_CHANGED } from "@/lib/media-library-events";
 
 const Context = createContext<{
   store: CanvasStore;
@@ -60,6 +61,16 @@ export function CanvasProvider({
   }));
   const resourceRevision = useResourceChangeStore((state) => state.cursor);
   const userId = useAuthStore((state) => state.user?.id);
+  useEffect(() => {
+    const refreshMedia = () => {
+      value.resources.invalidate();
+      void value.store.getState().load().catch((failure) => {
+        value.store.setState({ error: getApiErrorMessage(failure) });
+      });
+    };
+    window.addEventListener(MEDIA_LIBRARY_CHANGED, refreshMedia);
+    return () => window.removeEventListener(MEDIA_LIBRARY_CHANGED, refreshMedia);
+  }, [value]);
   useEffect(() => {
     if (!userId) return;
     return subscribeAgentConfiguration(userId, () => {

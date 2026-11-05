@@ -83,6 +83,11 @@ public class MediaAccessPolicy {
 
     public void edit(MediaResource resource, ResourceCommandContext context) {
         read(resource, context.actor());
+        editOwnership(resource, context);
+    }
+
+    /** 删除重放只返回操作状态，仍按当前用户和项目权限重新授权。 */
+    public void editOwnership(MediaResource resource, ResourceCommandContext context) {
         Owner owner = creation(resource.projectId(), context);
         if (resource.ownerType() != owner.type() || resource.ownerId() != owner.id()) {
             throw denied();

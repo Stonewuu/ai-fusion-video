@@ -84,11 +84,8 @@ public class GenerationInputVersions {
             validate(expected, actor);
         }
         Map<String, Integer> versions = new LinkedHashMap<>(expected == null ? Map.of() : expected);
-        for (String value : values) {
-            if (!MediaReference.managed(value)) {
-                continue;
-            }
-            var resource = resources.get(MediaReference.id(value), actor);
+        for (String value : values.stream().filter(MediaReference::managed).distinct().sorted().toList()) {
+            var resource = resources.forUpdate(MediaReference.id(value), actor);
             access.ready(resource, actor);
             var frozenVersion = versions.putIfAbsent(resource.id(), resource.version());
             if (frozenVersion != null && frozenVersion != resource.version()) {

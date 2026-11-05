@@ -1,11 +1,12 @@
 import { accessMedia } from "@/lib/api/media";
 import { resolveMediaUrl } from "@/lib/api/client";
-import { getApiErrorMessage } from "@/lib/api/api-error";
+import { getApiErrorMessage, getApiErrorStatus } from "@/lib/api/api-error";
 
-export interface MediaAccessSnapshot { url: string | null; error: string | null; loading: boolean }
+export interface MediaAccessSnapshot { url: string | null; error: string | null; loading: boolean; deleted?: boolean }
 export const EMPTY_MEDIA_ACCESS: MediaAccessSnapshot = { url: null, error: null, loading: false };
 const PENDING: MediaAccessSnapshot = { url: null, error: null, loading: true };
 interface Entry {
+  id: string;
   snapshot: MediaAccessSnapshot;
   listeners: Set<() => void>;
   controller: AbortController;
@@ -21,7 +22,7 @@ export function subscribeMediaAccess(key: string, id: string | null, download: b
   if (!key || !id) return () => {};
   let entry = active.get(key);
   if (!entry) {
-    entry = { snapshot: PENDING, listeners: new Set(), controller: new AbortController() };
+    entry = { id, snapshot: PENDING, listeners: new Set(), controller: new AbortController() };
     active.set(key, entry);
   }
   entry.listeners.add(notify);
@@ -37,8 +38,11 @@ export function subscribeMediaAccess(key: string, id: string | null, download: b
       current.timer = setTimeout(issue, Math.max(1000, remaining - 30000));
     } catch (error) {
       if (current.controller.signal.aborted) return;
-      current.snapshot = { url: null, loading: false, error: getApiErrorMessage(error) };
-      current.timer = setTimeout(issue, 30000);
+      const status = getApiErrorStatus(error);
+      current.snapshot = { url: null, loading: false, error: getApiErrorMessage(error), deleted: status === 410 };
+      if (status === null || status >= 500 || status === 429) {
+        current.timer = setTimeout(issue, 30000);
+      }
     }
     current.listeners.forEach((listener) => listener());
   };
@@ -50,4 +54,15 @@ export function subscribeMediaAccess(key: string, id: string | null, download: b
     clearTimeout(current.timer);
     active.delete(key);
   };
+}
+
+export function markMediaAccessDeleted(id: string) {
+  for (const entry of active.values()) {
+    if (entry.id === id) {
+      entry.controller.abort();
+      clearTimeout(entry.timer);
+      entry.snapshot = { url: null, error: "素材已永久删除", loading: false, deleted: true };
+      entry.listeners.forEach((notify) => notify());
+    }
+  }
 }

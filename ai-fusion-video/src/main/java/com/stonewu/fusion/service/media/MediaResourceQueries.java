@@ -13,6 +13,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 import java.util.List;
 import java.util.Optional;
@@ -35,6 +36,14 @@ public class MediaResourceQueries {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, noRollbackFor = BusinessException.class)
     public MediaResource get(String id, CanvasActor actor) {
         return read(id, actor);
+    }
+
+    /** 与新引用写入共用行锁，永久删除提交后不能再登记旧媒体版本。 */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public MediaResource forUpdate(String id, CanvasActor actor) {
+        var resource = resources.get(id, true).resource();
+        access.ready(resource, actor);
+        return resource;
     }
 
     /**

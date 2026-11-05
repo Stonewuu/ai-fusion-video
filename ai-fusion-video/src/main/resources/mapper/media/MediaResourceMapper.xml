@@ -46,6 +46,7 @@
             <otherwise>project_id = #{projectId}</otherwise>
         </choose>
         AND NOT EXISTS (SELECT 1 FROM afv_media_preview_job p WHERE p.output_resource_id = r.id)
+        AND NOT EXISTS (SELECT 1 FROM afv_media_deletion d WHERE d.media_id = r.id)
         ORDER BY created_at DESC, id DESC LIMIT #{limit} OFFSET #{offset}
     </select>
     <insert id="copy">

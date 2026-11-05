@@ -10,7 +10,6 @@ import {
   Music2,
   SlidersHorizontal,
   Sparkles,
-  X,
 } from "lucide-react";
 import type { AiModel } from "@/lib/api/ai-model";
 import type { GenerationCapabilities } from "@/lib/generation-capabilities";
@@ -20,6 +19,7 @@ import { getApiErrorMessage } from "@/lib/api/api-error";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { SafeImage } from "@/components/media/managed-image";
+import { MediaReferenceActions } from "@/components/media/media-reference-actions";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import type {
@@ -251,15 +251,8 @@ export function GenerationSimpleComposer({
                 <span className="absolute inset-x-1 bottom-1 truncate rounded-md bg-black/55 px-1 py-0.5 text-center text-[9px] text-white backdrop-blur-sm">
                   {attachment.label}
                 </span>
-                <button
-                  type="button"
-                  onClick={() => onRemoveAttachment(attachment.url)}
-                  title={`移除${attachment.label}`}
-                  aria-label={`移除${attachment.label}`}
-                  className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                >
-                  <X className="h-3 w-3" />
-                </button>
+                <MediaReferenceActions source={attachment.url} label={attachment.label}
+                  onRemove={() => onRemoveAttachment(attachment.url)} />
               </div>
             ))}
           </div>

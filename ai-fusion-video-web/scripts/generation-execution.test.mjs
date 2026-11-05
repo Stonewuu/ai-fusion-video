@@ -47,6 +47,52 @@ const { resolveGenerationCapabilities, workflowInputIssue } = load(
 );
 const videoRules = load("lib/video-model-rules.ts");
 const { resolutionChoices } = load("lib/image-output-sizes.ts");
+const imageOutputs = load("lib/image-output-sizes.ts");
+const canvasImages = load("lib/canvas/image-output.ts");
+
+test("画布与工作台使用同一比例档位选择，切换模型清除旧的自定义宽高", () => {
+  const parameters = {
+    supportedAspectRatios: ["1:1", "9:16"], supportedResolutions: ["2K", "4K", "auto"],
+    supportAutoSize: true, defaultAspectRatio: "9:16", defaultResolution: "2K",
+    supportedSizes: { "2K": { "9:16": "1152x2048" }, "4K": { "1:1": "2880x2880" } },
+  };
+  const model = { id: 7, parameters };
+  const saved = canvasImages.canvasImageDefaults({ modelId: 7, width: 1920, height: 1080, prompt: "海边" }, model);
+  assert.deepEqual(saved, { modelId: 7, prompt: "海边", ratio: "9:16", resolution: "2K" });
+  const options = imageOutputs.imageOutputCapabilities(parameters);
+  assert.deepEqual(imageOutputs.changeImageOutput(options, saved, { ratio: "1:1" }),
+    { ...saved, ratio: "1:1", resolution: "4K" });
+  assert.match(canvasImages.canvasImageOutputIssue({ ratio: "9:16", resolution: "4K" }, model), /分辨率/);
+  assert.equal(canvasImages.canvasImageOutputIssue(saved, model), null);
+});
+
+test("画布保留按像素提交的协议，并能将已保存参数显示为档位", () => {
+  const options = imageOutputs.imageOutputCapabilities({
+    supportedAspectRatios: ["1:1", "3:4"],
+    supportedResolutions: ["1024x1024", "768x1024"],
+    supportedSizes: { standard: { "1:1": "1024x1024", "3:4": "768x1024" } },
+  });
+  assert.deepEqual(imageOutputs.imageOutputRequest(options, { ratio: "3:4", resolution: "standard" }),
+    { ratio: "3:4", resolution: "768x1024" });
+  assert.deepEqual(imageOutputs.imageOutputSelection(options, { ratio: "3:4", resolution: "768x1024" }),
+    { ratio: "3:4", resolution: "standard" });
+  assert.match(imageOutputs.imageOutputIssue(options, { ratio: "1:1", resolution: "768x1024" }), /分辨率/);
+});
+
+test("自定义尺寸检查像素倍数、范围与冲突，自动尺寸不会保留固定宽高", () => {
+  const options = imageOutputs.imageOutputCapabilities({
+    supportedAspectRatios: ["auto", "1:1", "16:9"], supportedResolutions: ["auto", "2K"],
+    supportAutoSize: true, supportCustomSize: true, sizeMultiple: 16,
+    minPixels: 655360, maxPixels: 8294400, maxEdge: 3840, maxAspectRatio: 3,
+    supportedSizes: { "2K": { "1:1": "2048x2048", "16:9": "2048x1152" } },
+  });
+  assert.match(imageOutputs.imageOutputIssue(options, { width: 1920, height: 1080 }), /16 的倍数/);
+  assert.match(imageOutputs.imageOutputIssue(options, { width: 512, height: 512 }), /总像素/);
+  assert.match(imageOutputs.imageOutputIssue(options, { ratio: "auto", resolution: "auto", width: 1024, height: 1024 }), /不能同时/);
+  assert.match(imageOutputs.imageOutputIssue(options, { ratio: "16:9", resolution: "2K", width: 1024, height: 1024 }), /不一致/);
+  assert.equal(imageOutputs.imageOutputIssue(options, { ratio: "16:9", resolution: "2K" }), null);
+  assert.equal(imageOutputs.imageOutputIssue(options, { width: 1920, height: 1088 }), null);
+});
 
 test("GPT 图片模型的每个固定比例都能选择三个档位，提交时保留档位和比例", () => {
   const presets = ["openai/image.json", "openai/image-25.json"].flatMap((file) =>

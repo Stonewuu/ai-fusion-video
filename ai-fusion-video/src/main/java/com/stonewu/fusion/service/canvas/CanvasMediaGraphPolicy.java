@@ -43,7 +43,7 @@ public class CanvasMediaGraphPolicy implements CanvasGraphMutationPolicy {
             if (!id.matches("[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")) {
                 throw new CanvasException(CanvasErrorCode.INVALID_RESOURCE_REFERENCE, "媒体节点必须选择已登记的文件");
             }
-            var resource = media.get(id, actor);
+            var resource = media.forUpdate(id, actor);
             access.ready(resource, actor);
             if (resource.content().kind() != kind) {
                 throw new CanvasException(CanvasErrorCode.INVALID_RESOURCE_REFERENCE, "媒体类型与节点不匹配");

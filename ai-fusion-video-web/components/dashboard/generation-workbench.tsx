@@ -41,7 +41,7 @@ import { GenerationSubmissionNotice } from "./generation/generation-submission-n
 import { useGenerationSubmission } from "./generation/use-generation-submission";
 import { useGenerationHistory } from "./generation/use-generation-history";
 import { generationSubmitRequest } from "./generation/generation-submit-request";
-import { resolutionChoices } from "@/lib/image-output-sizes";
+import { changeImageOutput, imageOutputIssue } from "@/lib/image-output-sizes";
 import { useReferenceImageUploadAvailability } from "./generation/use-reference-image-upload-availability";
 
 interface GenerationWorkbenchProps {
@@ -179,10 +179,7 @@ function GenerationWorkbenchContent({ mode }: GenerationWorkbenchProps) {
     setForm((current) => {
       const next = { ...current, ...patch };
       if (mode === "image" && capabilities && patch.ratio !== undefined) {
-        const choices = resolutionChoices(capabilities, next.ratio);
-        if (!choices.includes(next.resolution)) {
-          next.resolution = choices[0] ?? "";
-        }
+        Object.assign(next, changeImageOutput(capabilities, current, patch));
       }
       if (mode === "video" && capabilities?.videoRules) {
         const allowed = videoRatioOptions(
@@ -528,8 +525,11 @@ function GenerationWorkbenchContent({ mode }: GenerationWorkbenchProps) {
       }
     } else if (!form.prompt.trim()) {
       return "请输入提示词";
-    } else if (capabilities.supportedResolutions.length && !resolutionChoices(capabilities, form.ratio).includes(form.resolution)) {
-      return "请选择当前画面比例支持的分辨率";
+    } else {
+      const issue = imageOutputIssue(capabilities, form);
+      if (issue) {
+        return issue;
+      }
     }
     const referenceImages = clean(form.referenceImages);
     if (

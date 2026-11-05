@@ -47,7 +47,9 @@ public class CanvasModelCatalog {
     private static final Set<String> MEDIA_FIELDS = Set.of(
             "prompt", "firstFrame", "lastFrame", "referenceImages", "referenceVideos", "referenceAudios");
     private static final List<String> PARAMETERS = List.of("supportedAspectRatios", "supportedResolutions",
-            "supportedSizes", "minDuration", "maxDuration", "maxDurationByResolution", "defaultDuration", "defaultResolution",
+            "supportedSizes", "defaultAspectRatio", "supportAutoSize", "supportCustomSize", "sizeMultiple",
+            "minPixels", "maxPixels", "maxEdge", "maxAspectRatio", "gptImage", "defaultWidth", "defaultHeight",
+            "minDuration", "maxDuration", "maxDurationByResolution", "defaultDuration", "defaultResolution",
             "supportedDurations", "supportedDurationsByResolution",
             "framesWithReferenceVideos",
             "supportCameraFixed",

@@ -2,7 +2,7 @@
 
 import type { AiModel } from "@/lib/api/ai-model";
 import type { GenerationCapabilities } from "@/lib/generation-capabilities";
-import { GenerationImageOutputPickers } from "./generation-image-output-pickers";
+import { ImageOutputPickers } from "@/components/generation/image-output-pickers";
 import { GenerationModelPicker } from "./generation-model-picker";
 import { GenerationDurationSlider } from "./generation-duration-slider";
 import { GenerationQuickSelect } from "./generation-quick-select";
@@ -43,7 +43,7 @@ export function GenerationQuickSettings({
       />
 
       {mode === "image" ? (
-        <GenerationImageOutputPickers compact capabilities={capabilities} form={form} onChange={onFormChange} />
+        <ImageOutputPickers compact capabilities={capabilities} form={form} onChange={onFormChange} />
       ) : (
         <>
           <GenerationQuickSelect

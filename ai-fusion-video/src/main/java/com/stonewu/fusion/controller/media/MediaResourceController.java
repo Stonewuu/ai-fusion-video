@@ -8,6 +8,9 @@ import com.stonewu.fusion.service.media.MediaResourceQueries;
 import com.stonewu.fusion.service.media.model.MediaResource;
 import com.stonewu.fusion.service.media.model.MediaSourceReference;
 import com.stonewu.fusion.service.resource.model.ResourceCommandContext;
+import com.stonewu.fusion.service.media.deletion.MediaDeletionService;
+import com.stonewu.fusion.service.media.deletion.MediaDeletionData;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
@@ -24,6 +27,18 @@ public class MediaResourceController {
     private final MediaIntakeService intake;
     private final MediaResourceQueries queries;
     private final MediaAccessTickets tickets;
+    private final MediaDeletionService deletions;
+
+    @GetMapping("/{id}/deletion-preview")
+    public CommonResult<MediaDeletionData.Preview> deletionPreview(@PathVariable String id) {
+        return CommonResult.success(deletions.preview(id, actors.current()));
+    }
+
+    @DeleteMapping("/{id}")
+    public CommonResult<MediaDeletionData.Result> delete(@PathVariable String id,
+                                                        @Valid @RequestBody MediaDeletionData.Request request) {
+        return CommonResult.success(deletions.remove(id, request, actors.current()));
+    }
 
     @PostMapping(value = "/upload", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public CommonResult<MediaResource> upload(@RequestParam MultipartFile file, @RequestParam String requestId,

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.media.MediaDeletionMapper">
+    <sql id="matchesDocument">
+        (JSON_CONTAINS(JSON_EXTRACT(content,'$**.mediaId'),JSON_QUOTE(#{mediaId}))
+        OR JSON_CONTAINS(JSON_EXTRACT(content,'$**.resourceId'),JSON_QUOTE(#{mediaId}))
+        OR JSON_CONTAINS(JSON_EXTRACT(content,'$**.sourceMediaId'),JSON_QUOTE(#{mediaId}))
+        OR JSON_CONTAINS(JSON_EXTRACT(content,'$**.mediaIds'),JSON_QUOTE(#{mediaId}))
+        OR JSON_CONTAINS_PATH(content,'one',CONCAT('$.inputMediaVersions."',#{mediaId},'"'))
+        OR JSON_SEARCH(content,'one',CONCAT('%media://',#{mediaId},'%')) IS NOT NULL)
+    </sql>
+    <select id="references" resultType="com.stonewu.fusion.service.media.deletion.MediaDeletionData$Reference">
+        SELECT anchor_kind AS kind, anchor_id AS id, canvas_id AS canvasId, retention_class AS retention
+        FROM afv_media_all_reference_document WHERE <include refid="matchesDocument"/>
+        UNION ALL
+        SELECT 'BUSINESS_BINDING', CONCAT(resource_type,':',resource_id,':',field_name), NULL, 'LIVE'
+        FROM afv_media_binding WHERE media_id=#{mediaId}
+        UNION ALL
+        SELECT 'BUSINESS_SOURCE', CONCAT(source_type,':',source_id,':',source_version,':',source_field), NULL, 'HISTORY'
+        FROM afv_media_source WHERE resource_id=#{mediaId}
+        UNION ALL
+        SELECT 'PRESET', preset_key, NULL, 'LIVE' FROM afv_media_preset_binding WHERE media_id=#{mediaId}
+        ORDER BY kind, id
+    </select>
+    <select id="activeUse" resultType="boolean">
+        SELECT EXISTS (
+            SELECT 1 FROM (
+                SELECT input_json AS content FROM afv_remote_generation_job
+                WHERE state NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','CANCELLED')
+                UNION ALL
+                SELECT JSON_ARRAY(input_json,checkpoint_json) FROM afv_media_job
+                WHERE status IN ('QUEUED','RUNNING','WAITING')
+                UNION ALL
+                SELECT snapshot_json FROM afv_canvas_run
+                WHERE status NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','BLOCKED','CANCELLED')
+            ) active_documents WHERE <include refid="matchesDocument"/>
+        ) OR EXISTS (
+            SELECT 1 FROM afv_media_access_ticket WHERE resource_id=#{mediaId} AND purpose&lt;&gt;'BROWSER'
+                AND revoked=FALSE AND expires_at&gt;UTC_TIMESTAMP(6)
+        ) OR EXISTS (
+            SELECT 1 FROM afv_media_preview_job p JOIN afv_media_job j ON j.id=p.job_id
+            WHERE p.source_resource_id=#{mediaId} AND j.status IN ('QUEUED','RUNNING','WAITING')
+        )
+    </select>
+    <select id="previewOutputs" resultType="String">
+        SELECT output_resource_id FROM afv_media_preview_job
+        WHERE source_resource_id=#{mediaId} AND output_resource_id IS NOT NULL ORDER BY output_resource_id
+    </select>
+    <select id="sharedCopies" resultType="long">
+        SELECT COUNT(*) FROM afv_media_resource WHERE blob_id=#{blobId} AND id&lt;&gt;#{mediaId}
+            AND state IN ('READY','STAGING')
+    </select>
+</mapper>

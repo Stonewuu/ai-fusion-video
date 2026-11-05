@@ -70,6 +70,30 @@ const flush = async () => {
   await Promise.resolve();
 };
 
+test("永久删除立即清除预览，迟到响应不能重新显示已删除素材", async () => {
+  const f = fixture();
+  const close = f.subscribePreview("scope", "original", () => {});
+  f.markMediaPreviewDeleted("original");
+  f.calls[0].resolve(ready);
+  await flush();
+  assert.equal(f.previewSnapshot("scope").view, null);
+  assert.equal(f.previewSnapshot("scope").deleted, true);
+  assert.equal(f.timers.size, 0);
+  f.retryPreview("scope");
+  assert.equal(f.calls.length, 1);
+  close();
+});
+
+test("服务端确认素材已删除时停止自动重试", async () => {
+  const f = fixture();
+  const close = f.subscribePreview("scope", "original", () => {});
+  f.calls[0].reject(Object.assign(new Error("媒体资源已删除"), { status: 410 }));
+  await flush();
+  assert.equal(f.previewSnapshot("scope").deleted, true);
+  assert.equal(f.timers.size, 0);
+  close();
+});
+
 test("same scoped media shares one admission and stops polling when its preview is ready", async () => {
   const f = fixture();
   const a = f.subscribePreview("1:team:original", "original", () => {});

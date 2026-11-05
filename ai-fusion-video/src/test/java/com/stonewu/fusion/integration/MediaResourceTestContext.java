@@ -75,6 +75,10 @@ import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import jakarta.validation.ValidatorFactory;
 import com.stonewu.fusion.service.media.MediaAccessTickets;
+import com.stonewu.fusion.service.media.deletion.MediaDeletionService;
+import com.stonewu.fusion.service.media.deletion.MediaDeletionReferences;
+import com.stonewu.fusion.service.media.deletion.MediaPurgeTransactions;
+import com.stonewu.fusion.service.media.deletion.MediaPurgeWorker;
 import com.stonewu.fusion.service.media.MediaBlobStore;
 import com.stonewu.fusion.service.media.lifecycle.MediaBlobLocks;
 import com.stonewu.fusion.service.media.lifecycle.MediaBlobLockConfiguration;
@@ -255,6 +259,8 @@ abstract class MediaResourceTestContext {
                 StorageProviderRegistry.class, MediaProbe.class, MediaRegistryTransactions.class,
                 MediaIntakeService.class,
                 MediaMetadataCache.class, MediaResourceQueries.class, MediaAccessTickets.class,
+                MediaDeletionService.class, MediaDeletionReferences.class,
+                MediaPurgeTransactions.class, MediaPurgeWorker.class,
                 MediaStorageConfigGuard.class,
                 MediaResourceController.class, MediaContentController.class);
         context.refresh();

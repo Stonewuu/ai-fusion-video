@@ -3,10 +3,8 @@
 import type { ReactNode } from "react";
 import { Grid2X2, Proportions, Scan } from "lucide-react";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
-import type { GenerationCapabilities } from "@/lib/generation-capabilities";
-import { resolutionChoices, resolutionLabel } from "@/lib/image-output-sizes";
+import { resolutionChoices, resolutionLabel, type ImageOutputCapabilities, type ImageOutputSelection } from "@/lib/image-output-sizes";
 import { cn } from "@/lib/utils";
-import type { GenerationFormState } from "./generation-types";
 
 function ratioValue(value: string) {
   const [width, height] = value.split(":").map(Number);
@@ -57,17 +55,18 @@ const itemClass = cn(
   "[&>span:first-child]:items-center [&>span:last-child:not(:first-child)]:right-1 [&>span:last-child:not(:first-child)>svg]:size-3",
 );
 
-function OutputSelect({ title, value, items, compact, icon, onChange, children }: {
+function OutputSelect({ title, value, items, compact, disabled, icon, onChange, children }: {
   title: string;
   value: string;
   items: { value: string; label: string }[];
   compact: boolean;
+  disabled?: boolean;
   icon: ReactNode;
   onChange: (value: string) => void;
   children: ReactNode;
 }) {
   const select = (
-    <Select items={items} value={value || null} disabled={!items.length} onValueChange={(next) => {
+    <Select items={items} value={value || null} disabled={disabled || !items.length} onValueChange={(next) => {
       if (next !== null) {
         onChange(next);
       }
@@ -95,13 +94,14 @@ function OutputSelect({ title, value, items, compact, icon, onChange, children }
 }
 
 interface Props {
-  capabilities: GenerationCapabilities | null;
-  form: GenerationFormState;
-  onChange: (patch: Partial<GenerationFormState>) => void;
+  capabilities: ImageOutputCapabilities | null;
+  form: ImageOutputSelection;
+  onChange: (patch: Partial<ImageOutputSelection>) => void;
   compact?: boolean;
+  disabled?: boolean;
 }
 
-export function GenerationImageOutputPickers({ capabilities, form, onChange, compact = false }: Props) {
+export function ImageOutputPickers({ capabilities, form, onChange, compact = false, disabled = false }: Props) {
   const ratios = capabilities?.supportedAspectRatios ?? [];
   const wide = ratios.filter((value) => ratioValue(value) > 1).sort((a, b) => ratioValue(a) - ratioValue(b));
   const tall = ratios.filter((value) => ratioValue(value) < 1).sort((a, b) => ratioValue(b) - ratioValue(a));
@@ -114,7 +114,7 @@ export function GenerationImageOutputPickers({ capabilities, form, onChange, com
   return (
     <>
       <OutputSelect title="画面比例" value={form.ratio} items={ratios.map((value) => ({ value, label: ratioLabel(value) }))}
-        compact={compact} icon={form.ratio ? <RatioFrame value={form.ratio} compact /> : <Proportions className="size-4" />} onChange={(ratio) => onChange({ ratio })}>
+        compact={compact} disabled={disabled} icon={form.ratio ? <RatioFrame value={form.ratio} compact /> : <Proportions className="size-4" />} onChange={(ratio) => onChange({ ratio })}>
         {groups.filter(({ options }) => options.length).map(({ title, options }) => (
           <SelectGroup key={title} className="grid grid-cols-3 gap-1.5 p-1">
             {title && <SelectLabel className="col-span-full px-0 pb-0 pt-1.5 text-xs">{title}</SelectLabel>}
@@ -133,7 +133,7 @@ export function GenerationImageOutputPickers({ capabilities, form, onChange, com
       </OutputSelect>
       <OutputSelect title="分辨率" value={form.resolution}
         items={resolutions.map((value) => ({ value, label: resolutionLabel(value) }))}
-        compact={compact} icon={<Grid2X2 aria-hidden className="size-4" />} onChange={(resolution) => onChange({ resolution })}>
+        compact={compact} disabled={disabled} icon={<Grid2X2 aria-hidden className="size-4" />} onChange={(resolution) => onChange({ resolution })}>
         <SelectGroup className="grid grid-cols-3 gap-2 p-1">
           {resolutions.map((tier) => {
             const size = capabilities?.imageSizes?.[tier]?.[form.ratio];

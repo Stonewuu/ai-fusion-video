@@ -18,6 +18,7 @@ import {
 import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { SafeImage } from "@/components/media/managed-image";
+import { useMediaUrl } from "@/hooks/use-media-url";
 import {
   Tooltip,
   TooltipContent,
@@ -75,6 +76,15 @@ export function GenerationHistoryResult({
   const previewUrl = resolveMediaUrl(getResultPreviewUrl(item));
   const resultReady = Boolean(mediaUrl || previewUrl);
   const displayUrl = mediaUrl || previewUrl;
+  const access = useMediaUrl(displayUrl);
+
+  if (access.deleted) {
+    return (
+      <div role="status" className="flex aspect-video items-center justify-center rounded-xl border border-border/30 bg-card/50 text-xs text-muted-foreground">
+        素材已删除
+      </div>
+    );
+  }
 
   if (!resultReady) {
     const stopped = taskStatus.tone === "cancelled";

@@ -47,7 +47,8 @@ class GenerationInputVersionsTests {
 
     @Test void doesNotSilentlyAdvanceAPinnedVersionWhenMediaChangesDuringAdmission() {
         String id = UUID.randomUUID().toString();
-        when(resources.get(id, actor)).thenReturn(resource(id, 3), resource(id, 4));
+        when(resources.get(id, actor)).thenReturn(resource(id, 3));
+        when(resources.forUpdate(id, actor)).thenReturn(resource(id, 4));
         var task = ImageTask.builder().refImageUrls("references").build();
         when(references.parseJsonInputs("references", "refImageUrls")).thenReturn(List.of(MediaReference.of(id)));
         task.setInputMediaVersions(Map.of(id, 3));
@@ -82,6 +83,7 @@ class GenerationInputVersionsTests {
     private String registered(int version) {
         String id = UUID.randomUUID().toString();
         when(resources.get(id, actor)).thenReturn(resource(id, version));
+        when(resources.forUpdate(id, actor)).thenReturn(resource(id, version));
         return id;
     }
 

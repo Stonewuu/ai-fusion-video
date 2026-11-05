@@ -35,6 +35,26 @@ class CanvasModelGraphPolicyTests {
     private final CanvasModelGraphPolicy policy = new CanvasModelGraphPolicy(models, new CanvasCapabilityRegistry());
     private final CanvasGraph empty = new CanvasGraph(1, null, List.of(), List.of());
 
+    @Test
+    void imageOutputCombinationsAndPixelRulesAreCheckedBeforeStartingARun() {
+        when(models.require(9)).thenReturn(option("image", Map.of("prompt", input(1)), Map.of(
+                "gptImage", true, "supportAutoSize", true,
+                "supportedAspectRatios", List.of("1:1", "9:16", "auto"),
+                "supportedResolutions", List.of("2K", "4K", "auto"),
+                "supportedSizes", Map.of("2K", Map.of("9:16", "1152x2048"), "4K", Map.of("1:1", "2880x2880"))), List.of()));
+        var wrongPair = node("image", CanvasNodeKind.IMAGE_GENERATION,
+                config().put("modelId", 9).put("prompt", "海边").put("ratio", "9:16").put("resolution", "4K"));
+        assertThatThrownBy(() -> policy.validateForRun(graph(List.of(wrongPair), List.of()), wrongPair, Map.of()))
+                .hasMessageContaining("不匹配");
+        var wrongPixels = node("image", CanvasNodeKind.IMAGE_GENERATION,
+                config().put("modelId", 9).put("prompt", "海边").put("width", 1920).put("height", 1080));
+        assertThatThrownBy(() -> policy.validateForRun(graph(List.of(wrongPixels), List.of()), wrongPixels, Map.of()))
+                .hasMessageContaining("16 的倍数");
+        var valid = node("image", CanvasNodeKind.IMAGE_GENERATION,
+                config().put("modelId", 9).put("prompt", "海边").put("ratio", "9:16").put("resolution", "2K"));
+        assertThatCode(() -> policy.validateForRun(graph(List.of(valid), List.of()), valid, Map.of())).doesNotThrowAnyException();
+    }
+
     @Test void rejectsDisabledModelsAndUnsupportedPortsWithoutProviderCalls() {
         var video = node("video", CanvasNodeKind.VIDEO_GENERATION, config().put("modelId", 9));
         when(models.require(9)).thenThrow(new BusinessException("模型停用"));

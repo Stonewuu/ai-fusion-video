@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
 import { GenerationDurationSlider } from "./generation-duration-slider";
 import type { GenerationFormState, WorkbenchMode } from "./generation-types";
 import { parseLimit } from "./generation-utils";
-import { GenerationImageOutputPickers } from "./generation-image-output-pickers";
+import { ImageOutputPickers } from "@/components/generation/image-output-pickers";
 
 interface GenerationOutputSettingsProps {
   mode: WorkbenchMode;
@@ -165,7 +165,7 @@ export function GenerationOutputSettings({
       <div className="mt-3 space-y-3.5">
         {mode === "image" ? (
           <div className="grid grid-cols-2 gap-3">
-            <GenerationImageOutputPickers capabilities={capabilities} form={form} onChange={onChange} />
+            <ImageOutputPickers capabilities={capabilities} form={form} onChange={onChange} />
           </div>
         ) : (
           <>

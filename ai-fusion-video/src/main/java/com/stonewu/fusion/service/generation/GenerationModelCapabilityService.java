@@ -372,6 +372,14 @@ public class GenerationModelCapabilityService {
                 .set("supportedSizes", copyJsonObject(config, "supportedSizes"))
                 .set("defaultWidth", getInteger(config, "defaultWidth"))
                 .set("defaultHeight", getInteger(config, "defaultHeight"))
+                .set("supportCustomSize", config.getBool("supportCustomSize"))
+                .set("sizeMultiple", getInteger(config, "sizeMultiple"))
+                .set("minPixels", getInteger(config, "minPixels"))
+                .set("maxPixels", getInteger(config, "maxPixels"))
+                .set("maxEdge", getInteger(config, "maxEdge"))
+                .set("maxAspectRatio", config.getDouble("maxAspectRatio"))
+                .set("gptImage", GptImageModel.presetCode(model.getCode()) != null
+                        && "openai".equalsIgnoreCase(metadata.modelProtocol()))
                 .set(ComfyUiWorkflowCapabilities.VERSION_KEY, config.get(ComfyUiWorkflowCapabilities.VERSION_KEY))
                 .set(ComfyUiWorkflowCapabilities.INPUTS_KEY, config.get(ComfyUiWorkflowCapabilities.INPUTS_KEY))
                 .set("summary", describeImageCapability(model, capability));

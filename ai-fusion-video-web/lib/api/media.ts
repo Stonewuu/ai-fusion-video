@@ -105,3 +105,33 @@ export function listManagedMedia(
     signal,
   });
 }
+
+export interface MediaDeletionPreview {
+  mediaId: string;
+  version: number;
+  referenceToken: string;
+  usages: { label: string; count: number }[];
+  sharedCopies: number;
+  permanentBlockedReason: string | null;
+  libraryRemoved: boolean;
+}
+
+export type MediaDeletionMode = "LIBRARY" | "PERMANENT";
+export interface MediaDeletionResult {
+  mediaId: string;
+  mode: MediaDeletionMode;
+  fileStatus: "RETAINED" | "PENDING" | "SHARED" | "PURGED";
+}
+
+export function previewMediaDeletion(id: string, signal?: AbortSignal) {
+  return http.get<never, MediaDeletionPreview>("/api/media-resources/" + id + "/deletion-preview", { signal });
+}
+
+export function deleteManagedMedia(id: string, request: {
+  requestId: string;
+  expectedVersion: number;
+  mode: MediaDeletionMode;
+  referenceToken: string;
+}) {
+  return http.delete<never, MediaDeletionResult>("/api/media-resources/" + id, { data: request });
+}

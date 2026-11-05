@@ -22,6 +22,7 @@ import type {
 } from "@/lib/canvas/types";
 import { useCanvas, useCanvasStoreApi } from "../canvas-provider";
 import { CanvasSelect } from "./canvas-select";
+import { canvasImageDefaults } from "@/lib/canvas/image-output";
 
 export function CanvasModelFields({
   capability,
@@ -113,7 +114,8 @@ export function CanvasModelFields({
             next.resultType = options.find(
               (item) => item.id === Number(value),
             )!.resultType;
-          onChange(next);
+          onChange(capability.kind === "imageGeneration"
+            ? canvasImageDefaults(next, options.find((item) => item.id === Number(value))!) : next);
         }}
       />
       {model && !matchesInputs(model) && (

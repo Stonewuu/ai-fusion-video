@@ -22,6 +22,7 @@ import { CanvasConfigFieldEditor } from "./config-field";
 import { CanvasDimensionsFields } from "./dimensions-fields";
 import { videoInputState, videoRulesOf } from "@/lib/video-model-rules";
 import { modelForVersion } from "@/lib/canvas/model-constraints";
+import { CanvasImageOutputFields } from "./image-output-fields";
 
 export function CanvasConfigFields({
   capability,
@@ -92,6 +93,7 @@ export function CanvasConfigFields({
     (!version ||
       (version.fields.includes("width") && version.fields.includes("height")));
   const fields = Object.entries(capability.configFields)
+    .filter(([key]) => capability.kind !== "imageGeneration" || !["ratio", "resolution", "width", "height"].includes(key))
     .filter(([key]) => !isAgent || !agentFormFields.has(key))
     .filter(
       ([key]) =>
@@ -220,12 +222,15 @@ export function CanvasConfigFields({
         </div>
       )}
       {renderFields(primary)}
+      {capability.kind === "imageGeneration" && (
+        <CanvasImageOutputFields capability={capability} config={config} model={model} onChange={onChange} disabled={disabled} />
+      )}
       {videoRulesOf(model?.parameters)?.fixedGenerateAudio === true && (
         <p className="text-xs text-muted-foreground">
           此模型会同时生成视频声音。
         </p>
       )}
-      {dimensions && (
+      {dimensions && capability.kind !== "imageGeneration" && (
         <CanvasDimensionsFields
           capability={capability}
           config={config}
@@ -233,7 +238,7 @@ export function CanvasConfigFields({
           disabled={disabled}
         />
       )}
-      {imageSize && (
+      {imageSize && capability.kind !== "imageGeneration" && (
         <p className="text-xs text-primary">
           预计画面尺寸：{imageSize.replace("x", " × ")} px
           {config.width || config.height ? "（已另设自定义尺寸）" : ""}

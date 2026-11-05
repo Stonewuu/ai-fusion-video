@@ -11,6 +11,7 @@ import type {
 import { canvasFieldLabels, canvasPortLabels } from "./labels";
 import { validateCanvasConfig } from "./config";
 import { portType, portTypes } from "./graph";
+import { canvasImageOutputIssue } from "./image-output";
 import {
   automaticVideoDuration,
   videoInputState,
@@ -332,13 +333,19 @@ export function validateModelNode(
   ) {
     return "请按当前输入重新选择画面比例";
   }
+  if (node.kind === "imageGeneration") {
+    const issue = canvasImageOutputIssue(node.config, model);
+    if (issue) {
+      return issue;
+    }
+  }
   for (const [field, parameter] of [
     ["ratio", "supportedAspectRatios"],
     ["resolution", "supportedResolutions"],
   ]) {
     const options = model.parameters[parameter];
     if (
-      node.config[field] !== undefined &&
+      node.kind !== "imageGeneration" && node.config[field] !== undefined &&
       Array.isArray(options) &&
       options.length &&
       !options.includes(node.config[field])

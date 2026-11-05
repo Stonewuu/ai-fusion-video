@@ -84,8 +84,8 @@ export function MediaThumbnail({
           title={error}
         >
           <Icon className="size-6 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">预览暂不可用</span>
-          {interactive && (
+          <span className="text-xs text-muted-foreground">{preview.deleted ? "素材已删除" : "预览暂不可用"}</span>
+          {interactive && !preview.deleted && (
             <Button
               variant="ghost"
               size="xs"

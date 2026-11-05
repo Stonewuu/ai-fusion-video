@@ -10,6 +10,8 @@ import com.stonewu.fusion.service.canvas.capability.CanvasModelCatalog;
 import com.stonewu.fusion.service.canvas.command.CanvasGraphMutation;
 import com.stonewu.fusion.service.canvas.model.*;
 import com.stonewu.fusion.service.generation.VideoModelRules;
+import com.stonewu.fusion.entity.generation.ImageTask;
+import com.stonewu.fusion.service.generation.image.ImageOutputDimensions;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -237,6 +239,14 @@ public class CanvasModelGraphPolicy implements CanvasGraphMutationPolicy {
         }
         choice(node, model, "ratio", "supportedAspectRatios");
         choice(node, model, "resolution", "supportedResolutions");
+        if (node.kind() == CanvasNodeKind.IMAGE_GENERATION) {
+            var config = node.config();
+            var task = ImageTask.builder().ratio(config.path("ratio").asText(null))
+                    .resolution(config.path("resolution").asText(null))
+                    .width(config.has("width") ? config.path("width").asInt() : null)
+                    .height(config.has("height") ? config.path("height").asInt() : null).build();
+            ImageOutputDimensions.normalize(task, modelConfig, Boolean.TRUE.equals(model.parameters().get("gptImage")));
+        }
         if (node.config().has("duration")) {
             int duration = node.config().path("duration").asInt();
             if (duration <= 0) {
