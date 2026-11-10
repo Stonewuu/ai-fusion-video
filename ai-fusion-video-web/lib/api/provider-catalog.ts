@@ -19,6 +19,7 @@ export interface ProviderDefinition {
   supportedModelTypes: number[];
   discovery: string;
   modelPresetCodes: string[];
+  restrictedProtocols: string[];
 }
 
 export interface ProviderModelCandidate {

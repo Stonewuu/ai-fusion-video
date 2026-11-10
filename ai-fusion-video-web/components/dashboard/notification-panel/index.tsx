@@ -7,11 +7,10 @@ import { Maximize2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { openExecutionRecord } from "@/lib/execution-record-navigation";
-import { ExecutionRecordSection } from "./execution-records";
-import {
-  ExpandedPanel,
-  PipelineTaskCard,
-} from "./detail";
+import { NotificationViews, type NotificationView } from "./notification-views";
+import { ExpandedPanel } from "./expanded-panel";
+import { PipelineTaskCard } from "./task-list-items";
+import { Button } from "@/components/ui/button";
 
 interface NotificationPanelProps {
   anchorRef: RefObject<HTMLButtonElement | null>;
@@ -25,8 +24,10 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
     clearCompleted,
     panelExpanded,
     setPanelExpanded,
+    setExpandedTaskId,
   } = usePipelineStore();
 
+  const [view, setView] = useState<NotificationView>("tasks");
   const [position, setPosition] = useState({ top: 0, right: 0 });
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -44,7 +45,9 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
   }, [notificationOpen, anchorRef, panelExpanded]);
 
   useEffect(() => {
-    if (!notificationOpen || panelExpanded) return;
+    if (!notificationOpen || panelExpanded) {
+      return;
+    }
 
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -82,6 +85,7 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
       <ExpandedPanel
         onClose={() => {
           setPanelExpanded(false);
+          setExpandedTaskId(null);
           setNotificationOpen(false);
         }}
       />
@@ -108,34 +112,19 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border/20">
         <h3 className="text-sm font-semibold">运行与通知</h3>
-        <div className="flex items-center gap-1">
-          {completedTasks.length > 0 && (
-            <button
-              onClick={clearCompleted}
-              className="text-[10px] text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded-lg hover:bg-muted"
-            >
+        <div className="flex items-center gap-2">
+          {view === "tasks" && completedTasks.length > 0 && (
+            <Button variant="ghost" onClick={clearCompleted}>
               清除已完成
-            </button>
+            </Button>
           )}
-          <button
-            onClick={() => setPanelExpanded(true)}
-            className="p-1 rounded-lg hover:bg-muted transition-colors"
-            title="展开大面板"
-          >
-            <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
-          <button
-            onClick={() => setNotificationOpen(false)}
-            aria-label="关闭任务中心"
-            className="p-1 rounded-lg hover:bg-muted transition-colors"
-          >
-            <X className="h-3.5 w-3.5 text-muted-foreground" />
-          </button>
+          <Button variant="ghost" size="icon" onClick={() => setPanelExpanded(true)} aria-label="展开任务面板"><Maximize2 /></Button>
+          <Button variant="ghost" size="icon" onClick={() => setNotificationOpen(false)} aria-label="关闭任务中心"><X /></Button>
         </div>
       </div>
 
-      <div className="max-h-[60vh] overflow-y-auto">
-        <ExecutionRecordSection selected={null} onSelect={openExecutionRecord} />
+      <div className="flex h-[60vh] min-h-0 flex-col">
+        <NotificationViews compact view={view} onViewChange={setView} selectedRecord={null} onSelectRecord={openExecutionRecord}>
         {tasks.length === 0 ? (
           <div className="py-12 text-center">
             <p className="text-sm text-muted-foreground">暂无 AI 任务</p>
@@ -175,6 +164,11 @@ export function NotificationPanel({ anchorRef }: NotificationPanelProps) {
             )}
           </div>
         )}
+        <div className="p-3"><Button variant="outline" className="w-full" onClick={() => {
+          setExpandedTaskId(null);
+          setPanelExpanded(true);
+        }}>查看全部任务</Button></div>
+        </NotificationViews>
       </div>
     </motion.div>,
     document.body

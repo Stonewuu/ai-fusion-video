@@ -149,6 +149,7 @@ export type StoryboardItemFields = Pick<StoryboardItem,
   "aiGenerated" | "status" | "imageUrl" | "referenceImageUrl" | "videoUrl" | "generatedImageUrl" |
   "firstFrameImageUrl" | "lastFrameImageUrl" | "firstFramePrompt" | "lastFramePrompt" | "generatedVideoUrl" | "videoPrompt">;
 export type StoryboardItemCreateReq = Partial<StoryboardItemFields> & {
+  sceneAssetItemId: number;
   storyboardSceneId: number;
   parentVersion: number;
   sortOrder?: number;

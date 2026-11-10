@@ -1,3 +1,4 @@
+import { applyModelRetry } from "@/lib/store/model-retry-timeline";
 import type { AiChatStreamEvent } from "@/lib/api/ai-pipeline";
 import type {
   AgentPipelineState,
@@ -31,10 +32,11 @@ export function createPendingPipelineState(): AgentPipelineState {
 function appendReasoningToSubTimeline(
   children: SubTimelineItem[],
   reasoningContent: string,
-  startedAtMs?: number
+  startedAtMs?: number,
+  replyId?: string
 ): SubTimelineItem[] {
   const last = children[children.length - 1];
-  if (last && last.type === "reasoning") {
+  if (last && last.type === "reasoning" && last.replyId === replyId) {
     return [
       ...children.slice(0, -1),
       {
@@ -50,6 +52,7 @@ function appendReasoningToSubTimeline(
     {
       type: "reasoning",
       text: reasoningContent,
+      replyId,
       ...(startedAtMs !== undefined ? { startedAtMs } : {}),
     },
   ];
@@ -76,10 +79,11 @@ function updateLastSubTimelineReasoningDuration(
 function appendReasoningToTimeline(
   timeline: TimelineItem[],
   reasoningContent: string,
-  startedAtMs?: number
+  startedAtMs?: number,
+  replyId?: string
 ): TimelineItem[] {
   const last = timeline[timeline.length - 1];
-  if (last && last.type === "reasoning") {
+  if (last && last.type === "reasoning" && last.replyId === replyId) {
     return [
       ...timeline.slice(0, -1),
       {
@@ -95,6 +99,7 @@ function appendReasoningToTimeline(
     {
       type: "reasoning",
       text: reasoningContent,
+      replyId,
       ...(startedAtMs !== undefined ? { startedAtMs } : {}),
     },
   ];
@@ -304,33 +309,35 @@ function appendToToolChildren(
 
 function appendContentToSubTimeline(
   children: SubTimelineItem[],
-  content: string
+  content: string,
+  replyId?: string
 ): SubTimelineItem[] {
   const updated = [...children];
   const last = updated[updated.length - 1];
-  if (last && last.type === "content") {
+  if (last && last.type === "content" && last.replyId === replyId) {
     return [
       ...updated.slice(0, -1),
       { ...last, text: last.text + content },
     ];
   }
 
-  return [...updated, { type: "content", text: content }];
+  return [...updated, { type: "content", text: content, replyId }];
 }
 
 function appendContentToTimeline(
   timeline: TimelineItem[],
-  content: string
+  content: string,
+  replyId?: string
 ): TimelineItem[] {
   const last = timeline[timeline.length - 1];
-  if (last && last.type === "content") {
+  if (last && last.type === "content" && last.replyId === replyId) {
     return [
       ...timeline.slice(0, -1),
       { ...last, text: last.text + content },
     ];
   }
 
-  return [...timeline, { type: "content", text: content }];
+  return [...timeline, { type: "content", text: content, replyId }];
 }
 
 function validTimestamp(value: unknown): number | undefined {
@@ -391,6 +398,15 @@ export function reducePipelineEvent(
   }
 
   switch (event.outputType) {
+    case "MODEL_RETRY":
+      next.timeline = applyModelRetry(next.timeline, event);
+      if (!isSubAgent) {
+        next.reasoningText = "";
+        next.reasoningStartTime = undefined;
+        next.reasoningDurationMs = undefined;
+      }
+      return next;
+
     case "REASONING":
       if (event.reasoningContent) {
         const reasoningStartTime = validTimestamp(event.reasoningStartTime);
@@ -402,7 +418,8 @@ export function reducePipelineEvent(
               appendReasoningToSubTimeline(
                 children,
                 event.reasoningContent!,
-                reasoningStartTime
+                reasoningStartTime,
+                event.replyId
               )
           );
         } else {
@@ -419,7 +436,8 @@ export function reducePipelineEvent(
           next.timeline = appendReasoningToTimeline(
             next.timeline,
             event.reasoningContent,
-            reasoningStartTime
+            reasoningStartTime,
+            event.replyId
           );
         }
       }
@@ -435,11 +453,12 @@ export function reducePipelineEvent(
             (children) =>
               appendContentToSubTimeline(
                 children,
-                event.content!
+                event.content!,
+                event.replyId
               )
           );
         } else {
-          next.timeline = appendContentToTimeline(next.timeline, event.content);
+          next.timeline = appendContentToTimeline(next.timeline, event.content, event.replyId);
         }
       }
       return next;
@@ -680,7 +699,7 @@ export function reducePipelineEvent(
       next.status = "done";
       next.pendingConfirmation = undefined;
       if (event.content) {
-        next.timeline = appendContentToTimeline(next.timeline, event.content);
+        next.timeline = appendContentToTimeline(next.timeline, event.content, event.replyId);
       }
       return next;
 
@@ -734,7 +753,7 @@ export function reducePipelineEvent(
         }
         next.pendingConfirmation = undefined;
         if (event.content) {
-          next.timeline = appendContentToTimeline(next.timeline, event.content);
+          next.timeline = appendContentToTimeline(next.timeline, event.content, event.replyId);
         }
       }
       return next;

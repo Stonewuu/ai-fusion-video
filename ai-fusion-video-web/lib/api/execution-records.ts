@@ -17,6 +17,16 @@ export interface ExecutionRecordSummary extends ExecutionRecordRef {
   updatedAt: string;
 }
 
+export type ExecutionRecordFilter = "ALL" | "REVIEW" | "FAILED" | "CANCELLED";
+
+export interface ExecutionRecordPage {
+  items: ExecutionRecordSummary[];
+  hasMore: boolean;
+  page: number;
+  total: number;
+  matchedTotal: number;
+}
+
 export interface ExecutionRecordDetail {
   task: ExecutionRecordSummary;
   projectId: number | null;
@@ -33,15 +43,15 @@ export interface ExecutionRecordDetail {
 }
 
 export const executionRecordApi = {
-  list: (page: number, signal?: AbortSignal): Promise<{ items: ExecutionRecordSummary[]; hasMore: boolean; page: number }> =>
-    http.get("/api/execution-records", { params: { page }, signal }),
+  list: (page: number, signal?: AbortSignal, filters?: { filter: ExecutionRecordFilter; days: number }): Promise<ExecutionRecordPage> =>
+    http.get("/api/execution-records", { params: { page, ...filters }, signal }),
   get: (target: ExecutionRecordRef, signal?: AbortSignal): Promise<ExecutionRecordDetail> =>
     http.get(`/api/execution-records/${target.kind}/${encodeURIComponent(target.id)}`, { signal }),
 };
 
 export function executionRecordStatus(record: ExecutionRecordSummary) {
   if (record.remoteUnknown) {
-    return "远端结果未知";
+    return "结果待确认";
   }
   if (!record.localFinished) {
     return "正在自动处理";

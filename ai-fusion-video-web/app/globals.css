@@ -236,6 +236,12 @@
   }
 }
 
+/* 目录高亮随指针立即切换，不让颜色渐变落后于快速移动；保留展开、按压和透明度动画。 */
+[data-sidebar-navigation] :where(button, [role="button"], [data-sidebar-row]),
+[data-sidebar-navigation] :where(button, [role="button"], [data-sidebar-row]) :where(span, svg) {
+  transition-property: opacity, transform, translate, scale, rotate;
+}
+
 /* 融光助手内部导航按容器宽度切换，而不是读取 viewport breakpoint。 */
 .assistant-shell,
 [data-assistant-dock-surface],
@@ -272,24 +278,19 @@
 }
 
 .assistant-launcher-waves {
-  --assistant-wave-color: var(--assistant-launcher-accent);
   pointer-events: none;
   position: absolute;
-  inset: 0;
+  inset: -24px;
   z-index: 0;
-  animation: assistant-waves-enter 240ms ease-out 80ms both;
+  contain: paint;
 }
 
 .assistant-launcher-wave {
   position: absolute;
-  inset: 0;
-  border-color: var(--assistant-wave-color);
-  border-style: solid;
-  border-width: 1px;
+  inset: 24px;
+  border: 1px solid var(--assistant-launcher-accent);
   border-radius: 9999px;
-  opacity: 0;
-  animation: assistant-wave-breathe 3s linear infinite;
-  will-change: opacity, transform;
+  animation: assistant-launcher-wave 3s linear infinite;
 }
 
 .assistant-launcher-wave:nth-child(2) {
@@ -300,39 +301,34 @@
   animation-delay: -2s;
 }
 
-@keyframes assistant-wave-breathe {
-  0% {
-    opacity: 0;
-    transform: scale(0.98);
-  }
+.assistant-launcher-waves[data-paused="true"] .assistant-launcher-wave {
+  animation-play-state: paused;
+}
 
-  8% {
-    opacity: 0.18;
+/* 遮罩存在期间暂停背景装饰，避免每一帧波纹都让全屏毛玻璃重新取样。关闭后接着播放。 */
+body:has(:is([data-slot="dialog-overlay"], [data-slot="sheet-overlay"], .modal-overlay)) .assistant-launcher-wave {
+  animation-play-state: paused;
+}
+
+@keyframes assistant-launcher-wave {
+  from {
     transform: scale(1);
+    opacity: 0.8;
   }
-
-  18% {
-    opacity: 0.72;
-    transform: scale(1.1);
-  }
-
-  70% {
-    opacity: 0.28;
-  }
-
-  100% {
+  to {
+    transform: scale(1.8);
     opacity: 0;
-    transform: scale(1.7);
   }
 }
 
-@keyframes assistant-waves-enter {
-  from {
-    opacity: 0;
+@media (prefers-reduced-motion: reduce) {
+  .assistant-launcher-wave {
+    animation: none;
+    opacity: 0.5;
+    transform: scale(1.15);
   }
-
-  to {
-    opacity: 1;
+  .assistant-launcher-wave:not(:first-child) {
+    display: none;
   }
 }
 
@@ -399,22 +395,6 @@ body[data-assistant-layer="true"] > [data-base-ui-portal] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .assistant-launcher-waves {
-    animation: none;
-  }
-
-  .assistant-launcher-wave {
-    animation: none;
-    inset: -9px;
-    border-width: 1px;
-    opacity: 0.5;
-    will-change: auto;
-  }
-
-  .assistant-launcher-wave:not(:first-child) {
-    display: none;
-  }
-
   .assistant-shell * {
     scroll-behavior: auto;
   }
@@ -439,27 +419,27 @@ body[data-assistant-layer="true"] > [data-base-ui-portal] {
 
 /*
  * 模态层级基线
- * 浅色主题使用白色毛玻璃遮罩，深色主题使用更高不透明度的黑色毛玻璃；
- * 弹窗本体更接近实体背景，避免透景干扰文字与表单阅读。
+ * 模糊由遮罩承担，表面保留半透明底色、细边框与阴影。
+ * 内容滚动、光标闪烁和卡片交互不再叠加大面积背景滤镜。
  */
 html:not(.dark) :where([data-slot="dialog-overlay"],
   [data-slot="sheet-overlay"],
   .modal-overlay) {
-  @apply backdrop-blur-sm backdrop-saturate-125;
+  backdrop-filter: blur(2px) saturate(1.25);
   background-color: oklch(1 0 0 / 40%);
 }
 
 html.dark :where([data-slot="dialog-overlay"],
   [data-slot="sheet-overlay"],
   .modal-overlay) {
-  @apply backdrop-blur-sm backdrop-saturate-125;
+  backdrop-filter: blur(2px) saturate(1.25);
   background-color: oklch(0 0 0 / 50%);
 }
 
 html:not(.dark) :where([data-slot="dialog-content"],
   [data-slot="sheet-content"],
   .modal-surface) {
-  @apply backdrop-blur-xl backdrop-saturate-150;
+  backdrop-filter: none;
   border-color: color-mix(in oklab, var(--foreground) 12%, transparent);
   background-color: color-mix(in oklab, var(--background) 92%, transparent);
   box-shadow: 0 24px 80px -32px oklch(0 0 0 / 42%);
@@ -468,10 +448,19 @@ html:not(.dark) :where([data-slot="dialog-content"],
 html.dark :where([data-slot="dialog-content"],
   [data-slot="sheet-content"],
   .modal-surface) {
-  @apply backdrop-blur-xl backdrop-saturate-150;
+  backdrop-filter: none;
   border-color: color-mix(in oklab, var(--foreground) 12%, transparent);
   background-color: color-mix(in oklab, var(--background) 94%, transparent);
   box-shadow: 0 24px 88px -30px oklch(0 0 0 / 78%);
+}
+
+/* 弹窗内的嵌套卡片共享遮罩的模糊，不再各自创建滤镜层。Portal 浮层不在这个范围内。 */
+:where([data-slot="dialog-content"], [data-slot="sheet-content"], .modal-surface) :where(
+  [class*="backdrop-blur"],
+  [class*="backdrop-filter"],
+  [class*="backdrop-saturate"]
+) {
+  backdrop-filter: none;
 }
 
 [data-slot="dialog-content"][data-variant="media-lightbox"] {
@@ -500,17 +489,4 @@ html.dark :where([data-slot="dialog-content"],
   opacity: 0.4;
   font-style: italic;
   pointer-events: none;
-}
-
-/* 资产占位图流光效果 */
-@keyframes shimmer {
-
-  0%,
-  100% {
-    transform: translateX(-100%);
-  }
-
-  50% {
-    transform: translateX(100%);
-  }
 }

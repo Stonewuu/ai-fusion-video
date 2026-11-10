@@ -35,6 +35,28 @@ class PlatformSubAgentOutputTests {
         assertThat(result.result()).isEqualTo("甲 \n乙");
     }
 
+    @Test
+    void modelRetryDoesNotSendTheFailedPartialAnswerBackToTheParent() {
+        var replay = mock(AgentRunReplayService.class);
+        var service = new PlatformSubAgentRunService(mock(AgentRunCoordinator.class), mock(AgentKernelSnapshotBuilder.class),
+                mock(AgentInputHistoryMapper.class), mock(AgentExecutionRuntimeContextRequests.class), mock(RunExecutionSupervisor.class),
+                replay, mock(AgentMessageProjectionService.class), mock(CancellationCoordinator.class),
+                mock(AgentRuntimeInstanceIdentity.class), new AgentScopeV2Properties());
+        when(replay.replayThenLive("child", 0)).thenReturn(Flux.just(
+                replyEvent(1, "CONTENT", "已经保存。", "good"), replyEvent(2, "CONTENT", "残缺回答", "failed"),
+                replyEvent(3, "MODEL_RETRY", "正在重试", "failed"), replyEvent(4, "CONTENT", "已完成。", "retry"),
+                event(5, "DONE", "", false)));
+        var result = service.awaitCompletion(new PlatformSubAgentRun("child", "parent", "tool", "writer", AgentRunStatus.RUNNING))
+                .block(Duration.ofSeconds(1));
+        assertThat(result.result()).isEqualTo("已经保存。已完成。");
+    }
+
+    private CommittedAgentEvent replyEvent(long sequence, String type, String text, String replyId) {
+        var payload = JsonNodeFactory.instance.objectNode().put("delta", text);
+        return new CommittedAgentEvent(sequence, "child", sequence, new AgentEventEnvelope("event-" + sequence,
+                type, "main", replyId, null, null, null, null, type, payload, Instant.now()), Instant.now());
+    }
+
     private CommittedAgentEvent event(long sequence, String type, String text, boolean mirrored) {
         var payload = JsonNodeFactory.instance.objectNode().put("delta", text).put("_platformMirroredChildEvent", mirrored);
         return new CommittedAgentEvent(sequence, "child", sequence, new AgentEventEnvelope("event-" + sequence,

@@ -3,6 +3,7 @@ package com.stonewu.fusion.mapper.generation;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.stonewu.fusion.entity.generation.GenerationSubmissionEntity;
+import com.stonewu.fusion.service.generation.job.AssetImageReferenceSnapshot;
 import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Param;
 
@@ -15,6 +16,9 @@ public interface GenerationSubmissionMapper extends BaseMapper<GenerationSubmiss
     GenerationSubmissionEntity selectAgentInvocation(@Param("scope") String scope,
                                                      @Param("agentRunId") String agentRunId,
                                                      @Param("toolCallId") String toolCallId);
+
+    AssetImageReferenceSnapshot selectAssetImageReferenceSnapshot(@Param("scope") String scope,
+                                                                  @Param("agentRunId") String agentRunId);
 
     int insertQueued(@Param("row") GenerationSubmissionEntity row);
 

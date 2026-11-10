@@ -36,7 +36,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /** 真实 HTTP 验证 SDK 与底层传输均不能隐藏重发，不访问外部模型服务。 */
 class SingleRequestTextProvidersTests {
-    private static final List<String> PROTOCOLS = List.of("openai", "responses", "anthropic", "gemini", "vertex", "dashscope", "ollama");
+    private static final List<String> PROTOCOLS = List.of("openai", "responses", "anthropic", "gemini", "vertex", "vertex-key", "dashscope", "ollama");
     private static final List<Msg> MESSAGES = List.of(Msg.builder().name("user").role(MsgRole.USER)
             .content(TextBlock.builder().text("生成一句场景描述").build()).build());
 
@@ -55,7 +55,7 @@ class SingleRequestTextProvidersTests {
         }
     }
 
-    @ParameterizedTest @ValueSource(strings = {"openai", "responses", "anthropic", "gemini", "vertex", "dashscope", "ollama"})
+    @ParameterizedTest @ValueSource(strings = {"openai", "responses", "anthropic", "gemini", "vertex", "vertex-key", "dashscope", "ollama"})
     void officialFormattersStillReadTheCompleteTextResponse(String protocol) throws Exception {
         try (var endpoint = new Endpoint(protocol, 200);
              var model = OwnedChatModel.owned(model(protocol, endpoint.url()))) {
@@ -77,7 +77,7 @@ class SingleRequestTextProvidersTests {
         }
     }
 
-    @ParameterizedTest @ValueSource(strings = {"openai", "responses", "anthropic", "gemini", "vertex", "dashscope", "ollama"})
+    @ParameterizedTest @ValueSource(strings = {"openai", "responses", "anthropic", "gemini", "vertex", "vertex-key", "dashscope", "ollama"})
     void firstTextArrivesWhileTheProviderIsStillWaitingToSendTheRest(String protocol) throws Exception {
         try (var endpoint = new Endpoint(protocol, 200, true);
              var model = OwnedChatModel.owned(model(protocol, endpoint.url()))) {
@@ -91,7 +91,7 @@ class SingleRequestTextProvidersTests {
         }
     }
 
-    @ParameterizedTest @ValueSource(strings = {"openai", "responses", "anthropic", "gemini", "vertex", "dashscope", "ollama"})
+    @ParameterizedTest @ValueSource(strings = {"openai", "responses", "anthropic", "gemini", "vertex", "vertex-key", "dashscope", "ollama"})
     void cancellationDoesNotWaitForTheRemainingProviderOutput(String protocol) throws Exception {
         try (var endpoint = new Endpoint(protocol, 200, true);
              var model = OwnedChatModel.owned(model(protocol, endpoint.url()))) {
@@ -105,6 +105,10 @@ class SingleRequestTextProvidersTests {
 
     private ChatModelBase model(String protocol, String url) {
         var api = ApiConfig.builder().id(1L).apiKey("local-test-key").apiUrl(url).autoAppendV1Path(true).build();
+        if (protocol.equals("vertex-key")) {
+            return new SingleRequestGeminiModel(new GenerationHttpApiClient("local-test-key", null, null, null,
+                    HttpOptions.builder().baseUrl(url).build(), api), "gemini-test", null);
+        }
         if (protocol.equals("vertex")) {
             var credentials = GoogleCredentials.create(new AccessToken("local-test-token", Date.from(Instant.now().plusSeconds(600))));
             return new SingleRequestGeminiModel(new GenerationHttpApiClient("test-project", "us-central1", credentials,
@@ -137,6 +141,11 @@ class SingleRequestTextProvidersTests {
             server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
             server.createContext("/", exchange -> {
                 requests.incrementAndGet();
+                if (protocol.equals("vertex-key")) {
+                    assertThat(exchange.getRequestHeaders().getFirst("x-goog-api-key")).isEqualTo("local-test-key");
+                    assertThat(exchange.getRequestHeaders().getFirst("Authorization")).isNull();
+                    assertThat(exchange.getRequestURI().getPath()).doesNotContain("projects/", "locations/");
+                }
                 exchange.getRequestBody().readAllBytes();
                 int code = requests.get() == 1 ? status : 200;
                 String body = code == 200 ? StreamingProviderFixtures.first(protocol) : "{\"error\":{\"message\":\"test-error\",\"type\":\"server_error\"}}";

@@ -1,6 +1,8 @@
 package com.stonewu.fusion.integration;
 
 import com.stonewu.fusion.entity.ai.ApiConfig;
+import com.stonewu.fusion.entity.ai.AiModel;
+import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.mapper.ai.ApiConfigMapper;
 import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
@@ -26,7 +28,7 @@ class ProviderCatalogPersistenceIT {
             source.setUsername(MYSQL.getUsername());
             source.setPassword(MYSQL.getPassword());
             Flyway.configure().dataSource(source).target("1.1.2.0.0").load().migrate();
-            MybatisTestSupport.register(context, source, ApiConfigMapper.class);
+            MybatisTestSupport.register(context, source, ApiConfigMapper.class, AiModelMapper.class);
             context.refresh();
             var mapper = context.getBean(ApiConfigMapper.class);
             var existing = ApiConfig.builder().name("已有自定义配置").platform("openai_compatible")
@@ -47,6 +49,34 @@ class ProviderCatalogPersistenceIT {
             reopened.setProviderId(null);
             mapper.updateById(reopened);
             assertThat(mapper.selectById(existing.getId()).getProviderId()).isNull();
+
+            // 从赞助渠道改回普通渠道，清空协议、地址和代理必须落库，不能保留旧值。
+            reopened.setVideoProtocol("infistar_video");
+            reopened.setProxyType("http");
+            reopened.setProxyHost("127.0.0.1");
+            reopened.setProxyPort(7890);
+            mapper.updateById(reopened);
+            reopened.setVideoProtocol(null);
+            reopened.setApiUrl(null);
+            reopened.setProxyType(null);
+            reopened.setProxyHost(null);
+            reopened.setProxyPort(null);
+            mapper.updateById(reopened);
+            var cleared = mapper.selectById(existing.getId());
+            assertThat(cleared.getVideoProtocol()).isNull();
+            assertThat(cleared.getApiUrl()).isNull();
+            assertThat(cleared.getProxyType()).isNull();
+            assertThat(cleared.getProxyHost()).isNull();
+            assertThat(cleared.getProxyPort()).isNull();
+
+            var models = context.getBean(AiModelMapper.class);
+            var model = AiModel.builder().name("协议覆盖验证").code("fixture-model").modelType(3)
+                    .apiConfigId(existing.getId()).modelProtocol("infistar_video").build();
+            models.insert(model);
+            var saved = models.selectById(model.getId());
+            saved.setModelProtocol(null);
+            models.updateById(saved);
+            assertThat(models.selectById(model.getId()).getModelProtocol()).isNull();
         }
     }
 }

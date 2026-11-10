@@ -1,5 +1,8 @@
 "use client";
 
+import { ModelRetryNotice } from "@/components/dashboard/shared/model-retry-notice";
+import { formatSubAgentResult } from "@/lib/ai/sub-agent-result";
+
 import { useEffect, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import {
@@ -230,6 +233,9 @@ function ToolTimelineItem({
                 <div className="space-y-2 pl-2 border-l-2 border-purple-500/20">
                   {item.children.map((child, childIndex) => {
                     const childCount = item.children?.length ?? 0;
+                    if (child.type === "retry") {
+                      return <ModelRetryNotice key={`sub-retry-${childIndex}`} text={child.text} />;
+                    }
                     if (child.type === "reasoning") {
                       const childIsStreaming =
                         item.status === "calling" &&
@@ -271,7 +277,7 @@ function ToolTimelineItem({
                 </div>
               )}
               {hasResult && (
-                <ToolResultDisplay toolName={item.name} result={item.result!} />
+                <ToolResultDisplay toolName={item.name} result={isSubAgentTool(item.name) ? formatSubAgentResult(item.result!) : item.result!} />
               )}
             </div>
           </motion.div>
@@ -304,6 +310,9 @@ export function AgentPipelineTimeline({
   return (
     <div ref={scrollRef} className="space-y-2 max-h-[60vh] overflow-y-auto">
       {timeline.map((item, index) => {
+        if (item.type === "retry") {
+          return <ModelRetryNotice key={`retry-${index}`} text={item.text} />;
+        }
         if (item.type === "reasoning") {
           const reasoningStreaming =
             isActive &&

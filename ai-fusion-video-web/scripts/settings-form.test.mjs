@@ -27,6 +27,8 @@ test("API addresses reject malformed, non HTTP and embedded credentials while Ve
   }
   assert.equal(httpAddressIssue("https://example.com/v1", "服务地址"), null);
   assert.equal(apiConfigIssue({ name: "Vertex", platform: "vertex_ai", appId: "project", apiUrl: "us-central1" }, [{ key: "appId", label: "项目 ID", required: true }], false), null);
+  assert.equal(apiConfigIssue({ name: "Vertex Key", platform: "vertex_ai_api_key", apiKey: "fixture", apiUrl: "global" }, cloudFields, false), null);
+  assert.equal(apiConfigIssue({ name: "Vertex Key", platform: "vertex_ai_api_key", appSecret: "stored-json" }, cloudFields, false)?.field, "api-field-apiKey");
 });
 
 test("API proxy validates port and credentials only when enabled", () => {

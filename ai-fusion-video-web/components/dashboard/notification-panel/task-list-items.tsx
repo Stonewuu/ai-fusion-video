@@ -33,7 +33,7 @@ export function TaskListItem({
     >
       {icon}
       <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium truncate">{label}</p>
+        <p className="text-xs font-medium truncate" title={label}>{label}</p>
         <p className="text-[10px] text-muted-foreground truncate">{subtitle}</p>
       </div>
     </button>

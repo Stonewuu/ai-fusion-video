@@ -58,6 +58,7 @@ class GenerationSubmissionServiceTests {
     final ImageGenerationStrategy imageProtocol = mock(ImageGenerationStrategy.class);
     final VideoGenerationStrategy videoProtocol = mock(VideoGenerationStrategy.class);
     final GenerationModelCapabilityService capabilities = mock(GenerationModelCapabilityService.class);
+    final AssetImageReferencePolicy assetReferences = mock(AssetImageReferencePolicy.class);
     final ResourceCommandContext actor = ResourceCommandContext.user(new CanvasActor(9, null), null);
     final AiModel model = AiModel.builder().id(5L).apiConfigId(7L).comfyuiWorkflowId(12L).build();
     final GenerationSubmissionService service = new GenerationSubmissionService(mock(GenerationSubmissionMapper.class),
@@ -65,7 +66,7 @@ class GenerationSubmissionServiceTests {
             mock(GenerationExecutionContexts.class), models, capabilities, workflows,
             images, videos, mock(GenerationJobRepository.class), mock(GenerationOutbox.class),
             mock(GenerationRequestRepository.class), imageProtocols, videoProtocols,
-            mock(GenerationInputVersions.class), mock(CanvasAgentNodeGeneration.class));
+            mock(GenerationInputVersions.class), mock(CanvasAgentNodeGeneration.class), assetReferences);
 
     @BeforeEach
     void configure() {
@@ -166,5 +167,18 @@ class GenerationSubmissionServiceTests {
         service.video(task, UUID.randomUUID().toString(), actor, null);
         assertThat(task.getGenerateAudio()).isNull();
         verify(videos).create(task);
+    }
+
+    @Test
+    void changedAssetReferencesCannotCreateAnotherPaidGeneration() {
+        var agent = new ResourceCommandContext(actor.actor(), "agent", null, "asset-run", "retry", "worker", 1L);
+        var task = ImageTask.builder().modelId(5L).prompt("去掉参考图后重试").count(1).build();
+        doThrow(new GenerationJobException(409, "ASSET_IMAGE_REFERENCES_CHANGED", "参考图不能移除"))
+                .when(assetReferences).enforce(task, agent);
+
+        assertThatThrownBy(() -> service.image(task, UUID.randomUUID().toString(), agent, null))
+                .isInstanceOf(GenerationJobException.class).hasMessageContaining("参考图不能移除");
+
+        verifyNoInteractions(images, imageProtocols);
     }
 }

@@ -62,6 +62,21 @@ class AgentScopeEventMapperTests {
     private final AgentScopeEventMapper mapper = new AgentScopeEventMapper(objectMapper, sanitizer);
 
     @Test
+    void modelRetryPreservesTheFailedReplyAndParentForTimelineRecovery() {
+        var event = new CustomEvent("model_retry", Map.of("replyId", "failed-reply", "content", "2 秒后重试（1/3）"));
+        event.withSource("main/asset-preprocessor");
+        event.withMetadata(Map.of("parentToolCallId", "parent-tool"));
+
+        var mapped = mapper.map(event);
+
+        assertThat(mapped.outputType()).isEqualTo("MODEL_RETRY");
+        assertThat(mapped.rawEventType()).isEqualTo("CUSTOM");
+        assertThat(mapped.replyId()).isEqualTo("failed-reply");
+        assertThat(mapped.parentToolCallId()).isEqualTo("parent-tool");
+        assertThat(mapped.payload().path("content").asText()).isEqualTo("2 秒后重试（1/3）");
+    }
+
+    @Test
     void derivesIdentityForEveryGaEventSubtypeAndCoversAllThirtyOneTypes() {
         List<IdentityCase> cases = identityCases();
 

@@ -9,6 +9,7 @@ import com.stonewu.fusion.service.canvas.CanvasJson;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import com.stonewu.fusion.service.generation.ReferenceImageTransportService;
 import com.stonewu.fusion.service.media.MediaInputTransport;
+import com.stonewu.fusion.service.media.MediaIntakeService;
 import com.stonewu.fusion.service.media.MediaReference;
 import com.stonewu.fusion.service.media.model.MediaKind;
 import lombok.RequiredArgsConstructor;
@@ -109,9 +110,8 @@ public class GenerationProviderInputs {
             List<String> values = new ArrayList<>();
             raw.path(port).forEach(value -> values.add(value.asText()));
             List<String> resolved = port.equals("referenceImages") ? images(values, submission, api, claim)
-                    : values.stream().map(value -> MediaReference.managed(value) ? media.generationUrl(value,
-                    submission.context().actor(),
-                    port.equals("referenceVideos") ? MediaKind.VIDEO : MediaKind.AUDIO, claim) : value).toList();
+                    : values.stream().map(value -> mediaSource(value,
+                    port.equals("referenceVideos") ? MediaKind.VIDEO : MediaKind.AUDIO, submission, claim)).toList();
             var output = result.putArray(port);
             resolved.forEach(output::add);
         }
@@ -123,8 +123,21 @@ public class GenerationProviderInputs {
         if (input == null || input.isBlank()) {
             return input;
         }
-        return JSONUtil.toJsonStr(references.parseJsonInputs(input, field).stream().map(value ->
-                MediaReference.managed(value) ? media.generationUrl(value, submission.context().actor(), kind,
-                        claim) : value).toList());
+        return JSONUtil.toJsonStr(references.parseJsonInputs(input, field).stream()
+                .map(value -> mediaSource(value, kind, submission, claim)).toList());
+    }
+
+    private String mediaSource(String value, MediaKind kind, GenerationSubmission submission,
+                               RemoteGenerationJob.Claim claim) {
+        if (!MediaReference.managed(value)) {
+            return value;
+        }
+        var config = capabilities.getMergedModelConfig(submission.model());
+        var formats = config.getJSONArray(kind == MediaKind.VIDEO
+                ? "referenceVideoInputFormats" : "referenceAudioInputFormats");
+        if (formats != null && formats.contains("data_uri")) {
+            return media.dataUri(value, submission.context().actor(), kind, MediaIntakeService.MAX_UPLOAD_BYTES);
+        }
+        return media.generationUrl(value, submission.context().actor(), kind, claim);
     }
 }

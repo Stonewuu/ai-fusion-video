@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.run;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
+import com.stonewu.fusion.service.ai.agentscope.message.AgentModelRetryMiddleware;
 import io.agentscope.core.event.*;
 import io.agentscope.core.message.ToolResultState;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,7 +42,8 @@ public final class AgentScopeEventMapper {
         Objects.requireNonNull(event, "event must not be null");
         Objects.requireNonNull(event.getType(), "event.type must not be null");
         Identity identity = identity(event);
-        JsonNode payload = sanitizer.sanitize(objectMapper.valueToTree(event));
+        JsonNode payload = sanitizer.sanitize(objectMapper.valueToTree(isModelRetry(event)
+                ? ((CustomEvent) event).getValue() : event));
         return new AgentEventEnvelope(
                 requireText(event.getId(), "event.id"),
                 event.getType().getValue(),
@@ -145,11 +147,15 @@ public final class AgentScopeEventMapper {
                     ((HintBlockEvent) event).getReplyId(),
                     ((HintBlockEvent) event).getBlockId());
             case ALL_TOOLS_DENIED -> base;
-            case CUSTOM -> base;
+            case CUSTOM -> isModelRetry(event)
+                    ? base.withReply((String) ((CustomEvent) event).getValue().get("replyId")) : base;
         };
     }
 
     private String outputType(AgentEvent event) {
+        if (isModelRetry(event)) {
+            return "MODEL_RETRY";
+        }
         return switch (event.getType()) {
             case TEXT_BLOCK_DELTA -> "CONTENT";
             case THINKING_BLOCK_DELTA -> "REASONING";
@@ -190,6 +196,10 @@ public final class AgentScopeEventMapper {
                  ALL_TOOLS_DENIED,
                  CUSTOM -> null;
         };
+    }
+
+    private boolean isModelRetry(AgentEvent event) {
+        return event instanceof CustomEvent custom && AgentModelRetryMiddleware.EVENT_NAME.equals(custom.getName());
     }
 
     private Identity baseIdentity(AgentEvent event) {

@@ -1,5 +1,8 @@
 package com.stonewu.fusion.service.ai.run;
 
+import com.stonewu.fusion.service.ai.agentscope.message.AgentModelCallFailure;
+import com.stonewu.fusion.service.ai.agentscope.message.AgentModelRetryMiddleware.AgentModelRetryExhausted;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -406,7 +409,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                     "Agent event ingress exceeded its bounded capacity");
             case SOURCE_FAILURE -> terminalFailure(
                     execution,
-                    AgentRuntimeErrorCode.AGENTSCOPE_INTERNAL_ERROR,
+                    outcome.failure() instanceof AgentModelCallFailure || outcome.failure() instanceof AgentModelRetryExhausted
+                            ? AgentRuntimeErrorCode.MODEL_REQUEST_FAILED : AgentRuntimeErrorCode.AGENTSCOPE_INTERNAL_ERROR,
                     outcome.failure().getMessage());
             case JOURNAL_FAILURE -> outcome.failure() instanceof OwnerLostException
                     ? Mono.empty()

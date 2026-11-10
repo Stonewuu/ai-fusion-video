@@ -13,12 +13,20 @@ import com.stonewu.fusion.service.resource.model.ResourceBindMediaCommand;
 import com.stonewu.fusion.service.resource.model.ResourceCommandContext;
 import com.stonewu.fusion.service.resource.model.ResourceCreateCommand;
 import com.stonewu.fusion.service.resource.model.ResourcePatchCommand;
+import com.stonewu.fusion.service.resource.model.AssetBatchCreateCommand;
+import com.stonewu.fusion.entity.media.MediaBindingEntity;
+import com.stonewu.fusion.entity.asset.AssetItem;
+import com.stonewu.fusion.mapper.media.MediaBindingMapper;
+import com.stonewu.fusion.mapper.asset.AssetItemMapper;
+import com.stonewu.fusion.repository.resource.ResourceReadRepository;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.nio.file.Files;
 import java.util.Map;
+import java.util.List;
 import java.util.UUID;
 import static com.stonewu.fusion.service.canvas.model.CanvasValueType.*;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -28,6 +36,46 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @Testcontainers(disabledWithoutDocker = false)
 class MediaBusinessBindingIT extends MediaResourceTestContext {
+    /** 多个变体共享同一主资产时，只登记最终版本的封面引用，整批失败仍须回滚。 */
+    @Test
+    void batchVariantsKeepOneCurrentParentCoverBindingAndRollbackInvalidMedia() throws Exception {
+        var media = upload(UUID.randomUUID().toString(), png, "造型参考.png", null, USER);
+        long asset = asset(null, USER);
+        commands().execute(binding(ASSET, asset, 0, null, Map.of("coverUrl", media.id())), USER);
+        var batch = new AssetBatchCreateCommand(UUID.randomUUID().toString(), ASSET_ITEM, null, asset, 1, true,
+                List.of(mapper.createObjectNode().put("name", "受伤造型").put("itemType", "variant")
+                                .put("imageUrl", MediaReference.of(media.id())),
+                        mapper.createObjectNode().put("name", "练功造型").put("itemType", "costume")));
+
+        var saved = commands().execute(batch, USER);
+        assertThat(saved.result().path("createdCount").asInt()).isEqualTo(2);
+        assertThat(saved.result().path("assetVersion").asInt()).isEqualTo(3);
+        assertThat(commands().execute(batch, USER)).isEqualTo(saved);
+        var bindings = context.getBean(MediaBindingMapper.class);
+        var parentBindings = bindings.selectList(new LambdaQueryWrapper<MediaBindingEntity>()
+                .eq(MediaBindingEntity::getResourceType, ASSET.code()).eq(MediaBindingEntity::getResourceId, asset));
+        assertThat(parentBindings).singleElement().satisfies(binding -> {
+            assertThat(binding.getFieldName()).isEqualTo("coverUrl");
+            assertThat(binding.getMediaId()).isEqualTo(media.id());
+            assertThat(binding.getResourceVersion()).isEqualTo(3);
+        });
+        var items = context.getBean(AssetItemMapper.class);
+        assertThat(items.selectCount(new LambdaQueryWrapper<AssetItem>().eq(AssetItem::getAssetId, asset))).isEqualTo(3);
+        var resources = context.getBean(ResourceReadRepository.class);
+        assertThat(resources.data(resources.require(ASSET, asset, false)).path("coverUrl").asText())
+                .isEqualTo(MediaReference.of(media.id()));
+
+        var invalid = new AssetBatchCreateCommand(UUID.randomUUID().toString(), ASSET_ITEM, null, asset, 3, true,
+                List.of(mapper.createObjectNode().put("name", "同批正常变体"), mapper.createObjectNode()
+                        .put("name", "同批无效媒体").put("imageUrl", MediaReference.of(UUID.randomUUID().toString()))));
+        assertThatThrownBy(() -> commands().execute(invalid, USER)).isInstanceOf(MediaException.class);
+        assertThat(items.selectCount(new LambdaQueryWrapper<AssetItem>().eq(AssetItem::getAssetId, asset))).isEqualTo(3);
+        assertThat(resources.require(ASSET, asset, false).version()).isEqualTo(3);
+        assertThat(bindings.selectList(new LambdaQueryWrapper<MediaBindingEntity>()
+                .eq(MediaBindingEntity::getResourceType, ASSET.code()).eq(MediaBindingEntity::getResourceId, asset)))
+                .isEqualTo(parentBindings);
+    }
+
     @Test
     void bindingSharesOnlyThroughLiveBusinessPermissionAndUnbindingRevokesTicket() throws Exception {
         var media = upload(UUID.randomUUID().toString(), png, "私有源.png", null, USER);

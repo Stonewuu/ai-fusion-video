@@ -101,8 +101,7 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
   const [contentReadyUserId, setContentReadyUserId] = useState<number | null>(null);
   const [overlayContentReady, setOverlayContentReady] = useState(mode !== "collapsed");
   const [heavyContentReady, setHeavyContentReady] = useState(false);
-  const [launcherWavesVisible, setLauncherWavesVisible] = useState(mode === "collapsed");
-  const [pointerReady, setPointerReady] = useState(true);
+  const [launcherRingVisible, setLauncherRingVisible] = useState(mode === "collapsed");
   const overlayContentRevealTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const previousModeRef = useRef(mode);
   const {
@@ -142,7 +141,7 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
     setDockTransition({ phase: "dock-out", target });
   }, [dockTransition.phase]);
 
-  const openAssistantWindow = useCallback((openedByPointer: boolean) => {
+  const openAssistantWindow = useCallback(() => {
     if (dockTransition.phase !== "idle") return;
     if (overlayContentRevealTimerRef.current !== null) {
       clearTimeout(overlayContentRevealTimerRef.current);
@@ -150,8 +149,7 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
     }
     setOverlayContentReady(false);
     setHeavyContentReady(false);
-    setLauncherWavesVisible(false);
-    setPointerReady(!openedByPointer);
+    setLauncherRingVisible(false);
     const state = useAssistantStore.getState();
     const desired = mobileViewport
       ? "maximized"
@@ -176,7 +174,7 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
 
   useEffect(() => subscribeToAssistantOpenRequest(() => {
     if (useAssistantStore.getState().mode === "collapsed") {
-      openAssistantWindow(false);
+      openAssistantWindow();
     }
   }), [openAssistantWindow]);
 
@@ -187,16 +185,10 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
     }
     setOverlayContentReady(false);
     setHeavyContentReady(false);
-    setLauncherWavesVisible(false);
-    setPointerReady(true);
+    setLauncherRingVisible(false);
     if (mode === "docked") beginDockExit("collapsed");
     else closeAssistant();
   }, [beginDockExit, closeAssistant, mode]);
-
-  const releaseInteractionGuard = useCallback(() => {
-    if (dockTransition.phase !== "idle") return;
-    setPointerReady(true);
-  }, [dockTransition.phase]);
 
   const toggleDock = useCallback(() => {
     if (dockTransition.phase !== "idle") return;
@@ -228,7 +220,7 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
   }, [beginDockExit, canDock, dockTransition.phase, mobileViewport, mode]);
 
   const finishOverlayAnimation = useCallback(() => {
-    if (mode === "collapsed") setLauncherWavesVisible(true);
+    if (mode === "collapsed") setLauncherRingVisible(true);
     if (dockTransition.phase === "overlay-out") {
       setDockTransition({ phase: "dock-in" });
       useAssistantStore.getState().setMode("docked", canDock);
@@ -369,7 +361,7 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
   const overlayContentVisible = contentHydrated && overlayContentReady;
   const conversationContentActive = heavyContentReady && dockTransition.phase === "idle";
   const interactionGuardActive = mode !== "collapsed"
-    && (dockTransition.phase !== "idle" || !pointerReady);
+    && dockTransition.phase !== "idle";
   if (!initialized || !userId) return null;
 
   return (
@@ -410,7 +402,6 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
               onClose={closeAssistantWindow}
               onRectPaint={paintWindowRect}
               interactionGuardActive={interactionGuardActive}
-              onInteractionGuardRelease={releaseInteractionGuard}
               contentActive={conversationContentActive}
               onDockResizeStart={startDockResize}
             />
@@ -470,15 +461,15 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
           }}
           onAnimationComplete={finishOverlayAnimation}
           className={cn(
-            "fixed z-65 border border-border/40 backdrop-blur-xl backdrop-saturate-150",
+            "fixed z-65 border border-border/40",
             overlayMode === "collapsed"
-              ? "overflow-visible bg-background/75 shadow-lg"
-              : "overflow-hidden bg-popover/80 shadow-xl",
+              ? "overflow-visible bg-background shadow-lg"
+              : "overflow-hidden bg-popover/80 backdrop-blur-xl backdrop-saturate-150 shadow-xl",
           )}
         >
           <AssistantLauncher
             collapsed={overlayMode === "collapsed"}
-            wavesVisible={launcherWavesVisible}
+            ringVisible={launcherRingVisible}
             status={launcherStatus}
             onOpen={openAssistantWindow}
             onPositionPaint={paintLauncherPosition}
@@ -518,7 +509,6 @@ export function AssistantDockSlot({ projectId }: AssistantDockSlotProps) {
                   onClose={closeAssistantWindow}
                   onRectPaint={paintWindowRect}
                   interactionGuardActive={interactionGuardActive}
-                  onInteractionGuardRelease={releaseInteractionGuard}
                   contentActive={conversationContentActive}
                 />
               </motion.div>

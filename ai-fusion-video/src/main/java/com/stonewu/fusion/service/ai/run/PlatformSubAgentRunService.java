@@ -144,11 +144,22 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
     private static final class ChildOutput {
         private final StringBuilder content = new StringBuilder();
         private CommittedAgentEvent terminal;
+        private String replyId;
+        private int replyStart;
 
         private void accept(CommittedAgentEvent event) {
             if (TERMINAL_OUTPUT_TYPES.contains(event.outputType())) {
                 terminal = event;
+            } else if ("MODEL_RETRY".equals(event.outputType())) {
+                if (event.envelope().replyId() != null && event.envelope().replyId().equals(replyId)) {
+                    content.setLength(replyStart);
+                    replyId = null;
+                }
             } else if ("CONTENT".equals(event.outputType())) {
+                if (!Objects.equals(replyId, event.envelope().replyId())) {
+                    replyId = event.envelope().replyId();
+                    replyStart = content.length();
+                }
                 JsonNode payload = event.projection();
                 JsonNode value = payload.has("delta") ? payload.get("delta") : payload.get("content");
                 if (value != null && value.isTextual()) {

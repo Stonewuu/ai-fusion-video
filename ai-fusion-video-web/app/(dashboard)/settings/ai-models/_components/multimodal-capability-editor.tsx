@@ -66,7 +66,7 @@ export function MultimodalCapabilityEditor({
       <div>
         <Label className="text-xs text-muted-foreground">多模态输入</Label>
         <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
-          只声明模型与当前接入协议实际支持的类型；助手会据此决定上传方式。
+          选择模型支持的输入类型与上传方式。
         </p>
       </div>
 

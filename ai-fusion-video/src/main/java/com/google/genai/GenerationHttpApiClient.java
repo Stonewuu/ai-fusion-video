@@ -25,7 +25,12 @@ public final class GenerationHttpApiClient extends HttpApiClient {
 
     public GenerationHttpApiClient(String project, String location, GoogleCredentials credentials,
                                    HttpOptions options, ApiConfig api) {
-        super(Optional.empty(), Optional.of(project), Optional.of(location), Optional.ofNullable(credentials),
+        this(null, project, location, credentials, options, api);
+    }
+
+    public GenerationHttpApiClient(String key, String project, String location, GoogleCredentials credentials,
+                                   HttpOptions options, ApiConfig api) {
+        super(Optional.ofNullable(key), Optional.ofNullable(project), Optional.ofNullable(location), Optional.ofNullable(credentials),
                 Optional.of(options), Optional.empty());
         single = SingleRequestModelSupport.client(api);
     }

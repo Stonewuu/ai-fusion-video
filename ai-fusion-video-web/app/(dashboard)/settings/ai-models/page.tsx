@@ -47,6 +47,7 @@ import type { ProviderModelCandidate } from "@/lib/api/provider-catalog";
 import { useProviderCatalog } from "./_hooks/use-provider-catalog";
 import { ApiConfigSearch, matchingApiConfigs } from "./_components/api-config-search";
 import { FetchRemoteModelsDialog } from "./_components/fetch-remote-models-dialog";
+import { AudioGenerationDialog } from "@/components/generation/audio/audio-generation-dialog";
 import { ComfyUiWorkflowManagerDialog } from "./_components/comfyui-workflow-manager-dialog";
 
 type AiModelViewMode = "list" | "card";
@@ -73,12 +74,14 @@ export default function AiModelsPage() {
   const [query, setQuery] = useState("");
   const visibleConfigs = matchingApiConfigs(configs, models, query);
   const [configsLoading, setConfigsLoading] = useState(true);
+  const [loadErrors, setLoadErrors] = useState({ configs: false, models: false, presets: false });
 
   // Dialog 状态
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<ApiConfig | null>(null);
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<AiModel | null>(null);
+  const [tryModel, setTryModel] = useState<AiModel | null>(null);
   const [initialCandidate, setInitialCandidate] = useState<ProviderModelCandidate | null>(null);
   const [modelDialogApiConfigId, setModelDialogApiConfigId] = useState<number | undefined>(undefined);
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false);
@@ -96,9 +99,10 @@ export default function AiModelsPage() {
     try {
       const data = await aiModelApi.list();
       setModels(data);
+      setLoadErrors(current => ({ ...current, models: false }));
     } catch (err) {
       console.error("加载 AI 模型列表失败:", err);
-      toastApiError(err, "加载 AI 模型列表失败");
+      setLoadErrors(current => ({ ...current, models: true }));
     }
   }, []);
 
@@ -107,9 +111,10 @@ export default function AiModelsPage() {
       setConfigsLoading(true);
       const data = await apiConfigApi.listAll();
       setConfigs(data);
+      setLoadErrors(current => ({ ...current, configs: false }));
     } catch (err) {
       console.error("加载 API 配置列表失败:", err);
-      toastApiError(err, "加载 API 配置列表失败");
+      setLoadErrors(current => ({ ...current, configs: true }));
     } finally {
       setConfigsLoading(false);
     }
@@ -119,9 +124,10 @@ export default function AiModelsPage() {
     try {
       const data = await aiModelApi.presets();
       setModelPresets(data);
+      setLoadErrors(current => ({ ...current, presets: false }));
     } catch (err) {
       console.error("加载模型预设失败:", err);
-      toastApiError(err, "加载模型预设失败");
+      setLoadErrors(current => ({ ...current, presets: true }));
     }
   }, []);
 
@@ -230,7 +236,11 @@ export default function AiModelsPage() {
     };
   }, [configs, configsLoading, shouldReduceMotion, viewMode]);
 
-  const handleTestTextModel = async (model: AiModel) => {
+  const handleTestModel = async (model: AiModel) => {
+    if (model.modelType === 4) {
+      setTryModel(model);
+      return;
+    }
     setTestingModelIds((prev) => {
       const next = new Set(prev);
       next.add(model.id);
@@ -437,7 +447,7 @@ export default function AiModelsPage() {
           setModelDialogOpen(true);
         }
       }}
-      onTestTextModel={handleTestTextModel} onModelsChanged={loadModels} />
+      onTestModel={handleTestModel} onModelsChanged={loadModels} />
   );
 
   return (
@@ -554,6 +564,11 @@ export default function AiModelsPage() {
             )}>
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
+          ) : Object.values(loadErrors).some(Boolean) ? (
+            <div role="alert" className={cn("flex flex-col items-center gap-3 py-8", viewMode === "card" && "lg:col-span-2")}>
+              <p className="text-sm text-muted-foreground">模型配置暂时无法加载，请重试</p>
+              <Button variant="outline" onClick={() => void Promise.all([loadConfigs(), loadModels(), loadModelPresets()])}>重试</Button>
+            </div>
           ) : configs.length === 0 ? (
             <div className={cn(
               "rounded-xl border border-dashed border-border/30 py-10 text-center",
@@ -663,6 +678,7 @@ export default function AiModelsPage() {
         initialCandidate={initialCandidate}
         onSaved={() => { loadModels(); }}
       />
+      {tryModel && <AudioGenerationDialog model={tryModel} onClose={() => setTryModel(null)} />}
       {fetchModelsConfig && (
         <FetchRemoteModelsDialog
           open={fetchModelsDialogOpen}

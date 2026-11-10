@@ -1,5 +1,7 @@
 package com.stonewu.fusion.service.ai.provider;
 
+import com.stonewu.fusion.service.ai.agentscope.message.AgentModelResponseFailure;
+
 import cn.hutool.core.util.StrUtil;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -24,6 +26,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 import java.time.Duration;
+import java.net.Proxy;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -78,10 +81,13 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
                     rememberFunctionCall(event, functionCallsByItemId);
 
                     if (event.isError()) {
-                        throw new RuntimeException("OpenAI Responses 流式调用失败: " + event.asError());
+                        var failure = event.asError();
+                        throw new AgentModelResponseFailure(failure.code().orElse(null), failure.message());
                     }
                     if (event.isFailed()) {
-                        throw new RuntimeException("OpenAI Responses 调用失败: " + event.asFailed());
+                        var failure = event.asFailed().response().error();
+                        throw new AgentModelResponseFailure(failure.map(error -> error.code().asString()).orElse(null),
+                                failure.map(error -> error.message()).orElse("模型请求失败，请稍后继续。"));
                     }
                     if (event.isIncomplete()) {
                         throw new RuntimeException("OpenAI Responses 返回未完成结果: " + event.asIncomplete());
@@ -107,9 +113,13 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
 
                     event.functionCallArgumentsDone().ifPresent(toolCallDone -> {
                         ResponseFunctionToolCall functionCall = functionCallsByItemId.get(toolCallDone.itemId());
-                        String toolCallId = functionCall != null ? functionCall.callId() : toolCallDone.itemId();
-                        String toolName = functionCall != null ? functionCall.name() : toolCallDone.name();
-                        String arguments = functionCall != null ? functionCall.arguments() : toolCallDone.arguments();
+                        if (functionCall == null) {
+                            throw new IllegalStateException("模型返回的工具调用缺少身份信息");
+                        }
+                        String toolCallId = functionCall.callId();
+                        String toolName = functionCall.name();
+                        // output_item.added 的 arguments 通常为空，完成事件才携带完整参数。
+                        String arguments = toolCallDone.arguments();
                         sawToolCall[0] = true;
                         sink.next(buildChunk(
                                 List.of(ToolUseBlock.builder()
@@ -324,14 +334,11 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
                 continue;
             }
 
-            FunctionTool.Builder builder = FunctionTool.builder().name(tool.getName());
+            FunctionTool.Builder builder = FunctionTool.builder().name(tool.getName())
+                    .strict(Boolean.TRUE.equals(tool.getStrict()));
             if (StrUtil.isNotBlank(tool.getDescription())) {
                 builder.description(tool.getDescription());
             }
-            if (tool.getStrict() != null) {
-                builder.strict(tool.getStrict());
-            }
-
             FunctionTool.Parameters.Builder parametersBuilder = FunctionTool.Parameters.builder();
             Map<String, Object> parameters = tool.getParameters();
             if (parameters != null) {
@@ -384,7 +391,7 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
                 .responseValidation(false);
 
         if (apiConfig != null) {
-            java.net.Proxy proxy = AiProxySupport.javaProxyOrNull(apiConfig);
+            Proxy proxy = AiProxySupport.javaProxyOrNull(apiConfig);
             if (proxy != null) {
                 builder.proxy(proxy);
             }
@@ -562,8 +569,8 @@ public class OpenAiResponsesAgentScopeModel extends ChatModelBase {
         }
         try {
             return OBJECT_MAPPER.readValue(arguments, MAP_TYPE_REFERENCE);
-        } catch (Exception ignored) {
-            return Map.of("raw", arguments);
+        } catch (Exception invalid) {
+            throw new IllegalArgumentException("模型返回的工具参数不是有效的 JSON 对象", invalid);
         }
     }
 

@@ -40,14 +40,18 @@
         LIMIT 1
     </select>
     <select id="selectProjectionRecoveryCandidates" resultType="com.stonewu.fusion.entity.ai.AgentRun">
-        SELECT *
-        FROM afv_agent_run
-        WHERE terminal_sequence IS NOT NULL
+        SELECT r.*
+        FROM afv_agent_run r
+        WHERE r.terminal_sequence IS NOT NULL
           AND (
-            projected_through_sequence &lt; terminal_sequence
-            OR projection_completed_at IS NULL
+            r.projected_through_sequence &lt; r.terminal_sequence
+            OR r.projection_completed_at IS NULL
           )
-        ORDER BY id
+          AND NOT EXISTS (
+            SELECT 1 FROM afv_agent_conversation c
+            WHERE c.conversation_id = r.conversation_id AND c.deleted = 1
+          )
+        ORDER BY r.id
         LIMIT #{limit}
     </select>
     <select id="selectAuthorizedByRunId" resultType="com.stonewu.fusion.entity.ai.AgentRun">

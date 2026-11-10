@@ -12,6 +12,7 @@ import com.stonewu.fusion.service.resource.model.ResourceCreateCommand;
 import com.stonewu.fusion.service.resource.model.ResourceDeleteCommand;
 import com.stonewu.fusion.service.resource.model.ResourcePatchCommand;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -23,6 +24,7 @@ import static com.stonewu.fusion.service.canvas.model.CanvasValueType.ASSET_ITEM
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class AssetToolCommands {
     private final ResourceCommandService commands;
     private final ResourceQueryService queries;
@@ -106,8 +108,9 @@ public class AssetToolCommands {
                     Map.of("status", "error", "message", failure.getMessage(), "errorCode", failure.getErrorCode(),
                             "details", failure.getDetails()));
         } catch (RuntimeException failure) {
-            return json.write(Map.of("status", "error", "message",
-                    failure.getMessage() == null ? "资产命令失败" : failure.getMessage()));
+            log.error("资产写入失败: operation={}", operation, failure);
+            return json.write(Map.of("status", "error", "message", "资产暂时无法保存，请稍后重试。",
+                    "errorCode", "ASSET_WRITE_FAILED"));
         }
     }
 

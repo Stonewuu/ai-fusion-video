@@ -8,9 +8,15 @@ import { cn } from "@/lib/utils";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
 import { EditableCell } from "./editable-cell";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useLayoutEffect } from "react";
 import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
 import { SafeImage } from "@/components/media/managed-image";
+import { attachStoryboardHorizontalScroll } from "./storyboard-horizontal-scroll";
+import {
+  STORYBOARD_TABLE_COLUMNS as COLUMNS,
+  loadSavedColWidths,
+  saveColWidths,
+} from "./storyboard-table-columns";
 
 const TOOLTIP_CONTENT_CLASS = "flex flex-col gap-0.5 items-start text-left max-w-[220px] px-2.5 py-1.5 rounded-lg text-[11px] bg-white/85 dark:bg-zinc-900/85 backdrop-blur-md border border-zinc-200/50 dark:border-zinc-800/50 text-zinc-900 dark:text-zinc-50 shadow-lg [&_.bg-foreground]:bg-white/85 [&_.fill-foreground]:fill-white/85 dark:[&_.bg-foreground]:bg-zinc-900/85 dark:[&_.fill-foreground]:fill-zinc-900/85";
 
@@ -30,87 +36,9 @@ function getAssetDisplayName(subItemName: string | null | undefined, parentAsset
   return `${subName} (${parentName})`;
 }
 
-/** 列定义 */
-type StoryboardTableField =
-  | "shotNumber"
-  | "imageUrl"
-  | "frameReferences"
-  | "generatedVideoUrl"
-  | "videoPrompt"
-  | "shotType"
-  | "duration"
-  | "cameraAngle"
-  | "cameraMovement"
-  | "content"
-  | "dialogue"
-  | "sound"
-  | "remark"
-  | "assets";
-
-interface ColumnDef {
-  label: string;
-  field: StoryboardTableField;
-  initW: number;
-  minW: number;
-  isImage?: boolean;
-  isVideo?: boolean;
-  multiline?: boolean;
-}
-
-const COLUMNS: ColumnDef[] = [
-  { label: "镜号", field: "shotNumber", initW: 48, minW: 40 },
-  { label: "画面", field: "imageUrl", initW: 80, minW: 60, isImage: true },
-  { label: "首尾帧", field: "frameReferences", initW: 92, minW: 82 },
-  { label: "视频", field: "generatedVideoUrl", initW: 80, minW: 60, isVideo: true },
-  { label: "视频提示词", field: "videoPrompt", initW: 200, minW: 80, multiline: true },
-  { label: "关联资产", field: "assets", initW: 160, minW: 100 },
-  { label: "景别", field: "shotType", initW: 64, minW: 50 },
-  { label: "时长", field: "duration", initW: 48, minW: 40 },
-  { label: "摄像机角度", field: "cameraAngle", initW: 90, minW: 60 },
-  { label: "运镜", field: "cameraMovement", initW: 80, minW: 50 },
-  {
-    label: "分镜内容",
-    field: "content",
-    initW: 240,
-    minW: 100,
-    multiline: true,
-  },
-  { label: "对白", field: "dialogue", initW: 200, minW: 80, multiline: true },
-  { label: "声音", field: "sound", initW: 100, minW: 60 },
-  { label: "备注", field: "remark", initW: 100, minW: 60 },
-];
-
 /** 固定列宽 */
 const DRAG_COL_W = 28;
 const ACTION_COL_W = 56;
-
-/** localStorage key for persisting column widths */
-const COL_WIDTHS_STORAGE_KEY = "fusion-storyboard-col-widths";
-
-/** 从 localStorage 读取保存的列宽（列数变化时自动 fallback） */
-function loadSavedColWidths(): number[] {
-  try {
-    const raw = localStorage.getItem(COL_WIDTHS_STORAGE_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed) && parsed.length === COLUMNS.length) {
-        return parsed;
-      }
-    }
-  } catch {
-    // ignore
-  }
-  return COLUMNS.map((c) => c.initW);
-}
-
-/** 保存列宽到 localStorage */
-function saveColWidths(widths: number[]) {
-  try {
-    localStorage.setItem(COL_WIDTHS_STORAGE_KEY, JSON.stringify(widths));
-  } catch {
-    // ignore
-  }
-}
 
 export function StoryboardTableView({
   items,
@@ -200,8 +128,18 @@ export function StoryboardTableView({
   const bodyScrollRef = useRef<HTMLDivElement>(null);
   const headerContentRef = useRef<HTMLDivElement>(null);
   const bodyContentRef = useRef<HTMLDivElement>(null);
-  const isSyncingHorizontalScrollRef = useRef(false);
   const colWidthsRef = useRef(colWidths);
+  const hasItems = items.length > 0;
+
+  useLayoutEffect(() => {
+    const header = headerScrollRef.current;
+    const content = headerContentRef.current;
+    const body = bodyScrollRef.current;
+    if (!header || !content || !body) {
+      return;
+    }
+    return attachStoryboardHorizontalScroll(header, content, body);
+  }, [hasItems]);
 
   useEffect(() => {
     colWidthsRef.current = colWidths;
@@ -217,13 +155,17 @@ export function StoryboardTableView({
   /** 根据列宽数组直接更新所有 grid 行的 gridTemplateColumns */
   const applyGridTemplate = useCallback(
     (widths: number[]) => {
-      if (!tableRootRef.current) return;
+      if (!tableRootRef.current) {
+        return;
+      }
       const tpl = buildGridTemplate(widths);
       const totalW = DRAG_COL_W + widths.reduce((s, w) => s + w, 0) + ACTION_COL_W;
 
       // 同步表头和表体的内容宽度
       [headerContentRef.current, bodyContentRef.current].forEach((content) => {
-        if (!content) return;
+        if (!content) {
+          return;
+        }
         content.style.width = `${totalW}px`;
         content.style.minWidth = `${totalW}px`;
       });
@@ -236,21 +178,6 @@ export function StoryboardTableView({
     },
     [buildGridTemplate]
   );
-
-  /** 同步表头和表体的横向滚动位置 */
-  const handleHorizontalScroll = useCallback((source: "header" | "body") => {
-    if (isSyncingHorizontalScrollRef.current) return;
-
-    const sourceEl = source === "header" ? headerScrollRef.current : bodyScrollRef.current;
-    const targetEl = source === "header" ? bodyScrollRef.current : headerScrollRef.current;
-    if (!sourceEl || !targetEl) return;
-
-    isSyncingHorizontalScrollRef.current = true;
-    targetEl.scrollLeft = sourceEl.scrollLeft;
-    requestAnimationFrame(() => {
-      isSyncingHorizontalScrollRef.current = false;
-    });
-  }, []);
 
   const handleResizeStart = useCallback(
     (colIdx: number, e: React.MouseEvent) => {
@@ -317,15 +244,16 @@ export function StoryboardTableView({
   return (
     <div className="space-y-3">
       {/* 表格容器：表头独立吸顶，表体负责横向滚动 */}
-      <div ref={tableRootRef} className="rounded-xl border border-border/20 bg-card/30 backdrop-blur-sm">
-        <div className="sticky -top-5 z-20 rounded-t-xl bg-background/95 shadow-sm backdrop-blur-sm">
+      <div ref={tableRootRef} data-storyboard-table className="rounded-xl border border-border/20 bg-card/30">
+        <div className="sticky -top-5 z-20 rounded-t-xl bg-background shadow-sm">
           <div
             ref={headerScrollRef}
-            onScroll={() => handleHorizontalScroll("header")}
-            className="overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            data-storyboard-header
+            className="overflow-hidden"
           >
             <div
               ref={headerContentRef}
+              className="will-change-transform"
               style={{ width: totalWidth, minWidth: totalWidth }}
             >
               {/* ===== 表头 ===== */}
@@ -376,7 +304,7 @@ export function StoryboardTableView({
 
         <div
           ref={bodyScrollRef}
-          onScroll={() => handleHorizontalScroll("body")}
+          data-storyboard-body
           className="overflow-x-auto"
         >
           <div
@@ -428,7 +356,8 @@ export function StoryboardTableView({
                   return (
                     <div
                       key={col.field}
-                      className="px-2 py-2 flex items-center justify-center min-w-0 break-all"
+                      data-storyboard-field={col.field}
+                      className="px-2 py-2 flex items-center justify-center min-w-0"
                     >
                       {col.isImage ? (
                       <div
@@ -724,11 +653,12 @@ export function StoryboardTableView({
                           "text-[11px] w-full",
                           col.field === "shotNumber"
                             ? "font-mono text-muted-foreground text-center"
-                            : col.field === "content"
-                            ? ""
+                            : col.multiline
+                            ? "text-left"
                             : "text-muted-foreground text-center"
                         )}
                         multiline={col.multiline}
+                        singleLine={col.singleLine}
                       />
                       )}
                     </div>

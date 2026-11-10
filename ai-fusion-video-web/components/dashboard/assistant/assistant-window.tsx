@@ -26,7 +26,6 @@ interface AssistantWindowProps {
   onClose: () => void;
   onRectPaint: (rect: AssistantRect) => void;
   interactionGuardActive: boolean;
-  onInteractionGuardRelease: () => void;
   contentActive: boolean;
   onDockResizeStart?: (event: ReactPointerEvent<HTMLDivElement>) => void;
 }
@@ -68,7 +67,6 @@ export function AssistantWindow({
   onClose,
   onRectPaint,
   interactionGuardActive,
-  onInteractionGuardRelease,
   contentActive,
   onDockResizeStart,
 }: AssistantWindowProps) {
@@ -267,8 +265,6 @@ export function AssistantWindow({
           <div
             aria-hidden="true"
             className="absolute inset-0 z-60 cursor-default"
-            onPointerMove={onInteractionGuardRelease}
-            onPointerDown={onInteractionGuardRelease}
           />
         ) : null}
       </div>

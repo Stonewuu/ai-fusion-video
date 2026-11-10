@@ -1,6 +1,9 @@
 package com.stonewu.fusion.service.ai.provider;
 
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
+import com.stonewu.fusion.common.BusinessException;
+import okhttp3.HttpUrl;
 import com.google.genai.Client;
 import com.google.genai.GenerationHttpApiClient;
 import com.google.genai.types.*;
@@ -126,7 +129,7 @@ public class GeminiAiProvider extends AbstractAiProvider {
             if (merged != null && StrUtil.isNotBlank(merged.getReasoningEffort())) {
                 builder.thinkingConfig(ThinkingConfig.builder()
                         .includeThoughts(true)
-                        .thinkingLevel(merged.getReasoningEffort().trim())
+                        .thinkingLevel(merged.getReasoningEffort().trim().toUpperCase(Locale.ROOT))
                         .build());
             }
         }
@@ -232,11 +235,24 @@ public class GeminiAiProvider extends AbstractAiProvider {
     public List<RemoteModelVO> listRemoteModels(AiProviderContext context) {
         requireApiKey(context.getApiKey(), "Gemini");
         String apiBaseUrl = resolveGeminiApiBaseUrl(context.getBaseUrl());
-        String url = joinUrl(apiBaseUrl, "/v1beta/models?pageSize=1000");
-        log.info("[GeminiAiProvider] 获取 Gemini 远程模型列表: {}", url);
-
-        String response = executeGet(url, Map.of("x-goog-api-key", context.getApiKey()), context.getApiConfig());
-        return parseGeminiModels(response);
+        var result = new LinkedHashMap<String, RemoteModelVO>();
+        var tokens = new HashSet<String>();
+        String pageToken = null;
+        do {
+            var url = HttpUrl.get(joinUrl(apiBaseUrl, "/v1beta/models")).newBuilder().addQueryParameter("pageSize", "1000");
+            if (pageToken != null) {
+                url.addQueryParameter("pageToken", pageToken);
+            }
+            String response = executeGet(url.build().toString(), Map.of("x-goog-api-key", context.getApiKey()), context.getApiConfig());
+            for (var model : parseGeminiModels(response)) {
+                result.putIfAbsent(model.getId(), model);
+            }
+            pageToken = JSONUtil.parseObj(response).getStr("nextPageToken");
+            if (StrUtil.isNotBlank(pageToken) && !tokens.add(pageToken)) {
+                throw new BusinessException("模型目录分页未能完成，请重试");
+            }
+        } while (StrUtil.isNotBlank(pageToken));
+        return result.values().stream().sorted(Comparator.comparing(RemoteModelVO::getId)).toList();
     }
 
     private String resolveGeminiApiBaseUrl(String baseUrl) {

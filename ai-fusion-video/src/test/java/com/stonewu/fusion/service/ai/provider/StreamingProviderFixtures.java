@@ -20,7 +20,7 @@ public final class StreamingProviderFixtures {
                     data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"雨落"}}
 
                     """;
-            case "gemini", "vertex" -> sse("""
+            case "gemini", "vertex", "vertex-key" -> sse("""
                     {"responseId":"test-id","candidates":[{"index":0,"content":{"role":"model","parts":[{"text":"雨落"}]}}]}
                     """);
             case "dashscope" -> sse("""
@@ -57,7 +57,7 @@ public final class StreamingProviderFixtures {
                     data: {"type":"message_stop"}
 
                     """;
-            case "gemini", "vertex" -> sse("""
+            case "gemini", "vertex", "vertex-key" -> sse("""
                     {"responseId":"test-id","candidates":[{"index":0,"content":{"role":"model","parts":[{"text":"古城。"}]},"finishReason":"STOP"}],"usageMetadata":{"promptTokenCount":10,"candidatesTokenCount":5,"totalTokenCount":15}}
                     """);
             case "dashscope" -> sse("""

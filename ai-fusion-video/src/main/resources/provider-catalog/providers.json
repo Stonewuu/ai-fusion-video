@@ -17,6 +17,7 @@
     "documentationUrl": "https://metaso.cn/minimax-h3",
     "supportedModelTypes": [3],
     "discovery": "metaso",
+    "restrictedProtocols": ["metaso_video"],
     "modelPresetCodes": ["metaso:MiniMax-H3", "metaso:seedance-2.0-mini", "metaso:seedance-2.0"]
   },
   {
@@ -36,6 +37,7 @@
     "documentationUrl": "https://doc.infistar.cc/api-overview",
     "supportedModelTypes": [1, 2, 3],
     "discovery": "infistar",
+    "restrictedProtocols": ["infistar_video"],
     "modelPresetCodes": []
   },
   {

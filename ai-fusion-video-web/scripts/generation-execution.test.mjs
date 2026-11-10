@@ -443,16 +443,24 @@ test("media-only requests survive persistence and retain automatic duration", ()
   );
 });
 
-test("video presets initialize five-second requests while retaining discrete model limits", () => {
+test("视频预设使用各自的默认时长，并保留模型的离散时长限制", () => {
   const presetRoot = path.resolve(root, "../ai-fusion-video/src/main/resources/model-presets");
   const presets = fs.readdirSync(presetRoot, { recursive: true })
     .filter((file) => /^video(?:-[\w-]+)?\.json$/.test(path.basename(file)))
     .flatMap((file) => JSON.parse(fs.readFileSync(path.join(presetRoot, file), "utf8")));
+  const eightSecondPresets = new Set([
+    "sora-2",
+    "sora-2-pro",
+    "infistar:veo-3.1-fast-generate-preview",
+    "google:veo-3.1-generate-001",
+    "google:veo-3.1-fast-generate-001",
+    "google:veo-3.1-lite-generate-001",
+  ]);
   for (const preset of presets) {
     const cap = resolveGenerationCapabilities({ modelType: 3, capabilityPresetCode: preset.code }, presets);
     const form = labels.generationFormForModel({ ...forms.EMPTY_GENERATION_FORM, duration: 2 }, cap);
     const request = requests.generationSubmitRequest("video", { ...form, prompt: "海浪" }, 42, cap);
-    const expected = ["sora-2", "sora-2-pro", "infistar:veo-3.1-fast-generate-preview"].includes(preset.code) ? 8 : 5;
+    const expected = eightSecondPresets.has(preset.code) ? 8 : 5;
     assert.equal(request.duration, expected, preset.code);
   }
   for (const code of ["infistar:wan3.0-video", "infistar:wan3.0-video-prime"]) {

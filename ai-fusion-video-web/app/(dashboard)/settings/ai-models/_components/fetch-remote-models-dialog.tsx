@@ -100,25 +100,21 @@ export function FetchRemoteModelsDialog({
   };
 
   const toggleSelectAll = () => {
-    const filtered = filteredModels;
-    const allSelected = filtered.every(m => selectedIds.has(m.id));
-    if (allSelected) {
-      const next = new Set(selectedIds);
-      filtered.forEach(m => next.delete(m.id));
-      setSelectedIds(next);
-    } else {
-      const next = new Set(selectedIds);
-      filtered.forEach(m => {
-        if (!existingModelCodes.has(m.id)) {
-          next.add(m.id);
-        }
-      });
-      setSelectedIds(next);
+    const next = new Set(selectedIds);
+    for (const model of selectableModels) {
+      if (allSelectableSelected) {
+        next.delete(model.id);
+      } else {
+        next.add(model.id);
+      }
     }
+    setSelectedIds(next);
   };
 
   const handleAdd = async () => {
-    if (selectedIds.size === 0) return;
+    if (selectedIds.size === 0) {
+      return;
+    }
     setAdding(true);
     try {
       const presets = await aiModelApi.presets();
@@ -154,24 +150,27 @@ export function FetchRemoteModelsDialog({
   };
 
   const filteredModels = remoteModels.filter(m => {
-    if (!searchQuery.trim()) return true;
+    if (!searchQuery.trim()) {
+      return true;
+    }
     const q = searchQuery.toLowerCase();
     return m.id.toLowerCase().includes(q) || (m.ownedBy && m.ownedBy.toLowerCase().includes(q));
   });
 
-  const selectableCount = filteredModels.filter(m => !existingModelCodes.has(m.id)).length;
+  const selectableModels = filteredModels.filter(m => !existingModelCodes.has(m.id));
+  const allSelectableSelected = selectableModels.length > 0 && selectableModels.every(m => selectedIds.has(m.id));
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl max-h-[calc(100vh-2rem)] sm:max-h-[88vh] flex flex-col overflow-hidden">
         <DialogHeader className="shrink-0">
-          <DialogTitle>获取可用模型</DialogTitle>
+          <DialogTitle>获取模型</DialogTitle>
           <DialogDescription>
-            从 {apiConfig.name} 获取远程可用模型列表，选择后点击添加
+            选择模型，添加到 {apiConfig.name}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3 min-h-0 overflow-y-auto px-1 pt-1 -mx-1">
+        <div className="flex flex-col gap-3 min-h-0 overflow-y-auto p-1">
           {/* 搜索框 + 模型类型选择 */}
           <div className="flex items-center gap-2 shrink-0">
             <div className="relative flex-1">
@@ -180,7 +179,7 @@ export function FetchRemoteModelsDialog({
                 placeholder="搜索模型..."
                 value={searchQuery}
                 onChange={e => setSearchQuery(e.target.value)}
-                className="text-sm pl-8 h-8"
+                className="text-sm pl-8 h-9"
               />
             </div>
             {hasUnknownModelTypes ? (
@@ -189,7 +188,7 @@ export function FetchRemoteModelsDialog({
                 onValueChange={v => setModelType(v as number)}
                 items={MODEL_TYPE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
               >
-                <SelectTrigger className="w-[148px] text-xs h-8">
+                <SelectTrigger className="w-[148px] text-xs h-9">
                   <SelectValue placeholder="默认模型类型" />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
@@ -203,15 +202,13 @@ export function FetchRemoteModelsDialog({
                 </SelectContent>
               </Select>
             ) : (
-              <div className="inline-flex h-8 items-center rounded-lg border border-emerald-500/20 bg-emerald-500/8 px-2.5 text-[10px] text-emerald-600 shrink-0">
-                已自动识别模型类型
-              </div>
+              null
             )}
           </div>
 
           {hasUnknownModelTypes && (
             <p className="-mt-1 text-[10px] text-muted-foreground">
-              已识别类型的模型会按返回值自动导入；仅未识别类型的模型才会使用右侧默认类型。
+              未标注类型的模型按所选类型添加
             </p>
           )}
 
@@ -236,23 +233,26 @@ export function FetchRemoteModelsDialog({
             <>
               {/* 全选 + 计数 */}
               <div className="flex items-center justify-between px-1 shrink-0">
-                <button
-                  type="button"
+                <Button
+                  variant="ghost"
+                  size="sm"
                   onClick={toggleSelectAll}
-                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  disabled={selectableModels.length === 0}
                 >
-                  {filteredModels.filter(m => !existingModelCodes.has(m.id)).every(m => selectedIds.has(m.id)) && selectableCount > 0
-                    ? "取消全选"
-                    : "全选可添加"}
-                </button>
+                  {allSelectableSelected ? "取消全选" : "全选可添加"}
+                </Button>
                 <span className="text-[10px] text-muted-foreground">
                   共 {filteredModels.length} 个模型，已选 {selectedIds.size} 个
                 </span>
               </div>
 
-              <div className="overflow-y-auto min-h-0 max-h-[400px] -mx-1 px-1 space-y-0.5">
+              <div className="overflow-y-auto min-h-0 max-h-[400px] p-1 space-y-0.5">
+                {filteredModels.length === 0 && (
+                  <p className="py-8 text-center text-sm text-muted-foreground">没有找到模型，换个关键词试试</p>
+                )}
                 {filteredModels.map(model => {
                   const alreadyExists = existingModelCodes.has(model.id);
+                  const canSelect = !alreadyExists;
                   const isSelected = selectedIds.has(model.id);
                   const modelDisplay = getModelDisplayParts({
                     name: model.displayName,
@@ -263,12 +263,12 @@ export function FetchRemoteModelsDialog({
                     <button
                       key={model.id}
                       type="button"
-                      onClick={() => !alreadyExists && toggleSelect(model.id)}
-                      disabled={alreadyExists}
+                      onClick={() => toggleSelect(model.id)}
+                      disabled={!canSelect}
                       className={cn(
-                        "flex items-center gap-3 w-full px-3 py-2 rounded-lg text-left transition-all duration-150",
-                        alreadyExists
-                          ? "opacity-50 cursor-not-allowed"
+                        "flex items-center gap-3 w-full px-3 py-2 rounded-lg border text-left transition-colors duration-150 motion-reduce:transition-none outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                        !canSelect
+                          ? "border-transparent text-muted-foreground cursor-not-allowed"
                           : isSelected
                             ? "bg-primary/10 border border-primary/30"
                             : "hover:bg-muted/50 border border-transparent"

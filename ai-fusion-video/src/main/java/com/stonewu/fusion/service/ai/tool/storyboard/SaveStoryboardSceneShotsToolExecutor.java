@@ -43,7 +43,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                 - location：场景地点
                 - timeOfDay：时间段（日/夜/黄昏/清晨）
                 - intExt：内外景标识（内景/外景/内外景）
-                - shots：镜头数组（必填），每个镜头含 content、shotType、duration、dialogue 等
+                - shots：镜头数组（必填），每个镜头必须含 content 和 sceneAssetItemId；场景取自当前项目的 scene 类型子资产
                 """;
     }
 
@@ -152,7 +152,8 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                                     },
                                     "sceneAssetItemId": {
                                         "type": "integer",
-                                        "description": "场景子资产ID（AssetItem.id）"
+                                        "minimum": 1,
+                                        "description": "必填，当前项目的场景子资产 ID（AssetItem.id）。空镜、特写也必须关联实际地点；缺少场景时先创建资产。"
                                     },
                                     "propIds": {
                                         "type": "array",
@@ -167,7 +168,8 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                                     }
                                 },
                                 "required": [
-                                    "content"
+                                    "content",
+                                    "sceneAssetItemId"
                                 ]
                             },
                             "minItems": 1,

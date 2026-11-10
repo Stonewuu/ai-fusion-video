@@ -11,6 +11,7 @@ import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.entity.generation.ImageTask;
 import com.stonewu.fusion.service.ai.AiModelService;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
+import com.stonewu.fusion.service.ai.provider.VertexAiAuthentication;
 import com.stonewu.fusion.service.generation.image.ImageGenerationService;
 import com.stonewu.fusion.service.generation.image.strategy.ImageGenerationStrategy;
 import com.stonewu.fusion.service.generation.job.GenerationPreparedRequest;
@@ -53,6 +54,7 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
     private final ImageGenerationService imageGenerationService;
     private final AiModelService aiModelService;
     private final GenerationMediaService generationMediaService;
+    private final VertexGeminiImageProtocol gemini;
     private final OkHttpClient okHttpClient = GenerationHttpClients.providerRequestBuilder()
             .connectTimeout(1, TimeUnit.MINUTES)
             .readTimeout(25, TimeUnit.MINUTES)
@@ -126,12 +128,21 @@ public class VertexAiImageStrategy implements ImageGenerationStrategy {
 
     @Override
     public int batchSize(ImageTask task, AiModel model, ApiConfig apiConfig) {
+        if (model.getCode().startsWith("gemini-")) {
+            return 1;
+        }
         return task.getCount();
     }
 
     @Override
     public PreparedGenerationCall prepare(ImageTask task, AiModel model, ApiConfig apiConfig) {
         int[] size = resolveDefaultSize(model, task);
+        if (model.getCode().startsWith("gemini-")) {
+            return gemini.prepare(task, model, apiConfig, size);
+        }
+        if (VertexAiAuthentication.usesApiKey(apiConfig)) {
+            throw new BusinessException("Imagen predict 接口请使用服务账号方式；Vertex API Key 生图请选用 Gemini 图片模型");
+        }
         return preparePredict(task.getPrompt(), model.getCode(), size[0], size[1], task.getCount(),
                 parseRefImageUrls(task.getRefImageUrls()), apiConfig);
     }

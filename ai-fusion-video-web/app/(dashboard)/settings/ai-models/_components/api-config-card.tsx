@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { getModelDisplayParts } from "@/lib/model-display";
 import { generationCapabilityError, resolvedGenerationConfig } from "@/lib/generation-capabilities";
-import { aiModelApi, PLATFORM_LABELS, type AiModel, type ApiConfig, type ModelPreset } from "@/lib/api/ai-model";
+import { aiModelApi, PLATFORM_LABELS, MODEL_TYPE_LABELS, type AiModel, type ApiConfig, type ModelPreset } from "@/lib/api/ai-model";
 import { Button } from "@/components/ui/button";
 import { ModelVendorIcon, ProviderVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import { maskSecret } from "../../_shared";
@@ -29,22 +29,18 @@ interface ApiConfigCardProps {
   onEditModel: (model: AiModel) => void;
   onDeleteModel: (id: number) => void;
   onAddModel: () => void;
-  onTestTextModel: (model: AiModel) => void;
+  onTestModel: (model: AiModel) => void;
   onModelsChanged: () => Promise<void>;
 }
 
-export function ApiConfigCard({ config, provider, models, modelPresets, collapsed, testingModelIds, onToggle, onFetch, onWorkflow, onEditConfig, onDeleteConfig, onEditModel, onDeleteModel, onAddModel, onTestTextModel, onModelsChanged }: ApiConfigCardProps) {
+export function ApiConfigCard({ config, provider, models, modelPresets, collapsed, testingModelIds, onToggle, onFetch, onWorkflow, onEditConfig, onDeleteConfig, onEditModel, onDeleteModel, onAddModel, onTestModel, onModelsChanged }: ApiConfigCardProps) {
   const shouldReduceMotion = useReducedMotion();
     const configModels = models.filter(m => m.apiConfigId === config.id);
 
     // 按类型分组
-    const modelTypeGroups = [
-      { type: 2, label: "图像生成" },
-      { type: 3, label: "视频生成" },
-      { type: 1, label: "对话" },
-    ].map(g => ({
-      ...g,
-      models: configModels.filter(m => m.modelType === g.type),
+    const modelTypeGroups = [1, 2, 3, 4].map(type => ({
+      type, label: MODEL_TYPE_LABELS[type],
+      models: configModels.filter(m => m.modelType === type),
     })).filter(g => g.models.length > 0);
 
     return (
@@ -331,9 +327,9 @@ export function ApiConfigCard({ config, provider, models, modelPresets, collapse
 
                           {/* 操作按钮 */}
                           <div className="flex items-center gap-2 shrink-0 mt-0.5">
-                            {model.modelType === 1 && (
+                            {(model.modelType === 1 || model.modelType === 4 && ["gemini", "vertex_ai", "vertex_ai_api_key"].includes(config.platform || "")) && (
                               <Button variant="outline" size="xs"
-                                onClick={() => onTestTextModel(model)}
+                                onClick={() => onTestModel(model)}
                                 disabled={testingModelIds.has(model.id)}
                               >
                                 {testingModelIds.has(model.id) ? (
@@ -341,7 +337,7 @@ export function ApiConfigCard({ config, provider, models, modelPresets, collapse
                                 ) : (
                                   <Search className="h-3 w-3" />
                                 )}
-                                {testingModelIds.has(model.id) ? "检测中" : "检测"}
+                                {model.modelType === 4 ? "试听" : testingModelIds.has(model.id) ? "检测中" : "检测"}
                               </Button>
                             )}
                             {!model.defaultModel && (

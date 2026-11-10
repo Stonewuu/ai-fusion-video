@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { AuthLayout } from "@/components/ui/auth-layout";
+import { AuthPageLayout } from "@/components/auth/auth-page-layout";
 import { useAuthStore } from "@/lib/store/auth-store";
 
 import { getInitStatus } from "@/lib/api/system-init";
@@ -81,7 +81,7 @@ function LoginContent() {
   };
 
   return (
-    <AuthLayout
+    <AuthPageLayout
       showSuccess={showSuccess}
       successTitle="登录成功"
       successSubtitle="正在进入控制面板"
@@ -207,7 +207,7 @@ function LoginContent() {
       <p className="text-xs text-white/30 pt-8">
         融光 · AI视频创作平台
       </p>
-    </AuthLayout>
+    </AuthPageLayout>
   );
 }
 

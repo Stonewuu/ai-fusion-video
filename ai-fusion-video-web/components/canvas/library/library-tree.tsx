@@ -170,7 +170,8 @@ function LibraryRow({
   const selected = activeKey === keyOf(entry);
   return (
     <div
-      className={cn("group flex items-center gap-1 rounded-lg transition-colors", selected ? "bg-primary/10 text-primary ring-1 ring-primary/20" : "hover:bg-muted/40")}
+      data-sidebar-row
+      className={cn("group flex items-center gap-1 rounded-lg", selected ? "bg-primary/10 text-primary ring-1 ring-primary/20" : "hover:bg-muted/40")}
       draggable={!disabled && !busy}
       onDragStart={(event) => {
         if (disabled || busy) {

@@ -3,6 +3,7 @@ package com.stonewu.fusion.controller.system;
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.security.SecurityUtils;
 import com.stonewu.fusion.service.execution.ExecutionRecordQueries;
+import com.stonewu.fusion.service.execution.ExecutionRecordQueries.Filter;
 import com.stonewu.fusion.service.execution.recovery.ExecutionRecoveryData.Kind;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -18,8 +19,10 @@ public class ExecutionRecordController {
     private final ExecutionRecordQueries records;
 
     @GetMapping
-    public CommonResult<ExecutionRecordQueries.Page> list(@RequestParam(defaultValue = "0") int page) {
-        return CommonResult.success(records.list(SecurityUtils.requireCurrentUserId(), page));
+    public CommonResult<ExecutionRecordQueries.Page> list(@RequestParam(defaultValue = "0") int page,
+                                                         @RequestParam(defaultValue = "ALL") Filter filter,
+                                                         @RequestParam(defaultValue = "0") int days) {
+        return CommonResult.success(records.list(SecurityUtils.requireCurrentUserId(), page, filter, days));
     }
 
     @GetMapping("/{kind}/{id}")

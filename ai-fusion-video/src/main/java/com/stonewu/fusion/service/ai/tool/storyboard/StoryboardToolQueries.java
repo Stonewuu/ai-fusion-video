@@ -112,28 +112,35 @@ public class StoryboardToolQueries {
         List<ShotCount> counts = boards.shotCounts(id, actor);
         Map<Long, Long> episodeCounts = new HashMap<>();
         Map<Long, Long> sceneCounts = new HashMap<>();
+        Map<Long, Long> episodeMissingScenes = new HashMap<>();
+        Map<Long, Long> sceneMissingScenes = new HashMap<>();
         for (ShotCount count : counts) {
             if (count.episodeId() != null) {
                 episodeCounts.merge(count.episodeId(), count.itemCount(), Long::sum);
+                episodeMissingScenes.merge(count.episodeId(), count.missingSceneCount(), Long::sum);
             }
             if (count.sceneId() != null) {
                 sceneCounts.merge(count.sceneId(), count.itemCount(), Long::sum);
+                sceneMissingScenes.merge(count.sceneId(), count.missingSceneCount(), Long::sum);
             }
         }
         for (JsonNode episode : board.path("episodes")) {
             ObjectNode value = (ObjectNode) episode;
             long episodeId = value.path("id").longValue();
             value.put("storyboardEpisodeId", episodeId).put("itemCount", episodeCounts.getOrDefault(episodeId, 0L))
+                    .put("missingSceneCount", episodeMissingScenes.getOrDefault(episodeId, 0L))
                     .put("sceneCount", value.path("scenes").size());
             for (JsonNode scene : value.path("scenes")) {
                 ObjectNode entry = (ObjectNode) scene;
                 long sceneId = entry.path("id").longValue();
-                entry.put("storyboardSceneId", sceneId).put("itemCount", sceneCounts.getOrDefault(sceneId, 0L));
+                entry.put("storyboardSceneId", sceneId).put("itemCount", sceneCounts.getOrDefault(sceneId, 0L))
+                        .put("missingSceneCount", sceneMissingScenes.getOrDefault(sceneId, 0L));
             }
             media(value);
         }
         board.put("storyboardId", id).put("scope", "overview")
                 .put("totalItems", counts.stream().mapToLong(ShotCount::itemCount).sum())
+                .put("missingSceneCount", counts.stream().mapToLong(ShotCount::missingSceneCount).sum())
                 .put("unassignedItems", counts.stream().filter(count -> count.episodeId() == null)
                         .mapToLong(ShotCount::itemCount).sum());
         return board;

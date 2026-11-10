@@ -1,6 +1,5 @@
 "use client";
 
-import { motion, useReducedMotion } from "framer-motion";
 import { Link2, LoaderCircle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -42,24 +41,8 @@ export function ScriptEpisodeBindingReminder({
   panelId,
   onToggle,
 }: ScriptEpisodeBindingReminderProps) {
-  const shouldReduceMotion = useReducedMotion();
-
   return (
     <div className="relative mr-1 shrink-0">
-      {!isOpen && !isBinding && !shouldReduceMotion && (
-        <motion.span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-xl border border-amber-500/40"
-          animate={{ opacity: [0, 0.28, 0], scale: [1, 1.14, 1.28] }}
-          transition={{
-            duration: 2.4,
-            ease: "easeOut",
-            repeat: Infinity,
-            repeatDelay: 0.6,
-            times: [0, 0.35, 1],
-          }}
-        />
-      )}
       <Button
         type="button"
         variant="outline"

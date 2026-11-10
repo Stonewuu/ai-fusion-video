@@ -55,7 +55,7 @@ function LinkedAssetGroup({
               ? asset.name
               : sub.name;
 
-          const imageUrl = sub?.imageUrl || asset.coverUrl;
+          const imageUrl = sub ? sub.imageUrl : asset.coverUrl;
           const letter = displayName.charAt(0);
 
           // 根据类型定制颜色

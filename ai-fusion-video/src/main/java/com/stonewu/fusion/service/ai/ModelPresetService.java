@@ -141,6 +141,30 @@ public class ModelPresetService {
         return presetCodesByModelKey.get(modelKey(modelCode, modelType));
     }
 
+    /** 同名渠道模型使用自己的预设；官方 Google 预设只按完整模型标识匹配。 */
+    public String findPresetCode(String modelCode, Integer modelType, String platform) {
+        if (StrUtil.isBlank(modelCode) || modelType == null) {
+            return null;
+        }
+        var scoped = presets.values().stream()
+                .filter(preset -> modelType.equals(preset.getInt("modelType"))
+                        && modelCode.equals(preset.getStr("modelCode", preset.getStr("code")))
+                        && preset.getJSONArray("matchPlatforms") != null
+                        && preset.getJSONArray("matchPlatforms").contains(platform))
+                .map(preset -> preset.getStr("code")).toList();
+        if (scoped.size() > 1) {
+            throw new IllegalStateException("同一渠道的模型预设重复: " + modelCode);
+        }
+        if (!scoped.isEmpty()) {
+            return scoped.getFirst();
+        }
+        String candidate = findPresetCode(modelCode, modelType);
+        if (candidate != null && presets.get(candidate).getJSONArray("matchPlatforms") != null) {
+            return null;
+        }
+        return candidate;
+    }
+
     /** 提供商预设只按显式绑定匹配，不继承同名原厂模型的协议能力。 */
     public String findProviderPresetCode(String providerId, String modelCode, int modelType) {
         return presets.values().stream()

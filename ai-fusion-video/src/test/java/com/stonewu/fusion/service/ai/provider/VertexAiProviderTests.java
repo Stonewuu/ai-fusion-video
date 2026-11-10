@@ -14,8 +14,33 @@ import java.net.Proxy;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class VertexAiProviderTests {
+
+    @Test
+    void apiKeyModeBuildsBothCallersWithoutLoadingStaleServiceAccountCredentials() throws Exception {
+        var config = ApiConfig.builder().platform("vertex_ai_api_key").apiKey("fixture-key")
+                .appId("old-project").apiUrl("us-central1").appSecret("invalid-json").build();
+        var context = AiProviderContext.builder().apiConfig(config).apiKey("fixture-key")
+                .model(AiModel.builder().supportReasoning(false).build()).modelName("gemini-3.8-flash")
+                .config(Map.of()).build();
+        var provider = new VertexAiProvider();
+        var model = (GeminiChatModel) provider.createAgentScopeModel(context);
+        try {
+            assertThat(readField(model, "vertexAI")).isEqualTo(true);
+            assertThat(readField(model, "project")).isNull();
+            assertThat(readField(model, "location")).isNull();
+        } finally {
+            model.close();
+        }
+        assertThat(provider.createChatModel(context)).isNotNull();
+        try (var single = (SingleRequestGeminiModel) provider.createAgentScopeModel(context.toBuilder().singleRequest(true).build())) {
+            assertThat(single.getModelName()).isEqualTo("gemini-3.8-flash");
+        }
+        assertThatThrownBy(() -> provider.createAgentScopeModel(context.toBuilder().apiKey("").build()))
+                .hasMessageContaining("apiKey");
+    }
 
     @Test
     void createAgentScopeModelUsesOfficialVertexCredentialsOptionsAndProxy() throws Exception {

@@ -47,12 +47,12 @@ public final class CanvasAgentNodeContracts {
                     List.of(SCRIPT_SCENE, SCRIPT_EPISODE, SCRIPT, ASSET, ASSET_ITEM, TEXT),
                     "连接要修改的剧本、分集或场次，并填写修改要求。");
             case "episode_script_creator", "episode_scene_writer" -> profile(type, List.of(SCRIPT_EPISODE), true, true,
-                    List.of(SCRIPT_SCENE, SCRIPT_EPISODE, SCRIPT, TEXT), "连接一个剧本分集，编写并保存该集场次与对白。");
+                    List.of(SCRIPT_SCENE, SCRIPT_EPISODE, SCRIPT, ASSET, ASSET_ITEM, TEXT), "连接一个剧本分集，编写并保存该集场次与对白。");
             case "script_to_storyboard" -> profile(type, List.of(SCRIPT), true, true,
                     List.of(STORYBOARD, STORYBOARD_EPISODE, STORYBOARD_SCENE, SHOT, ASSET, ASSET_ITEM, TEXT),
                     "连接一个剧本，为当前项目创作分镜。");
             case "episode_storyboard_writer" -> profile(type, List.of(SCRIPT_EPISODE), true, true,
-                    List.of(STORYBOARD_EPISODE, STORYBOARD_SCENE, SHOT, STORYBOARD, TEXT),
+                    List.of(STORYBOARD_EPISODE, STORYBOARD_SCENE, SHOT, STORYBOARD, ASSET, ASSET_ITEM, TEXT),
                     "连接一个剧本分集，为该集创作分镜。");
             case "storyboard_asset_preprocessor", "canvas_asset_extractor" ->
                     profile(type, List.of(SCRIPT, SCRIPT_EPISODE, SCRIPT_SCENE), false, true,

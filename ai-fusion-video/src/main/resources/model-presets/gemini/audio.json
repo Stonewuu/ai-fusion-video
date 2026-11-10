@@ -1,0 +1,287 @@
+[
+  {
+    "code": "google:gemini-3.8-flash-tts",
+    "modelCode": "gemini-3.8-flash-tts",
+    "name": "Gemini 3.8 Flash TTS",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/text-to-speech/overview"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Gemini 3.8 Flash TTS",
+    "config": {
+      "voice": "Kore"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "contextWindow": 8192,
+    "outputTokenLimit": 16384
+  },
+  {
+    "code": "google:gemini-3.8-flash-lite-tts",
+    "modelCode": "gemini-3.8-flash-lite-tts",
+    "name": "Gemini 3.8 Flash Lite TTS",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/text-to-speech/overview"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Gemini 3.8 Flash Lite TTS",
+    "config": {
+      "voice": "Kore"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "contextWindow": 8192,
+    "outputTokenLimit": 16384
+  },
+  {
+    "code": "google:gemini-3.1-flash-tts-preview",
+    "modelCode": "gemini-3.1-flash-tts-preview",
+    "name": "Gemini 3.1 Flash TTS Preview",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "gemini"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/text-to-speech/overview"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Gemini 3.1 Flash TTS Preview",
+    "config": {
+      "voice": "Kore"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": []
+  },
+  {
+    "code": "google:gemini-2.5-flash-tts",
+    "modelCode": "gemini-2.5-flash-tts",
+    "name": "Gemini 2.5 Flash TTS",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/text-to-speech/overview"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Gemini 2.5 Flash TTS",
+    "config": {
+      "voice": "Kore"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": []
+  },
+  {
+    "code": "google:gemini-2.5-pro-tts",
+    "modelCode": "gemini-2.5-pro-tts",
+    "name": "Gemini 2.5 Pro TTS",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/text-to-speech/overview"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Gemini 2.5 Pro TTS",
+    "config": {
+      "voice": "Kore"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": []
+  },
+  {
+    "code": "google:gemini-2.5-flash-preview-tts",
+    "modelCode": "gemini-2.5-flash-preview-tts",
+    "name": "Gemini 2.5 Flash Preview TTS",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "gemini"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/text-to-speech/overview"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Gemini 2.5 Flash Preview TTS",
+    "config": {
+      "voice": "Kore"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": []
+  },
+  {
+    "code": "google:gemini-2.5-pro-preview-tts",
+    "modelCode": "gemini-2.5-pro-preview-tts",
+    "name": "Gemini 2.5 Pro Preview TTS",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "gemini"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/text-to-speech/overview"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Gemini 2.5 Pro Preview TTS",
+    "config": {
+      "voice": "Kore"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": []
+  },
+  {
+    "code": "google:lyria-3-clip-preview",
+    "modelCode": "lyria-3-clip-preview",
+    "name": "Lyria 3 Clip Preview",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/music/generate-music",
+      "https://aistudio.google.com/docs/music-generation"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Lyria 3 Clip Preview",
+    "config": {},
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "multimodalInputTypes": [
+      "image"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64"
+      ]
+    }
+  },
+  {
+    "code": "google:lyria-3-pro-preview",
+    "modelCode": "lyria-3-pro-preview",
+    "name": "Lyria 3 Pro Preview",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/music/generate-music"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Lyria 3 Pro Preview",
+    "config": {},
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "multimodalInputTypes": [
+      "image"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64"
+      ]
+    }
+  },
+  {
+    "code": "google:lyria-002",
+    "modelCode": "lyria-002",
+    "name": "Lyria 002",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/music/generate-music"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Lyria 002",
+    "config": {
+      "googleLocation": "us-central1"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {}
+  },
+  {
+    "code": "google:lyria-3.5",
+    "modelCode": "lyria-3.5",
+    "name": "Lyria 3.5",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "gemini"
+    ],
+    "description": "Lyria 3.5",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/music-generation"
+    ],
+    "verifiedAt": "2026-11-07",
+    "config": {},
+    "multimodalInputTypes": [
+      "image"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64"
+      ]
+    }
+  },
+  {
+    "code": "google:lyria-realtime-exp",
+    "modelCode": "lyria-realtime-exp",
+    "name": "Lyria RealTime",
+    "platform": "gemini",
+    "modelType": 4,
+    "official": true,
+    "matchPlatforms": [
+      "gemini"
+    ],
+    "description": "Lyria RealTime",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/realtime-music-generation"
+    ],
+    "verifiedAt": "2026-11-07",
+    "config": {
+      "durationSeconds": 10
+    },
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {}
+  }
+]

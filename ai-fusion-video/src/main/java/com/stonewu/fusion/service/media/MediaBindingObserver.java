@@ -39,8 +39,14 @@ public class MediaBindingObserver implements ResourceMutationObserver {
     @Transactional(propagation = Propagation.MANDATORY)
     public void validateAndApply(ResourceMutation mutation, ResourceCommandContext context) {
         List<Binding> pending = new ArrayList<>();
-        List<ResourceChange> targets = mutation.changes().stream()
-                .filter(change -> TYPES.contains(change.resourceType())).toList();
+        Map<ResourceTarget, ResourceChange> finalChanges = new LinkedHashMap<>();
+        for (ResourceChange change : mutation.changes()) {
+            if (TYPES.contains(change.resourceType())) {
+                finalChanges.put(new ResourceTarget(change.resourceType(), change.resourceId()), change);
+            }
+        }
+        // 批量创建多个变体会多次推进同一主资产版本；媒体引用只按其最终状态登记一次。
+        var targets = finalChanges.values();
         for (ResourceChange change : targets) {
             if (change.deleted()) {
                 continue;
@@ -79,5 +85,8 @@ public class MediaBindingObserver implements ResourceMutationObserver {
     }
 
     private record Binding(ResourceChange change, String field, String mediaId, MediaSourceFields.Value source) {
+    }
+
+    private record ResourceTarget(CanvasValueType type, long id) {
     }
 }

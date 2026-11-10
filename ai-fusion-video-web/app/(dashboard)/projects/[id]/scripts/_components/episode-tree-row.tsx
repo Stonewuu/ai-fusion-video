@@ -21,7 +21,7 @@ export function EpisodeTreeRow({ episode, expanded, active, onToggle, onSelect, 
   onGenerateStoryboard }: EpisodeTreeRowProps) {
   const title = episode.title || `第 ${episode.episodeNumber} 集`;
   return (
-    <div className={cn("group/episode-row flex min-w-0 items-center rounded-xl p-1 transition-colors",
+    <div data-sidebar-row className={cn("group/episode-row flex min-w-0 items-center rounded-xl p-1",
       active ? "bg-primary/8" : "hover:bg-primary/5")}>
       <Button type="button" variant="ghost" size="icon-xs" onClick={onToggle} aria-expanded={expanded}
         aria-label={`${expanded ? "收起" : "展开"}${title}`}>

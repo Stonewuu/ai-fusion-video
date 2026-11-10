@@ -12,6 +12,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class AiModelMultimodalCapabilitiesTests {
+    @Test
+    void audioGenerationRetainsDeclaredImageReferences() {
+        var music = AiModel.builder().modelType(4).multimodalInputTypes(List.of("image"))
+                .multimodalInputTransports(Map.of("image", List.of("base64"))).build();
+        AiModelMultimodalCapabilities.normalizeModel(music);
+        assertThat(music.getMultimodalInputTypes()).containsExactly("image");
+        assertThat(music.getMultimodalInputTransports()).containsEntry("image", List.of("base64"));
+    }
 
     @Test
     void normalizesCanonicalTypesAndDerivesVisionCompatibilityFlag() {

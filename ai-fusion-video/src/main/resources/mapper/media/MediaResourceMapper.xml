@@ -30,6 +30,9 @@
             ON m.created_by=s.actor_user_id
                AND m.request_id LIKE CONCAT('generation:',LOWER(s.kind),':',s.task_id,':%')
             WHERE m.id=#{mediaId}
+        UNION ALL SELECT 'AUDIO_GENERATION_TASK_OUTPUT' FROM afv_media_resource m JOIN afv_audio_generation_task t
+            ON m.created_by=t.user_id AND m.request_id LIKE CONCAT(t.id,'-audio-%')
+            WHERE m.id=#{mediaId}
         LIMIT 1
     </select>
     <select id="documentRetention" resultType="String">

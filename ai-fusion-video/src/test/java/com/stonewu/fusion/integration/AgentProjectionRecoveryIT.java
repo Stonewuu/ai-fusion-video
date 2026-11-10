@@ -73,6 +73,7 @@ class AgentProjectionRecoveryIT {
         properties.add("spring.datasource.hikari.maximum-pool-size", () -> 32);
         properties.add("spring.datasource.hikari.minimum-idle", () -> 0);
         properties.add("fusion.agentscope.v2.state.mode", () -> "in-memory");
+        properties.add("fusion.agentscope.v2.execution.maintenance-initial-delay-ms", () -> 3600000);
     }
 
     @Autowired
@@ -98,6 +99,35 @@ class AgentProjectionRecoveryIT {
 
     @Autowired
     private AgentRunMapper runMapper;
+
+    /** 删除会话后不能继续恢复其消息，也不能影响同批其他会话的历史保存。 */
+    @Test
+    void deletedConversationsDoNotBreakRepeatedRecoveryOfOtherRuns() {
+        var removedRuns = List.of(startRoot("deleted-first"), startRoot("deleted-second"));
+        for (var run : removedRuns) {
+            append(run, "TEXT_BLOCK_DELTA", "CONTENT", null, objectPayload("delta", "已删除会话内容"));
+            await(terminalCoordinator.terminateOwned(completedTerminal(run), run.ownerInstanceId(), run.ownerEpoch()));
+            await(conversationService.deleteConversationByConversationId(run.conversationId(), 42L));
+        }
+        var retained = startRoot("retained-history");
+        append(retained, "TEXT_BLOCK_DELTA", "CONTENT", null, objectPayload("delta", "保留会话内容"));
+        await(terminalCoordinator.terminateOwned(completedTerminal(retained), retained.ownerInstanceId(), retained.ownerEpoch()));
+
+        await(projectionService.recoverTerminalBatch(100));
+        await(projectionService.recoverTerminalBatch(100));
+
+        assertThat(projectedMessages(retained.runId())).singleElement()
+                .satisfies(message -> assertThat(message.getContent()).isEqualTo("保留会话内容"));
+        assertThat(requireRun(retained.runId()).getProjectionCompletedAt()).isNotNull();
+        for (var run : removedRuns) {
+            // 已被选中的运行记录也可能在实际恢复前被删除。
+            await(projectionService.projectThrough(run.runId(), requireRun(run.runId()).getTerminalSequence()));
+            assertThat(projectedMessages(run.runId())).isEmpty();
+            assertThat(requireRun(run.runId()).getProjectedThroughSequence()).isZero();
+            assertThat(requireRun(run.runId()).getProjectionCompletedAt()).isNull();
+            assertThat(conversationService.getByConversationId(run.conversationId())).isNull();
+        }
+    }
 
     @Test
     void projectsAssistantAndToolHistoryInOrderAndCompletesTerminalCursor() {
@@ -195,6 +225,36 @@ class AgentProjectionRecoveryIT {
         AgentRun persisted = requireRun(run.runId());
         assertThat(persisted.getProjectedThroughSequence()).isEqualTo(terminalSequence);
         assertThat(persisted.getProjectionCompletedAt()).isNotNull();
+    }
+
+    /** 模型重试后历史记录保留成功工具，不保存断线前的半段正文和工具参数。 */
+    @Test
+    void modelRetryDiscardsOnlyTheIncompleteResponseDuringIncrementalProjection() {
+        var run = startRoot("model-retry-history");
+        append(run, "TOOL_CALL_DELTA", null, "saved-tool", objectPayload("delta", "{}"));
+        append(run, "TOOL_CALL_END", "TOOL_CALL", "saved-tool",
+                objectPayload("toolCallName", "save_asset"));
+        append(run, "TOOL_RESULT_TEXT_DELTA", null, "saved-tool",
+                objectPayload("delta", "资产已保存"));
+        append(run, "TOOL_RESULT_END", "TOOL_FINISHED", "saved-tool",
+                objectPayload("toolCallName", "save_asset").put("state", "SUCCESS"));
+        append(run, "TEXT_BLOCK_DELTA", "CONTENT", null, objectPayload("delta", "尚未完成的回答"));
+        append(run, "TOOL_CALL_START", "TOOL_CALL_STARTED", "incomplete-tool",
+                objectPayload("toolCallName", "save_asset"));
+        append(run, "TOOL_CALL_DELTA", null, "incomplete-tool", objectPayload("delta", "{\"name\":"));
+        await(projectionService.projectThrough(run.runId(), requireRun(run.runId()).getNextSequence() - 1));
+        assertThat(projectedMessages(run.runId())).hasSize(2);
+
+        append(run, "CUSTOM", "MODEL_RETRY", null, objectPayload("content", "模型请求暂时中断，2 秒后重试（1/3）"));
+        append(run, "TEXT_BLOCK_DELTA", "CONTENT", null, objectPayload("delta", "重试后完成"));
+        await(terminalCoordinator.terminateOwned(completedTerminal(run), run.ownerInstanceId(), run.ownerEpoch()));
+        await(projectionService.projectThrough(run.runId(), requireRun(run.runId()).getTerminalSequence()));
+        await(projectionService.recoverTerminalBatch(100));
+
+        assertThat(projectedMessages(run.runId())).extracting(AgentMessage::getContent)
+                .containsExactly("{}", "资产已保存", "重试后完成");
+        assertThat(projectedMessages(run.runId())).extracting(AgentMessage::getToolCallId)
+                .doesNotContain("incomplete-tool");
     }
 
     @Test
@@ -345,6 +405,7 @@ class AgentProjectionRecoveryIT {
         assertThat(persisted.getProjectedThroughSequence()).isZero();
         assertThat(persisted.getProjectionCompletedAt()).isNull();
         assertThat(projectedMessages(run.runId())).hasSize(1);
+        await(conversationService.deleteConversationByConversationId(run.conversationId(), 42L));
     }
 
     private void append(

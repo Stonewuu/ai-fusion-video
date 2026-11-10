@@ -85,7 +85,10 @@ class TrackedAgentStreamingTests {
         var disconnected = new HttpTransportException("Connection reset after HTTP status 500 was mentioned in content");
         try (var tracked = tracked(Flux.concat(Flux.just(text("半段内容")), Flux.error(disconnected)))) {
             StepVerifier.create(tracked.stream(List.of(), List.of(), null)).expectNextCount(1)
-                    .expectErrorMatches(error -> error == disconnected).verify(Duration.ofSeconds(3));
+                    .expectErrorSatisfies(error -> {
+                        assertThat(error).isInstanceOf(AgentModelCallFailure.class).hasCause(disconnected);
+                        assertThat(((AgentModelCallFailure) error).retryable()).isTrue();
+                    }).verify(Duration.ofSeconds(3));
             verify(ledger).uncertain(claim, false);
             verify(ledger, never()).failed(any());
         }

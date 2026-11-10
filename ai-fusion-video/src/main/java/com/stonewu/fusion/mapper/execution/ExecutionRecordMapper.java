@@ -13,7 +13,11 @@ public interface ExecutionRecordMapper {
                LocalDateTime createdAt, LocalDateTime updatedAt) {
     }
 
-    List<Row> list(@Param("userId") long userId, @Param("offset") int offset, @Param("limit") int limit);
+    List<Row> list(@Param("userId") long userId, @Param("statuses") List<String> statuses,
+                   @Param("since") LocalDateTime since, @Param("offset") int offset, @Param("limit") int limit);
+
+    long count(@Param("userId") long userId, @Param("statuses") List<String> statuses,
+               @Param("since") LocalDateTime since);
 
     Row get(@Param("userId") long userId, @Param("kind") Kind kind, @Param("id") String id);
 }

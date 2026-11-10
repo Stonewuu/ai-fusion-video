@@ -1,62 +1,733 @@
 [
   {
+    "code": "gemini-4-argon",
+    "modelCode": "gemini-4-argon",
+    "name": "Gemini 4 Argon",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方推理模型，输入与输出共用 1M 上下文。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "contextWindow": 1048576,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "stable",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-4-argon",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {},
+    "contextWindowMode": "shared_input_output",
+    "extendedOutputTokenLimit": 1048576
+  },
+  {
+    "code": "gemini-3.8-flash",
+    "modelCode": "gemini-3.8-flash",
+    "name": "Gemini 3.8 Flash",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "contextWindow": 1048576,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "stable",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3.8-flash",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {}
+  },
+  {
+    "code": "gemini-3.7-flash",
+    "modelCode": "gemini-3.7-flash",
+    "name": "Gemini 3.7 Flash",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "contextWindow": 1048576,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "deprecated",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3.7-flash",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {}
+  },
+  {
     "code": "gemini-3.6-flash",
+    "modelCode": "gemini-3.6-flash",
     "name": "Gemini 3.6 Flash",
     "platform": "gemini",
-    "modelProtocol": "gemini",
     "modelType": 1,
-    "description": "Google 2026 年稳定版多模态模型，支持文本、图片、视频、音频和 PDF 输入。",
-    "capabilities": ["文本对话", "图片理解", "视频理解", "音频理解", "PDF 理解", "思考", "工具调用"],
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
     "supportReasoning": true,
-    "reasoningEffortLevels": ["high", "medium", "low", "minimal"],
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low",
+      "minimal"
+    ],
     "contextWindow": 1048576,
-    "multimodalInputTypes": ["image", "video", "audio", "file"],
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
     "multimodalInputTransports": {
-      "image": ["url", "base64"],
-      "video": ["url", "base64"],
-      "audio": ["url", "base64"],
-      "file": ["url", "base64"]
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
     },
+    "lifecycle": "stable",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3.6-flash",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
     "config": {}
   },
   {
     "code": "gemini-3.5-flash",
+    "modelCode": "gemini-3.5-flash",
     "name": "Gemini 3.5 Flash",
     "platform": "gemini",
-    "modelProtocol": "gemini",
     "modelType": 1,
-    "description": "Google 2026 年稳定版高智能模型，支持文本、图片、视频、音频和 PDF 输入。",
-    "capabilities": ["文本对话", "图片理解", "视频理解", "音频理解", "PDF 理解", "思考", "工具调用"],
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
     "supportReasoning": true,
-    "reasoningEffortLevels": ["high", "medium", "low", "minimal"],
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low",
+      "minimal"
+    ],
     "contextWindow": 1048576,
-    "multimodalInputTypes": ["image", "video", "audio", "file"],
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
     "multimodalInputTransports": {
-      "image": ["url", "base64"],
-      "video": ["url", "base64"],
-      "audio": ["url", "base64"],
-      "file": ["url", "base64"]
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
     },
+    "lifecycle": "deprecated",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3.5-flash",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
     "config": {}
   },
   {
     "code": "gemini-3.5-flash-lite",
+    "modelCode": "gemini-3.5-flash-lite",
     "name": "Gemini 3.5 Flash-Lite",
     "platform": "gemini",
-    "modelProtocol": "gemini",
     "modelType": 1,
-    "description": "Google 2026 年稳定版高吞吐模型，支持文本、图片、视频、音频和 PDF 输入。",
-    "capabilities": ["文本对话", "图片理解", "视频理解", "音频理解", "PDF 理解", "思考", "工具调用"],
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
     "supportReasoning": true,
-    "reasoningEffortLevels": ["high", "medium", "low", "minimal"],
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low",
+      "minimal"
+    ],
     "contextWindow": 1048576,
-    "multimodalInputTypes": ["image", "video", "audio", "file"],
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
     "multimodalInputTransports": {
-      "image": ["url", "base64"],
-      "video": ["url", "base64"],
-      "audio": ["url", "base64"],
-      "file": ["url", "base64"]
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
     },
+    "lifecycle": "stable",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3.5-flash-lite",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {}
+  },
+  {
+    "code": "gemini-3.1-flash-lite",
+    "modelCode": "gemini-3.1-flash-lite",
+    "name": "Gemini 3.1 Flash-Lite",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low",
+      "minimal"
+    ],
+    "contextWindow": 1048576,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "stable",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3.1-flash-lite",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {}
+  },
+  {
+    "code": "gemini-3.1-pro-preview",
+    "modelCode": "gemini-3.1-pro-preview",
+    "name": "Gemini 3.1 Pro preview",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "contextWindow": 1048576,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "preview",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3.1-pro-preview",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {}
+  },
+  {
+    "code": "gemini-3-flash-preview",
+    "modelCode": "gemini-3-flash-preview",
+    "name": "Gemini 3 Flash preview",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low",
+      "minimal"
+    ],
+    "contextWindow": 1048576,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "preview",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3-flash-preview",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {}
+  },
+  {
+    "code": "gemini-2.5-pro",
+    "modelCode": "gemini-2.5-pro",
+    "name": "Gemini 2.5 Pro",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [],
+    "contextWindow": 1048576,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "deprecated",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-2.5-pro",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {}
+  },
+  {
+    "code": "gemini-2.5-flash",
+    "modelCode": "gemini-2.5-flash",
+    "name": "Gemini 2.5 Flash",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [],
+    "contextWindow": 1048576,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "deprecated",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-2.5-flash",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {}
+  },
+  {
+    "code": "gemini-2.5-flash-lite",
+    "modelCode": "gemini-2.5-flash-lite",
+    "name": "Gemini 2.5 Flash-Lite",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方多模态对话模型。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [],
+    "contextWindow": 1048576,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "stable",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-2.5-flash-lite",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {}
+  },
+  {
+    "code": "gemini-robotics-er-2-preview",
+    "modelCode": "gemini-robotics-er-2-preview",
+    "name": "Gemini Robotics ER 2",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方机器人空间理解与任务规划模型。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low",
+      "minimal"
+    ],
+    "contextWindow": 131072,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "preview",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-robotics-er-2-preview",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
+    "config": {}
+  },
+  {
+    "code": "gemini-3.1-pro-preview-customtools",
+    "modelCode": "gemini-3.1-pro-preview-customtools",
+    "name": "Gemini 3.1 Pro Preview Custom Tools",
+    "platform": "gemini",
+    "modelType": 1,
+    "official": true,
+    "matchPlatforms": [
+      "gemini"
+    ],
+    "description": "Google 官方面向自定义工具调用的 Gemini 3.1 Pro 预览模型。",
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "low"
+    ],
+    "contextWindow": 1048576,
+    "outputTokenLimit": 65536,
+    "multimodalInputTypes": [
+      "image",
+      "video",
+      "audio",
+      "file"
+    ],
+    "multimodalInputTransports": {
+      "image": [
+        "base64",
+        "url"
+      ],
+      "video": [
+        "base64",
+        "url"
+      ],
+      "audio": [
+        "base64",
+        "url"
+      ],
+      "file": [
+        "base64",
+        "url"
+      ]
+    },
+    "lifecycle": "preview",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3.1-pro-preview",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/thinking"
+    ],
+    "verifiedAt": "2026-11-06",
     "config": {}
   }
 ]

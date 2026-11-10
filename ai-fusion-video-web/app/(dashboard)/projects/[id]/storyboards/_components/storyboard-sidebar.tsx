@@ -77,9 +77,10 @@ function SortableSceneItem({
   return (
     <div
       ref={setNodeRef}
+      data-sidebar-row
       style={style}
       className={cn(
-        "group/scene flex items-center mb-0.5 rounded-md transition-colors overflow-hidden",
+        "group/scene flex items-center mb-0.5 rounded-md overflow-hidden",
         isDragging && "opacity-50 z-10",
         isActive ? "bg-primary/10" : "hover:bg-primary/5"
       )}
@@ -342,7 +343,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
 
   if (collapsed) {
     return (
-      <div className="w-12 border-r border-border/20 flex flex-col shrink-0 bg-card/20 h-full transition-[width] duration-200">
+      <div data-sidebar-navigation="storyboards" className="w-12 border-r border-border/20 flex flex-col shrink-0 bg-card/20 h-full transition-[width] duration-200">
         <div className="px-2 py-3 border-b border-primary/8 flex flex-col items-center gap-2">
           <button
             type="button"
@@ -359,7 +360,7 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
   }
 
   return (
-    <div className="w-full lg:w-64 border-r border-border/20 flex flex-col shrink-0 bg-card/20 h-full transition-[width] duration-200">
+    <div data-sidebar-navigation="storyboards" className="w-full lg:w-64 border-r border-border/20 flex flex-col shrink-0 bg-card/20 h-full transition-[width] duration-200">
       {/* 标题栏 */}
       <div className="px-4 py-3 border-b border-primary/8 flex items-center justify-between">
         <h3 className="text-xs font-semibold text-primary/80 uppercase tracking-wider">
@@ -431,8 +432,8 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
               return (
                 <div key={ep.id} className="group/ep mb-0.5">
                   {/* 集标题行 */}
-                  <div className={cn(
-                    "flex items-center rounded-lg transition-colors",
+                  <div data-sidebar-row className={cn(
+                    "flex items-center rounded-lg",
                     isEpisodeSelected ? "bg-primary/8" : "hover:bg-primary/5"
                   )}>
                     <button

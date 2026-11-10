@@ -14,6 +14,9 @@ public interface AgentConversationMapper extends BaseMapper<AgentConversation> {
     AgentConversation selectByConversationIdForUpdate(
             @Param("conversationId") String conversationId);
 
+    AgentConversation selectProjectionConversationForUpdate(
+            @Param("conversationId") String conversationId);
+
     LocalDateTime selectDatabaseNow();
 
     List<AgentConversation> selectAgentStateCleanupCandidates(

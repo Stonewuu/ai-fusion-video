@@ -11,8 +11,9 @@ import { assetApi } from "@/lib/api/asset";
 import { useProject } from "../../project-context";
 import { useStoryboardGeneration } from "./use-storyboard-generation";
 import { useStoryboardInvalidation } from "./use-storyboard-invalidation";
+import type { ShotAssets } from "../_components/edit-assets-dialog";
 import { reconcileStoryboardGroups } from "../storyboard-data";
-import { SIDEBAR_COLLAPSED_STORAGE_KEY, type ViewMode, type SidebarSelection, type SceneWithItems } from "../storyboard-types";
+import { DETAILS_COLLAPSED_STORAGE_KEY, SIDEBAR_COLLAPSED_STORAGE_KEY, type ViewMode, type SidebarSelection, type SceneWithItems } from "../storyboard-types";
 
 export function useStoryboardWorkspace(projectId: number) {
   const composeRequests = useCommandRequestKey();
@@ -33,6 +34,7 @@ export function useStoryboardWorkspace(projectId: number) {
   const [assetLookup, setAssetLookup] = useState<Record<number, { item: import("@/lib/api/asset").AssetItem; asset: import("@/lib/api/asset").Asset }>>({});
   const [editAssetsOpen, setEditAssetsOpen] = useState(false);
   const [editingItem, setEditingItem] = useState<StoryboardItem | null>(null);
+  const [addingItem, setAddingItem] = useState<{ scene: StoryboardScene; shotNumber: string } | null>(null);
 
   const loadProjectAssets = useCallback(async () => {
     try {
@@ -61,6 +63,7 @@ export function useStoryboardWorkspace(projectId: number) {
   // 视图状态
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isDetailsCollapsed, setIsDetailsCollapsed] = useState(false);
 
   // 加载本地用户偏好
   useEffect(() => {
@@ -70,6 +73,9 @@ export function useStoryboardWorkspace(projectId: number) {
     }
     setIsSidebarCollapsed(
       localStorage.getItem(SIDEBAR_COLLAPSED_STORAGE_KEY) === "true"
+    );
+    setIsDetailsCollapsed(
+      localStorage.getItem(DETAILS_COLLAPSED_STORAGE_KEY) === "true"
     );
   }, []);
 
@@ -83,6 +89,10 @@ export function useStoryboardWorkspace(projectId: number) {
       SIDEBAR_COLLAPSED_STORAGE_KEY,
       collapsed ? "true" : "false"
     );
+  }, []);
+  const handleSetDetailsCollapsed = useCallback((collapsed: boolean) => {
+    setIsDetailsCollapsed(collapsed);
+    localStorage.setItem(DETAILS_COLLAPSED_STORAGE_KEY, String(collapsed));
   }, []);
   const [selectedItemId, setSelectedItemId] = useState<number | null>(null);
   const [frameDialogItemId, setFrameDialogItemId] = useState<number | null>(null);
@@ -475,26 +485,28 @@ export function useStoryboardWorkspace(projectId: number) {
 
   // ========== 操作 ==========
 
-  const handleAddItem = async (sceneId: number) => {
-    if (!storyboard) return;
+  const handleAddItem = (sceneId: number) => {
     const group = sceneGroups.find((g) => g.scene.id === sceneId);
-    if (!group) return;
-    const currentItems = group.items;
-    try {
-      const payload = {
-        storyboardSceneId: sceneId,
-        parentVersion: group.scene.version,
-        sortOrder: currentItems.length,
-        shotNumber: String(currentItems.length + 1),
-      };
-      const newItem = await storyboardApi.createItem(payload, requests.forPayload(payload));
-      requests.clear();
-      await refreshStoryboardData();
-      setSelectedItemId(newItem.id);
-    } catch (err) {
-      console.error("添加新分镜条目失败:", err);
-      toastApiError(err, "添加新分镜条目失败");
+    if (group) {
+      setAddingItem({ scene: group.scene, shotNumber: String(group.items.length + 1) });
     }
+  };
+
+  const handleConfirmAddItem = async (assets: ShotAssets) => {
+    if (!addingItem) {
+      return;
+    }
+    const payload = {
+      storyboardSceneId: addingItem.scene.id,
+      parentVersion: addingItem.scene.version,
+      shotNumber: addingItem.shotNumber,
+      ...assets,
+    };
+    const newItem = await storyboardApi.createItem(payload, requests.forPayload(payload));
+    requests.clear();
+    setAddingItem(null);
+    await refreshStoryboardData();
+    setSelectedItemId(newItem.id);
   };
 
   const handleDeleteEpisode = async (episode: StoryboardEpisode) => {
@@ -758,8 +770,10 @@ export function useStoryboardWorkspace(projectId: number) {
     setEditingItem,
     viewMode,
     isSidebarCollapsed,
+    isDetailsCollapsed,
     handleSetViewMode,
     handleSetSidebarCollapsed,
+    handleSetDetailsCollapsed,
     selectedItemId,
     frameDialogItemId,
     frameDialogInitialType,
@@ -791,6 +805,9 @@ export function useStoryboardWorkspace(projectId: number) {
     handleBindScriptEpisode,
     handleSidebarInitialLoad,
     handleAddItem,
+    addingItem,
+    setAddingItem,
+    handleConfirmAddItem,
     handleDeleteEpisode,
     handleDeleteScene,
     handleReorderScenes,

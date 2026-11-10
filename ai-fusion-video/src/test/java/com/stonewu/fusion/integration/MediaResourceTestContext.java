@@ -46,6 +46,12 @@ import com.stonewu.fusion.service.resource.AssetCommandSupport;
 import com.stonewu.fusion.service.resource.AssetFields;
 import com.stonewu.fusion.service.resource.AssetResourcePatchHandler;
 import com.stonewu.fusion.service.resource.AssetResourceCreateHandler;
+import com.stonewu.fusion.service.resource.AssetBatchCreateHandler;
+import com.stonewu.fusion.service.resource.AssetResourceQueryService;
+import com.stonewu.fusion.service.resource.ResourceQueryService;
+import com.stonewu.fusion.service.resource.ResourceSnapshotCache;
+import com.stonewu.fusion.repository.resource.AssetReadRepository;
+import com.stonewu.fusion.repository.resource.ProjectWorkspaceRepository;
 import com.stonewu.fusion.service.resource.AssetResourceDeleteHandler;
 import com.stonewu.fusion.service.resource.ProjectFields;
 import com.stonewu.fusion.service.resource.ProjectResourcePatchHandler;
@@ -240,6 +246,8 @@ abstract class MediaResourceTestContext {
                 AssetCommandSupport.class, AssetFields.class, AssetMutationRepository.class,
                 AssetResourcePatchHandler.class,
                 AssetResourceCreateHandler.class, AssetResourceDeleteHandler.class, ProjectFields.class,
+                AssetBatchCreateHandler.class, AssetResourceQueryService.class, ResourceQueryService.class,
+                ResourceSnapshotCache.class, AssetReadRepository.class, ProjectWorkspaceRepository.class,
                 ProjectResourcePatchHandler.class,
                 StoryboardCommandSupport.class, StoryboardFields.class, StoryboardRelations.class,
                 StoryboardVersionView.class,

@@ -135,6 +135,7 @@ export function CanvasWorkspacePanels({
       <div className="relative flex min-h-0 grow basis-0">
         <aside
           ref={leftAside}
+          data-sidebar-navigation="canvas-left"
           aria-label="项目与素材面板"
           onKeyDown={(event) => {
             if (
@@ -203,6 +204,7 @@ export function CanvasWorkspacePanels({
         </section>
         <aside
           ref={rightAside}
+          data-sidebar-navigation="canvas-right"
           aria-label="编辑与评审面板"
           onKeyDown={(event) => {
             if (

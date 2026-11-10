@@ -9,6 +9,13 @@
         LIMIT 1
         FOR UPDATE
     </select>
+    <select id="selectProjectionConversationForUpdate" resultType="com.stonewu.fusion.entity.ai.AgentConversation">
+        SELECT *
+        FROM afv_agent_conversation
+        WHERE conversation_id = #{conversationId}
+        LIMIT 1
+        FOR UPDATE
+    </select>
     <select id="selectDatabaseNow" resultType="java.time.LocalDateTime">
         SELECT UTC_TIMESTAMP(3)
     </select>

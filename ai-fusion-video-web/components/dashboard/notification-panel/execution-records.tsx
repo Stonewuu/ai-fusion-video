@@ -1,87 +1,76 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CircleHelp, Loader2, RefreshCw, XCircle } from "lucide-react";
+import { Ban, CircleHelp, Loader2, RefreshCw, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getApiErrorMessage } from "@/lib/api/api-error";
-import { executionRecordApi, executionRecordStatus, type ExecutionRecordRef, type ExecutionRecordSummary } from "@/lib/api/execution-records";
-import { useAuthStore } from "@/lib/store/auth-store";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
+import { executionRecordStatus, type ExecutionRecordFilter, type ExecutionRecordRef } from "@/lib/api/execution-records";
 import { TaskListItem } from "./task-list-items";
 import { formatDatetime } from "./utils";
+import type { ExecutionRecordsState } from "./use-execution-records";
 
-export function ExecutionRecordSection({ selected, onSelect }: {
+const states = [
+  { value: "ALL", label: "全部状态" },
+  { value: "REVIEW", label: "待确认" },
+  { value: "FAILED", label: "执行失败" },
+  { value: "CANCELLED", label: "已取消" },
+];
+const periods = [
+  { value: "0", label: "全部时间" },
+  { value: "7", label: "近 7 天" },
+  { value: "30", label: "近 30 天" },
+];
+
+export function ExecutionRecordList({ records, selected, onSelect, showFilters }: {
+  records: ExecutionRecordsState;
   selected: ExecutionRecordRef | null;
   onSelect: (record: ExecutionRecordRef) => void;
+  showFilters: boolean;
 }) {
-  const userId = useAuthStore((state) => state.user?.id);
-  return userId ? <ExecutionRecordList key={userId} selected={selected} onSelect={onSelect} /> : null;
-}
-
-function ExecutionRecordList({ selected, onSelect }: {
-  selected: ExecutionRecordRef | null;
-  onSelect: (record: ExecutionRecordRef) => void;
-}) {
-  const [items, setItems] = useState<ExecutionRecordSummary[]>([]);
-  const [page, setPage] = useState(0);
-  const [revision, setRevision] = useState(0);
-  const [more, setMore] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  useEffect(() => {
-    const controller = new AbortController();
-    void executionRecordApi.list(page, controller.signal).then((result) => {
-      if (controller.signal.aborted) {
-        return;
-      }
-      setItems((previous) => {
-        const merged = new Map((page === 0 ? [] : previous).map((item) => [`${item.kind}:${item.id}`, item]));
-        result.items.forEach((item) => merged.set(`${item.kind}:${item.id}`, item));
-        return Array.from(merged.values());
-      });
-      setMore(result.hasMore);
-      setError(null);
-    }).catch((failure) => {
-      if (!controller.signal.aborted) {
-        setError(getApiErrorMessage(failure));
-      }
-    }).finally(() => {
-      if (!controller.signal.aborted) {
-        setLoading(false);
-      }
-    });
-    return () => controller.abort();
-  }, [page, revision]);
-
-  const reload = () => {
-    setLoading(true);
-    setPage(0);
-    setRevision((value) => value + 1);
-  };
+  const { items, query, changeFilters, matchedTotal, loading, error, hasMore, reload, loadMore } = records;
   return (
-    <section className="px-3 py-2" aria-label="异常任务记录">
-      <div className="flex items-center justify-between gap-2 px-1 pb-2">
-        <h4 className="text-xs font-medium text-muted-foreground">异常记录</h4>
-        <Button variant="ghost" size="icon-xs" aria-label="刷新异常记录" disabled={loading} onClick={reload}>
-          <RefreshCw className={loading ? "animate-spin" : undefined} />
-        </Button>
+    <section className="flex h-full min-h-0 flex-col" aria-label="异常任务记录">
+      <div className="shrink-0 px-3 pb-2">
+        {showFilters && <div className="grid min-w-0 grid-cols-2 gap-2 p-1">
+          <Select items={states} value={query.filter} onValueChange={value => changeFilters({ filter: value as ExecutionRecordFilter })}>
+            <SelectTrigger className="w-full min-w-0" aria-label="异常状态"><SelectValue placeholder="全部状态" /></SelectTrigger>
+            <SelectContent><SelectGroup>{states.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
+          </Select>
+          <Select items={periods} value={String(query.days)} onValueChange={value => changeFilters({ days: Number(value) })}>
+            <SelectTrigger className="w-full min-w-0" aria-label="异常记录时间"><SelectValue placeholder="全部时间" /></SelectTrigger>
+            <SelectContent><SelectGroup>{periods.map(item => <SelectItem key={item.value} value={item.value}>{item.label}</SelectItem>)}</SelectGroup></SelectContent>
+          </Select>
+        </div>}
+        <div className="flex items-center justify-between gap-2 px-1">
+          <span className="text-xs text-muted-foreground" aria-live="polite">{matchedTotal === null ? "" : `共 ${matchedTotal} 条`}</span>
+          <Button variant="ghost" size="icon" aria-label="刷新异常记录" disabled={loading} onClick={reload}>
+            <RefreshCw className={loading ? "animate-spin motion-reduce:animate-none" : undefined} />
+          </Button>
+        </div>
       </div>
-      {error && <p role="alert" className="px-1 py-2 text-xs text-destructive">{error}</p>}
-      {!error && !loading && items.length === 0 && <p className="px-1 py-2 text-xs text-muted-foreground">暂无异常记录</p>}
-      {items.map((item) => (
-        <TaskListItem
-          key={`${item.kind}:${item.id}`}
-          label={item.title}
-          subtitle={`${executionRecordStatus(item)} · ${formatDatetime(item.updatedAt)}`}
-          icon={item.remoteUnknown ? <CircleHelp className="size-4 shrink-0 text-muted-foreground" /> : <XCircle className="size-4 shrink-0 text-destructive" />}
-          selected={selected?.kind === item.kind && selected.id === item.id}
-          onClick={() => onSelect(item)}
-        />
-      ))}
-      {loading && items.length === 0 && <div role="status" aria-label="加载异常记录" className="flex justify-center p-3"><Loader2 className="size-4 animate-spin text-muted-foreground" /></div>}
-      {more && <Button variant="ghost" size="sm" className="w-full" disabled={loading} onClick={() => {
-        setLoading(true);
-        setPage((value) => value + 1);
-      }}>加载更多</Button>}
+      <OverlayScrollArea className="min-h-0 flex-1" aria-label="异常记录列表">
+        <div className="flex flex-col gap-1 px-3 pb-3 pt-1">
+          {error && <div role="alert" className="flex flex-col items-start gap-2 px-1 py-3">
+            <p className="text-xs text-destructive">{error}</p>
+            <Button variant="outline" onClick={items.length ? loadMore : reload}>重试</Button>
+          </div>}
+          {!error && !loading && items.length === 0 && <p className="px-1 py-8 text-center text-xs text-muted-foreground">
+            {query.filter === "ALL" && query.days === 0 ? "暂无异常记录" : "没有符合条件的记录"}
+          </p>}
+          {items.map(item => (
+            <TaskListItem key={`${item.kind}:${item.id}`} label={item.title}
+              subtitle={`${executionRecordStatus(item)} · ${formatDatetime(item.updatedAt)}`}
+              icon={item.status === "CANCELLED" ? <Ban className="size-4 shrink-0 text-muted-foreground" />
+                : item.remoteUnknown || item.status === "NEEDS_REVIEW" ? <CircleHelp className="size-4 shrink-0 text-muted-foreground" />
+                : <XCircle className="size-4 shrink-0 text-destructive" />}
+              selected={selected?.kind === item.kind && selected.id === item.id} onClick={() => onSelect(item)} />
+          ))}
+          {loading && <div role="status" aria-label="加载异常记录" className="flex justify-center p-3">
+            <Loader2 className="size-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
+          </div>}
+          {hasMore && !error && <Button variant="ghost" className="w-full" disabled={loading} onClick={loadMore}>加载更多</Button>}
+        </div>
+      </OverlayScrollArea>
     </section>
   );
 }

@@ -22,6 +22,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class GenerationProviderFailureTests {
+    @Test
+    void googleArrayErrorPreservesTheMissingPermission() {
+        var failure = GenerationProviderFailure.http(403, """
+                [{"error":{"code":403,"message":"Permission 'aiplatform.interactions.create' denied",
+                  "details":[{"debug":"not for display"}]}}]
+                """);
+        assertThat(failure.reason()).isEqualTo("Permission 'aiplatform.interactions.create' denied");
+    }
+
     @ParameterizedTest
     @CsvSource({"400,false", "401,false", "403,false", "408,false", "429,false", "500,false", "503,false", "503,true"})
     void explicitHttpFailureBecomesDurableFailedReceiptWithoutResending(int status, boolean compressed) throws Exception {

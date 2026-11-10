@@ -273,7 +273,7 @@ export function ConversationNavigation({ onSelected }: { onSelected?: () => void
   const setDrawerOpen = useAssistantStore((state) => state.setDrawerOpen);
   return (
     <>
-      <aside className={cn("assistant-navigation", drawerOpen && "assistant-navigation-open")}>
+      <aside data-sidebar-navigation="assistant" className={cn("assistant-navigation", drawerOpen && "assistant-navigation-open")}>
         <ConversationList onSelected={onSelected} />
       </aside>
       {drawerOpen ? (

@@ -201,7 +201,7 @@ public class ReferenceImageTransportService {
         throw unsupported(model, reason);
     }
 
-    private String toDataUri(String source, ApiConfig apiConfig) {
+    public String toDataUri(String source, ApiConfig apiConfig) {
         if (StrUtil.startWithIgnoreCase(source, "data:")) {
             return source;
         }

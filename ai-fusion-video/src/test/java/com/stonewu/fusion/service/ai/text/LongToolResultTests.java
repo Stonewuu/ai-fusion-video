@@ -119,6 +119,32 @@ class LongToolResultTests {
     }
 
     @Test
+    @DisplayName("未配置上下文容量时，中等长度场次直接返回，长结果连续读取不丢字")
+    void unconfiguredModelsReadSceneSizedResultsWithoutExtraRoundTrips() throws Exception {
+        String content = "场次内容🌕".repeat(4000);
+        Msg message = Msg.builder().role(MsgRole.TOOL).content(ToolResultBlock.of("call", "get_script_scene",
+                TextBlock.builder().text(content).build())).build();
+        AgentState state = AgentState.builder().build();
+        state.contextMutable().add(message);
+        Agent agent = mock(Agent.class);
+        when(agent.getAgentState()).thenReturn(state);
+        new LongToolResultMiddleware(results, null).onReasoning(agent,
+                RuntimeContext.builder().userId("7").sessionId("session").build(),
+                new ReasoningInput(List.of(message), List.of(), null), input -> {
+                    var block = (ToolResultBlock) input.messages().getFirst().getContent().getFirst();
+                    assertThat(((TextBlock) block.getOutput().getFirst()).getText()).isEqualTo(content);
+                    return Flux.empty();
+                }).blockLast();
+        verify(workspace, never()).putArtifactIfAbsent(any(), anyString(), any());
+        var first = TextPages.read(content, TextPages.Request.from(json.readTree("{}"), null));
+        var remaining = TextPages.read(content, TextPages.Request.from(json.createObjectNode()
+                .put("offset", first.nextOffset()).put("contentVersion", first.contentVersion()), null));
+        assertThat(first.endOffset()).isGreaterThan(8000);
+        assertThat(first.content() + remaining.content()).isEqualTo(content);
+        assertThat(remaining.hasMore()).isFalse();
+    }
+
+    @Test
     @DisplayName("保存失败必须停止处理并保留原状态，不能返回无法读取的占位内容")
     void storageFailureDoesNotDiscardCanonicalContentOrCallTheModel() {
         String content = "文".repeat(95910);

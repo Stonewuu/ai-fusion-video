@@ -203,7 +203,7 @@ class GenerationSingleRequestTests {
         config.setAppId("test-project");
         config.setAppSecret("{}");
         config.setApiUrl(base + "/v1/projects/test/locations/us-central1/publishers/google/models/imagen:predict");
-        var vertex = new VertexAiImageStrategy(mock(ImageGenerationService.class), mock(AiModelService.class), mock(GenerationMediaService.class));
+        var vertex = new VertexAiImageStrategy(mock(ImageGenerationService.class), mock(AiModelService.class), mock(GenerationMediaService.class), null);
         assertThatThrownBy(() -> vertex.prepare(ImageTask.builder().prompt("original").count(1).build(),
                 AiModel.builder().code("imagen-4.0-generate-001").build(), config)).hasMessageContaining("身份准备失败");
         assertThat(received).isEmpty();

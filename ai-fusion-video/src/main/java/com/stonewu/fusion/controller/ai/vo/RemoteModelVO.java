@@ -53,4 +53,5 @@ public class RemoteModelVO {
      * 是否由系统推断补全元数据
      */
     private Boolean inferredMetadata;
+
 }

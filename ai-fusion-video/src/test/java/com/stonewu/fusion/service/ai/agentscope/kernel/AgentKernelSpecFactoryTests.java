@@ -188,6 +188,34 @@ class AgentKernelSpecFactoryTests {
     }
 
     @Test
+    void framePromptOnlyRunCannotGenerateImagesAfterDelegationOrRestore() {
+        ToolExecutor generator = mock(ToolExecutor.class);
+        when(generator.getToolName()).thenReturn("generate_image");
+        when(generator.isEnabled()).thenReturn(true);
+        when(generator.getParametersSchema()).thenReturn("{\"type\":\"object\",\"properties\":{}}");
+        ToolExecutor update = mock(ToolExecutor.class);
+        when(update.getToolName()).thenReturn("update_storyboard_item_frame");
+        when(update.isEnabled()).thenReturn(true);
+        when(update.getParametersSchema()).thenReturn("{\"type\":\"object\",\"properties\":{}}");
+        var models = mock(AgentScopeModelFactory.class);
+        when(models.modelConfigFingerprint(model)).thenReturn("a".repeat(64));
+        var agents = AgentConfigurationTestSupport.agents(registry);
+        var configured = new AgentKernelSpecFactory(agents, new AiToolConfigService(List.of(generator, update), registry),
+                models, new AgentScopeV2Properties(), new ObjectMapper(), mcp, AgentConfigurationTestSupport.skills(agents));
+        var parent = configured.createRoot(request().setAgentType("storyboard_frame_gen")
+                .setContext(Map.of("promptOnly", true)), model, "仅优化首帧提示词");
+        assertThat(parent.toolWhitelist()).contains("generate_storyboard_frame").doesNotContain("generate_image");
+        var child = configured.createChild(parent, registry.getByType("storyboard_frame_gen").getSubAgentTools().getFirst(),
+                new ProjectContext(7L), Map.of("message", "只优化提示词", "promptOnly", false));
+        assertThat(child.promptVariables()).containsEntry("promptOnly", "true");
+        assertThat(child.toolWhitelist()).contains("update_storyboard_item_frame")
+                .doesNotContain("generate_image", "await_generation_task", "generate_video");
+        var snapshot = new CanonicalAgentKernelSnapshotBuilder().build(child);
+        var restored = configured.restore(snapshot.payload(), model, "a".repeat(64));
+        assertThat(restored.toolWhitelist()).isEqualTo(child.toolWhitelist());
+    }
+
+    @Test
     void explicitEmptyMcpReferencesDisableMcpTools() {
         AgentKernelToolManifest search = new AgentKernelToolManifest(
                 "search_assets",

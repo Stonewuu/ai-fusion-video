@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils";
 import { projectApi, type Project } from "@/lib/api/project";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { useAuthStore } from "@/lib/store/auth-store";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 
 // ========== 各模块的二级菜单配置 ==========
 
@@ -82,6 +83,7 @@ export function SidebarNav({
   onCollapsedChange,
 }: SidebarNavProps) {
   const router = useRouter();
+  const reducedMotion = usePrefersReducedMotion();
   const pathname = usePathname();
   const currentUser = useAuthStore((state) => state.user);
   const isAdmin = currentUser?.roles?.includes("admin") ?? false;
@@ -185,20 +187,22 @@ export function SidebarNav({
 
   return (
     <div
+      data-dashboard-sidebar
+      data-sidebar-navigation="global"
       className={cn(
         "w-full h-[calc(100vh-6rem)] rounded-2xl p-2",
-        "bg-linear-to-b from-background/80 to-background/40",
-        "backdrop-blur-lg border border-border/40",
+        "bg-card [contain:paint]",
+        "border border-border/40",
         "shadow-lg"
       )}
     >
       <AnimatePresence mode="wait">
         <motion.div
           key={sectionTitle}
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: reducedMotion ? 0 : 8 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.2, ease: "easeOut" }}
+          transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}
         >
           {/* 标题区 */}
           {collapsed ? (
@@ -279,18 +283,19 @@ export function SidebarNav({
                   onClick={() => handleNav(item.href)}
                   title={item.label}
                   aria-label={item.label}
+                  aria-current={isActive ? "page" : undefined}
                   className={cn(
                     "w-full flex items-center rounded-xl text-sm",
-                    "transition-all duration-150 relative",
+                    "relative outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
                     collapsed
                       ? "h-10 justify-center px-0"
                       : "gap-2.5 px-3 py-2",
                     isActive
-                      ? "font-medium text-foreground bg-foreground/6"
-                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/3"
+                      ? "font-medium text-foreground bg-foreground/10"
+                      : "text-muted-foreground hover:text-foreground hover:bg-foreground/6"
                   )}
                 >
-                  <span className={cn("transition-colors", isActive ? item.iconColor : "")}>
+                  <span className={isActive ? item.iconColor : undefined}>
                     <Icon className="h-[18px] w-[18px]" />
                   </span>
                   {!collapsed && <span>{item.label}</span>}

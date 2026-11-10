@@ -5,10 +5,12 @@ import { Image as ImageIcon, Loader2, Sparkles, X, ZoomIn } from "lucide-react";
 import ImageInput from "@/components/dashboard/image-input";
 import { SafeImage } from "@/components/media/managed-image";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { cn } from "@/lib/utils";
+import { buildDefaultFramePrompt } from "@/lib/storyboard/frame-prompts";
 import type { Project } from "@/lib/api/project";
 import type { StoryboardFrameType, StoryboardItem } from "@/lib/api/storyboard";
 
@@ -28,50 +30,11 @@ function getFrameLabel(frameType: StoryboardFrameType) {
   return frameType === "first" ? "首帧" : "尾帧";
 }
 
-function buildDefaultFramePrompt(
-  item: StoryboardItem,
-  project: Project | null | undefined,
-  frameType: StoryboardFrameType
-) {
-  const style =
-    [
-      project?.artStyleDescription,
-      project?.artStyleImagePrompt,
-      project?.artStyle,
-    ].find((text) => text && text.trim()) || "高质量精细画面";
-  const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
-  const parts = [
-    `项目画风：${style}`,
-    `镜头：${shotLabel}`,
-    item.shotType ? `景别：${item.shotType}` : null,
-    item.content ? `画面内容：${item.content}` : null,
-    item.sceneExpectation ? `画面期望：${item.sceneExpectation}` : null,
-    item.dialogue ? `对白/旁白：${item.dialogue}` : null,
-    item.cameraMovement ? `运镜：${item.cameraMovement}` : null,
-    item.cameraAngle ? `机位角度：${item.cameraAngle}` : null,
-  ].filter(Boolean);
-
-  const frameInstruction =
-    frameType === "first"
-      ? "生成该镜头视频的首帧定格图，表现动作开始前或刚开始的关键瞬间，画面要能自然作为视频开场。"
-      : "生成该镜头视频的尾帧定格图，表现动作完成后的结尾状态，画面要能自然作为视频结束帧。";
-
-  return `${frameInstruction}\n${parts.join("\n")}`;
-}
-
-export function buildDefaultBatchFramePrompt(frameType: StoryboardFrameType) {
-  const frameInstruction =
-    frameType === "first"
-      ? "生成每个分镜镜头视频的首帧定格图，表现动作开始前或刚开始的关键瞬间，画面要能自然作为视频开场。"
-      : "生成每个分镜镜头视频的尾帧定格图，表现动作完成后的结尾状态，画面要能自然作为视频结束帧。";
-
-  return `${frameInstruction}\n请结合每个镜头自身的画面内容、画面期望、对白/旁白、景别、运镜、机位角度、角色、道具、场景和项目画风补足构图、主体关系、环境氛围与细节。保持同一分镜集内角色、道具、场景和画面风格一致。`;
-}
-
 function FramePromptDialog({
   open,
   title,
   defaultPrompt,
+  replaceExisting,
   submitting,
   onClose,
   onConfirm,
@@ -79,18 +42,23 @@ function FramePromptDialog({
   open: boolean;
   title: string;
   defaultPrompt: string;
+  replaceExisting: boolean;
   submitting?: boolean;
   onClose: () => void;
   onConfirm: (prompt: string) => Promise<void> | void;
 }) {
   const [prompt, setPrompt] = useState(defaultPrompt);
 
-  if (!open) return null;
+  if (!open) {
+    return null;
+  }
 
   const canSubmit = prompt.trim().length > 0 && !submitting;
 
   const handleConfirm = async () => {
-    if (!canSubmit) return;
+    if (!canSubmit) {
+      return;
+    }
     await onConfirm(prompt.trim());
   };
 
@@ -109,22 +77,25 @@ function FramePromptDialog({
             <div>
               <h3 className="text-sm font-semibold">{title}</h3>
               <p className="text-[10px] text-muted-foreground">
-                编辑后提交到任务中心
+                {replaceExisting ? "生成成功后将替换当前参考图" : "编辑提示词，生成镜头参考图"}
               </p>
             </div>
           </div>
-          <button
+          <Button
             type="button"
+            variant="ghost"
+            size="icon"
             onClick={onClose}
             disabled={submitting}
-            className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground transition-colors disabled:opacity-40"
+            aria-label="关闭提示词"
           >
-            <X className="h-4 w-4" />
-          </button>
+            <X />
+          </Button>
         </div>
 
         <div className="p-5 min-h-0 overflow-hidden">
           <Textarea
+            aria-label="画面提示词"
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
             className="h-[min(52vh,28rem)] min-h-40 max-h-full overflow-y-auto overscroll-contain text-xs leading-relaxed resize-none [field-sizing:fixed]"
@@ -132,23 +103,19 @@ function FramePromptDialog({
         </div>
 
         <div className="px-5 py-3.5 border-t border-border/20 flex items-center justify-end gap-2 shrink-0">
-          <button
+          <Button
             type="button"
+            variant="ghost"
             onClick={onClose}
             disabled={submitting}
-            className="px-4 py-2 rounded-lg text-xs font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-40"
           >
             取消
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
+            variant="ai"
             onClick={handleConfirm}
             disabled={!canSubmit}
-            className={cn(
-              "flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium transition-all",
-              "bg-primary text-primary-foreground hover:bg-primary/90",
-              "disabled:opacity-40 disabled:pointer-events-none"
-            )}
           >
             {submitting ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -156,7 +123,7 @@ function FramePromptDialog({
               <Sparkles className="h-3.5 w-3.5" />
             )}
             提交生成
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -195,7 +162,9 @@ export function FrameReferenceSection({
   const { confirm } = useConfirm();
 
   const confirmOverwrite = useCallback(async () => {
-    if (!imageUrl) return true;
+    if (!imageUrl) {
+      return true;
+    }
     return await confirm({
       title: "覆盖参考图",
       description: `${label}参考图已存在，确认覆盖吗？`,
@@ -205,7 +174,9 @@ export function FrameReferenceSection({
   }, [confirm, imageUrl, label]);
 
   const handleChange = async (nextValue: string) => {
-    if (!onUpdateFrame) return;
+    if (!onUpdateFrame) {
+      return;
+    }
     const nextUrl = nextValue.trim() || null;
     const currentUrl = imageUrl?.trim() || null;
     if (
@@ -229,14 +200,17 @@ export function FrameReferenceSection({
     }
   };
 
-  const handleOpenPrompt = async () => {
-    if (!onGenerateFrame) return;
-    if (!(await confirmOverwrite())) return;
+  const handleOpenPrompt = () => {
+    if (!onGenerateFrame) {
+      return;
+    }
     setPromptOpen(true);
   };
 
   const handleConfirmPrompt = async (nextPrompt: string) => {
-    if (!onGenerateFrame) return;
+    if (!onGenerateFrame) {
+      return;
+    }
     try {
       setSubmitting(true);
       await onGenerateFrame(item, frameType, nextPrompt);
@@ -291,8 +265,8 @@ export function FrameReferenceSection({
           onChange={(nextUrl) => {
             void handleChange(nextUrl);
           }}
-          previewHeight="h-96"
-          previewContainerClassName="mx-auto w-[360px] max-w-full bg-muted/20"
+          previewHeight="aspect-[3/2] w-full"
+          previewContainerClassName="bg-background"
           previewImageClassName="object-contain"
           onPreviewClick={
             imageUrl && onPreviewImage
@@ -325,6 +299,7 @@ export function FrameReferenceSection({
         open={promptOpen}
         title={`AI生成${label}`}
         defaultPrompt={defaultPrompt}
+        replaceExisting={!!imageUrl}
         submitting={submitting}
         onClose={() => setPromptOpen(false)}
         onConfirm={handleConfirmPrompt}
@@ -360,7 +335,9 @@ export function StoryboardFrameReferenceDialog({
     setPreviewImageTitle(title);
   }, []);
 
-  if (!open || !item) return null;
+  if (!open || !item) {
+    return null;
+  }
 
   const shotLabel = item.shotNumber || item.autoShotNumber || String(item.id);
   const activeImageUrl =

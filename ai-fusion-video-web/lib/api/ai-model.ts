@@ -110,6 +110,12 @@ export interface AiModelUpdateReq {
 
 /** 模型能力预设（从后端 JSON 加载） */
 export interface ModelPreset {
+  official?: boolean;
+  matchPlatforms?: string[];
+  sourceUrls?: string[];
+  verifiedAt?: string;
+  outputTokenLimit?: number;
+  lifecycle?: string;
   providerId?: string;
   modelCapabilities?: Record<string, unknown>;
   code: string;
@@ -223,7 +229,8 @@ export const PLATFORM_OPTIONS = [
   { value: "openai_compatible", label: "OpenAI / 兼容接入", description: "API Key / Bearer 鉴权；文本、图片、视频协议可分别配置" },
   { value: "newapi", label: "New API", description: "New API 聚合网关，支持远程模型发现与视频任务接口" },
   { value: "volcengine", label: "火山引擎（豆包）", description: "字节跳动火山引擎豆包大模型" },
-  { value: "vertex_ai", label: "Google Vertex AI", description: "Google Cloud Vertex AI Gemini" },
+  { value: "vertex_ai", label: "Google Vertex AI（服务账号）", description: "项目 ID、区域与服务账号 JSON，支持自动获取模型" },
+  { value: "vertex_ai_api_key", label: "Google Vertex AI（API Key）", description: "使用 Google Cloud 的 Vertex API Key，通过全球端点调用" },
   { value: "gemini", label: "Google Gemini API", description: "Google AI Studio / Gemini Developer API" },
   { value: "GoogleFlowReverseApi", label: "Google Flow Reverse API", description: "Flow2API 反向代理，图片/视频 alias 模型" },
   { value: "dashscope", label: "阿里 DashScope", description: "阿里云百炼 / DashScope（通义千问、万相、Qwen-Image）" },
@@ -235,20 +242,18 @@ export const PLATFORM_OPTIONS = [
 
 /** 模型类型选项 */
 export const MODEL_TYPE_OPTIONS = [
-  { value: 1, label: "对话" },
+  { value: 1, label: "文字生成" },
   { value: 2, label: "图像生成" },
   { value: 3, label: "视频生成" },
-  { value: 4, label: "语音合成" },
-  { value: 5, label: "语音识别" },
+  { value: 4, label: "音频生成" },
 ] as const;
 
 /** 模型类型标签映射 */
 export const MODEL_TYPE_LABELS: Record<number, string> = {
-  1: "对话",
+  1: "文字生成",
   2: "图像生成",
   3: "视频生成",
-  4: "语音合成",
-  5: "语音识别",
+  4: "音频生成",
 };
 
 /** 接入与鉴权类型标签映射 */
@@ -262,6 +267,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
   moonshot: "Moonshot",
   siliconflow: "硅基流动",
   vertex_ai: "Vertex AI",
+  vertex_ai_api_key: "Vertex AI · API Key",
   vertexai: "Vertex AI",
   GoogleFlowReverseApi: "Google Flow Reverse API",
   gemini: "Gemini",

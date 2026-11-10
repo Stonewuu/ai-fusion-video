@@ -16,11 +16,15 @@ public final class GenerationProviderFailure extends BusinessException {
     private static final ObjectMapper JSON = new ObjectMapper();
     private final int httpStatus;
     private final String reason;
+    private final String errorCode;
+    private final String retryAfter;
 
-    private GenerationProviderFailure(int status, String reason) {
+    private GenerationProviderFailure(int status, String reason, String errorCode, String retryAfter) {
         super(502, "生成失败（HTTP " + status + "）：" + reason);
         this.httpStatus = status;
         this.reason = reason;
+        this.errorCode = errorCode;
+        this.retryAfter = retryAfter;
     }
 
     public int httpStatus() {
@@ -31,8 +35,33 @@ public final class GenerationProviderFailure extends BusinessException {
         return reason;
     }
 
+    public String errorCode() {
+        return errorCode;
+    }
+
+    public String retryAfter() {
+        return retryAfter;
+    }
+
     public static GenerationProviderFailure http(int status, String body) {
-        return new GenerationProviderFailure(status, reason(body));
+        return http(status, body, null);
+    }
+
+    public static GenerationProviderFailure http(int status, String body, String retryAfter) {
+        return new GenerationProviderFailure(status, reason(body), errorCode(body), retryAfter);
+    }
+
+    private static String errorCode(String body) {
+        if (body == null || !body.stripLeading().startsWith("{")) {
+            return null;
+        }
+        try {
+            JsonNode node = JSON.readTree(body);
+            JsonNode error = node.path("error");
+            return (error.isObject() ? error : node).path("code").asText(null);
+        } catch (JsonProcessingException invalid) {
+            return null;
+        }
     }
 
     public static GenerationProviderFailure find(Throwable failure) {
@@ -73,6 +102,15 @@ public final class GenerationProviderFailure extends BusinessException {
         }
         if (node.isTextual()) {
             return node.asText();
+        }
+        if (node.isArray()) {
+            for (JsonNode item : node) {
+                String text = message(item);
+                if (text != null && !text.isBlank()) {
+                    return text;
+                }
+            }
+            return null;
         }
         for (String field : new String[]{"error", "message", "detail", "msg", "error_message", "errorMessage"}) {
             String text = message(node.get(field));

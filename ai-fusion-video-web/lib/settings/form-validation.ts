@@ -19,7 +19,7 @@ export function apiConfigIssue(form: ApiConfigSaveReq, fields: { key: string; la
     if (field.required && !(field.key === "apiKey" && noKey && form.platform === "openai_compatible") && !String(values[field.key] ?? "").trim())
       return { field: `api-field-${field.key}`, message: `请填写${field.label}。` };
   }
-  if (form.apiUrl?.trim() && form.platform !== "vertex_ai") {
+  if (form.apiUrl?.trim() && form.platform !== "vertex_ai" && form.platform !== "vertex_ai_api_key") {
     const message = httpAddressIssue(form.apiUrl, "API 地址");
     if (message) return { field: "api-field-apiUrl", message };
   }

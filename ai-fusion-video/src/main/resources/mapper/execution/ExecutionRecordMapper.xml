@@ -25,10 +25,19 @@
         SELECT 'EPISODE_AUDIO', j.id, '分集合成与配乐', j.status, j.error_msg, j.created_at, j.updated_at
         FROM afv_media_job j JOIN afv_episode_audio_job a ON a.job_id = j.id WHERE j.actor_user_id = #{userId}
     </sql>
+    <sql id="filters">
+        WHERE status IN
+        <foreach collection="statuses" item="status" open="(" separator="," close=")">#{status}</foreach>
+        <if test="since != null">AND updated_at &gt;= #{since}</if>
+    </sql>
     <select id="list" resultType="com.stonewu.fusion.mapper.execution.ExecutionRecordMapper$Row">
         SELECT * FROM (<include refid="records"/>) execution_records
-        WHERE status IN ('UNKNOWN_SUBMISSION', 'NEEDS_REVIEW', 'FAILED', 'PARTIAL_FAILED', 'CONFLICT', 'CANCELLED')
+        <include refid="filters"/>
         ORDER BY updated_at DESC, kind, id LIMIT #{limit} OFFSET #{offset}
+    </select>
+    <select id="count" resultType="long">
+        SELECT COUNT(*) FROM (<include refid="records"/>) execution_records
+        <include refid="filters"/>
     </select>
     <select id="get" resultType="com.stonewu.fusion.mapper.execution.ExecutionRecordMapper$Row">
         SELECT * FROM (<include refid="records"/>) execution_records WHERE kind = #{kind} AND id = #{id}

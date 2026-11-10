@@ -54,16 +54,19 @@ public class ApiConfig extends BaseEntity {
     /**
      * 文本模型默认请求协议；同一接入配置可按能力类型使用不同协议
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String textProtocol;
 
     /**
      * 图片模型默认请求协议
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String imageProtocol;
 
     /**
      * 视频模型默认请求协议
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String videoProtocol;
 
     /**
@@ -74,6 +77,7 @@ public class ApiConfig extends BaseEntity {
     /**
      * API 接口地址
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String apiUrl;
 
     /**
@@ -86,26 +90,31 @@ public class ApiConfig extends BaseEntity {
     /**
      * 出站代理类型：none / http / socks5
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String proxyType;
 
     /**
      * 出站代理主机
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String proxyHost;
 
     /**
      * 出站代理端口
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private Integer proxyPort;
 
     /**
      * 出站代理认证用户名
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String proxyUsername;
 
     /**
      * 出站代理认证密码
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String proxyPassword;
 
     /**

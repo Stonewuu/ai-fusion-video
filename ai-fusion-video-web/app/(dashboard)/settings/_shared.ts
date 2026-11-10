@@ -101,7 +101,8 @@ export function getPlatformFields(platform: string): PlatformField[] {
     case "vertex_ai":
       return [
         { key: "appId", label: "项目 ID (Project ID)", placeholder: "my-gcp-project", type: "text", required: true },
-        { key: "apiUrl", label: "区域 (Location)", placeholder: "us-central1", type: "text" },
+        { key: "apiUrl", label: "区域 (Location)", placeholder: "global", type: "text", required: true,
+          helperText: "填写模型支持的区域，例如 global 或 us-central1。模型在不同区域的可用性不同。" },
         {
           key: "appSecret",
           label: "服务账号 JSON Key",
@@ -109,6 +110,19 @@ export function getPlatformFields(platform: string): PlatformField[] {
           type: "text",
           multiline: true,
           helperText: "Vertex AI 还需要认证凭证。留空时依赖服务器上的 ADC；若需显式凭证或用于 Imagen 文生图，可在此填写服务账号 JSON Key。",
+        },
+      ];
+    case "vertex_ai_api_key":
+      return [
+        { key: "appId", label: "项目 ID", placeholder: "my-gcp-project", type: "text",
+          helperText: "Omni、研究与音乐模型需要填写项目 ID。" },
+        {
+          key: "apiKey",
+          label: "Vertex AI API Key",
+          placeholder: "Google Cloud API Key",
+          type: "password",
+          required: true,
+          helperText: "使用 Google Cloud 中可调用 Vertex AI 的 API Key。模型目录接口要求服务账号认证；可先用服务账号获取模型，再切换为 API Key 调用。",
         },
       ];
     case "gemini":

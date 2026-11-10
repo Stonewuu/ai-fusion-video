@@ -1,0 +1,327 @@
+[
+  {
+    "code": "google:gemini-omni-1.2-flash",
+    "modelCode": "gemini-omni-1.2-flash",
+    "name": "Gemini Omni 1.2 Flash",
+    "platform": "gemini",
+    "modelType": 3,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/video/generate-videos-from-text"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Gemini Omni 1.2 Flash",
+    "config": {
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceVideoInputFormats": [
+        "data_uri"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 6,
+      "maxReferenceImages": 6,
+      "maxReferenceVideos": 3,
+      "maxReferenceAudios": 0,
+      "supportedResolutions": [
+        "360p",
+        "720p",
+        "1080p",
+        "4k"
+      ],
+      "supportedAspectRatios": [
+        "16:9",
+        "9:16"
+      ],
+      "minDuration": 3,
+      "maxDuration": 15,
+      "defaultDuration": 5,
+      "defaultResolution": "720p",
+      "supportSeed": true,
+      "supportGenerateAudio": false,
+      "googleAudioAlwaysOn": true
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "contextWindow": 131072,
+    "outputTokenLimit": 65536
+  },
+  {
+    "code": "google:gemini-omni-1.1-flash-preview",
+    "modelCode": "gemini-omni-1.1-flash-preview",
+    "name": "Gemini Omni 1.1 Flash Preview",
+    "platform": "gemini",
+    "modelType": 3,
+    "official": true,
+    "matchPlatforms": [
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/video/generate-videos-from-text"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Gemini Omni 1.1 Flash Preview",
+    "config": {
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceVideoInputFormats": [
+        "data_uri"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 6,
+      "maxReferenceImages": 6,
+      "maxReferenceVideos": 3,
+      "maxReferenceAudios": 0,
+      "supportedResolutions": [
+        "360p",
+        "720p",
+        "1080p",
+        "4k"
+      ],
+      "supportedAspectRatios": [
+        "16:9",
+        "9:16"
+      ],
+      "minDuration": 3,
+      "maxDuration": 10,
+      "defaultDuration": 5,
+      "defaultResolution": "720p",
+      "supportSeed": true,
+      "supportGenerateAudio": false,
+      "googleAudioAlwaysOn": true
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "contextWindow": 131072,
+    "outputTokenLimit": 65536
+  },
+  {
+    "code": "google:gemini-omni-1.1-flash",
+    "modelCode": "gemini-omni-1.1-flash",
+    "name": "Gemini Omni 1.1 Flash",
+    "platform": "gemini",
+    "modelType": 3,
+    "official": true,
+    "matchPlatforms": [
+      "gemini"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/video/generate-videos-from-text"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Gemini Omni 1.1 Flash",
+    "config": {
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceVideoInputFormats": [
+        "data_uri"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 6,
+      "maxReferenceImages": 6,
+      "maxReferenceVideos": 3,
+      "maxReferenceAudios": 0,
+      "supportedResolutions": [
+        "360p",
+        "720p",
+        "1080p",
+        "4k"
+      ],
+      "supportedAspectRatios": [
+        "16:9",
+        "9:16"
+      ],
+      "minDuration": 3,
+      "maxDuration": 10,
+      "defaultDuration": 5,
+      "defaultResolution": "720p",
+      "supportSeed": true,
+      "supportGenerateAudio": false,
+      "googleAudioAlwaysOn": true
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "contextWindow": 131072,
+    "outputTokenLimit": 65536
+  },
+  {
+    "code": "google:veo-3.1-generate-001",
+    "modelCode": "veo-3.1-generate-001",
+    "name": "Veo 3.1",
+    "platform": "gemini",
+    "modelType": 3,
+    "official": true,
+    "matchPlatforms": [
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/veo/3-1-generate"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Veo 3.1",
+    "config": {
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceVideoInputFormats": [
+        "data_uri"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 3,
+      "maxReferenceImages": 3,
+      "maxReferenceVideos": 1,
+      "maxReferenceAudios": 0,
+      "supportedResolutions": [
+        "720p",
+        "1080p",
+        "4k"
+      ],
+      "supportedAspectRatios": [
+        "16:9",
+        "9:16"
+      ],
+      "minDuration": 4,
+      "maxDuration": 8,
+      "defaultDuration": 8,
+      "defaultResolution": "720p",
+      "supportSeed": true,
+      "supportGenerateAudio": true,
+      "googleLocation": "us-central1"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": []
+  },
+  {
+    "code": "google:veo-3.1-fast-generate-001",
+    "modelCode": "veo-3.1-fast-generate-001",
+    "name": "Veo 3.1 Fast",
+    "platform": "gemini",
+    "modelType": 3,
+    "official": true,
+    "matchPlatforms": [
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/veo/3-1-generate"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Veo 3.1 Fast",
+    "config": {
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceVideoInputFormats": [
+        "data_uri"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 3,
+      "maxReferenceImages": 3,
+      "maxReferenceVideos": 1,
+      "maxReferenceAudios": 0,
+      "supportedResolutions": [
+        "720p",
+        "1080p"
+      ],
+      "supportedAspectRatios": [
+        "16:9",
+        "9:16"
+      ],
+      "minDuration": 4,
+      "maxDuration": 8,
+      "defaultDuration": 8,
+      "defaultResolution": "720p",
+      "supportSeed": true,
+      "supportGenerateAudio": true,
+      "googleLocation": "us-central1"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": []
+  },
+  {
+    "code": "google:veo-3.1-lite-generate-001",
+    "modelCode": "veo-3.1-lite-generate-001",
+    "name": "Veo 3.1 Lite",
+    "platform": "gemini",
+    "modelType": 3,
+    "official": true,
+    "matchPlatforms": [
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "sourceUrls": [
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/veo/3-1-generate"
+    ],
+    "verifiedAt": "2026-11-07",
+    "description": "Veo 3.1 Lite",
+    "config": {
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "referenceVideoInputFormats": [
+        "data_uri"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": false,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 2,
+      "maxReferenceImages": 0,
+      "maxReferenceVideos": 1,
+      "maxReferenceAudios": 0,
+      "supportedResolutions": [
+        "720p",
+        "1080p"
+      ],
+      "supportedAspectRatios": [
+        "16:9",
+        "9:16"
+      ],
+      "minDuration": 4,
+      "maxDuration": 8,
+      "defaultDuration": 8,
+      "defaultResolution": "720p",
+      "supportSeed": true,
+      "supportGenerateAudio": true,
+      "googleLocation": "us-central1"
+    },
+    "supportReasoning": false,
+    "reasoningEffortLevels": []
+  }
+]

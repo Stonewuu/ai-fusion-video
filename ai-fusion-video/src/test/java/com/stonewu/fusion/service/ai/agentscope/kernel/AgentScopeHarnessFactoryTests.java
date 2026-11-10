@@ -140,10 +140,13 @@ class AgentScopeHarnessFactoryTests {
 
         assertThat(configured.getTriggerMessages()).isZero();
         assertThat(configured.getTriggerTokens()).isEqualTo(209_715);
+        assertThat(configured.isOffloadBeforeCompact()).isFalse();
+        assertThat(configured.isFlushBeforeCompact()).isFalse();
 
         var fallback = AgentScopeHarnessFactory.compactionConfig(null);
         assertThat(fallback.getTriggerMessages()).isEqualTo(50);
         assertThat(fallback.getTriggerTokens()).isZero();
+        assertThat(fallback.isOffloadBeforeCompact()).isFalse();
 
         assertThat(AgentScopeHarnessFactory.resolveContextWindow(1_000_000, 8_192))
                 .isEqualTo(1_000_000);

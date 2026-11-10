@@ -14,6 +14,15 @@
         WHERE scope_key = #{scope}
             AND agent_invocation_key = SHA2(CAST(JSON_ARRAY(#{agentRunId}, #{toolCallId}) AS CHAR CHARACTER SET utf8mb4), 256)
     </select>
+    <select id="selectAssetImageReferenceSnapshot" resultType="com.stonewu.fusion.service.generation.job.AssetImageReferenceSnapshot">
+        SELECT s.id AS submission_id, j.input_json
+        FROM afv_generation_submission s
+        LEFT JOIN afv_remote_generation_job j ON j.submission_id = s.id AND j.item_index = 0
+        WHERE s.scope_key = #{scope} AND s.kind = 'IMAGE'
+            AND JSON_UNQUOTE(JSON_EXTRACT(s.context_json, '$.agentRunId')) = #{agentRunId}
+        ORDER BY s.created_at, s.id
+        LIMIT 1
+    </select>
     <insert id="insertQueued">
         INSERT INTO afv_generation_submission(id, request_id, scope_key, request_hash, kind, task_id, public_task_id,
             actor_user_id, actor_team_id, project_id, canvas_node_run_id, context_json, model_snapshot_json,

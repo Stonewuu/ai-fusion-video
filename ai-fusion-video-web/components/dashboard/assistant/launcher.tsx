@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
-import { motion, useReducedMotion } from "framer-motion";
+import { motion } from "framer-motion";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   ASSISTANT_LAUNCHER_SIZE,
@@ -10,15 +10,17 @@ import {
 } from "./geometry";
 import { useAssistantStore } from "@/lib/store/assistant-store";
 import { AssistantBrandIcon } from "./assistant-brand-icon";
+import { usePageVisible } from "@/hooks/use-page-visible";
+import { usePrefersReducedMotion } from "@/hooks/use-prefers-reduced-motion";
 
 // The open launcher overlays the 56px title bar; keep this separate from the collapsed hit area.
 const ASSISTANT_OPEN_LAUNCHER_AREA_SIZE = 56;
 
 interface AssistantLauncherProps {
   collapsed: boolean;
-  wavesVisible: boolean;
+  ringVisible: boolean;
   status: AssistantLauncherStatus;
-  onOpen: (openedByPointer: boolean) => void;
+  onOpen: () => void;
   onPositionPaint: (position: AssistantPoint) => void;
 }
 
@@ -26,12 +28,13 @@ export type AssistantLauncherStatus = "idle" | "running" | "completed";
 
 export function AssistantLauncher({
   collapsed,
-  wavesVisible,
+  ringVisible,
   status,
   onOpen,
   onPositionPaint,
 }: AssistantLauncherProps) {
-  const reducedMotion = useReducedMotion();
+  const reducedMotion = usePrefersReducedMotion();
+  const pageVisible = usePageVisible();
   const position = useAssistantStore((state) => state.launcherPosition);
   const updatePosition = useAssistantStore((state) => state.updateLauncherPosition);
   const pointerRef = useRef<{ x: number; y: number; originX: number; originY: number } | null>(null);
@@ -120,17 +123,18 @@ export function AssistantLauncher({
         duration: reducedMotion ? 0.01 : collapsed ? 0.15 : 0.2,
         ease: collapsed ? "easeIn" : "easeOut",
       }}
-      className={collapsed && wavesVisible
+      className={collapsed && ringVisible
         ? "absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2"
         : "absolute left-0 top-0 z-20"}
       style={{
         pointerEvents: collapsed ? "auto" : "none",
       }}
     >
-      {collapsed && wavesVisible ? (
+      {collapsed && ringVisible ? (
         <span
           aria-hidden="true"
           data-status={status}
+          data-paused={!pageVisible}
           className="assistant-launcher-waves"
         >
           <span className="assistant-launcher-wave" />
@@ -158,7 +162,9 @@ export function AssistantLauncher({
                   draggedRef.current = false;
                   return;
                 }
-                if (collapsed) onOpen(event.detail > 0);
+                if (collapsed) {
+                  onOpen();
+                }
               }}
               style={{ touchAction: "none" }}
               className="relative z-10 flex size-full cursor-pointer select-none items-center justify-center rounded-full bg-transparent text-primary outline-none transition-colors hover:bg-transparent focus-visible:ring-[3px] focus-visible:ring-ring/50 active:bg-transparent"

@@ -47,8 +47,8 @@ public final class AiModelMultimodalCapabilities {
             }
             normalizedTypes.add(type);
         }
-        if (!Integer.valueOf(1).equals(model.getModelType()) && !normalizedTypes.isEmpty()) {
-            throw new BusinessException(400, "只有对话模型可以配置多模态输入能力");
+        if (!List.of(1, 4).contains(model.getModelType()) && !normalizedTypes.isEmpty()) {
+            throw new BusinessException(400, "当前模型类型不支持这些输入能力，请检查模型类型");
         }
 
         Map<String, List<String>> normalizedTransports = new LinkedHashMap<>();

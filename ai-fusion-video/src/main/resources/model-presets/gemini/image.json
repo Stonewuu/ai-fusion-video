@@ -1,0 +1,450 @@
+[
+  {
+    "code": "google:gemini-nano-banana-2.1",
+    "modelCode": "gemini-nano-banana-2.1",
+    "name": "Nano Banana 2.1",
+    "platform": "gemini",
+    "modelType": 2,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方图片生成与编辑模型。",
+    "contextWindow": 131072,
+    "outputTokenLimit": 32768,
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "medium",
+      "minimal"
+    ],
+    "lifecycle": "stable",
+    "verifiedAt": "2026-11-06",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-nano-banana-2.1",
+      "https://aistudio.google.com/docs/generate-content/image-generation",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/nano-banana-2-1"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": [
+        "1:1",
+        "1:4",
+        "1:8",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:1",
+        "4:3",
+        "4:5",
+        "5:4",
+        "8:1",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "1:4": "512x2048",
+          "1:8": "384x3072",
+          "2:3": "848x1264",
+          "3:2": "1264x848",
+          "3:4": "896x1200",
+          "4:1": "2048x512",
+          "4:3": "1200x896",
+          "4:5": "928x1152",
+          "5:4": "1152x928",
+          "8:1": "3072x384",
+          "9:16": "768x1376",
+          "16:9": "1376x768",
+          "21:9": "1584x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "1:4": "1024x4096",
+          "1:8": "768x6144",
+          "2:3": "1696x2528",
+          "3:2": "2528x1696",
+          "3:4": "1792x2400",
+          "4:1": "4096x1024",
+          "4:3": "2400x1792",
+          "4:5": "1856x2304",
+          "5:4": "2304x1856",
+          "8:1": "6144x768",
+          "9:16": "1536x2752",
+          "16:9": "2752x1536",
+          "21:9": "3168x1344"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "1:4": "2048x8192",
+          "1:8": "1536x12288",
+          "2:3": "3392x5056",
+          "3:2": "5056x3392",
+          "3:4": "3584x4800",
+          "4:1": "8192x2048",
+          "4:3": "4800x3584",
+          "4:5": "3712x4608",
+          "5:4": "4608x3712",
+          "8:1": "12288x1536",
+          "9:16": "3072x5504",
+          "16:9": "5504x3072",
+          "21:9": "6336x2688"
+        }
+      },
+      "nativeImageSize": true
+    }
+  },
+  {
+    "code": "google:gemini-3.1-flash-image",
+    "modelCode": "gemini-3.1-flash-image",
+    "name": "Nano Banana 2",
+    "platform": "gemini",
+    "modelType": 2,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方图片生成与编辑模型。",
+    "contextWindow": 131072,
+    "outputTokenLimit": 32768,
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "minimal"
+    ],
+    "lifecycle": "stable",
+    "verifiedAt": "2026-11-06",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3.1-flash-image",
+      "https://aistudio.google.com/docs/generate-content/image-generation",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-flash-image"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": [
+        "1:1",
+        "1:4",
+        "1:8",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:1",
+        "4:3",
+        "4:5",
+        "5:4",
+        "8:1",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "512": {
+          "1:1": "512x512",
+          "1:4": "256x1024",
+          "1:8": "192x1536",
+          "2:3": "424x632",
+          "3:2": "632x424",
+          "3:4": "448x600",
+          "4:1": "1024x256",
+          "4:3": "600x448",
+          "4:5": "464x576",
+          "5:4": "576x464",
+          "8:1": "1536x192",
+          "9:16": "384x688",
+          "16:9": "688x384",
+          "21:9": "792x168"
+        },
+        "1K": {
+          "1:1": "1024x1024",
+          "1:4": "512x2048",
+          "1:8": "384x3072",
+          "2:3": "848x1264",
+          "3:2": "1264x848",
+          "3:4": "896x1200",
+          "4:1": "2048x512",
+          "4:3": "1200x896",
+          "4:5": "928x1152",
+          "5:4": "1152x928",
+          "8:1": "3072x384",
+          "9:16": "768x1376",
+          "16:9": "1376x768",
+          "21:9": "1584x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "1:4": "1024x4096",
+          "1:8": "768x6144",
+          "2:3": "1696x2528",
+          "3:2": "2528x1696",
+          "3:4": "1792x2400",
+          "4:1": "4096x1024",
+          "4:3": "2400x1792",
+          "4:5": "1856x2304",
+          "5:4": "2304x1856",
+          "8:1": "6144x768",
+          "9:16": "1536x2752",
+          "16:9": "2752x1536",
+          "21:9": "3168x1344"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "1:4": "2048x8192",
+          "1:8": "1536x12288",
+          "2:3": "3392x5056",
+          "3:2": "5056x3392",
+          "3:4": "3584x4800",
+          "4:1": "8192x2048",
+          "4:3": "4800x3584",
+          "4:5": "3712x4608",
+          "5:4": "4608x3712",
+          "8:1": "12288x1536",
+          "9:16": "3072x5504",
+          "16:9": "5504x3072",
+          "21:9": "6336x2688"
+        }
+      },
+      "nativeImageSize": true
+    }
+  },
+  {
+    "code": "google:gemini-3.1-flash-lite-image",
+    "modelCode": "gemini-3.1-flash-lite-image",
+    "name": "Nano Banana 2 Lite",
+    "platform": "gemini",
+    "modelType": 2,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方图片生成与编辑模型。",
+    "contextWindow": 65536,
+    "outputTokenLimit": 4096,
+    "supportReasoning": true,
+    "reasoningEffortLevels": [
+      "high",
+      "minimal"
+    ],
+    "lifecycle": "stable",
+    "verifiedAt": "2026-11-06",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3.1-flash-lite-image",
+      "https://aistudio.google.com/docs/generate-content/image-generation",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-1-flash-lite-image"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": [
+        "1:1",
+        "1:4",
+        "1:8",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:1",
+        "4:3",
+        "4:5",
+        "5:4",
+        "8:1",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "1:4": "512x2048",
+          "1:8": "384x3072",
+          "2:3": "848x1264",
+          "3:2": "1264x848",
+          "3:4": "896x1200",
+          "4:1": "2048x512",
+          "4:3": "1200x896",
+          "4:5": "928x1152",
+          "5:4": "1152x928",
+          "8:1": "3072x384",
+          "9:16": "768x1376",
+          "16:9": "1376x768",
+          "21:9": "1584x672"
+        }
+      },
+      "nativeImageSize": true
+    }
+  },
+  {
+    "code": "google:gemini-3-pro-image",
+    "modelCode": "gemini-3-pro-image",
+    "name": "Nano Banana Pro",
+    "platform": "gemini",
+    "modelType": 2,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方图片生成与编辑模型。",
+    "contextWindow": 65536,
+    "outputTokenLimit": 32768,
+    "supportReasoning": true,
+    "reasoningEffortLevels": [],
+    "lifecycle": "stable",
+    "verifiedAt": "2026-11-06",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-3-pro-image",
+      "https://aistudio.google.com/docs/generate-content/image-generation",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/3-pro-image"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "2:3": "848x1264",
+          "3:2": "1264x848",
+          "3:4": "896x1200",
+          "4:3": "1200x896",
+          "4:5": "928x1152",
+          "5:4": "1152x928",
+          "9:16": "768x1376",
+          "16:9": "1376x768",
+          "21:9": "1584x672"
+        },
+        "2K": {
+          "1:1": "2048x2048",
+          "2:3": "1696x2528",
+          "3:2": "2528x1696",
+          "3:4": "1792x2400",
+          "4:3": "2400x1792",
+          "4:5": "1856x2304",
+          "5:4": "2304x1856",
+          "9:16": "1536x2752",
+          "16:9": "2752x1536",
+          "21:9": "3168x1344"
+        },
+        "4K": {
+          "1:1": "4096x4096",
+          "2:3": "3392x5056",
+          "3:2": "5056x3392",
+          "3:4": "3584x4800",
+          "4:3": "4800x3584",
+          "4:5": "3712x4608",
+          "5:4": "4608x3712",
+          "9:16": "3072x5504",
+          "16:9": "5504x3072",
+          "21:9": "6336x2688"
+        }
+      },
+      "nativeImageSize": true
+    }
+  },
+  {
+    "code": "google:gemini-2.5-flash-image",
+    "modelCode": "gemini-2.5-flash-image",
+    "name": "Nano Banana",
+    "platform": "gemini",
+    "modelType": 2,
+    "official": true,
+    "matchPlatforms": [
+      "gemini",
+      "vertex_ai",
+      "vertex_ai_api_key"
+    ],
+    "description": "Google 官方图片生成与编辑模型。",
+    "contextWindow": 65536,
+    "outputTokenLimit": 32768,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "lifecycle": "stable",
+    "verifiedAt": "2026-11-06",
+    "sourceUrls": [
+      "https://aistudio.google.com/docs/models/gemini-2.5-flash-image",
+      "https://aistudio.google.com/docs/generate-content/image-generation",
+      "https://docs.cloud.google.com/gemini-enterprise-agent-platform/models/gemini/2-5-flash-image"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "data_uri"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 3,
+      "defaultWidth": 1024,
+      "defaultHeight": 1024,
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "3:4",
+        "4:3",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "supportedSizes": {
+        "1K": {
+          "1:1": "1024x1024",
+          "2:3": "832x1248",
+          "3:2": "1248x832",
+          "3:4": "864x1184",
+          "4:3": "1184x864",
+          "4:5": "896x1152",
+          "5:4": "1152x896",
+          "9:16": "768x1344",
+          "16:9": "1344x768",
+          "21:9": "1536x672"
+        }
+      },
+      "nativeImageSize": false
+    }
+  }
+]

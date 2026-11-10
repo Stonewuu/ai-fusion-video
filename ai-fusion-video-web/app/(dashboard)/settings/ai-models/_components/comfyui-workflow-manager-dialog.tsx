@@ -91,7 +91,7 @@ export function ComfyUiWorkflowManagerDialog({
         </DialogHeader>
 
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
-          <aside className="flex min-h-0 flex-col rounded-xl border border-border/30 bg-card/50 p-3 backdrop-blur-sm">
+          <aside data-sidebar-navigation="workflows" className="flex min-h-0 flex-col rounded-xl border border-border/30 bg-card p-3">
             <div className="flex shrink-0 items-center justify-between gap-2">
               <div>
                 <p className="text-sm font-semibold">工作流目录</p>

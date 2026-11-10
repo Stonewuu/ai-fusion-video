@@ -6,7 +6,7 @@ import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { scriptApi, type ScriptEpisode } from "@/lib/api/script";
 import { storyboardApi, type Storyboard, type StoryboardEpisode, type StoryboardItem, type StoryboardFrameType } from "@/lib/api/storyboard";
 import { toastApiError } from "@/lib/api/toast-api-error";
-import { buildDefaultBatchFramePrompt } from "../_components/storyboard-frame-reference-dialog";
+import { buildBatchFrameContext } from "@/lib/storyboard/frame-prompts";
 import type { BatchFrameGeneratePayload } from "../_components/storyboard-ref-panel";
 import type { SceneWithItems } from "../storyboard-types";
 
@@ -195,22 +195,8 @@ const handleBatchGenerateSceneFrames = useCallback(
       const allowedItemIds = new Set(sceneGroup.items.map((item) => item.id));
       const safeFirstItemIds = firstItemIds.filter((id) => allowedItemIds.has(id));
       const safeLastItemIds = lastItemIds.filter((id) => allowedItemIds.has(id));
-      const tasks = [
-        {
-          frameType: "first" as const,
-          itemIds: safeFirstItemIds,
-          frameLabel: "首帧",
-          framePrompt: buildDefaultBatchFramePrompt("first"),
-        },
-        {
-          frameType: "last" as const,
-          itemIds: safeLastItemIds,
-          frameLabel: "尾帧",
-          framePrompt: buildDefaultBatchFramePrompt("last"),
-        },
-      ].filter((task) => task.itemIds.length > 0);
-
-      if (tasks.length === 0) {
+      const frameContext = buildBatchFrameContext(storyboard.id, safeFirstItemIds, safeLastItemIds);
+      if (!frameContext) {
         await alert({ title: "无需生成", description: "当前场次首尾帧已完整，无需重复生成。", variant: "info" });
         return;
       }
@@ -223,38 +209,27 @@ const handleBatchGenerateSceneFrames = useCallback(
       const sceneLabel =
         sceneGroup.scene.sceneHeading ||
         (sceneGroup.scene.sceneNumber ? `场次 ${sceneGroup.scene.sceneNumber}` : `场次 ${sceneId}`);
-      let firstPipelineId: string | null = null;
-
-      for (const task of tasks) {
-        const title = `批量生成${episodeLabel} ${sceneLabel}${task.frameLabel}`;
-        const pipelineId = addPipeline({
-          label: `${title} (${task.itemIds.length} 个镜头)`,
+      const frameLabel = frameContext.frameType === "both" ? "首尾帧" : frameContext.frameType === "first" ? "首帧" : "尾帧";
+      const title = `批量生成${episodeLabel} ${sceneLabel}${frameLabel}`;
+      const pipelineId = addPipeline({
+        label: `${title} (${frameContext.selectedStoryboardItemIds.length} 个镜头)`,
+        projectId,
+        request: {
+          agentType: "storyboard_frame_gen",
+          toolExecutionMode: "FULL_ACCESS",
+          category: "pipeline",
+          title,
           projectId,
-          request: {
-            agentType: "storyboard_frame_gen",
-            toolExecutionMode: "FULL_ACCESS",
-            category: "pipeline",
-            title,
-            projectId,
-            context: {
-              selectedStoryboardItemIds: task.itemIds,
-              storyboardId: storyboard.id,
-              frameType: task.frameType,
-                framePrompt: task.framePrompt,
-              },
-            },
-            onComplete: () => {
-              void refreshStoryboardItems(task.itemIds);
-            },
-          });
-        firstPipelineId = firstPipelineId || pipelineId;
-      }
+          context: frameContext,
+        },
+        onComplete: () => {
+          void refreshStoryboardItems(frameContext.selectedStoryboardItemIds);
+        },
+      });
 
       setNotificationOpen(true);
       setPanelExpanded(true);
-      if (firstPipelineId) {
-        setExpandedTaskId(firstPipelineId);
-      }
+      setExpandedTaskId(pipelineId);
     },
     [
       addPipeline,

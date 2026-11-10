@@ -9,6 +9,7 @@ import io.agentscope.core.model.ChatResponse;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.io.EOFException;
 
 /**
  * 正文直接转发，只累计工具参数；流完成前校验，阻止 SDK 把残缺参数当成空对象执行。
@@ -50,7 +51,8 @@ final class AgentModelResponseValidation {
 
     void finish() {
         if (finishReason == null) {
-            throw new IllegalStateException("模型连接在返回完成标记前中断，未执行本轮工具");
+            throw new IllegalStateException("模型连接在返回完成标记前中断，未执行本轮工具",
+                    new EOFException("模型流缺少完成标记"));
         }
         if ("length".equalsIgnoreCase(finishReason) || "max_tokens".equalsIgnoreCase(finishReason)) {
             throw new BusinessException(502, "模型输出达到长度上限，未执行本轮工具。请提高模型输出上限或拆分要求后重试。");

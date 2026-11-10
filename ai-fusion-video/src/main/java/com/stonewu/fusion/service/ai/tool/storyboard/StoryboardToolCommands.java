@@ -152,11 +152,17 @@ public class StoryboardToolCommands {
         if (!Set.of("first", "last").contains(type)) {
             throw StoryboardFields.invalid("frameType 仅支持 first 或 last");
         }
-        requireText(fields.get("imageUrl"), "imageUrl");
         ObjectNode patch = fields.objectNode();
-        patch.set(type + "FrameImageUrl", fields.get("imageUrl"));
+        if (fields.has("imageUrl")) {
+            requireText(fields.get("imageUrl"), "imageUrl");
+            patch.set(type + "FrameImageUrl", fields.get("imageUrl"));
+        }
         if (fields.has("framePrompt")) {
+            requireText(fields.get("framePrompt"), "framePrompt");
             patch.set(type + "FramePrompt", fields.get("framePrompt"));
+        }
+        if (patch.isEmpty()) {
+            throw StoryboardFields.invalid("请提供首尾帧图片或提示词");
         }
         return new ResourcePatchCommand(request, SHOT, id, expected, patch);
     }

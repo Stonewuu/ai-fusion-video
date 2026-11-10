@@ -1,4 +1,7 @@
 "use client";
+
+import { ModelRetryNotice } from "@/components/dashboard/shared/model-retry-notice";
+import { formatSubAgentResult } from "@/lib/ai/sub-agent-result";
 import { ManagedMediaLink } from "@/components/media/managed-media-link";
 
 
@@ -192,7 +195,9 @@ const SubTimelineEntry = memo(function SubTimelineEntry({
 }) {
   let content;
 
-  if (child.type === "reasoning") {
+  if (child.type === "retry") {
+    content = <ModelRetryNotice text={child.text} />;
+  } else if (child.type === "reasoning") {
     content = (
       <ReasoningThink
         content={child.text}
@@ -250,12 +255,9 @@ const SubAgentCard = memo(function SubAgentCard({
       ): child is Extract<SubTimelineItem, { type: "content" }> =>
         child.type === "content"
     );
-  const renderedResult =
-    !isRunning && item.result
-      ? lastContentChild?.text.trim() === item.result.trim()
-        ? null
-        : item.result
-      : null;
+  const formattedResult = item.result ? formatSubAgentResult(item.result) : null;
+  const renderedResult = !isRunning && formattedResult && lastContentChild?.text.trim() !== formattedResult.trim()
+    ? formattedResult : null;
   const hasResult = !!renderedResult;
   const hasContent = children.length > 0 || hasResult;
   const [innerScrollElement, setInnerScrollElement] = useScrollElement();
@@ -439,7 +441,9 @@ const TimelineEntry = memo(function TimelineEntry({
 }) {
   let content;
 
-  if (item.type === "reasoning") {
+  if (item.type === "retry") {
+    content = <ModelRetryNotice text={item.text} />;
+  } else if (item.type === "reasoning") {
     content = (
       <ReasoningThink
         content={item.text}

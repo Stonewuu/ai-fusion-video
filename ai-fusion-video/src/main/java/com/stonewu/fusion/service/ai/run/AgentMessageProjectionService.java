@@ -78,7 +78,9 @@ public class AgentMessageProjectionService {
                 .subscribeOn(schedulers.journal())
                 .flatMapMany(Flux::fromIterable)
                 .flatMapDelayError(run -> projectThrough(
-                                run.getRunId(), run.getTerminalSequence()),
+                                run.getRunId(), run.getTerminalSequence())
+                                .onErrorMap(failure -> new IllegalStateException(
+                                        "智能体历史消息恢复失败: runId=" + run.getRunId(), failure)),
                         1,
                         1)
                 .then();
@@ -89,7 +91,7 @@ public class AgentMessageProjectionService {
                         transactionTemplate.execute(ignored ->
                                 projectChunk(runId, throughSequence))))
                 .subscribeOn(schedulers.journal())
-                .flatMap(progress -> progress.cursor() >= throughSequence
+                .flatMap(progress -> progress.conversationDeleted() || progress.cursor() >= throughSequence
                         ? Mono.empty()
                         : projectNextChunk(runId, throughSequence));
     }
@@ -100,6 +102,14 @@ public class AgentMessageProjectionService {
             throw new IllegalArgumentException("Agent run does not exist: " + runId);
         }
         long cursor = requireCursor(run);
+        // 批次选出记录后仍可能删除会话；与删除操作共用行锁，禁止继续写入已删除会话。
+        AgentConversation conversation = conversationMapper.selectProjectionConversationForUpdate(run.getConversationId());
+        if (conversation == null) {
+            throw new IllegalStateException("智能体会话记录不存在: " + run.getConversationId());
+        }
+        if (Boolean.TRUE.equals(conversation.getDeleted())) {
+            return new ProjectionProgress(cursor, true);
+        }
         long lastCommitted = requireLastCommittedSequence(run);
         if (cursor > lastCommitted) {
             throw new IllegalStateException(
@@ -113,7 +123,7 @@ public class AgentMessageProjectionService {
         }
         if (cursor >= throughSequence) {
             repairProjectionCompletion(run, cursor);
-            return new ProjectionProgress(cursor);
+            return new ProjectionProgress(cursor, false);
         }
 
         List<AgentEvent> events = eventMapper.selectProjectionRange(
@@ -138,7 +148,7 @@ public class AgentMessageProjectionService {
         }
         long projectedThrough = events.getLast().getSequenceNo();
         advanceCursor(run, projectedThrough);
-        return new ProjectionProgress(projectedThrough);
+        return new ProjectionProgress(projectedThrough, false);
     }
 
     private void projectBoundary(AgentRun run, AgentEvent event) {
@@ -149,6 +159,8 @@ public class AgentMessageProjectionService {
         if (outputType == null
                 || "CONTENT".equals(outputType)
                 || "REASONING".equals(outputType)
+                || "TOOL_CALL_STARTED".equals(outputType)
+                || "MODEL_RETRY".equals(outputType)
                 || "SUB_AGENT_STARTED".equals(outputType)) {
             return;
         }
@@ -620,6 +632,6 @@ public class AgentMessageProjectionService {
                 progress, "Agent projection transaction returned no result");
     }
 
-    private record ProjectionProgress(long cursor) {
+    private record ProjectionProgress(long cursor, boolean conversationDeleted) {
     }
 }

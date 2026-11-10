@@ -4,6 +4,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONArray;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
+import com.stonewu.fusion.service.ai.google.GoogleModelFamily;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
@@ -200,7 +201,7 @@ public abstract class AbstractAiProvider implements AiProvider {
         if (thinkingBudget != null) {
             builder.thinkingBudget(thinkingBudget);
             hasOptions = true;
-        } else if (isReasoningEnabled(context)) {
+        } else if (isReasoningEnabled(context) && !context.getModelName().matches("gemini-[3-9].*")) {
             // Gemini 2.5 通过 thinkingBudget 触发 ThinkingConfig，-1 表示动态思考。
             builder.thinkingBudget(-1);
             hasOptions = true;
@@ -316,6 +317,7 @@ public abstract class AbstractAiProvider implements AiProvider {
                 if (StrUtil.isBlank(id)) {
                     continue;
                 }
+
                 String displayName = StrUtil.blankToDefault(
                         item.getStr("display_name", item.getStr("displayName")),
                         id);
@@ -373,34 +375,41 @@ public abstract class AbstractAiProvider implements AiProvider {
             JSONObject root = JSONUtil.parseObj(json);
             JSONArray models = root.getJSONArray("models");
             if (models == null) {
-                return List.of();
+                  throw new BusinessException("模型目录返回不完整，请重试");
             }
             for (int index = 0; index < models.size(); index++) {
                 JSONObject item = models.getJSONObject(index);
-                if (!supportsGeminiGenerateContent(item.getJSONArray("supportedGenerationMethods"))) {
-                    continue;
-                }
-
-                String id = item.getStr("baseModelId");
+                String id = StrUtil.removePrefix(item.getStr("name"), "models/");
                 if (StrUtil.isBlank(id)) {
-                    id = StrUtil.removePrefix(item.getStr("name"), "models/");
+                    id = item.getStr("baseModelId");
                 }
                 if (StrUtil.isBlank(id)) {
                     continue;
                 }
 
+                if (GoogleModelFamily.excluded(id)) {
+                    continue;
+                }
+                Integer modelType = GoogleModelFamily.type(id);
+                if (modelType == null && supportsGeminiGenerateContent(item.getJSONArray("supportedGenerationMethods"))) {
+                    modelType = 1;
+                }
+                if (modelType == null) {
+                    continue;
+                }
                 String displayName = item.getStr("displayName");
                 deduplicated.putIfAbsent(id, RemoteModelVO.builder()
                         .id(id)
                         .displayName(StrUtil.blankToDefault(displayName, id))
                         .ownedBy(StrUtil.blankToDefault(displayName, "google"))
-                        .modelType(1)
+                        .modelType(modelType)
+                        .modelProtocol("gemini")
                         .build());
             }
         } catch (Exception e) {
             String responsePreview = previewResponse(json);
             log.error("[AiProvider] 解析 Gemini 模型列表失败, responsePreview={}", responsePreview, e);
-            throw new BusinessException("解析 Gemini 模型列表响应失败。响应预览: " + responsePreview);
+            throw new BusinessException("模型目录暂时无法读取，请重试");
         }
         List<RemoteModelVO> result = new ArrayList<>(deduplicated.values());
         result.sort(Comparator.comparing(RemoteModelVO::getId));

@@ -20,6 +20,11 @@
         FROM afv_media_source WHERE resource_id=#{mediaId}
         UNION ALL
         SELECT 'PRESET', preset_key, NULL, 'LIVE' FROM afv_media_preset_binding WHERE media_id=#{mediaId}
+        UNION ALL
+        SELECT 'AUDIO_GENERATION_TASK_OUTPUT',t.id,NULL,'HISTORY'
+        FROM afv_media_resource m JOIN afv_audio_generation_task t
+            ON m.created_by=t.user_id AND m.request_id LIKE CONCAT(t.id,'-audio-%')
+        WHERE m.id=#{mediaId}
         ORDER BY kind, id
     </select>
     <select id="activeUse" resultType="boolean">
@@ -31,9 +36,16 @@
                 SELECT JSON_ARRAY(input_json,checkpoint_json) FROM afv_media_job
                 WHERE status IN ('QUEUED','RUNNING','WAITING')
                 UNION ALL
+                SELECT JSON_ARRAY(input_json,result_json) FROM afv_audio_generation_task
+                WHERE state IN ('QUEUED','RUNNING','INGESTING') AND deleted=FALSE
+                UNION ALL
                 SELECT snapshot_json FROM afv_canvas_run
                 WHERE status NOT IN ('SUCCEEDED','PARTIAL_FAILED','FAILED','BLOCKED','CANCELLED')
             ) active_documents WHERE <include refid="matchesDocument"/>
+        ) OR EXISTS (
+            SELECT 1 FROM afv_media_resource m JOIN afv_audio_generation_task t
+                ON m.created_by=t.user_id AND m.request_id LIKE CONCAT(t.id,'-audio-%')
+            WHERE m.id=#{mediaId} AND t.state IN ('QUEUED','RUNNING','INGESTING') AND t.deleted=FALSE
         ) OR EXISTS (
             SELECT 1 FROM afv_media_access_ticket WHERE resource_id=#{mediaId} AND purpose&lt;&gt;'BROWSER'
                 AND revoked=FALSE AND expires_at&gt;UTC_TIMESTAMP(6)

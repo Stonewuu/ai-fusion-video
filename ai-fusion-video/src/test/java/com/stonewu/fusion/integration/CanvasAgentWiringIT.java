@@ -9,6 +9,7 @@ import com.stonewu.fusion.mapper.ai.AgentModelCallUsageMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.service.execution.ExecutionRecordQueries;
+import com.stonewu.fusion.service.execution.ExecutionRecordQueries.Filter;
 import com.stonewu.fusion.service.execution.recovery.ExecutionRecoveryData.Kind;
 import com.stonewu.fusion.repository.ai.AgentModelCallUsageRepository;
 import io.agentscope.core.message.ContentBlock;
@@ -740,7 +741,7 @@ class CanvasAgentWiringIT {
                 .isEqualTo(cancelled ? "CANCELLED" : "FAILED");
         assertThat(usageLedger.claimSettlementBatch("unknown-result", Duration.ofMinutes(1), 500))
                 .noneMatch(row -> row.getModelCallId().equals(call.id()));
-        assertThat(executionRecords.list(f.user(), 0).items())
+        assertThat(executionRecords.list(f.user(), 0, Filter.ALL, 0).items())
                 .anyMatch(row -> row.id().equals(call.id()) && row.remoteUnknown() && row.localFinished());
         assertThat(executionRecords.get(f.user(), Kind.AGENT_MODEL, call.id()).capacityHeld()).isFalse();
 

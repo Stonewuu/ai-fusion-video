@@ -53,6 +53,7 @@ export function CanvasPanelNavigation<T extends CanvasPanel>({
 }) {
   return (
     <nav
+      data-sidebar-navigation="canvas"
       aria-label={label}
       className={cn("flex gap-2", collapsed && "flex-col", className)}
     >

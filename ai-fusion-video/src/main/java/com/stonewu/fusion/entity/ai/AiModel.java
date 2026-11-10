@@ -1,6 +1,7 @@
 package com.stonewu.fusion.entity.ai;
 
 import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.FieldStrategy;
 import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
@@ -45,6 +46,7 @@ public class AiModel extends BaseEntity {
     /**
      * 模型级请求协议覆盖；为空时继承 API 配置中对应能力类型的默认协议
      */
+    @TableField(updateStrategy = FieldStrategy.ALWAYS)
     private String modelProtocol;
 
     /**
@@ -53,7 +55,7 @@ public class AiModel extends BaseEntity {
     private String capabilityPresetCode;
 
     /**
-     * 模型类型：1-文本对话 2-图片生成 3-视频生成
+     * 模型类型：1-文字生成 2-图像生成 3-视频生成 4-音频生成
      */
     private Integer modelType;
 

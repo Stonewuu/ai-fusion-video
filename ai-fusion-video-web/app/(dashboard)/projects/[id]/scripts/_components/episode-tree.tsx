@@ -62,9 +62,10 @@ function SortableSceneItem({
   return (
     <div
       ref={setNodeRef}
+      data-sidebar-row
       style={style}
       className={cn(
-        "flex items-center group/scene rounded-md transition-colors overflow-hidden",
+        "flex items-center group/scene rounded-md overflow-hidden",
         isDragging && "opacity-50 z-10",
         isSelected ? "bg-primary/10" : "hover:bg-primary/5"
       )}
@@ -169,7 +170,7 @@ export function EpisodeTree({
 
   if (collapsed) {
     return (
-      <div className="w-12 border-r border-border/20 flex flex-col shrink-0 bg-card/20 h-full transition-[width] duration-200">
+      <div data-sidebar-navigation="scripts" className="w-12 border-r border-border/20 flex flex-col shrink-0 bg-card/20 h-full transition-[width] duration-200">
         <div className="px-2 py-3 border-b border-primary/8 flex flex-col items-center gap-2">
           <button
             type="button"
@@ -187,7 +188,7 @@ export function EpisodeTree({
   }
 
   return (
-    <div className="w-full lg:w-64 border-r border-border/20 flex flex-col shrink-0 bg-card/20 h-full transition-[width] duration-200">
+    <div data-sidebar-navigation="scripts" className="w-full lg:w-64 border-r border-border/20 flex flex-col shrink-0 bg-card/20 h-full transition-[width] duration-200">
       <div className="px-4 py-3 border-b border-primary/8 flex items-center justify-between">
         <h3 className="text-xs font-semibold text-primary/80 uppercase tracking-wider">
           剧本目录

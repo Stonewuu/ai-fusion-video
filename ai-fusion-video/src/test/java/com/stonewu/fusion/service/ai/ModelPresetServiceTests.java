@@ -22,6 +22,33 @@ class ModelPresetServiceTests {
         service.init();
     }
 
+    /** 发布包中也不能残留已移除类型的预设资源。 */
+    @Test
+    void presetsOnlyExposeTheFourGenerationTypes() {
+        service.getAllPresets().forEach(preset ->
+                assertTrue(Set.of(1, 2, 3, 4).contains(preset.getInt("modelType")), preset.getStr("code")));
+        assertEquals("google:lyria-3-clip-preview",
+                service.findPresetCode("lyria-3-clip-preview", 4, "vertex_ai"));
+    }
+
+    /** 同名 Flow 模型保留原渠道能力，Google 官方渠道使用独立规格。 */
+    @Test
+    void matchesGeminiPresetsByChannelAndCompleteModelId() {
+        assertEquals("google:gemini-3.1-flash-image", service.findPresetCode("gemini-3.1-flash-image", 2, "vertex_ai"));
+        assertEquals("google:gemini-3.1-flash-image", service.findPresetCode("gemini-3.1-flash-image", 2, "gemini"));
+        assertEquals("gemini-3.1-flash-image", service.findPresetCode("gemini-3.1-flash-image", 2, "GoogleFlowReverseApi"));
+        assertEquals("gemini-3.8-flash", service.findPresetCode("gemini-3.8-flash", 1, "vertex_ai"));
+        assertEquals(null, service.findPresetCode("gemini-3.8-flash-unknown", 1, "vertex_ai"));
+        var nativeImage = service.getPreset("google:gemini-3.1-flash-image").getJSONObject("config");
+        assertEquals(14, nativeImage.getInt("maxReferenceImages"));
+        assertEquals("384x3072", nativeImage.getJSONObject("supportedSizes").getJSONObject("1K").getStr("1:8"));
+        assertEquals("688x384", nativeImage.getJSONObject("supportedSizes").getJSONObject("512").getStr("16:9"));
+        assertEquals(5, service.getPreset("gemini-3.1-flash-image").getJSONObject("config").getJSONArray("supportedAspectRatios").size());
+        assertEquals(1, service.getPreset("google:gemini-3.1-flash-lite-image").getJSONObject("config").getJSONObject("supportedSizes").size());
+        assertEquals(List.of("high", "medium", "low"), JSONUtil.toList(service.getPreset("gemini-3.8-flash").getJSONArray("reasoningEffortLevels"), String.class));
+        assertTrue(service.getPreset("gemini-2.5-pro").getJSONArray("reasoningEffortLevels").isEmpty());
+    }
+
     @Test
     void sponsoredCapabilitiesDoNotReplaceOfficialPresetsWithTheSameModelId() {
         assertEquals("MiniMax-H3", service.findPresetCode("MiniMax-H3", 3));

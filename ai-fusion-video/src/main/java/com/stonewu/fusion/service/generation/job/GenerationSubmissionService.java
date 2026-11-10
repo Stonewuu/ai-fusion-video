@@ -58,6 +58,7 @@ public class GenerationSubmissionService {
     private final VideoGenerationStrategyRouter videoProtocols;
     private final GenerationInputVersions inputVersions;
     private final CanvasAgentNodeGeneration agentNodes;
+    private final AssetImageReferencePolicy assetImageReferences;
 
     @CacheEvict(value = {"imageTask", "imageItems"}, allEntries = true)
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -90,6 +91,7 @@ public class GenerationSubmissionService {
         task.setWorkflowVersionId(version(model, task.getWorkflowVersionId()));
         capabilities.validateImageTask(model, task);
         nodeRunId = agentNodes.admit(context, GenerationKind.IMAGE, model, task.getCount(), null, nodeRunId);
+        assetImageReferences.enforce(task, context);
         inputVersions.freeze(task, context.actor());
         task.setExecutionContextJson(json.write(GenerationExecutionIdentity.worker(context)));
         task.setTaskId(UUID.randomUUID().toString());

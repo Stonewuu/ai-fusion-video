@@ -47,8 +47,9 @@ public class UpdateStoryboardItemFrameToolExecutor implements ToolExecutor {
     @Override
     public String getToolDescription() {
         return """
-                将生成的图片URL保存到分镜条目的首帧或尾帧字段中。
-                调用 generate_image 获取图片URL后，使用此工具将图片关联到对应的分镜镜头。
+                保存分镜镜头的首帧或尾帧图片及最终生图提示词，写入需要 expectedVersion。
+                生图成功后传入 imageUrl 和实际使用的 framePrompt。
+                仅优化提示词时只传 framePrompt，省略 imageUrl，保留已有图片。
                 """;
     }
 
@@ -77,11 +78,11 @@ public class UpdateStoryboardItemFrameToolExecutor implements ToolExecutor {
                         },
                         "imageUrl": {
                             "type": "string",
-                            "description": "generate_image 返回的图片URL"
+                            "description": "生成成功的图片URL；仅修订提示词时省略，不传 null 或空字符串"
                         },
                         "framePrompt": {
                             "type": "string",
-                            "description": "生成首尾帧时使用的提示词"
+                            "description": "实际用于生成的最终提示词，或仅修订模式下供下次生成使用的提示词"
                         },
                         "expectedVersion": {
                             "type": "integer",
@@ -92,8 +93,11 @@ public class UpdateStoryboardItemFrameToolExecutor implements ToolExecutor {
                     "required": [
                         "storyboardItemId",
                         "frameType",
-                        "imageUrl",
                         "expectedVersion"
+                    ],
+                    "anyOf": [
+                        { "required": ["imageUrl"] },
+                        { "required": ["framePrompt"] }
                     ],
                     "additionalProperties": false
                 }

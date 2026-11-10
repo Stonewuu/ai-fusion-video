@@ -38,7 +38,7 @@ public class StoryboardItemInsertToolExecutor implements ToolExecutor {
                 - storyboardSceneId 为必填参数，必须使用已有分镜场次ID
                 - content 为必填参数，描述画面内容
                 - 可指定景别、时长、对白、音效、配乐、镜头运动等详细信息
-                - 可关联角色资产ID和场景资产ID
+                - sceneAssetItemId 必填，使用当前项目的场景子资产 ID；角色和道具按实际画面关联
                 """;
     }
 
@@ -113,7 +113,8 @@ public class StoryboardItemInsertToolExecutor implements ToolExecutor {
                         },
                         "sceneAssetItemId": {
                             "type": "integer",
-                            "description": "场景子资产ID（AssetItem.id）"
+                            "minimum": 1,
+                            "description": "必填，当前项目的场景子资产 ID（AssetItem.id）"
                         },
                         "propIds": {
                             "type": "array",
@@ -140,6 +141,7 @@ public class StoryboardItemInsertToolExecutor implements ToolExecutor {
                     "required": [
                         "storyboardSceneId",
                         "content",
+                        "sceneAssetItemId",
                         "expectedParentVersion"
                     ],
                     "additionalProperties": false

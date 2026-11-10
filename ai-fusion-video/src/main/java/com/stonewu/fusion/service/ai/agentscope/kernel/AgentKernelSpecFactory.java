@@ -195,6 +195,9 @@ public final class AgentKernelSpecFactory {
         }
         Map<String, String> variables = new LinkedHashMap<>(AgentPromptVariables.forChild(
                 parent.promptVariables(), project, input));
+        if (framePromptOnly(childType, parent.promptVariables())) {
+            variables.put("promptOnly", "true");
+        }
         if (parent.promptVariables().containsKey(AgentDefinitionConfiguration.SNAPSHOT_VARIABLE)) {
             variables.put(AgentDefinitionConfiguration.SNAPSHOT_VARIABLE,
                     parent.promptVariables().get(AgentDefinitionConfiguration.SNAPSHOT_VARIABLE));
@@ -449,7 +452,19 @@ public final class AgentKernelSpecFactory {
                 add(manifest, whitelist, mcpTool);
             }
         }
+        if (framePromptOnly(agentType, variables)) {
+            Set<String> permitted = Set.of("get_project", "get_storyboard", "get_storyboard_scene_items",
+                    "list_project_assets", "get_generation_model_capabilities", "generate_storyboard_frame",
+                    "update_storyboard_item_frame");
+            return new ToolSelection(manifest.stream().filter(tool -> permitted.contains(tool.toolName())).toList(),
+                    whitelist.stream().filter(permitted::contains).collect(Collectors.toCollection(LinkedHashSet::new)));
+        }
         return new ToolSelection(manifest, whitelist);
+    }
+
+    private boolean framePromptOnly(String agentType, Map<String, String> variables) {
+        return ("storyboard_frame_gen".equals(agentType) || "storyboard_frame_executor".equals(agentType))
+                && "true".equals(variables.get("promptOnly"));
     }
 
     private void add(

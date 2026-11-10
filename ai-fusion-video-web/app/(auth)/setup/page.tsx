@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { AuthLayout } from "@/components/ui/auth-layout";
+import { AuthPageLayout } from "@/components/auth/auth-page-layout";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { setupAdmin } from "@/lib/api/system-init";
 
@@ -88,7 +88,7 @@ export default function SetupPage() {
   };
 
   return (
-    <AuthLayout
+    <AuthPageLayout
       showSuccess={showSuccess}
       successTitle="初始化完成"
       successSubtitle="正在进入控制面板"
@@ -224,6 +224,6 @@ export default function SetupPage() {
       <p className="text-xs text-white/30 pt-4">
         融光 · 首次启动配置
       </p>
-    </AuthLayout>
+    </AuthPageLayout>
   );
 }

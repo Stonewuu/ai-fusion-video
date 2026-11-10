@@ -115,8 +115,12 @@
     <select id="storyboardShotCounts" resultType="com.stonewu.fusion.mapper.resource.ResourceReadMapper$ShotCount">
         <bind name="type" value="@com.stonewu.fusion.service.canvas.model.CanvasValueType@SHOT"/>
         <bind name="historical" value="false"/>
-        SELECT r.storyboard_episode_id AS episode_id, r.storyboard_scene_id AS scene_id, COUNT(*) AS item_count
+        SELECT r.storyboard_episode_id AS episode_id, r.storyboard_scene_id AS scene_id, COUNT(*) AS item_count,
+               SUM(CASE WHEN scene_asset.id IS NULL THEN 1 ELSE 0 END) AS missing_scene_count
         FROM afv_storyboard_item r <include refid="joins"/>
+        LEFT JOIN afv_asset_item scene_item ON scene_item.id = r.scene_asset_item_id AND scene_item.deleted = FALSE
+        LEFT JOIN afv_asset scene_asset ON scene_asset.id = scene_item.asset_id AND scene_asset.deleted = FALSE
+             AND scene_asset.type = 'scene' AND scene_asset.project_id = p.project_id
         WHERE r.storyboard_id = #{storyboardId} AND r.deleted = FALSE
         GROUP BY r.storyboard_episode_id, r.storyboard_scene_id
     </select>

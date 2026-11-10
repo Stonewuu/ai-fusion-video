@@ -13,6 +13,7 @@ import java.util.LinkedHashMap;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.Locale;
 
 /** 服务端统一维护提供商身份、赞助资料和快捷配置默认值。 */
 @Service
@@ -40,7 +41,7 @@ public class ProviderCatalogService {
         }
     }
 
-    @Cacheable(value = "providerCatalog", key = "'catalog-v3'")
+    @Cacheable(value = "providerCatalog", key = "'catalog-v4'")
     public List<ProviderDefinition> list() {
         return providers.values().stream()
                 .filter(provider -> !provider.hidden())
@@ -71,6 +72,19 @@ public class ProviderCatalogService {
                 && !Integer.valueOf(0).equals(config.getStatus())
                 && (config.getApiKey() == null || config.getApiKey().isBlank())) {
             throw new BusinessException(400, "请填写平台的 API Key");
+        }
+    }
+
+    public void validateProtocol(ApiConfig config, String protocol) {
+        if (protocol == null || protocol.isBlank()) {
+            return;
+        }
+        String normalized = protocol.trim().toLowerCase(Locale.ROOT).replace(' ', '_').replace('-', '_');
+        for (var provider : providers.values()) {
+            if (provider.restrictedProtocols().contains(normalized)
+                    && (config == null || !provider.id().equals(config.getProviderId()))) {
+                throw new BusinessException(400, "协议 " + protocol + " 仅适用于“" + provider.label() + "”渠道，请重新选择 API 配置或协议");
+            }
         }
     }
 }

@@ -2,7 +2,7 @@ package com.stonewu.fusion.service.ai.catalog;
 
 import java.util.List;
 
-/** 平台身份及配置模板；商业展示信息不参与模型协议路由。 */
+/** 平台身份及配置模板；专用协议限定提供商，但不自动推断模型的请求协议。 */
 public record ProviderDefinition(
         String id,
         String platform,
@@ -21,5 +21,9 @@ public record ProviderDefinition(
         String documentationUrl,
         List<Integer> supportedModelTypes,
         String discovery,
-        List<String> modelPresetCodes) {
+        List<String> modelPresetCodes,
+        List<String> restrictedProtocols) {
+    public ProviderDefinition {
+        restrictedProtocols = restrictedProtocols == null ? List.of() : List.copyOf(restrictedProtocols);
+    }
 }

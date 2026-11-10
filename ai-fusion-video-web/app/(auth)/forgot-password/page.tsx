@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { AuthLayout } from "@/components/ui/auth-layout";
+import { AuthPageLayout } from "@/components/auth/auth-page-layout";
 import { http } from "@/lib/api/client";
 
 function ForgotPasswordContent() {
@@ -111,7 +111,7 @@ function ForgotPasswordContent() {
         confirmPassword,
       });
 
-      // 触发 AuthLayout 成功跳转动画
+      // 触发 认证页面的成功过渡
       setShowSuccessAnim(true);
     } catch (err: unknown) {
       const errorMsg = (err as { message?: string })?.message;
@@ -122,7 +122,7 @@ function ForgotPasswordContent() {
   };
 
   return (
-    <AuthLayout
+    <AuthPageLayout
       showSuccess={showSuccessAnim}
       successTitle="密码重置成功"
       successSubtitle="正在跳转至登录页面"
@@ -337,7 +337,7 @@ function ForgotPasswordContent() {
       </div>
 
       <p className="text-xs text-white/30 pt-8">融光 · AI视频创作平台</p>
-    </AuthLayout>
+    </AuthPageLayout>
   );
 }
 

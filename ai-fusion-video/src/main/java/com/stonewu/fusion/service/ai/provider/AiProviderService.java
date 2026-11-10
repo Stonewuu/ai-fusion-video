@@ -118,7 +118,7 @@ public class AiProviderService {
                 .providerPlatform(StrUtil.blankToDefault(model.getProviderPlatform(), metadata.providerPlatform()))
                 .modelType(resolvedModelType)
                 .modelProtocol(StrUtil.blankToDefault(model.getModelProtocol(), metadata.modelProtocol()))
-                .capabilityPresetCode(modelPresetService.findPresetCode(model.getId(), resolvedModelType))
+                .capabilityPresetCode(modelPresetService.findPresetCode(model.getId(), resolvedModelType, providerPlatform))
                 .inferredMetadata(
                         model.getInferredMetadata() != null ? model.getInferredMetadata() : metadata.inferred())
                 .build();

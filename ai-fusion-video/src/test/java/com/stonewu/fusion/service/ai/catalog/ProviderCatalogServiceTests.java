@@ -26,6 +26,20 @@ class ProviderCatalogServiceTests {
     ProviderCatalogServiceTests() throws Exception {
     }
 
+    /** 专用协议只属于指定渠道，通用协议仍可由所有渠道选择。 */
+    @Test
+    void rejectsSponsorProtocolsOnOtherChannels() {
+        var config = ApiConfig.builder().platform("gemini").build();
+        assertThatThrownBy(() -> catalog.validateProtocol(config, "infistar_video"))
+                .hasMessageContaining("仅适用于");
+        assertThatThrownBy(() -> catalog.validateProtocol(config, " METASO-VIDEO "))
+                .hasMessageContaining("仅适用于");
+        config.setProviderId("metaso");
+        assertThatCode(() -> catalog.validateProtocol(config, "metaso_video")).doesNotThrowAnyException();
+        assertThatThrownBy(() -> catalog.validateProtocol(config, "infistar_video")).hasMessageContaining("仅适用于");
+        assertThatCode(() -> catalog.validateProtocol(config, "openai")).doesNotThrowAnyException();
+    }
+
     /** 隐藏平台不进入配置目录，已保存配置仍能按原平台校验。 */
     @Test
     void hidesProviderWithoutBreakingSavedBindings() throws Exception {

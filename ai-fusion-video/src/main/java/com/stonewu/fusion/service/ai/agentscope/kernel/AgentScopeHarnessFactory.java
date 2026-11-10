@@ -10,6 +10,7 @@ import com.stonewu.fusion.service.ai.agentscope.state.StateStoreGuardedChatModel
 import com.stonewu.fusion.service.ai.agentscope.workspace.AgentWorkspaceBaseStore;
 import com.stonewu.fusion.service.ai.run.AgentExecutionLimits;
 import com.stonewu.fusion.service.ai.text.LongToolResultMiddleware;
+import com.stonewu.fusion.service.ai.agentscope.message.AgentModelRetryMiddleware;
 import com.stonewu.fusion.service.ai.text.LongToolResultStore;
 import com.stonewu.fusion.service.ai.tool.ReadToolResultToolExecutor;
 import io.agentscope.core.model.ExecutionConfig;
@@ -148,14 +149,14 @@ public final class AgentScopeHarnessFactory {
                     .sysPrompt(spec.systemPrompt())
                     .model(new StateStoreGuardedChatModel(
                             ownedModel.model(), failures, contextWindow))
-                    // Each reasoning request has its own durable admission. The
-                    // Harness must not turn a failed response into another paid call.
-                    .maxRetries(1) // AgentScope counts the first attempt in this budget.
+                    // 网络层只发送一次；会话层为每次重试重新受理并沿用已保存上下文。
+                    .maxRetries(1)
                     .stateStore(stateStore)
                     .toolkit(toolkit)
                     .permissionContext(AgentToolPermissionPolicy.contextFor(
                             toolkit, ToolExecutionMode.DEFAULT))
                     .middleware(shutdownRecoveryBridge)
+                    .middleware(new AgentModelRetryMiddleware(failures))
                     .compaction(compactionConfig(contextWindow))
                     .maxIters(spec.maxIters())
                     .toolExecutionConfig(ExecutionConfig.builder()
@@ -229,13 +230,15 @@ public final class AgentScopeHarnessFactory {
     }
 
     static CompactionConfig compactionConfig(Integer contextWindow) {
+        // 摘要前的全文由平台日志保存；不另写包含会话标识的本地文件。
+        var builder = CompactionConfig.builder().offloadBeforeCompact(false).flushBeforeCompact(false);
         if (contextWindow == null || contextWindow <= 0) {
-            return CompactionConfig.builder().build();
+            return builder.build();
         }
         int triggerTokens = Math.max(
                 1,
                 (int) ((long) contextWindow * COMPACTION_TRIGGER_PERCENT / 100));
-        return CompactionConfig.builder()
+        return builder
                 .triggerMessages(0)
                 .triggerTokens(triggerTokens)
                 .build();

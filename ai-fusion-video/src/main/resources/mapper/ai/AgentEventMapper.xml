@@ -102,7 +102,7 @@
         WHERE run_id = #{runId}
           AND sequence_no &lt; #{beforeSequence}
           AND output_type IS NOT NULL
-          AND output_type NOT IN ('CONTENT', 'REASONING')
+          AND output_type NOT IN ('CONTENT', 'REASONING', 'TOOL_CALL_STARTED')
           AND (
                 parent_tool_call_id = #{parentToolCallId}
              OR (parent_tool_call_id IS NULL AND #{parentToolCallId} IS NULL)

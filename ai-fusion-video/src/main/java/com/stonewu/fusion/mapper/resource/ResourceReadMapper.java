@@ -27,7 +27,7 @@ public interface ResourceReadMapper {
 
     long countStoryboardChildren(@Param("type") CanvasValueType type, @Param("storyboardId") long storyboardId);
 
-    record ShotCount(Long episodeId, Long sceneId, long itemCount) {
+    record ShotCount(Long episodeId, Long sceneId, long itemCount, long missingSceneCount) {
     }
 
     List<ShotCount> storyboardShotCounts(@Param("storyboardId") long storyboardId);

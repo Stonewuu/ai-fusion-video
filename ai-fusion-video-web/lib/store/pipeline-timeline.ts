@@ -19,10 +19,12 @@ export type SubTimelineItem =
       status: ToolTimelineStatus;
       result?: string | null;
     }
-  | { type: "content"; text: string }
+  | { type: "content"; text: string; replyId?: string }
+  | { type: "retry"; text: string }
   | {
       type: "reasoning";
       text: string;
+      replyId?: string;
       startedAtMs?: number;
       durationMs?: number;
     };
@@ -42,10 +44,12 @@ export type TimelineItem =
   | {
       type: "reasoning";
       text: string;
+      replyId?: string;
       startedAtMs?: number;
       durationMs?: number;
     }
-  | { type: "content"; text: string };
+  | { type: "content"; text: string; replyId?: string }
+  | { type: "retry"; text: string };
 
 function isInProgressToolStatus(status: ToolTimelineStatus): boolean {
   return status === "preparing"

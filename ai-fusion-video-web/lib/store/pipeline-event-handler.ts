@@ -1,3 +1,4 @@
+import { applyModelRetry } from "@/lib/store/model-retry-timeline";
 import type { AiChatStreamEvent } from "@/lib/api/ai-pipeline";
 import type { AiChatStreamEvent as GenericStreamEvent } from "@/lib/api/ai-assistant";
 import {
@@ -124,10 +125,11 @@ function updateToolStatus(
 function appendReasoningToSubTimeline(
   children: SubTimelineItem[],
   reasoningContent: string,
-  startedAtMs?: number
+  startedAtMs?: number,
+  replyId?: string
 ): SubTimelineItem[] {
   const last = children[children.length - 1];
-  if (last && last.type === "reasoning") {
+  if (last && last.type === "reasoning" && last.replyId === replyId) {
     return [
       ...children.slice(0, -1),
       {
@@ -142,6 +144,7 @@ function appendReasoningToSubTimeline(
     {
       type: "reasoning",
       text: reasoningContent,
+      replyId,
       ...(startedAtMs !== undefined ? { startedAtMs } : {}),
     },
   ];
@@ -167,10 +170,11 @@ function updateLastSubTimelineReasoningDuration(
 function appendReasoningToTimeline(
   timeline: TimelineItem[],
   reasoningContent: string,
-  startedAtMs?: number
+  startedAtMs?: number,
+  replyId?: string
 ): TimelineItem[] {
   const last = timeline[timeline.length - 1];
-  if (last && last.type === "reasoning") {
+  if (last && last.type === "reasoning" && last.replyId === replyId) {
     return [
       ...timeline.slice(0, -1),
       {
@@ -185,6 +189,7 @@ function appendReasoningToTimeline(
     {
       type: "reasoning",
       text: reasoningContent,
+      replyId,
       ...(startedAtMs !== undefined ? { startedAtMs } : {}),
     },
   ];
@@ -283,6 +288,15 @@ export function createPipelineEventHandler(
           }
 
           switch (event.outputType) {
+            case "MODEL_RETRY":
+              next.timeline = applyModelRetry(next.timeline, event);
+              if (!isSubAgent) {
+                next.reasoningText = "";
+                next.reasoningStartTime = undefined;
+                next.reasoningDurationMs = undefined;
+              }
+              break;
+
             case "REASONING":
               if (event.reasoningContent) {
                 const reasoningStartTime = validTimestamp(
@@ -296,7 +310,8 @@ export function createPipelineEventHandler(
                       appendReasoningToSubTimeline(
                         children,
                         event.reasoningContent!,
-                        reasoningStartTime
+                        reasoningStartTime,
+                        event.replyId
                       )
                   );
                 } else {
@@ -312,7 +327,8 @@ export function createPipelineEventHandler(
                   next.timeline = appendReasoningToTimeline(
                     next.timeline,
                     event.reasoningContent,
-                    reasoningStartTime
+                    reasoningStartTime,
+                    event.replyId
                   );
                 }
               }
@@ -331,7 +347,7 @@ export function createPipelineEventHandler(
 
                       const last =
                         updatedChildren[updatedChildren.length - 1];
-                      if (last && last.type === "content") {
+                      if (last && last.type === "content" && last.replyId === event.replyId) {
                         return [
                           ...updatedChildren.slice(0, -1),
                           {
@@ -346,7 +362,7 @@ export function createPipelineEventHandler(
                       }
                       return [
                         ...updatedChildren,
-                        { type: "content" as const, text: content },
+                        { type: "content" as const, text: content, replyId: event.replyId },
                       ];
                     }
                   );
@@ -355,6 +371,7 @@ export function createPipelineEventHandler(
                   if (
                     last &&
                     last.type === "content" &&
+                    last.replyId === event.replyId &&
                     !next.separateNextRootContent
                   ) {
                     next.timeline[next.timeline.length - 1] = {
@@ -369,6 +386,7 @@ export function createPipelineEventHandler(
                     next.timeline.push({
                       type: "content",
                       text: content,
+                      replyId: event.replyId,
                     });
                   }
                   next.separateNextRootContent = false;

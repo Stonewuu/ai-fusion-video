@@ -25,7 +25,8 @@ import static com.stonewu.fusion.service.canvas.model.CanvasValueType.*;
 public class CanvasAgentNodeScopes {
     private static final Set<String> SCRIPT_ROOT = Set.of("story_to_script");
     private static final Set<String> BOARD_ROOT = Set.of("script_to_storyboard", "episode_storyboard_writer");
-    private static final Set<String> ASSET_ROOTS = Set.of("script_to_storyboard", "storyboard_asset_preprocessor");
+    private static final Set<String> ASSET_ROOTS = Set.of("script_to_storyboard", "episode_storyboard_writer",
+            "storyboard_asset_preprocessor");
     private static final Set<String> SCRIPT_READ_ONLY = Set.of("script_to_storyboard", "episode_storyboard_writer",
             "storyboard_asset_preprocessor", "canvas_asset_extractor", "concept_visualizer");
     private final ResourceQueryService resources;
@@ -111,7 +112,8 @@ public class CanvasAgentNodeScopes {
             }
         }
         if (Set.of("ai_media", "story_to_script", "script_full_parse", "script_episode_parse", "script_assistant",
-                "episode_scene_writer", "canvas_asset_extractor", "script_to_storyboard",
+                "episode_scene_writer", "episode_script_creator", "canvas_asset_extractor", "script_to_storyboard",
+                "episode_storyboard_writer",
                 "storyboard_asset_preprocessor").contains(type)) {
             create.addAll(Set.of(ASSET, ASSET_ITEM));
         }

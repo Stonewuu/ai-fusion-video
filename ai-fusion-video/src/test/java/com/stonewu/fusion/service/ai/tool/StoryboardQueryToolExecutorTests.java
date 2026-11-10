@@ -45,13 +45,16 @@ class StoryboardQueryToolExecutorTests {
     void overviewReadsCountsAndNeverLoadsAllShots() throws Exception {
         root.putArray("episodes").add(episode);
         when(boards.tree(STORYBOARD, 5, 2, actor)).thenReturn(root);
-        when(boards.shotCounts(5, actor)).thenReturn(List.of(new ShotCount(11L, 101L, 2460)));
+        when(boards.shotCounts(5, actor)).thenReturn(List.of(new ShotCount(11L, 101L, 2460, 7)));
         var result = mapper.readTree(executor.execute("{\"storyboardId\":5}", invocation));
         assertThat(result.path("status").asText()).isEqualTo("success");
         assertThat(result.path("scope").asText()).isEqualTo("overview");
         assertThat(result.path("resourceStatus").intValue()).isEqualTo(1);
         assertThat(result.path("version").intValue()).isEqualTo(12);
         assertThat(result.path("totalItems").intValue()).isEqualTo(2460);
+        assertThat(result.path("missingSceneCount").intValue()).isEqualTo(7);
+        assertThat(result.path("episodes").get(0).path("missingSceneCount").intValue()).isEqualTo(7);
+        assertThat(result.path("episodes").get(0).path("scenes").get(0).path("missingSceneCount").intValue()).isEqualTo(7);
         assertThat(result.path("episodes").get(0).path("itemCount").intValue()).isEqualTo(2460);
         assertThat(result.path("episodes").get(0).path("scenes").get(0).path("itemCount").intValue()).isEqualTo(2460);
         assertThat(result.has("items")).isFalse();

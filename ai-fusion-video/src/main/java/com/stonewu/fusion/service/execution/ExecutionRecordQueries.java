@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Set;
@@ -32,6 +33,19 @@ public class ExecutionRecordQueries {
     private final ExecutionRecoveryDecisionMapper decisions;
     private final AgentEventEnvelopeSanitizer sanitizer;
 
+    public enum Filter {
+        ALL, REVIEW, FAILED, CANCELLED;
+
+        public List<String> statuses() {
+            return switch (this) {
+                case ALL -> List.of("UNKNOWN_SUBMISSION", "NEEDS_REVIEW", "FAILED", "PARTIAL_FAILED", "CONFLICT", "CANCELLED");
+                case REVIEW -> List.of("UNKNOWN_SUBMISSION", "NEEDS_REVIEW");
+                case FAILED -> List.of("FAILED", "PARTIAL_FAILED", "CONFLICT");
+                case CANCELLED -> List.of("CANCELLED");
+            };
+        }
+    }
+
     public record Summary(Kind kind, String id, String title, String status, boolean localFinished,
                           boolean remoteUnknown, String message, Instant createdAt, Instant updatedAt) {
     }
@@ -43,17 +57,23 @@ public class ExecutionRecordQueries {
                          List<Remote> remote, List<Audit> history) {
     }
 
-    public record Page(List<Summary> items, boolean hasMore, int page) {
+    public record Page(List<Summary> items, boolean hasMore, int page, long total, long matchedTotal) {
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
-    public Page list(long userId, int page) {
+    public Page list(long userId, int page, Filter filter, int days) {
         if (page < 0 || page > 1000000) {
             throw MediaException.invalid("任务记录页码无效");
         }
-        var rows = records.list(userId, page * PAGE_SIZE, PAGE_SIZE + 1);
+        if (days != 0 && days != 7 && days != 30) {
+            throw MediaException.invalid("请选择全部时间、近 7 天或近 30 天");
+        }
+        LocalDateTime since = days == 0 ? null : LocalDateTime.now(ZoneOffset.UTC).minusDays(days);
+        long total = records.count(userId, Filter.ALL.statuses(), null);
+        long matched = filter == Filter.ALL && since == null ? total : records.count(userId, filter.statuses(), since);
+        var rows = records.list(userId, filter.statuses(), since, page * PAGE_SIZE, PAGE_SIZE + 1);
         return new Page(rows.stream().limit(PAGE_SIZE).map(row -> summary(row,
-                targets.get(new Ref(row.kind(), row.id())))).toList(), rows.size() > PAGE_SIZE, page);
+                targets.get(new Ref(row.kind(), row.id())))).toList(), rows.size() > PAGE_SIZE, page, total, matched);
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)

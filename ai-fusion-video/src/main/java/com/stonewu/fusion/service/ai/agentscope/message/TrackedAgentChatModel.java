@@ -17,7 +17,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Supplier;
 
 /**
- * 每次实际网络订阅只提交一次，不在断线、取消或恢复时自动重发。
+ * 每次网络订阅独立受理并只发送一次；暂时性故障交给会话层按规则重试。
  */
 public final class TrackedAgentChatModel extends ChatModelBase implements AutoCloseable {
     private ChatModelBase initialRequest;
@@ -81,6 +81,7 @@ public final class TrackedAgentChatModel extends ChatModelBase implements AutoCl
             AtomicReference<ChatUsage> usage = new AtomicReference<>();
             AgentModelResponseValidation validation = new AgentModelResponseValidation();
             AtomicReference<BusinessException> invalidResponse = new AtomicReference<>();
+            AtomicReference<Throwable> modelFailure = new AtomicReference<>();
             Mono<AgentModelRequests.Claim> admission = Mono.fromCallable(
                             () -> requests.admit(id, model, runtime, fingerprint).orElse(null))
                     .subscribeOn(Schedulers.boundedElastic())
@@ -104,19 +105,20 @@ public final class TrackedAgentChatModel extends ChatModelBase implements AutoCl
                                     }
                                     return Mono.error(invalid);
                                 }
-                            })),
+                            })).doOnError(modelFailure::set),
                             claim -> recorded(() -> requests.completed(claim, usage.get())),
                             (claim, error) -> recorded(() -> {
                                 if (error == invalidResponse.get()) {
                                     requests.completed(claim, usage.get());
-                                } else if (AgentModelHttpFailure.status(error) != null) {
+                                } else if (AgentModelHttpFailure.hasFailedResponse(error)) {
                                     requests.failed(claim);
                                 } else {
                                     requests.uncertain(claim, false);
                                 }
                             }),
                             claim -> recorded(() -> requests.uncertain(claim, true))),
-                    this::release).subscribeOn(Schedulers.boundedElastic());
+                    this::release).onErrorMap(error -> error == modelFailure.get() && error != invalidResponse.get()
+                            ? new AgentModelCallFailure(error) : error).subscribeOn(Schedulers.boundedElastic());
         });
     }
 

@@ -79,7 +79,7 @@ class CanvasDraftReadinessTests {
         verifyNoInteractions(media, access);
         String mediaId = UUID.randomUUID().toString();
         var configured = node(CanvasNodeKind.IMAGE,json.createObjectNode().put("resourceId",mediaId));
-        when(media.get(mediaId,null)).thenThrow(new BusinessException(403,"无权查看此媒体"));
+        when(media.forUpdate(mediaId,null)).thenThrow(new BusinessException(403,"无权查看此媒体"));
         assertThatThrownBy(() -> policy.validate(null,empty,mutation(configured),null)).hasMessageContaining("无权");
         verifyNoInteractions(access);
     }

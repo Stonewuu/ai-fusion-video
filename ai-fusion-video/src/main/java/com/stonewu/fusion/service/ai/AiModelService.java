@@ -12,6 +12,7 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.mapper.ai.AiModelMapper;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
+import com.stonewu.fusion.service.ai.google.GoogleModelFamily;
 import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
@@ -318,10 +319,17 @@ public class AiModelService {
         }
         var apiConfig = aiModelMetadataResolver.resolveApiConfig(model);
         apiConfigService.validateModelType(apiConfig, model.getModelType());
-        if (model.getModelType() < 1 || model.getModelType() > 3) {
+        if (model.getModelType() == 4 && !GoogleModelFamily.googlePlatform(apiConfig.getPlatform())) {
             return;
         }
         var metadata = aiModelMetadataResolver.resolve(model, apiConfig);
+        apiConfigService.validateModelProtocol(apiConfig, metadata.modelProtocol());
+        if (model.getModelType() == 4 && GoogleModelFamily.googlePlatform(apiConfig.getPlatform())) {
+            String protocol = "gemini".equals(apiConfig.getPlatform()) ? "gemini" : "vertex_ai";
+            if (!protocol.equals(metadata.modelProtocol())) {
+                throw new BusinessException("请选择与当前 Google 渠道对应的请求协议");
+            }
+        }
         if (StrUtil.isBlank(metadata.modelProtocol()) || "generic".equals(metadata.modelProtocol())) {
             String capability = switch (model.getModelType()) {
                 case 1 -> "文本";

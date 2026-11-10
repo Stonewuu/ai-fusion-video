@@ -5,7 +5,7 @@ package com.stonewu.fusion.service.ai.text;
  */
 public final class ToolTextBudget {
     public static final int MAX_PAGE_CHARS = 64_000;
-    private static final int UNCONFIGURED_PAGE_CHARS = 8_000;
+    private static final int UNCONFIGURED_PAGE_CHARS = 16_000;
 
     private ToolTextBudget() {
     }

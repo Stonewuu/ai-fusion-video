@@ -59,6 +59,17 @@ public class AiAgentRegistry {
         }
     }
 
+    private static String loadSystemPrompt(String fileName) {
+        return loadPrompt(fileName) + "\n\n" + loadPrompt("agent-common.rules.md");
+    }
+
+    private AiAgentDefinition.SubAgentToolDef assetImageTool() {
+        return AiAgentDefinition.SubAgentToolDef.builder().toolName("generate_asset_image")
+                .displayName("为子资产生成图片")
+                .description("为一个子资产生成并保存参考图。message 包含 assetId、itemId、projectId。基础图先完成，依赖它的变体随后执行；不同基础资产可以并行，不传 session_id。")
+                .parametersSchema(SUB_AGENT_MESSAGE_SCHEMA).refAgentType("asset_image_executor").build();
+    }
+
     /**
      * 注册内置 Agent 定义
      */
@@ -67,9 +78,8 @@ public class AiAgentRegistry {
         registerCanvasAssistantAgent();
         register(AiAgentDefinition.builder().type("canvas_asset_extractor").name("提取剧本资产")
                 .toolNames(List.of("get_project", "get_project_script", "get_script_structure", "get_script_episode",
-                        "list_project_assets", "query_asset_metadata", "batch_create_assets"))
-                .systemPrompt(
-                        "根据指定剧本或分集提取角色、场景与道具。先读取真实内容与已有资产，复用已有对象；通过版本化资产工具创建缺失对象，使用返回的真实 ID。不要改写剧本，不要生成图片。")
+                        "get_script_scene", "list_project_assets", "query_asset_metadata", "batch_create_assets"))
+                .systemPrompt(loadSystemPrompt("canvas-asset-extractor.system.md"))
                 .instructionTemplate("").enableTools(1).build());
         registerConceptVisualizerAgent();
         registerScriptFullParseAgent();
@@ -113,7 +123,7 @@ public class AiAgentRegistry {
                         "delete_image_task",
                         "delete_video_task",
                         "query_asset_metadata")))
-                .systemPrompt(loadPrompt("ai-media.system.md"))
+                .systemPrompt(loadSystemPrompt("ai-media.system.md"))
                 .instructionTemplate(loadPrompt("ai-media.instruction.md"))
                 .enableTools(1)
                 .build());
@@ -131,7 +141,7 @@ public class AiAgentRegistry {
 
     private void registerCanvasAssistantAgent() {
         register(AiAgentDefinition.builder().type("canvas_assistant").name("画布助手")
-                .toolNames(CanvasAgentToolNames.NAMES).systemPrompt(loadPrompt("canvas-assistant.system.md"))
+                .toolNames(CanvasAgentToolNames.NAMES).systemPrompt(loadSystemPrompt("canvas-assistant.system.md"))
                 .instructionTemplate("").enableTools(1).build());
     }
 
@@ -139,7 +149,7 @@ public class AiAgentRegistry {
         register(AiAgentDefinition.builder()
                 .type("concept_visualizer")
                 .name("概念可视化")
-                .systemPrompt(loadPrompt("concept-visualizer.system.md"))
+                .systemPrompt(loadSystemPrompt("concept-visualizer.system.md"))
                 .instructionTemplate("")
                 .enableTools(0)
                 .build());
@@ -158,7 +168,7 @@ public class AiAgentRegistry {
                                 .toolName("episode_scene_writer")
                                 .displayName("分集场次编写器")
                                 .description(
-                                        "对指定分集内容进行场次拆解和编写。输入分集编号和内容摘要，子Agent会自动解析并保存场次数据。可同时调用多个实例并行处理不同分集。调用时只传声明中要求的业务参数，不要传 session_id，框架会自动维护会话。")
+                                        "传入实际 scriptEpisodeId，子智能体读取本集完整原文，解析并保存场次。可并行处理独立分集，不传 session_id。")
                                 .parametersSchema(
                                         """
                                                 {
@@ -185,10 +195,8 @@ public class AiAgentRegistry {
                                           },
                                           "required": ["scriptEpisodeId", "sceneCount", "status"]
                                         }""")
-                                .systemPromptOverride(loadPrompt(
-                                        "script-full-parse_episode-scene-writer.override.md"))
                                 .build()))
-                .systemPrompt(loadPrompt("script-full-parse.system.md"))
+                .systemPrompt(loadSystemPrompt("script-full-parse.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
@@ -240,10 +248,8 @@ public class AiAgentRegistry {
                                           },
                                           "required": ["scriptEpisodeId", "sceneCount", "status"]
                                         }""")
-                                .systemPromptOverride(loadPrompt(
-                                        "script-story-to-script_episode-script-creator.override.md"))
                                 .build()))
-                .systemPrompt(loadPrompt("script-story-to-script.system.md"))
+                .systemPrompt(loadSystemPrompt("script-story-to-script.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
@@ -263,7 +269,7 @@ public class AiAgentRegistry {
                         "update_script_info", "save_script_scene_items",
                         "get_script_episode", "get_script_structure",
                         "manage_script_scenes", "query_asset_metadata", "get_project"))
-                .systemPrompt(loadPrompt("script-episode-upload.system.md"))
+                .systemPrompt(loadSystemPrompt("script-episode-upload.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
@@ -280,10 +286,10 @@ public class AiAgentRegistry {
                 .type("script_assistant")
                 .name("剧本对话助手")
                 .toolNames(List.of(
-                        "get_script_structure", "get_script_episode",
+                        "get_script_structure", "get_script_episode", "get_script_scene", "query_asset_metadata",
                         "update_script_scene", "manage_script_scenes",
                         "list_project_assets", "create_asset"))
-                .systemPrompt(loadPrompt("script-assistant.system.md"))
+                .systemPrompt(loadSystemPrompt("script-assistant.system.md"))
                 .instructionTemplate("")
                 .enableTools(1)
                 .build());
@@ -303,7 +309,7 @@ public class AiAgentRegistry {
                                 .toolName("storyboard_asset_preprocessor")
                                 .displayName("子资产预处理器")
                                 .description(
-                                        "分析所有分集剧本内容，识别角色/场景/道具的外观变化，统一创建所需的子资产变体并保存到数据库。此工具必须在 episode_storyboard_writer 之前调用，且只调用一次。调用时只传声明中要求的业务参数，不要传 session_id，框架会自动维护会话。")
+                                        "检查目标分集的全部场次，复用已有资产，补齐缺失的场景、人物、道具及必要变体。先完成预处理再调用 episode_storyboard_writer；续跑只处理未完成范围，不传 session_id。")
                                 .parametersSchema(
                                         """
                                                 {
@@ -329,15 +335,13 @@ public class AiAgentRegistry {
                                           },
                                           "required": ["status"]
                                         }""")
-                                .systemPromptOverride(loadPrompt(
-                                        "script-to-storyboard_asset-preprocessor.override.md"))
                                 .build(),
                         // 分集分镜编写子 Agent（并行，后执行）
                         AiAgentDefinition.SubAgentToolDef.builder()
                                 .toolName("episode_storyboard_writer")
                                 .displayName("分集分镜编写器")
                                 .description(
-                                        "对指定分集进行分镜转换。输入分集编号，子Agent会自动查询场次内容、获取最新资产列表（含预处理器已创建的子资产）、设计镜头并保存分镜数据。可同时调用多个实例并行处理不同分集。调用时只传声明中要求的业务参数，不要传 session_id，框架会自动维护会话。")
+                                        "创建、继续或复核指定分集的分镜。scriptEpisodeId 使用剧本分集记录 ID；task 说明本次范围、已完成进度、待处理问题及是否允许修改，子智能体据此查询和处理。独立分集可并行处理。不要传 session_id，会话由平台维护。")
                                 .parametersSchema(
                                         """
                                                 {
@@ -346,6 +350,10 @@ public class AiAgentRegistry {
                                                     "scriptEpisodeId": {
                                                       "type": "integer",
                                                       "description": "剧本分集记录ID（从 get_script_structure 获取）"
+                                                    },
+                                                    "task": {
+                                                      "type": "string",
+                                                      "description": "本次工作要求，包括处理范围、创建或复核目的、已完成进度、待处理问题和修改权限；续跑时传递上次尚未完成的事项"
                                                     }
                                                   },
                                                   "additionalProperties": false,
@@ -365,10 +373,8 @@ public class AiAgentRegistry {
                                           },
                                           "required": ["scriptEpisodeId", "shotCount", "sceneCount", "status"]
                                         }""")
-                                .systemPromptOverride(loadPrompt(
-                                        "script-to-storyboard_episode-storyboard-writer.override.md"))
                                 .build()))
-                .systemPrompt(loadPrompt("script-to-storyboard.system.md"))
+                .systemPrompt(loadSystemPrompt("script-to-storyboard.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
@@ -385,17 +391,17 @@ public class AiAgentRegistry {
                 .type("episode_scene_writer")
                 .name("分集场次编写器")
                 .toolNames(List.of(
-                        "get_script_episode", "list_project_assets",
+                        "get_script_episode", "list_project_assets", "query_asset_metadata", "batch_create_assets",
                         "save_script_scene_items", "get_project_script",
                         "get_script_scene"))
-                .systemPrompt(loadPrompt("episode-scene-writer.system.md"))
+                .systemPrompt(loadSystemPrompt("episode-scene-writer.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
                         <script_id>{scriptId}</script_id>
                         </task_context>
 
-                        请根据主 Agent 提供的 episodeId，查询该集原文并解析场次数据。""")
+                        请根据主 Agent 提供的 scriptEpisodeId，查询该集原文并解析场次数据。""")
                 .enableTools(1)
                 .build());
     }
@@ -410,15 +416,15 @@ public class AiAgentRegistry {
                 .type("episode_script_creator")
                 .name("分集剧本创作器")
                 .toolNames(List.of(
-                        "get_script_episode", "list_project_assets", "save_script_scene_items"))
-                .systemPrompt(loadPrompt("episode-script-creator.system.md"))
+                        "get_script_episode", "list_project_assets", "query_asset_metadata", "batch_create_assets", "save_script_scene_items"))
+                .systemPrompt(loadSystemPrompt("episode-script-creator.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
                         <script_id>{scriptId}</script_id>
                         </task_context>
 
-                        请根据主 Agent 提供的 episodeId，查询该集大纲并创作完整的场次和对白。""")
+                        请根据主 Agent 提供的 scriptEpisodeId，查询该集大纲并创作完整的场次和对白。""")
                 .enableTools(1)
                 .build());
     }
@@ -434,8 +440,10 @@ public class AiAgentRegistry {
                 .name("分集分镜编写器")
                 .toolNames(List.of(
                         "get_script_episode", "get_script_scene", "list_project_assets", "get_storyboard",
-                        "save_storyboard_episode", "save_storyboard_scene_shots"))
-                .systemPrompt(loadPrompt("episode-storyboard-writer.system.md"))
+                        "save_storyboard_episode", "save_storyboard_scene_shots", "get_storyboard_scene_items",
+                        "query_asset_metadata", "batch_create_assets", "batch_create_asset_items", "query_asset_items",
+                        "batch_update_storyboard"))
+                .systemPrompt(loadSystemPrompt("episode-storyboard-writer.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
@@ -454,26 +462,24 @@ public class AiAgentRegistry {
     /**
      * 注册分镜子资产预处理子 Agent
      * <p>
-     * 串行执行（只调用一次），负责分析所有分集剧本内容，
-     * 识别角色/场景/道具的外观变化，统一创建子资产变体，
-     * 返回完整的 assetItemMapping 供分镜编写子 Agent 使用。
+     * 在分集编写之前补齐主资产和变体，供编写器直接关联。
      */
     private void registerStoryboardAssetPreprocessorAgent() {
         register(AiAgentDefinition.builder()
                 .type("storyboard_asset_preprocessor")
                 .name("子资产预处理器")
                 .toolNames(List.of(
-                        "get_script_episode", "list_project_assets",
-                        "query_asset_items", "batch_create_asset_items",
+                        "get_script_episode", "get_script_scene", "list_project_assets",
+                        "query_asset_items", "batch_create_assets", "batch_create_asset_items",
                         "query_asset_metadata"))
-                .systemPrompt(loadPrompt("storyboard-asset-preprocessor.system.md"))
+                .systemPrompt(loadSystemPrompt("storyboard-asset-preprocessor.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
                         <script_id>{scriptId}</script_id>
                         </task_context>
 
-                        请根据主 Agent 提供的 episodeIds，逐集分析剧本内容并创建所需的子资产变体。""")
+                        请根据主 Agent 提供的 scriptEpisodeIds，逐集检查场景、人物和道具，补齐缺失主资产及必要子资产。""")
                 .enableTools(1)
                 .build());
     }
@@ -489,28 +495,8 @@ public class AiAgentRegistry {
                 .name("资产图片自动生成")
                 .toolNames(List.of(
                         "get_project", "query_asset_items", "list_project_assets"))
-                .subAgentTools(List.of(
-                        AiAgentDefinition.SubAgentToolDef.builder()
-                                .toolName("generate_asset_image")
-                                .displayName("为子资产生成图片")
-                                .description("""
-                                        为单个子资产生成AI图片并自动保存。每次调用只处理一个子资产，可在同一轮同时调用多个实例并行执行。
-
-                                        调用时 message 必须包含以下信息（每行一个键值对）：
-                                        - assetId: 主资产ID（数字，必传）
-                                        - itemId: 子资产ID（数字，必传）
-                                        - projectId: 项目ID（数字，必传）
-                                        - 不要额外传 session_id，框架会自动维护会话
-
-                                        message 格式示例：
-                                        请为子资产生成图片。
-                                        assetId: 1
-                                        itemId: 3
-                                        projectId: 5""")
-                                .parametersSchema(SUB_AGENT_MESSAGE_SCHEMA)
-                                .refAgentType("asset_image_executor")
-                                .build()))
-                .systemPrompt(loadPrompt("asset-image-generation.system.md"))
+                .subAgentTools(List.of(assetImageTool()))
+                .systemPrompt(loadSystemPrompt("asset-image-generation.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
@@ -533,7 +519,7 @@ public class AiAgentRegistry {
                         "get_project", "query_asset_items", "get_generation_model_capabilities", "generate_image",
                         "get_generation_task",
                         "update_asset_image"))
-                .systemPrompt(loadPrompt("asset-image-executor.system.md"))
+                .systemPrompt(loadSystemPrompt("asset-image-executor.system.md"))
                 .instructionTemplate("")
                 .enableTools(1)
                 .build());
@@ -549,31 +535,24 @@ public class AiAgentRegistry {
                 .type("storyboard_frame_gen")
                 .name("分镜首尾帧生成")
                 .toolNames(List.of(
-                        "get_project", "get_storyboard", "get_storyboard_scene_items"))
+                        "get_project", "get_storyboard", "get_storyboard_scene_items",
+                        "list_project_assets", "query_asset_items", "get_generation_model_capabilities"))
                 .subAgentTools(List.of(
                         AiAgentDefinition.SubAgentToolDef.builder()
                                 .toolName("generate_storyboard_frame")
                                 .displayName("为镜头生成首尾帧")
                                 .description("""
-                                        为单个分镜镜头生成首帧或尾帧图片并自动保存。每次调用只处理一个镜头的一个帧，可在同一轮同时调用多个实例并行执行。
-
-                                        调用时 message 必须包含以下信息（每行一个键值对）：
-                                        - storyboardItemId: 分镜条目ID（数字，必传）
-                                        - projectId: 项目ID（数字，必传）
-                                        - frameType: 帧类型，first 或 last（必传）
-                                        - framePrompt: 用户确认后的首尾帧提示词（必传）
-                                        - 不要额外传 session_id，框架会自动维护会话
-
-                                        message 格式示例：
-                                        请为分镜镜头生成首尾帧。
-                                        storyboardItemId: 42
-                                        projectId: 5
-                                        frameType: first
-                                        framePrompt: 生成该镜头视频的首帧定格图……""")
+                                        为一个镜头的一帧生成并保存图片，或在 promptOnly=true 时仅修订提示词。
+                                        先完成场次连续性规划和关联资产参考图，再调用本工具。
+                                        message 是字符串，内容为 JSON 对象，包含 storyboardItemId、projectId、frameType（first/last）、
+                                        framePrompt、continuityPlan、shotPlan、continuityReferences、width、height、promptOnly。
+                                        同一镜头首帧保存成功后才调用尾帧；独立且已有共同参考的镜头可以并行。
+                                        不传 session_id。仅优化提示词不生成图片、不改已有图片。
+                                        """)
                                 .parametersSchema(SUB_AGENT_MESSAGE_SCHEMA)
                                 .refAgentType("storyboard_frame_executor")
                                 .build()))
-                .systemPrompt(loadPrompt("storyboard-frame-gen.system.md"))
+                .systemPrompt(loadSystemPrompt("storyboard-frame-gen.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
@@ -599,7 +578,7 @@ public class AiAgentRegistry {
                         "get_project", "get_storyboard_scene_items",
                         "get_generation_model_capabilities", "generate_image", "get_generation_task",
                         "update_storyboard_item_frame"))
-                .systemPrompt(loadPrompt("storyboard-frame-executor.system.md"))
+                .systemPrompt(loadSystemPrompt("storyboard-frame-executor.system.md"))
                 .instructionTemplate("")
                 .enableTools(1)
                 .build());
@@ -635,7 +614,7 @@ public class AiAgentRegistry {
                                 .parametersSchema(SUB_AGENT_MESSAGE_SCHEMA)
                                 .refAgentType("storyboard_video_executor")
                                 .build()))
-                .systemPrompt(loadPrompt("storyboard-video-gen.system.md"))
+                .systemPrompt(loadSystemPrompt("storyboard-video-gen.system.md"))
                 .instructionTemplate("""
                         <task_context>
                         <project_id>{projectId}</project_id>
@@ -659,7 +638,7 @@ public class AiAgentRegistry {
                         "get_project", "get_storyboard_scene_items",
                         "get_generation_model_capabilities", "generate_video", "get_generation_task",
                         "update_storyboard_item_video"))
-                .systemPrompt(loadPrompt("storyboard-video-executor.system.md"))
+                .systemPrompt(loadSystemPrompt("storyboard-video-executor.system.md"))
                 .instructionTemplate("")
                 .enableTools(1)
                 .build());

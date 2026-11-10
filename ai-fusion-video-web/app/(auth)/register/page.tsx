@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { AuthLayout } from "@/components/ui/auth-layout";
+import { AuthPageLayout } from "@/components/auth/auth-page-layout";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { getInitStatus } from "@/lib/api/system-init";
 import { getApiErrorMessage } from "@/lib/api/api-error";
@@ -108,7 +108,7 @@ export default function RegisterPage() {
 
   if (!allowRegister) {
     return (
-      <AuthLayout>
+      <AuthPageLayout>
         <div className="space-y-4">
           <h1 className="text-[2rem] font-bold leading-[1.1] tracking-tight text-white">
             当前未开放注册
@@ -124,12 +124,12 @@ export default function RegisterPage() {
             返回登录
           </Link>
         </div>
-      </AuthLayout>
+      </AuthPageLayout>
     );
   }
 
   return (
-    <AuthLayout
+    <AuthPageLayout
       showSuccess={showSuccess}
       successTitle="注册成功"
       successSubtitle="正在进入控制面板"
@@ -259,6 +259,6 @@ export default function RegisterPage() {
       </p>
 
       <p className="text-xs text-white/30 pt-4">融光 · 公开注册</p>
-    </AuthLayout>
+    </AuthPageLayout>
   );
 }
