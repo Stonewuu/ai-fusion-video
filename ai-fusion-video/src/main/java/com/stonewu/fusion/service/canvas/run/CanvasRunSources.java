@@ -75,7 +75,7 @@ public class CanvasRunSources {
             case SCRIPT_EPISODE -> output.put("text", List.of(text(data.path("rawContent").asText(""))));
             case SCRIPT_SCENE -> output.put("text", List.of(text(sceneText(data))));
             case SHOT -> {
-                output.put("prompt", List.of(text(data.path("videoPrompt").asText(""))));
+                output.put("prompt", List.of(text(CanvasVideoPrompt.shot(data))));
                 mediaField(output, "firstFrame", snapshot, "firstFrameImageUrl", usedPorts, actor,
                         document.projectId());
                 mediaField(output, "lastFrame", snapshot, "lastFrameImageUrl", usedPorts, actor, document.projectId());

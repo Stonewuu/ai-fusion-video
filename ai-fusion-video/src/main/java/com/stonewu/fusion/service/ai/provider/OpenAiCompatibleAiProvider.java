@@ -167,13 +167,16 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
             hasOptions = true;
         }
 
-        Boolean includeReasoning = getConfigBoolean(context.getConfig(), "includeReasoning", "include_reasoning");
-        if (includeReasoning == null && isReasoningEnabled(context)) {
-            includeReasoning = true;
-        }
-        if (includeReasoning != null) {
-            builder.additionalBodyParam("include_reasoning", includeReasoning);
-            hasOptions = true;
+        // 部分兼容接口只接受 reasoning_effort，配置可明确关闭未公布的扩展字段。
+        if (!Boolean.FALSE.equals(getConfigBoolean(context.getConfig(), "sendIncludeReasoning"))) {
+            Boolean includeReasoning = getConfigBoolean(context.getConfig(), "includeReasoning", "include_reasoning");
+            if (includeReasoning == null && isReasoningEnabled(context)) {
+                includeReasoning = true;
+            }
+            if (includeReasoning != null) {
+                builder.additionalBodyParam("include_reasoning", includeReasoning);
+                hasOptions = true;
+            }
         }
 
         return hasOptions ? builder.build() : null;

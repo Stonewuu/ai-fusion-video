@@ -79,6 +79,18 @@ Thank you to the following sponsors for supporting AI Fusion Video!
         <p>🎁 Sign up through the <a href="https://metaso.cn/minimax-h3/?s=fusioi" target="_blank" rel="noopener noreferrer"><strong>exclusive AI-FUSION-VIDEO link</strong></a> to claim bonus credits and special offers.</p>
       </td>
     </tr>
+    <tr>
+      <td width="180" align="center" valign="middle">
+        <a href="https://youkou.cc/" target="_blank" rel="noopener noreferrer">
+          <img src="assets/sponsors/erchun-logo.jpg" alt="Erchun Technology logo" width="144" height="144" />
+        </a>
+      </td>
+      <td valign="top">
+        <p><strong>Thank you to <a href="https://youkou.cc/" target="_blank" rel="noopener noreferrer">Erchun AIGC (贰春)</a> for sponsoring this project | Multiple channels and models</strong></p>
+        <p>Images from <strong>CNY 0.01 each</strong> · H3 video from <strong>CNY 0.03/second</strong>. Seedance offers official and special-price channels, starting at <strong>10% of official prices</strong>.</p>
+        <p>Hundreds of models · Dozens of channels · Choose freely</p>
+      </td>
+    </tr>
   </tbody>
 </table>
 

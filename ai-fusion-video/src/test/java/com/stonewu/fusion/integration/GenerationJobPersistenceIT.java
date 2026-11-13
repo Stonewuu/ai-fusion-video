@@ -238,6 +238,27 @@ class GenerationJobPersistenceIT {
     }
 
     @Test
+    void providerPollingDelayLongerThanOneMinuteIsPreserved() {
+        insert("READY");
+        var job = jobs.claim("youkou-worker").orElseThrow();
+        var before = jobs.now();
+        jobs.waitForNextPoll(job.claim(), 137, "POLLING", null, null);
+        var after = jobs.now();
+        var scheduled = context.getBean(RemoteGenerationJobMapper.class).selectById(job.id()).getNextPollAt();
+        assertThat(scheduled).isBetween(before.plusSeconds(137), after.plusSeconds(137));
+        assertThat(jobs.claim("another-worker")).isEmpty();
+    }
+
+    @Test
+    void longProviderDelayWakesAtTheDeadlineWithoutAnEarlyPoll() {
+        insert("READY");
+        var job = jobs.claim("youkou-worker").orElseThrow();
+        jobs.waitForNextPoll(job.claim(), Integer.MAX_VALUE, "POLLING", null, null);
+        var scheduled = context.getBean(RemoteGenerationJobMapper.class).selectById(job.id()).getNextPollAt();
+        assertThat(scheduled).isAfterOrEqualTo(job.deadline()).isBefore(job.deadline().plusSeconds(2));
+    }
+
+    @Test
     void largeInlineImageResultsDoNotBlockOtherJobsOrReacquireCapacityDuringIngestRecovery() throws IOException {
         insert("READY");
         var processing = jobs.claim("ingest-a").orElseThrow();

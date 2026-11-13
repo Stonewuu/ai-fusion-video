@@ -24,6 +24,7 @@ import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import type {
   GenerationHistoryEntry,
   GenerationResultItem,
+  GenerationTask,
   WorkbenchMode,
 } from "./generation-types";
 import {
@@ -52,7 +53,7 @@ interface GenerationHistoryProps {
   onRefresh: () => void;
   onLoadMore: () => void;
   onUseSuggestion: (prompt: string) => void;
-  onReusePrompt: (prompt: string) => void;
+  onReuseTask: (task: GenerationTask) => void;
   onUseReference: (item: GenerationResultItem) => void;
   onAddAsset: (item: GenerationResultItem, prompt: string) => void;
   onCancel: (taskId: string) => void;
@@ -69,7 +70,7 @@ export function GenerationHistory({
   onRefresh,
   onLoadMore,
   onUseSuggestion,
-  onReusePrompt,
+  onReuseTask,
   onUseReference,
   onAddAsset,
   onCancel,
@@ -278,8 +279,8 @@ export function GenerationHistory({
                 <Button
                   variant="ghost"
                   size="xs"
-                  onClick={() => onReusePrompt(task.prompt)}
-                  title="复用提示词"
+                  onClick={() => onReuseTask(task)}
+                  title="恢复模型、参数和参考素材"
                 >
                   <RotateCcw className="h-3 w-3" />
                   再次使用
@@ -295,6 +296,7 @@ export function GenerationHistory({
             </header>
 
             <GenerationHistoryReferences
+              mode={mode}
               task={task}
               onPreview={setMediaPreview}
             />

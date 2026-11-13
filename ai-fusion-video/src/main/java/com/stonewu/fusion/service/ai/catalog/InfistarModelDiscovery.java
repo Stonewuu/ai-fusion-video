@@ -136,7 +136,7 @@ public class InfistarModelDiscovery implements ProviderModelDiscovery {
             overrides.set("supportReferenceImages", references).set("maxReferenceImages", references ? 1 : 0);
         }
         String name = preset == null || commonPreset ? id : preset.getStr("name");
-        return new ProviderModelCandidate(id, name, type, protocol, presetCode, overrides.toString(), null);
+        return new ProviderModelCandidate(id, name, type, protocol, presetCode, overrides.toString(), null, null);
     }
 
     private boolean hasMediaGenerationTag(String tags) {

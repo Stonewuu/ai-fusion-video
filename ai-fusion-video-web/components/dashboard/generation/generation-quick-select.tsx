@@ -26,7 +26,7 @@ interface GenerationQuickSelectProps {
 }
 
 const TRIGGER_CLASS =
-  "h-8 rounded-xl border-transparent bg-transparent px-2.5 text-xs hover:bg-background/80";
+  "h-9 w-28 min-w-0 shrink-0 text-sm tabular-nums sm:w-32";
 
 export function GenerationQuickSelect({
   value,
@@ -38,23 +38,9 @@ export function GenerationQuickSelect({
 }: GenerationQuickSelectProps) {
   const selected = options.find((option) => option.value === value) ?? options[0];
 
-  if (options.length <= 1) {
-    return (
-      <div
-        className={cn(
-          "flex min-w-0 items-center text-muted-foreground",
-          TRIGGER_CLASS,
-          className,
-        )}
-        title={selected?.label || placeholder}
-      >
-        <span className="truncate">{selected?.label || placeholder}</span>
-      </div>
-    );
-  }
-
   return (
     <Select
+      disabled={options.length <= 1}
       value={selected?.value ?? value}
       onValueChange={(nextValue) => onChange(String(nextValue))}
       items={options.map((option) => ({
@@ -62,7 +48,7 @@ export function GenerationQuickSelect({
         label: option.label,
       }))}
     >
-      <SelectTrigger className={cn(TRIGGER_CLASS, className)}>
+      <SelectTrigger aria-label={placeholder} title={selected?.label || placeholder} className={cn(TRIGGER_CLASS, className)}>
         <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent
@@ -70,11 +56,11 @@ export function GenerationQuickSelect({
         sideOffset={8}
         align="start"
         alignItemWithTrigger={false}
-        className={cn("w-auto min-w-24", contentClassName)}
+        className={cn("w-auto min-w-28 text-sm", contentClassName)}
       >
         <SelectGroup>
           {options.map((option) => (
-            <SelectItem key={option.value} value={option.value}>
+            <SelectItem key={option.value} value={option.value} className="text-sm">
               {option.menuLabel ?? option.label}
             </SelectItem>
           ))}

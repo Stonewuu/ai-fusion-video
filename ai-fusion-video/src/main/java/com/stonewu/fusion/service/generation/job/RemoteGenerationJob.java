@@ -12,7 +12,8 @@ public record RemoteGenerationJob(String id, String submissionId, long itemId, i
                                   RemoteGenerationResult result, boolean cancelRequested, boolean cancelSent,
                                   boolean permitHeld, String owner, long epoch, LocalDateTime leaseUntil,
                                   LocalDateTime deadline, int pollAttempts, int consecutiveErrors,
-                                  String errorCode, String errorMessage, long revision) {
+                                  String errorCode, String errorMessage, long revision,
+                                  LocalDateTime createdAt, LocalDateTime updatedAt) {
     public record Claim(String id, String owner, long epoch) {
     }
 

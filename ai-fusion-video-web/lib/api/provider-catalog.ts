@@ -1,5 +1,5 @@
 import { http } from "./client";
-import type { ApiConfigSaveReq } from "./ai-model";
+import type { ApiConfigSaveReq, MultimodalInputType, MultimodalInputTransports } from "./ai-model";
 
 export interface ProviderDefinition {
   id: string;
@@ -30,6 +30,13 @@ export interface ProviderModelCandidate {
   capabilityPresetCode: string | null;
   config: string;
   configurationHint: string | null;
+  textCapabilities: {
+    inputTypes: MultimodalInputType[];
+    inputTransports: MultimodalInputTransports;
+    contextWindow: number | null;
+    reasoning: boolean;
+    reasoningEfforts: string[];
+  } | null;
 }
 
 export interface ProviderDiscoveryResult {

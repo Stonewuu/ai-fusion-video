@@ -87,7 +87,7 @@ public class CanvasRunEnvironment {
             return json.object(Map.of("executorVersion", 1, "operation", freeze(body, actor)));
         }
         CanvasMediaRules.config(node);
-        var result = json.object(Map.of("executorVersion", 1));
+        var result = json.object(Map.of("executorVersion", CanvasVideoPrompt.appliesTo(node) ? 2 : 1));
         if (CanvasAgentNodeTypes.KINDS.contains(node.kind())) {
             result.setAll(agentModels.freeze(node, actor));
         }

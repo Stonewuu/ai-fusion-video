@@ -49,6 +49,139 @@ const videoRules = load("lib/video-model-rules.ts");
 const { resolutionChoices } = load("lib/image-output-sizes.ts");
 const imageOutputs = load("lib/image-output-sizes.ts");
 const canvasImages = load("lib/canvas/image-output.ts");
+const executionDetails = load("components/dashboard/generation/generation-execution-presentation.ts");
+const references = load("components/dashboard/generation/generation-reference-input.ts");
+const { generationDurationScale } = load("components/dashboard/generation/generation-duration-scale.ts");
+
+test("连续秒数列表与范围时长都通过滑条选择实际秒数", () => {
+  const enumerated = generationDurationScale(2, 30, Array.from({ length: 29 }, (_, index) => index + 2));
+  assert.equal(enumerated.seconds(0), 2);
+  assert.equal(enumerated.seconds(enumerated.max), 30);
+  assert.equal(enumerated.seconds(enumerated.position(20)), 20);
+  const range = generationDurationScale(4, 30);
+  assert.equal(range.seconds(range.position(20)), 20);
+  assert.equal(range.min, 4);
+  assert.equal(range.max, 30);
+});
+
+test("离散时长滑条只选择模型支持的秒数，并随分辨率更新", () => {
+  const cap = { supportedDurations: [4, 6, 8], supportedDurationsByResolution: { "4K": [8] }, minDuration: 4, maxDuration: 8 };
+  const scale = generationDurationScale(4, 8, videoRules.videoDurationOptions(cap, "720p"));
+  assert.deepEqual(Array.from({ length: scale.max + 1 }, (_, index) => scale.seconds(index)), [4, 6, 8]);
+  assert.equal(scale.seconds(scale.position(4) + 1), 6);
+  const highResolution = generationDurationScale(4, 8, videoRules.videoDurationOptions(cap, "4K"));
+  assert.equal(highResolution.min, highResolution.max);
+  assert.equal(highResolution.seconds(0), 8);
+});
+
+const imageReference = "media://11111111-1111-4111-8111-111111111111";
+const videoReference = "media://22222222-2222-4222-8222-222222222222";
+const audioReference = "media://33333333-3333-4333-8333-333333333333";
+const referenceCapabilities = {
+  supportsFirstFrame: true, supportsLastFrame: true, supportsReferenceImages: true,
+  supportsReferenceVideos: true, supportsReferenceAudios: true,
+  maxImageInputs: 5, maxReferenceImages: 3, maxReferenceVideos: 2, maxReferenceAudios: 2,
+};
+
+test("从视频结果添加引用只传原视频，不用封面替代", () => {
+  const form = { ...forms.EMPTY_GENERATION_FORM };
+  const item = { videoUrl: videoReference, coverUrl: imageReference };
+  const added = references.appendResultReference("video", form, referenceCapabilities, item);
+  assert.deepEqual(added.form.referenceVideos, [videoReference]);
+  assert.deepEqual(added.form.referenceImages, []);
+  const request = requests.generationSubmitRequest("video", added.form, 7);
+  assert.equal(request.referenceVideoUrls, JSON.stringify([videoReference]));
+  assert.equal(request.referenceImageUrls, undefined);
+  assert.deepEqual(form.referenceVideos, []);
+});
+
+test("模型不支持视频引用、结果未就绪或数量已满时明确拒绝添加", () => {
+  const item = { videoUrl: videoReference, coverUrl: imageReference };
+  assert.throws(() => references.appendResultReference("video", forms.EMPTY_GENERATION_FORM,
+    { ...referenceCapabilities, supportsReferenceVideos: false }, item), /不支持参考视频/);
+  assert.throws(() => references.appendResultReference("video", forms.EMPTY_GENERATION_FORM,
+    referenceCapabilities, { ...item, videoUrl: null }), /尚未就绪/);
+  assert.throws(() => references.appendResultReference("video",
+    { ...forms.EMPTY_GENERATION_FORM, referenceVideos: [videoReference] }, referenceCapabilities, item), /已在/);
+  assert.throws(() => references.appendResultReference("video", forms.EMPTY_GENERATION_FORM,
+    { ...referenceCapabilities, maxReferenceVideos: 0 }, item), /数量已达上限/);
+});
+
+test("再次使用恢复全部参考素材和关闭参数，提交时保留原始媒体引用", () => {
+  const task = { prompt: "按原视频的运动生成", ratio: "16:9", resolution: "480P", count: 2,
+    duration: 4, seed: 0, watermark: false, generateAudio: false, cameraFixed: false,
+    firstFrameImageUrl: imageReference, lastFrameImageUrl: imageReference,
+    referenceImageUrls: JSON.stringify([imageReference]),
+    referenceVideoUrls: JSON.stringify([videoReference]), referenceAudioUrls: JSON.stringify([audioReference]) };
+  const restored = references.generationFormFromTask("video", task,
+    { ...forms.EMPTY_GENERATION_FORM, watermark: true, generateAudio: true });
+  const request = requests.generationSubmitRequest("video", restored, 7);
+  assert.equal(request.firstFrameImageUrl, imageReference);
+  assert.equal(request.lastFrameImageUrl, imageReference);
+  assert.equal(request.referenceImageUrls, task.referenceImageUrls);
+  assert.equal(request.referenceVideoUrls, task.referenceVideoUrls);
+  assert.equal(request.referenceAudioUrls, task.referenceAudioUrls);
+  assert.equal(request.prompt, task.prompt);
+  assert.equal(request.duration, 4);
+  assert.equal(request.seed, 0);
+  assert.equal(request.generateAudio, false);
+  assert.equal(request.watermark, false);
+  assert.equal(references.taskReferences("video", task).filter(item => item.mediaType === "video")[0].url, videoReference);
+});
+
+test("再次使用无引用的任务会清除当前草稿引用，图片任务保留自己的参考图", () => {
+  const defaults = { ...forms.EMPTY_GENERATION_FORM, referenceVideos: [videoReference], referenceImages: [imageReference] };
+  const restored = references.generationFormFromTask("video", { prompt: "新的风景", count: 1 }, defaults);
+  assert.deepEqual(restored.referenceVideos, []);
+  assert.deepEqual(restored.referenceImages, []);
+  assert.equal(restored.seed, "");
+  const image = references.generationFormFromTask("image",
+    { prompt: "保持人物", count: 1, refImageUrls: JSON.stringify([imageReference]) }, defaults);
+  assert.deepEqual(image.referenceImages, [imageReference]);
+  assert.deepEqual(image.referenceVideos, []);
+});
+
+test("移除首帧不会同时移除使用同一图片的尾帧", () => {
+  const form = { ...forms.EMPTY_GENERATION_FORM, firstFrame: [imageReference], lastFrame: [imageReference] };
+  const removed = references.removeGenerationReference(form,
+    { url: imageReference, kind: "firstFrame", mediaType: "image", label: "首帧" });
+  assert.deepEqual(removed.firstFrame, []);
+  assert.deepEqual(removed.lastFrame, [imageReference]);
+  assert.deepEqual(form.firstFrame, [imageReference]);
+});
+
+test("引用记录损坏时不把再次使用变成没有参考素材的生成", () => {
+  assert.throws(() => references.generationFormFromTask("video",
+    { prompt: "保持原主体", count: 1, referenceVideoUrls: "invalid-json" }, forms.EMPTY_GENERATION_FORM), /无法读取/);
+});
+
+test("本地结束但供应商受理未知时，详情仍显示受理待确认", () => {
+  const item = { state: "UNKNOWN_SUBMISSION", providerTaskId: null, availableActions: [] };
+  assert.equal(executionDetails.executionStatus({ state: "FAILED", items: [item] }), "受理待确认");
+  assert.match(executionDetails.executionGuidance(item), /供应商平台核对/);
+  assert.equal(executionDetails.executionStatus({ state: "FAILED", items: [{ state: "FAILED" }] }), "生成失败");
+  assert.equal(executionDetails.executionTime(null), "—");
+});
+
+test("执行参数保留零种子和关闭状态，不把未配置参数显示成默认值", () => {
+  const values = executionDetails.executionParameters({ kind: "VIDEO", input: { parameters: {
+    count: 2, duration: -1, seed: 0, generateAudio: false, ratio: null, resolution: null,
+  } } });
+  const fields = Object.fromEntries(values.map(({ label, value }) => [label, value]));
+  assert.deepEqual(fields, { 数量: "2 段", 画面比例: "—", 分辨率: "—", 时长: "自动", 声音: "关闭", 随机种子: "0" });
+});
+
+test("已收到结果但保存失败时，详情引导保存结果而不是重新生成", () => {
+  const guidance = executionDetails.executionGuidance({ state: "FAILED", availableActions: ["RETRY_INGEST"] });
+  assert.match(guidance, /重新保存结果/);
+  assert.doesNotMatch(guidance, /重新生成/);
+});
+
+test("同步返回结果但没有任务编号时，不误报供应商尚未响应", () => {
+  assert.equal(executionDetails.executionProviderTask({ providerTaskId: null, attempts: [{ submitted: true, acknowledged: true }] }), "—");
+  assert.equal(executionDetails.executionProviderTask({ providerTaskId: null, attempts: [{ submitted: true, acknowledged: false }] }), "未返回");
+  assert.equal(executionDetails.executionProviderTask({ providerTaskId: "provider-1", attempts: [] }), "provider-1");
+});
 
 test("画布与工作台使用同一比例档位选择，切换模型清除旧的自定义宽高", () => {
   const parameters = {

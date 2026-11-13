@@ -1,5 +1,25 @@
 [
   {
+    "id": "erchun",
+    "platform": "openai_compatible",
+    "label": "贰春 AI",
+    "url": "https://api.youkou.cc",
+    "textProtocol": "openai_compatible",
+    "imageProtocol": "youkou",
+    "videoProtocol": "youkou",
+    "appendV1": true,
+    "vendor": "erchun",
+    "hint": "对话、图片与视频生成",
+    "sponsored": true,
+    "quickSetup": true,
+    "credentialUrl": "https://youkou.cc/",
+    "documentationUrl": "https://erchun.youkou.cc/open-api/docs.html",
+    "supportedModelTypes": [1, 2, 3],
+    "discovery": "youkou",
+    "restrictedProtocols": ["youkou"],
+    "modelPresetCodes": []
+  },
+  {
     "id": "metaso",
     "platform": "openai_compatible",
     "label": "秘塔 AI",

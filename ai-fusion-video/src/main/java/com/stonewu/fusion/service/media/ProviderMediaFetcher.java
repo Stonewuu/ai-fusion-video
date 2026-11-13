@@ -94,6 +94,8 @@ public class ProviderMediaFetcher {
                         throw new IOException("供应商重定向无效");
                     }
                     uri = uri.resolve(response.header("Location"));
+                    // 签名下载链接即使与提供商同域，也不再携带原接口的凭据。
+                    allowAuthorization = false;
                     continue;
                 }
                 if (status != 200 || response.body() == null) {

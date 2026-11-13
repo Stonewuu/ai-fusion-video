@@ -69,6 +69,7 @@ const BRAND_ICONS = {
   deepMind: { Icon: DeepMind },
   deepSeek: { Icon: DeepSeek },
   doubao: { Icon: Doubao },
+  erchun: { src: "/brands/erchun.jpg" },
   flux: { Icon: Flux },
   gemini: { Icon: Gemini },
   google: { Icon: Google },
@@ -148,6 +149,7 @@ const MODEL_ICON_RULES: IconRule[] = [
 ];
 
 const PROVIDER_ICON_RULES: IconRule[] = [
+  [/erchun|贰春/, "erchun"],
   [/metaso|秘塔/, "metaso"],
   [/infistar|无限星河/, "infistar"],
   [/minimax/, "minimax"],

@@ -7,6 +7,7 @@ import { ProviderVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import type { ProviderDefinition } from "@/lib/api/provider-catalog";
 import { cn } from "@/lib/utils";
 import { SponsorNotice } from "./sponsor-notice";
+import { orderProviderPresets } from "./provider-preset-order";
 
 interface ProviderPresetPickerProps {
   providers: ProviderDefinition[];
@@ -62,7 +63,7 @@ export function ProviderPresetPicker({
         </div>
       )}
       <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-        {providers.map((provider) => {
+        {orderProviderPresets(providers).map((provider) => {
           const selected = selectedId === provider.id;
           const surface = cn(
             "min-w-0 rounded-xl border p-3 text-left transition-colors",

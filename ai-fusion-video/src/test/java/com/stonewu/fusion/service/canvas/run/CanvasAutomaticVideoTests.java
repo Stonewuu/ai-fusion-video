@@ -5,6 +5,7 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.canvas.CanvasJson;
+import com.stonewu.fusion.service.canvas.capability.CanvasCapabilityRegistry;
 import com.stonewu.fusion.service.canvas.model.CanvasActor;
 import com.stonewu.fusion.service.canvas.model.CanvasGraph;
 import com.stonewu.fusion.service.canvas.model.CanvasNode;
@@ -52,8 +53,12 @@ class CanvasAutomaticVideoTests {
         var nodeRun = mock(NodeRun.class);
         when(nodeRun.id()).thenReturn("node");
         when(nodeRun.plan()).thenReturn(plan);
-        when(nodeRun.inputs()).thenReturn(new Ports(Map.of("firstFrame", List.of(new Value("frame", CanvasValueType.IMAGE,
-                null, "00000000-0000-4000-8000-000000000001", 1, null, null, null)))));
+        var inputs = new CanvasRunInputs(new CanvasCapabilityRegistry(), mock(CanvasRunSources.class));
+        var resolved = inputs.configured(plan,
+                Map.of("firstFrame", List.of(new Value("frame", CanvasValueType.IMAGE,
+                        null, "00000000-0000-4000-8000-000000000001", 1, null, null, null))),
+                new CanvasActor(42, null));
+        when(nodeRun.inputs()).thenReturn(resolved);
         var run = mock(Run.class);
         var runPlan = mock(Plan.class);
         when(run.actor()).thenReturn(new CanvasActor(42, null));

@@ -22,6 +22,7 @@ import com.stonewu.fusion.service.ai.catalog.ProviderSetupService;
 import com.stonewu.fusion.service.ai.catalog.ProviderSetupWriter;
 import com.stonewu.fusion.service.ai.comfyui.ComfyUiWorkflowService;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
+import com.stonewu.fusion.service.generation.GenerationModelCapabilityService;
 import com.sun.net.httpserver.HttpServer;
 import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
@@ -55,6 +56,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -115,6 +117,8 @@ class ProviderSetupFlowIT {
         context.registerBean(CacheManager.class, () -> new ConcurrentMapCacheManager());
         context.registerBean(ChatModelFactory.class, () -> mock(ChatModelFactory.class));
         context.registerBean(ComfyUiWorkflowService.class, () -> mock(ComfyUiWorkflowService.class));
+        context.registerBean(GenerationModelCapabilityService.class, () -> new GenerationModelCapabilityService(
+                context.getBean(AiModelMetadataResolver.class), context.getBean(ModelPresetService.class)));
         MybatisTestSupport.register(context, source, ApiConfigMapper.class, AiModelMapper.class);
         context.register(ProviderCatalogService.class, ModelPresetService.class, ApiConfigService.class,
                 AiModelMetadataResolver.class, AiModelService.class, MetasoModelDiscovery.class,
@@ -229,9 +233,9 @@ class ProviderSetupFlowIT {
         var config = discovery.resolveConfiguration(request(List.of("MiniMax-H3")).configuration());
         long beforeConfigs = configs.selectCount(null);
         long beforeModels = models.selectCount(null);
-        var valid = new ProviderModelCandidate("MiniMax-H3", "H3", 3, "metaso_video", "metaso:MiniMax-H3", "{}", null);
+        var valid = new ProviderModelCandidate("MiniMax-H3", "H3", 3, "metaso_video", "metaso:MiniMax-H3", "{}", null, null);
         var second = new ProviderModelCandidate("seedance-2.0-mini", "Seedance Mini", 3, "metaso_video",
-                "metaso:seedance-2.0-mini", "{}", null);
+                "metaso:seedance-2.0-mini", "{}", null, null);
         doThrow(new DataAccessResourceFailureException("simulated database write failure"))
                 .when(models).insert(argThat((AiModel model) -> "seedance-2.0-mini".equals(model.getCode())));
         try {
@@ -242,6 +246,27 @@ class ProviderSetupFlowIT {
         }
         assertThat(configs.selectCount(null)).isEqualTo(beforeConfigs);
         assertThat(models.selectCount(null)).isEqualTo(beforeModels);
+    }
+
+    @Test
+    void discoveredTextCapabilitiesAreSavedWithoutAnOfficialModelPreset() {
+        var request = new ApiConfigSaveReqVO();
+        request.setProviderId("erchun");
+        request.setName("贰春测试配置");
+        request.setApiKey("test-youkou-key");
+        var config = discovery.resolveConfiguration(request);
+        var text = new ProviderModelCandidate.TextCapabilities(List.of(), Map.of(),
+                1_000_000, true, List.of("none", "low", "high", "max"));
+        var candidate = new ProviderModelCandidate("DeepSeek V4 Pro", "DeepSeek V4 Pro", 1,
+                "openai_compatible", null, "{\"sendIncludeReasoning\":false}", null, text);
+        var result = context.getBean(ProviderSetupWriter.class).save(config, List.of(candidate),
+                UUID.randomUUID().toString(), "youkou-capabilities");
+        var saved = models.selectOne(new LambdaQueryWrapper<AiModel>().eq(AiModel::getApiConfigId, result.apiConfigId()));
+        assertThat(saved.getContextWindow()).isEqualTo(1_000_000);
+        assertThat(saved.getSupportReasoning()).isTrue();
+        assertThat(saved.getReasoningEffortLevels()).containsExactly("none", "low", "high", "max");
+        assertThat(saved.getSupportVision()).isFalse();
+        assertThat(saved.getCapabilityPresetCode()).isNull();
     }
 
     @Test

@@ -40,6 +40,9 @@ export interface GenerationExecutionItem {
   errorMessage: string | null;
   revision: number;
   deadline: string;
+  createdAt: string;
+  updatedAt: string;
+  pollAttempts: number;
   resultReceived: boolean;
   availableActions: GenerationReviewAction[];
   attempts: {
@@ -49,6 +52,32 @@ export interface GenerationExecutionItem {
     submitted: boolean;
     acknowledged: boolean;
     resolution: string | null;
+    createdAt: string;
+    submittedAt: string | null;
+    acknowledgedAt: string | null;
+    resolvedAt: string | null;
+    resolutionNote: string | null;
+  }[];
+}
+export interface GenerationExecutionInput {
+  prompt: string | null;
+  parameters: {
+    generateMode?: string | null;
+    count: number;
+    ratio?: string | null;
+    resolution?: string | null;
+    width?: number | null;
+    height?: number | null;
+    duration?: number | null;
+    generateAudio?: boolean | null;
+    cameraFixed?: boolean | null;
+    watermark?: boolean | null;
+    seed?: number | null;
+    workflowVersionId?: number | null;
+  };
+  references: {
+    kind: "firstFrame" | "lastFrame" | "image" | "video" | "audio";
+    source: string;
   }[];
 }
 export interface GenerationExecution extends GenerationExecutionSummary {
@@ -58,7 +87,10 @@ export interface GenerationExecution extends GenerationExecutionSummary {
   revision: number;
   modelId: number;
   modelName: string;
+  modelCode: string;
+  modelProtocol: string | null;
   createdAt: string;
+  input: GenerationExecutionInput;
   items: GenerationExecutionItem[];
 }
 export const generationExecutionApi = {

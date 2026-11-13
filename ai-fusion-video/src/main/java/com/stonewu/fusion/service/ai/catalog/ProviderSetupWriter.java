@@ -77,6 +77,12 @@ public class ProviderSetupWriter {
                         .reasoningEffortLevels(preset.getJSONArray("reasoningEffortLevels").toList(String.class));
             }
         }
+        var text = candidate.textCapabilities();
+        if (text != null) {
+            builder.supportVision(text.inputTypes().contains("image")).multimodalInputTypes(text.inputTypes())
+                    .multimodalInputTransports(text.inputTransports()).contextWindow(text.contextWindow())
+                    .supportReasoning(text.reasoning()).reasoningEffortLevels(text.reasoningEfforts());
+        }
         return builder.build();
     }
 

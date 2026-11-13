@@ -14,6 +14,7 @@ const { getProtocolOptionsForModelType } = loaded.exports;
 const providers = [
   { id: "metaso", restrictedProtocols: ["metaso_video"] },
   { id: "infistar", restrictedProtocols: ["infistar_video"] },
+  { id: "erchun", restrictedProtocols: ["youkou"] },
 ];
 const values = (id, catalog = providers) => getProtocolOptionsForModelType(3, id, catalog).map(item => item.value);
 
@@ -24,6 +25,11 @@ test("普通渠道不显示赞助商专用协议，赞助渠道只能选择自�
   assert.ok(!values("metaso").includes("infistar_video"));
   assert.ok(values("infistar").includes("infistar_video"));
   assert.ok(values("infistar").includes("openai"));
+  assert.ok(!values(null).includes("youkou"));
+  assert.ok(values("erchun").includes("youkou"));
+  assert.ok(!values("infistar").includes("youkou"));
+  assert.ok(getProtocolOptionsForModelType(2, "erchun", providers).some(item => item.value === "youkou"));
+  assert.ok(!getProtocolOptionsForModelType(2, null, providers).some(item => item.value === "youkou"));
 });
 
 test("目录加载失败或渠道已隐藏时，不暴露专用协议选项", () => {

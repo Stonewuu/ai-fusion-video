@@ -79,6 +79,18 @@
         <p>🎁 通过 <a href="https://metaso.cn/minimax-h3/?s=fusioi" target="_blank" rel="noopener noreferrer"><strong>融光专属链接</strong></a> 注册，即可领取赠送额度及专属优惠。</p>
       </td>
     </tr>
+    <tr>
+      <td width="180" align="center" valign="middle">
+        <a href="https://youkou.cc/" target="_blank" rel="noopener noreferrer">
+          <img src="assets/sponsors/erchun-logo.jpg" alt="贰春科技 Logo" width="144" height="144" />
+        </a>
+      </td>
+      <td valign="top">
+        <p><strong>感谢 <a href="https://youkou.cc/" target="_blank" rel="noopener noreferrer">贰春 AIGC</a> 赞助本项目 | 多渠道多模型提供商</strong></p>
+        <p>图片 <strong>1 分钱/张起</strong> · 视频模型 H3 低至 <strong>3 分钱/秒起</strong>，Seedance 官方和特价都有，最低低至 <strong>1 折起</strong></p>
+        <p>百款模型 · 几十个渠道 · 自由选</p>
+      </td>
+    </tr>
   </tbody>
 </table>
 

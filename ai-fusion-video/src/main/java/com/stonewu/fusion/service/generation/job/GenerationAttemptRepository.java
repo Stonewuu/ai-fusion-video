@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.time.LocalDateTime;
 
 @Repository
 @RequiredArgsConstructor
@@ -98,10 +99,14 @@ public class GenerationAttemptRepository {
         return attempts.selectList(new LambdaQueryWrapper<GenerationAttemptEntity>()
                         .select(GenerationAttemptEntity::getId, GenerationAttemptEntity::getAttemptNo,
                                 GenerationAttemptEntity::getProviderTaskId, GenerationAttemptEntity::getSubmittedAt,
-                                GenerationAttemptEntity::getAcknowledgedAt, GenerationAttemptEntity::getResolution)
+                                GenerationAttemptEntity::getAcknowledgedAt, GenerationAttemptEntity::getResolution,
+                                GenerationAttemptEntity::getCreatedAt, GenerationAttemptEntity::getResolvedAt,
+                                GenerationAttemptEntity::getResolutionNote)
                         .eq(GenerationAttemptEntity::getJobId, jobId).orderByAsc(GenerationAttemptEntity::getAttemptNo))
                 .stream().map(row -> new Summary(row.getId(), row.getAttemptNo(), row.getProviderTaskId(),
-                        row.getSubmittedAt() != null, row.getAcknowledgedAt() != null, row.getResolution())).toList();
+                        row.getSubmittedAt() != null, row.getAcknowledgedAt() != null, row.getResolution(),
+                        row.getCreatedAt(), row.getSubmittedAt(), row.getAcknowledgedAt(), row.getResolvedAt(),
+                        row.getResolutionNote())).toList();
     }
 
     /**
@@ -146,6 +151,7 @@ public class GenerationAttemptRepository {
     }
 
     public record Summary(String id, int number, String providerTaskId, boolean submitted, boolean acknowledged,
-                          String resolution) {
+                          String resolution, LocalDateTime createdAt, LocalDateTime submittedAt,
+                          LocalDateTime acknowledgedAt, LocalDateTime resolvedAt, String resolutionNote) {
     }
 }

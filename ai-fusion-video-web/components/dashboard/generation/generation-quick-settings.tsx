@@ -8,7 +8,8 @@ import { GenerationDurationSlider } from "./generation-duration-slider";
 import { GenerationQuickSelect } from "./generation-quick-select";
 import type { GenerationFormState, WorkbenchMode } from "./generation-types";
 import { parseLimit } from "./generation-utils";
-import { videoDurationForResolution, videoDurationOptions, videoInputState, videoMaxDuration, videoRatioOptions } from "@/lib/video-model-rules";
+import { videoDurationOptions, videoMaxDuration } from "@/lib/video-model-rules";
+import { GenerationVideoOutputPickers } from "./generation-video-output-pickers";
 
 interface GenerationQuickSettingsProps {
   mode: WorkbenchMode;
@@ -45,36 +46,7 @@ export function GenerationQuickSettings({
       {mode === "image" ? (
         <ImageOutputPickers compact capabilities={capabilities} form={form} onChange={onFormChange} />
       ) : (
-        <>
-          <GenerationQuickSelect
-            value={form.ratio}
-            placeholder="比例"
-            options={videoRatioOptions(
-              capabilities?.supportedAspectRatios || [],
-              capabilities?.videoRules,
-              videoInputState(form),
-            ).map((value) => ({
-              value,
-              label: value === "adaptive" || value === "auto" ? "自适应比例" : `比例 ${value}`,
-              menuLabel: value === "adaptive" || value === "auto" ? "自适应" : value,
-            }))}
-            onChange={(ratio) => onFormChange({ ratio })}
-          />
-
-          <GenerationQuickSelect
-            value={form.resolution}
-            placeholder="分辨率"
-            options={(capabilities?.supportedResolutions ?? []).map((value) => ({
-              value,
-              label: value,
-            }))}
-            contentClassName="min-w-28"
-            onChange={(resolution) => {
-              const duration = capabilities ? videoDurationForResolution(form.duration, capabilities, resolution) : form.duration;
-              onFormChange({ resolution, duration });
-            }}
-          />
-        </>
+        <GenerationVideoOutputPickers compact capabilities={capabilities} form={form} onChange={onFormChange} />
       )}
 
       <GenerationQuickSelect

@@ -10,6 +10,7 @@ export const MODEL_PROTOCOL_LABELS: Record<string, string> = {
   minimax_h3: "MiniMax H3 官方协议",
   metaso_video: "秘塔视频协议",
   infistar_video: "无限星河视频协议",
+  youkou: "贰春异步协议",
   volcengine: "火山引擎协议",
   vertex_ai: "Vertex AI 协议",
   google_flow: "Flow 协议",
@@ -32,6 +33,7 @@ export const TEXT_PROTOCOL_OPTIONS = [
 ] as const;
 
 export const IMAGE_PROTOCOL_OPTIONS = [
+  { value: "youkou", label: "贰春异步协议", providerOnly: true },
   { value: "gemini", label: "Gemini 协议" },
   { value: "openai", label: "OpenAI 官方协议" },
   { value: "newapi", label: "New API 协议" },
@@ -44,6 +46,7 @@ export const IMAGE_PROTOCOL_OPTIONS = [
 ] as const;
 
 export const VIDEO_PROTOCOL_OPTIONS = [
+  { value: "youkou", label: "贰春异步协议", providerOnly: true },
   { value: "gemini", label: "Gemini 协议" },
   { value: "vertex_ai", label: "Vertex AI 协议" },
   { value: "minimax_h3", label: "MiniMax H3 官方协议" },

@@ -1,0 +1,928 @@
+{
+  "contract_version": "platform-async-20261019",
+  "catalog_version": "youkou-test-catalog",
+  "data": [
+    {
+      "id": "2.0 渠道特价",
+      "object": "model",
+      "display_name": "2.0 渠道特价",
+      "output_type": "video",
+      "endpoints": [
+        "/v1/videos"
+      ],
+      "public_model_id": "mdl_124df3fb260e4eee1785c3838cecf79d",
+      "protocol": {
+        "kind": "platform_async_extension",
+        "create_success_status": 202,
+        "status_path": "/v1/tasks/{task_id}",
+        "content_path": "/v1/tasks/{task_id}/content",
+        "result_path": null
+      },
+      "capabilities": {
+        "schema_version": 1,
+        "sync_status": "synced",
+        "constraints": {
+          "audio_requires_image_or_video": false,
+          "max_video_input_output_duration_seconds": 30
+        },
+        "image": {
+          "status": "supported",
+          "mode": "reference",
+          "modes": [
+            "reference"
+          ],
+          "max_dimension": 8000,
+          "max_count": 9,
+          "allowed_mime_types": [
+            "image/jpeg",
+            "image/png",
+            "image/webp"
+          ],
+          "max_bytes": 20971520,
+          "min_dimension": 240,
+          "min_aspect_ratio": 0.125,
+          "max_aspect_ratio": 8
+        },
+        "video": {
+          "status": "supported",
+          "max_count": 2,
+          "max_duration_seconds": 15,
+          "min_duration_seconds": 0,
+          "max_total_duration_seconds": 0,
+          "allowed_mime_types": [
+            "video/mp4",
+            "video/quicktime"
+          ],
+          "max_bytes": 104857600
+        },
+        "audio": {
+          "status": "supported",
+          "max_count": 2,
+          "max_duration_seconds": 15,
+          "min_duration_seconds": 1,
+          "max_total_duration_seconds": 0,
+          "allowed_mime_types": [
+            "audio/mpeg",
+            "audio/wav"
+          ],
+          "max_bytes": 15728640
+        },
+        "mix": {
+          "status": "supported",
+          "allow_mixed": true,
+          "max_total": 20
+        }
+      },
+      "parameters": {
+        "/v1/videos": {
+          "content_types": [
+            "application/json",
+            "multipart/form-data"
+          ],
+          "fields": {
+            "model": {
+              "type": "string",
+              "status": "supported",
+              "required": true,
+              "extension": false
+            },
+            "prompt": {
+              "type": "string",
+              "status": "supported",
+              "required": true,
+              "max_bytes": 65535,
+              "extension": false,
+              "max_length": 20000
+            },
+            "input_images": {
+              "type": "array",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "min_count": 0,
+              "format": "media_id",
+              "max_dimension": 8000,
+              "max_count": 9,
+              "allowed_mime_types": [
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+              ],
+              "max_bytes": 20971520,
+              "min_dimension": 240,
+              "min_aspect_ratio": 0.125,
+              "max_aspect_ratio": 8,
+              "exclusive_with": [
+                "input_reference",
+                "input_image_files"
+              ]
+            },
+            "input_videos": {
+              "type": "array",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "min_count": 0,
+              "format": "media_id",
+              "max_count": 2,
+              "max_duration_seconds": 15,
+              "min_duration_seconds": 0,
+              "max_total_duration_seconds": 0,
+              "allowed_mime_types": [
+                "video/mp4",
+                "video/quicktime"
+              ],
+              "max_bytes": 104857600
+            },
+            "input_audios": {
+              "type": "array",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "min_count": 0,
+              "format": "media_id",
+              "max_count": 2,
+              "max_duration_seconds": 15,
+              "min_duration_seconds": 1,
+              "max_total_duration_seconds": 0,
+              "allowed_mime_types": [
+                "audio/mpeg",
+                "audio/wav"
+              ],
+              "max_bytes": 15728640
+            },
+            "input_reference": {
+              "type": "file_or_reference",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "min_count": 1,
+              "format": "file_or_file_id",
+              "max_dimension": 8000,
+              "max_count": 1,
+              "allowed_mime_types": [
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+              ],
+              "max_bytes": 20971520,
+              "min_dimension": 240,
+              "min_aspect_ratio": 0.125,
+              "max_aspect_ratio": 8,
+              "alias_of": "input_images",
+              "exclusive_with": [
+                "input_images",
+                "input_image_files"
+              ]
+            },
+            "input_image_files": {
+              "type": "array",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "min_count": 1,
+              "format": "multipart_files",
+              "max_dimension": 8000,
+              "max_count": 9,
+              "allowed_mime_types": [
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+              ],
+              "max_bytes": 20971520,
+              "min_dimension": 240,
+              "min_aspect_ratio": 0.125,
+              "max_aspect_ratio": 8,
+              "multipart_field": "input_image_files[]",
+              "content_types": [
+                "multipart/form-data"
+              ],
+              "alias_of": "input_images",
+              "exclusive_with": [
+                "input_reference",
+                "input_images"
+              ]
+            },
+            "seconds": {
+              "type": "integer",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ],
+              "default": 10,
+              "mode": "enum"
+            },
+            "duration_seconds": {
+              "type": "integer",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "values": [
+                4,
+                5,
+                6,
+                7,
+                8,
+                9,
+                10,
+                11,
+                12,
+                13,
+                14,
+                15
+              ],
+              "default": 10,
+              "mode": "enum",
+              "alias_of": "seconds"
+            },
+            "aspect_ratio": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "values": [
+                "adaptive",
+                "16:9",
+                "4:3",
+                "1:1",
+                "3:4",
+                "9:16"
+              ],
+              "default": "adaptive",
+              "mode": "enum"
+            },
+            "resolution": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "values": [
+                "480P",
+                "720P",
+                "1080P"
+              ],
+              "default": "1080P",
+              "mode": "enum"
+            },
+            "size": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                "856x480",
+                "640x480",
+                "480x480",
+                "480x640",
+                "480x856",
+                "1280x720",
+                "960x720",
+                "720x720",
+                "720x960",
+                "720x1280",
+                "1920x1080",
+                "1440x1080",
+                "1080x1080",
+                "1080x1440",
+                "1080x1920"
+              ],
+              "default": null,
+              "mode": "enum",
+              "resolves": [
+                "resolution",
+                "aspect_ratio"
+              ]
+            },
+            "video_reference_frame_mode": {
+              "type": "string",
+              "status": "unsupported",
+              "required": false,
+              "default": "reference",
+              "extension": true
+            },
+            "frame_rate": {
+              "type": "integer",
+              "status": "unsupported",
+              "required": false,
+              "extension": true
+            },
+            "generate_audio": {
+              "type": "boolean",
+              "status": "unsupported",
+              "required": false,
+              "extension": true,
+              "values": null,
+              "default": null
+            },
+            "generation_options": {
+              "type": "object",
+              "status": "unsupported",
+              "required": false,
+              "extension": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "DeepSeek V4 Pro",
+      "object": "model",
+      "display_name": "DeepSeek V4 Pro",
+      "output_type": "text",
+      "endpoints": [
+        "/v1/chat/completions"
+      ],
+      "public_model_id": "mdl_b0f584652039f18cb38eb00cc6483432",
+      "protocol": {
+        "kind": "openai_chat_completions",
+        "create_success_status": 200,
+        "status_path": null,
+        "content_path": null,
+        "result_path": null
+      },
+      "capabilities": {
+        "kind": "text",
+        "limits": {
+          "context_window": 1000000,
+          "max_input_tokens": 1000000,
+          "max_output_tokens": 393216,
+          "max_reasoning_tokens": 393216,
+          "reasoning_max_input_tokens": 1000000,
+          "reasoning_max_output_tokens": 393216
+        },
+        "effective_limits": {
+          "context_window": 1000000,
+          "max_output_tokens": 8192,
+          "max_input_tokens": 1000000
+        },
+        "features": {
+          "vision": "unsupported",
+          "json_object": "supported",
+          "json_schema": "unknown",
+          "tools": "supported",
+          "thinking": "supported",
+          "cache_read": "supported",
+          "cache_write": "unknown",
+          "streaming": "supported"
+        },
+        "reasoning_efforts": [
+          "none",
+          "low",
+          "high",
+          "max"
+        ],
+        "default_reasoning_effort": "high",
+        "reasoning_mode": "optional",
+        "reasoning_history": "unknown",
+        "modalities": {
+          "input": [
+            "text"
+          ],
+          "output": [
+            "text"
+          ]
+        },
+        "parameter_constraints": []
+      },
+      "parameters": {
+        "/v1/chat/completions": {
+          "content_types": [
+            "application/json"
+          ],
+          "fields": {
+            "model": {
+              "type": "string",
+              "status": "supported",
+              "required": true,
+              "extension": false
+            },
+            "messages": {
+              "type": "array",
+              "status": "supported",
+              "required": true,
+              "extension": false
+            },
+            "stream": {
+              "type": "boolean",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "default": false
+            },
+            "stream_options": {
+              "type": "object",
+              "status": "supported",
+              "required": false,
+              "extension": false
+            },
+            "n": {
+              "type": "integer",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                1
+              ],
+              "default": 1
+            },
+            "max_completion_tokens": {
+              "type": "integer",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "min": 1,
+              "max": 8192,
+              "default": null
+            },
+            "max_tokens": {
+              "type": "integer",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "min": 1,
+              "max": 8192,
+              "alias_of": "max_completion_tokens"
+            },
+            "temperature": {
+              "type": "number",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "min": 0,
+              "max": 2,
+              "default": null
+            },
+            "tools": {
+              "type": "array",
+              "status": "supported",
+              "required": false,
+              "extension": false
+            },
+            "tool_choice": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                "none",
+                "auto",
+                "required"
+              ],
+              "requires": [
+                "tools"
+              ]
+            },
+            "response_format": {
+              "type": "object",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                "text",
+                "json_object"
+              ]
+            },
+            "reasoning_effort": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                "none",
+                "low",
+                "high",
+                "max"
+              ],
+              "default": "high"
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "GK Image 2.0-BR-default",
+      "object": "model",
+      "display_name": "GK Image 2.0-BR-default",
+      "output_type": "image",
+      "endpoints": [
+        "/v1/images/generations",
+        "/v1/images/edits"
+      ],
+      "public_model_id": "mdl_43f48a5b5f2081e0e7946743a142185c",
+      "protocol": {
+        "kind": "platform_async_extension",
+        "create_success_status": 202,
+        "status_path": "/v1/tasks/{task_id}",
+        "content_path": "/v1/tasks/{task_id}/content",
+        "result_path": "/v1/tasks/{task_id}/result"
+      },
+      "capabilities": {
+        "schema_version": 1,
+        "sync_status": "synced",
+        "constraints": {
+          "audio_requires_image_or_video": false
+        },
+        "image": {
+          "status": "supported",
+          "mode": "reference",
+          "modes": [
+            "reference"
+          ],
+          "max_dimension": 0,
+          "max_count": 3,
+          "allowed_mime_types": [
+            "image/jpeg",
+            "image/png",
+            "image/webp"
+          ],
+          "max_bytes": 10485760
+        },
+        "video": {
+          "status": "unsupported",
+          "max_count": 0,
+          "max_duration_seconds": 0,
+          "min_duration_seconds": 0,
+          "max_total_duration_seconds": 0,
+          "allowed_mime_types": [],
+          "max_bytes": 0
+        },
+        "audio": {
+          "status": "unsupported",
+          "max_count": 0,
+          "max_duration_seconds": 0,
+          "min_duration_seconds": 0,
+          "max_total_duration_seconds": 0,
+          "allowed_mime_types": [],
+          "max_bytes": 0
+        },
+        "mix": {
+          "status": "unsupported",
+          "allow_mixed": false,
+          "max_total": 0
+        }
+      },
+      "parameters": {
+        "/v1/images/generations": {
+          "content_types": [
+            "application/json"
+          ],
+          "fields": {
+            "model": {
+              "type": "string",
+              "status": "supported",
+              "required": true,
+              "extension": false
+            },
+            "prompt": {
+              "type": "string",
+              "status": "supported",
+              "required": true,
+              "max_bytes": 24000,
+              "extension": false
+            },
+            "input_images": {
+              "type": "array",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "min_count": 0,
+              "format": "media_id",
+              "max_dimension": 0,
+              "max_count": 3,
+              "allowed_mime_types": [
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+              ],
+              "max_bytes": 10485760
+            },
+            "input_videos": {
+              "type": "array",
+              "status": "unsupported",
+              "required": false,
+              "extension": true,
+              "min_count": 0,
+              "format": "media_id",
+              "max_count": 0,
+              "max_duration_seconds": 0,
+              "min_duration_seconds": 0,
+              "max_total_duration_seconds": 0,
+              "allowed_mime_types": [],
+              "max_bytes": 0
+            },
+            "input_audios": {
+              "type": "array",
+              "status": "unsupported",
+              "required": false,
+              "extension": true,
+              "min_count": 0,
+              "format": "media_id",
+              "max_count": 0,
+              "max_duration_seconds": 0,
+              "min_duration_seconds": 0,
+              "max_total_duration_seconds": 0,
+              "allowed_mime_types": [],
+              "max_bytes": 0
+            },
+            "n": {
+              "type": "integer",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                1
+              ],
+              "default": 1
+            },
+            "size": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                "auto",
+                "1024x1024",
+                "1024x576",
+                "576x1024",
+                "1024x768",
+                "768x1024",
+                "2048x2048",
+                "2048x1152",
+                "1152x2048",
+                "2048x1536",
+                "1536x2048"
+              ],
+              "default": "auto",
+              "resolves": [
+                "resolution",
+                "aspect_ratio"
+              ]
+            },
+            "quality": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                "auto"
+              ],
+              "default": "auto"
+            },
+            "resolution": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "values": [
+                "1k",
+                "2k"
+              ],
+              "default": "1k",
+              "mode": "enum"
+            },
+            "aspect_ratio": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "values": [
+                "1:1",
+                "16:9",
+                "9:16",
+                "4:3",
+                "3:4"
+              ],
+              "default": "1:1",
+              "mode": "enum",
+              "alias_of": "size"
+            },
+            "output_format": {
+              "type": "string",
+              "status": "unsupported",
+              "required": false,
+              "extension": false
+            },
+            "response_format": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                "b64_json",
+                "url"
+              ],
+              "default": "b64_json"
+            },
+            "generation_options": {
+              "type": "object",
+              "status": "unsupported",
+              "required": false,
+              "extension": true
+            }
+          }
+        },
+        "/v1/images/edits": {
+          "content_types": [
+            "application/json",
+            "multipart/form-data"
+          ],
+          "fields": {
+            "model": {
+              "type": "string",
+              "status": "supported",
+              "required": true,
+              "extension": false
+            },
+            "prompt": {
+              "type": "string",
+              "status": "supported",
+              "required": true,
+              "max_bytes": 24000,
+              "extension": false
+            },
+            "input_images": {
+              "type": "array",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "min_count": 1,
+              "format": "media_id",
+              "max_dimension": 0,
+              "max_count": 3,
+              "allowed_mime_types": [
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+              ],
+              "max_bytes": 10485760,
+              "required_any_of": [
+                "input_images",
+                "image"
+              ]
+            },
+            "input_videos": {
+              "type": "array",
+              "status": "unsupported",
+              "required": false,
+              "extension": true,
+              "min_count": 0,
+              "format": "media_id",
+              "max_count": 0,
+              "max_duration_seconds": 0,
+              "min_duration_seconds": 0,
+              "max_total_duration_seconds": 0,
+              "allowed_mime_types": [],
+              "max_bytes": 0
+            },
+            "input_audios": {
+              "type": "array",
+              "status": "unsupported",
+              "required": false,
+              "extension": true,
+              "min_count": 0,
+              "format": "media_id",
+              "max_count": 0,
+              "max_duration_seconds": 0,
+              "min_duration_seconds": 0,
+              "max_total_duration_seconds": 0,
+              "allowed_mime_types": [],
+              "max_bytes": 0
+            },
+            "n": {
+              "type": "integer",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                1
+              ],
+              "default": 1
+            },
+            "size": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                "auto",
+                "1024x1024",
+                "1024x576",
+                "576x1024",
+                "1024x768",
+                "768x1024",
+                "2048x2048",
+                "2048x1152",
+                "1152x2048",
+                "2048x1536",
+                "1536x2048"
+              ],
+              "default": "auto",
+              "resolves": [
+                "resolution",
+                "aspect_ratio"
+              ]
+            },
+            "quality": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                "auto"
+              ],
+              "default": "auto"
+            },
+            "resolution": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "values": [
+                "1k",
+                "2k"
+              ],
+              "default": "1k",
+              "mode": "enum"
+            },
+            "aspect_ratio": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": true,
+              "values": [
+                "1:1",
+                "16:9",
+                "9:16",
+                "4:3",
+                "3:4"
+              ],
+              "default": "1:1",
+              "mode": "enum",
+              "alias_of": "size"
+            },
+            "output_format": {
+              "type": "string",
+              "status": "unsupported",
+              "required": false,
+              "extension": false
+            },
+            "response_format": {
+              "type": "string",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "values": [
+                "b64_json",
+                "url"
+              ],
+              "default": "b64_json"
+            },
+            "image": {
+              "type": "file_or_reference",
+              "status": "supported",
+              "required": false,
+              "extension": false,
+              "min_count": 0,
+              "format": "file_or_file_id",
+              "max_dimension": 0,
+              "max_count": 3,
+              "allowed_mime_types": [
+                "image/jpeg",
+                "image/png",
+                "image/webp"
+              ],
+              "max_bytes": 10485760,
+              "alias_of": "input_images",
+              "exclusive_with": [
+                "input_images"
+              ],
+              "required_any_of": [
+                "input_images",
+                "image"
+              ]
+            },
+            "generation_options": {
+              "type": "object",
+              "status": "unsupported",
+              "required": false,
+              "extension": true
+            }
+          }
+        }
+      }
+    }
+  ]
+}

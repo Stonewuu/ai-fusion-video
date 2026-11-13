@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -130,7 +131,9 @@ public class GenerationJobRepository {
     public void waitForNextPoll(RemoteGenerationJob.Claim claim, int seconds, String phase,
                                 String errorCode, String errorMessage) {
         var job = leased(claim, true);
-        jobMapper.schedulePoll(phase, Math.max(1, Math.min(60, seconds)),
+        // 保留供应商要求的等待间隔；到任务截止时间先执行超时处理，不提前再次请求。
+        long remaining = Math.max(1, (long) Math.ceil(Duration.between(now(), job.deadline()).toMillis() / 1000.0));
+        jobMapper.schedulePoll(phase, (int) Math.min(Math.max(1, seconds), remaining),
                 errorCode == null ? 0 : job.consecutiveErrors() + 1,
                 errorCode, errorMessage, job.id());
     }
@@ -178,6 +181,6 @@ public class GenerationJobRepository {
                 row.getOwnerEpoch(), lease,
                 row.getDeadlineAt(),
                 row.getPollAttempts(), row.getConsecutiveErrors(), row.getErrorCode(),
-                row.getErrorMessage(), row.getRevision());
+                row.getErrorMessage(), row.getRevision(), row.getCreatedAt(), row.getUpdatedAt());
     }
 }

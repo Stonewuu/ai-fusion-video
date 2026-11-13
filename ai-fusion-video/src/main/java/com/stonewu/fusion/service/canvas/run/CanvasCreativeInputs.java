@@ -43,9 +43,7 @@ public final class CanvasCreativeInputs {
             if (value.type() == CanvasValueType.TEXT) {
                 content = value.text();
             } else if (value.type().isBusinessResource() && value.resource() != null && value.data() != null) {
-                ObjectNode data = value.data().deepCopy();
-                removeMediaAndMetadata(data);
-                content = data.isEmpty() ? "" : data.toPrettyString();
+                content = businessContent(node, value);
             } else {
                 throw CanvasRunException.invalid("内容设定只接受文字、资产或项目内容；图片和视频请接入相应媒体输入");
             }
@@ -61,6 +59,20 @@ public final class CanvasCreativeInputs {
             throw CanvasRunException.invalid("组合后的创作内容超过 " + limit + " 字符，请减少内容设定或拆分任务");
         }
         inputs.put("prompt", List.of(sources.text(prompt)));
+    }
+
+    private static String businessContent(CanvasNode node, Value value) {
+        if (CanvasVideoPrompt.appliesTo(node)) {
+            if (value.type() == CanvasValueType.ASSET || value.type() == CanvasValueType.ASSET_ITEM) {
+                return CanvasVideoPrompt.asset(value.data());
+            }
+            if (value.type() == CanvasValueType.SHOT) {
+                return CanvasVideoPrompt.shot(value.data());
+            }
+        }
+        ObjectNode data = value.data().deepCopy();
+        removeMediaAndMetadata(data);
+        return data.isEmpty() ? "" : data.toPrettyString();
     }
 
     private static void removeMediaAndMetadata(ObjectNode object) {

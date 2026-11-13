@@ -211,6 +211,20 @@ public class CanvasRunPlanner {
             }
             for (var edge : connected) {
                 var upstream = nodes.get(edge.sourceNodeId());
+                if (CanvasVideoPrompt.appliesTo(plan.node()) && port.id().equals("prompt")) {
+                    List<Value> knownPrompt = null;
+                    if (edge.output() != null) {
+                        knownPrompt = List.of(plan.pinned().get(edge.id()));
+                    } else if (upstream != null && (upstream.action().equals("REUSE")
+                            || !upstream.sourceOutputs().values().isEmpty())) {
+                        knownPrompt = upstream.sourceOutputs().at(edge.sourcePort());
+                    }
+                    if (knownPrompt != null && CanvasVideoPrompt.emptyPrompt(knownPrompt)) {
+                        issues.add(new Issue(plan.node().id(), "EMPTY_SOURCE",
+                                "连接的创作要求为空，请补充上游镜头或文本内容"));
+                        continue;
+                    }
+                }
                 if (edge.output() == null && upstream == null) {
                     issues.add(new Issue(plan.node().id(), "INVALID_UPSTREAM", "上游节点未通过校验"));
                 } else if (edge.output() == null && (upstream.action().equals("REUSE")

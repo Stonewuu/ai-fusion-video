@@ -18,13 +18,10 @@ import {
   type GenerationReviewAction,
 } from "@/lib/api/generation-execution";
 import { getApiErrorMessage, getApiErrorStatus } from "@/lib/api/api-error";
-import {
-  generationPhaseLabels,
-  generationReviewLabels,
-  generationStateLabels,
-  generationTerminalStates,
-} from "@/lib/generation-execution-view";
-import { ExecutionRecordButton } from "@/components/dashboard/notification-panel/execution-record-button";
+import { generationTerminalStates } from "@/lib/generation-execution-view";
+import { GenerationExecutionInputSection } from "./generation-execution-input";
+import { GenerationExecutionItemSection } from "./generation-execution-item";
+import { executionStatus, executionTime } from "./generation-execution-presentation";
 
 export function GenerationExecutionDialog({
   id,
@@ -109,16 +106,16 @@ export function GenerationExecutionDialog({
           }
         }}
       >
-        <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-2xl">
+        <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-3xl">
           <DialogHeader className="shrink-0">
             <DialogTitle>生成执行详情</DialogTitle>
             <DialogDescription>
               {data
-                ? `${data.modelName} · ${generationStateLabels[data.state] ?? "状态无法识别"}`
-                : "正在读取任务状态…"}
+                ? `${data.modelName} · ${executionStatus(data)}`
+                : error ? "暂时无法读取任务详情" : "正在读取任务状态…"}
             </DialogDescription>
           </DialogHeader>
-          <DialogScrollBody className="space-y-4">
+          <DialogScrollBody className="flex flex-col gap-4">
             {error && (
               <div
                 role="alert"
@@ -140,87 +137,17 @@ export function GenerationExecutionDialog({
                 {reviewError}
               </p>
             )}
-            {data?.items.map((item) => (
-              <section
-                key={item.id}
-                className="space-y-3 border-b border-border/20 pb-4 last:border-b-0"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-medium">
-                    {item.itemIds.length === 1
-                      ? `结果 ${item.index + 1}`
-                      : `结果 ${item.index + 1}–${item.index + item.itemIds.length}`}
-                  </h3>
-                  <span className="text-xs text-muted-foreground">
-                    {generationStateLabels[item.state] ?? "状态无法识别"} ·{" "}
-                    {generationPhaseLabels[item.phase] ?? "阶段无法识别"}
-                  </span>
-                </div>
-                {item.errorMessage && (
-                  <p className="break-words text-sm text-destructive">
-                    {item.errorMessage}
-                  </p>
-                )}
-                {item.cancelRequested &&
-                  !generationTerminalStates.has(item.state) && (
-                    <p className="text-sm text-muted-foreground">
-                      已请求取消，正在查询原任务状态。
-                    </p>
-                  )}
-                {item.remoteCapacityHeld && (
-                  <p className="text-xs text-muted-foreground">
-                    远端任务尚未确认结束，暂时保留生成名额。
-                  </p>
-                )}
-                <div className="flex flex-wrap gap-2">
-                  {item.availableActions.includes("RETRY_INGEST") && (
-                    <Button variant="outline" size="sm" disabled={busy || !!error}
-                      onClick={() => void review(item, "RETRY_INGEST", "重新保存已收到的结果")}>
-                      重新保存结果
-                    </Button>
-                  )}
-                  {["UNKNOWN_SUBMISSION", "FAILED", "NEEDS_REVIEW"].includes(item.state) && (
-                    <ExecutionRecordButton target={{ kind: "GENERATION", id: item.id }} onOpen={onClose} />
-                  )}
-                </div>
-                {item.attempts.length > 0 && (
-                  <details className="text-xs text-muted-foreground">
-                    <summary className="cursor-pointer rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                      查看提交记录（{item.attempts.length} 次）
-                    </summary>
-                    <ul className="mt-3 space-y-3">
-                      {item.attempts.map((attempt) => (
-                        <li key={attempt.id} className="space-y-1">
-                          <p>
-                            第 {attempt.number} 次 ·{" "}
-                            {attempt.resolution
-                              ? "已处理"
-                              : attempt.acknowledged
-                              ? "已收到响应"
-                              : attempt.submitted
-                                ? "已记录提交，受理待确认"
-                                : "正在准备，尚未提交"}
-                          </p>
-                          {attempt.providerTaskId && (
-                            <p className="break-all">
-                              供应商任务编号：{attempt.providerTaskId}
-                            </p>
-                          )}
-                          {attempt.resolution && (
-                            <p>
-                              历史处理：
-                              {generationReviewLabels[
-                                attempt.resolution as GenerationReviewAction
-                              ] ?? attempt.resolution}
-                            </p>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-              </section>
-            ))}
+            {data && (
+              <>
+                <p className="text-xs text-muted-foreground">提交时间：{executionTime(data.createdAt)}</p>
+                {data.items.map((item) => (
+                  <GenerationExecutionItemSection key={item.id} item={item} data={data}
+                    busy={busy || !!error} onClose={onClose}
+                    onRetry={() => void review(item, "RETRY_INGEST", "重新保存已收到的结果")} />
+                ))}
+                <GenerationExecutionInputSection data={data} />
+              </>
+            )}
           </DialogScrollBody>
         </DialogContent>
       </Dialog>

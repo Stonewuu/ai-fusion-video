@@ -41,7 +41,7 @@ public class ProviderCatalogService {
         }
     }
 
-    @Cacheable(value = "providerCatalog", key = "'catalog-v4'")
+    @Cacheable(value = "providerCatalog", key = "'catalog-v6'")
     public List<ProviderDefinition> list() {
         return providers.values().stream()
                 .filter(provider -> !provider.hidden())

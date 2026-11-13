@@ -35,7 +35,7 @@ export function GenerationModelPicker({
 }: GenerationModelPickerProps) {
   const selectedModel = models.find((model) => model.id === modelId);
   const shellClass = compact
-    ? "h-8 max-w-[min(15rem,42vw)] rounded-xl px-2.5 text-xs"
+    ? "h-9 w-48 shrink-0 text-sm sm:w-52"
     : "h-10 w-full rounded-xl px-3 text-sm";
 
   if (loading) {
@@ -73,7 +73,9 @@ export function GenerationModelPicker({
     <Select
       value={selectedModel?.id ?? null}
       onValueChange={(value) => {
-        if (value !== null) onChange(Number(value));
+        if (value !== null) {
+          onChange(Number(value));
+        }
       }}
       items={models.map((model) => ({
         value: model.id,
@@ -82,6 +84,7 @@ export function GenerationModelPicker({
     >
       <SelectTrigger
         aria-label="选择生成模型"
+        title={selectedModel ? getModelDisplayParts(selectedModel).name : "选择模型"}
         className={cn(
           "min-w-0 border-transparent bg-transparent hover:bg-background/80",
           shellClass,
@@ -101,7 +104,7 @@ export function GenerationModelPicker({
         align="start"
         alignItemWithTrigger={false}
         className={cn(
-          "border border-border/55 bg-popover/95 p-1.5 shadow-[0_18px_55px_-22px_rgba(15,23,42,.38)]",
+          "border border-border/55 bg-popover/95 p-1.5 text-sm shadow-[0_18px_55px_-22px_rgba(15,23,42,.38)]",
           compact
             ? "w-[min(17rem,calc(100vw-2rem))] min-w-[13rem]"
             : "w-[min(22rem,calc(100vw-2rem))] min-w-[16rem]",
@@ -119,13 +122,13 @@ export function GenerationModelPicker({
                 key={model.id}
                 value={model.id}
                 title={modelCode ? `${display.name} · ${modelCode}` : display.name}
-                className="min-h-11 py-2.5 pl-2.5"
+                className="min-h-11 py-2.5 pl-2.5 text-sm"
               >
                 <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted/70">
                   <ModelVendorIcon source={model} className="size-4" />
                 </span>
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-xs font-medium">
+                  <span className="block truncate text-sm font-medium">
                     {display.name}
                   </span>
                   {modelCode && (

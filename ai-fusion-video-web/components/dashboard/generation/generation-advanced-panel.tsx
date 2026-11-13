@@ -192,6 +192,7 @@ export function GenerationAdvancedPanel({
                 {promptLimit ? `/${promptLimit}` : " 字"}
               </span>
             </div>
+            {/* 输入区与面板共用底色，局部覆盖全局表单底色令牌。 */}
             <Textarea
               value={form.prompt}
               onChange={(event) => onFormChange({ prompt: event.target.value })}
@@ -213,7 +214,7 @@ export function GenerationAdvancedPanel({
                   ? "例如：雨夜霓虹街头的人像，湿润路面反光，电影感侧光，保留自然肤质与浅景深…"
                   : "例如：人物穿过雨夜街道，镜头缓慢跟随，霓虹倒影掠过画面，节奏克制…"
               }
-              className="mt-1 min-h-36 resize-none rounded-none border-0 bg-transparent px-3.5 py-3 text-[14px] leading-6 shadow-none focus-visible:ring-0"
+              className="mt-1 min-h-36 max-h-[min(18rem,30dvh)] scroll-m-1 overflow-y-auto overscroll-contain rounded-none border-0 bg-transparent [--field-background:transparent] px-3.5 py-3 text-sm leading-6 shadow-none focus-visible:ring-0"
             />
             <div className="flex flex-wrap items-center gap-1.5 border-t border-border/30 bg-muted/18 px-3 py-2.5">
               <span className="mr-0.5 text-[10px] text-muted-foreground">
@@ -238,7 +239,7 @@ export function GenerationAdvancedPanel({
                 <div>
                   <h4 className="text-xs font-semibold">参考素材</h4>
                   <p className="mt-0.5 text-[10px] text-muted-foreground">
-                    上传图片或粘贴 URL / Data URI
+                    上传素材或添加链接
                   </p>
                 </div>
                 <span className="rounded-md bg-muted px-2 py-1 text-[10px] text-muted-foreground">

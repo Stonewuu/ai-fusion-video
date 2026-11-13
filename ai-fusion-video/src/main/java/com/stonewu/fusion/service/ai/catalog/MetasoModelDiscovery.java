@@ -31,7 +31,7 @@ public class MetasoModelDiscovery implements ProviderModelDiscovery {
                 throw new IllegalStateException("提供商引用的模型预设不存在: " + code);
             }
             return new ProviderModelCandidate(preset.getStr("modelCode"), preset.getStr("name"),
-                    preset.getInt("modelType"), preset.getStr("modelProtocol"), code, "{}", null);
+                    preset.getInt("modelType"), preset.getStr("modelProtocol"), code, "{}", null, null);
         }).toList();
         return new ProviderDiscoveryResult(provider.id(), true, "密钥已验证；以下为平台公开的视频模型预设。", models);
     }

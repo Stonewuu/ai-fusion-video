@@ -204,7 +204,9 @@ export function getGenerationParameterItems(
   }
 
   const modeLabel =
-    task.generateMode === "image2video"
+    task.referenceVideoUrls && task.referenceVideoUrls !== "[]"
+      ? "参考视频生成"
+      : task.generateMode === "image2video"
       ? "图生视频"
       : task.generateMode === "text2video"
         ? "文生视频"

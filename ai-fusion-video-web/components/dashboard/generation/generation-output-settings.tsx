@@ -1,6 +1,6 @@
 "use client";
 
-import { videoDurationForResolution, videoDurationOptions, videoInputState, videoMaxDuration, videoRatioOptions } from "@/lib/video-model-rules";
+import { videoDurationOptions, videoMaxDuration } from "@/lib/video-model-rules";
 
 import { Check, Minus, Plus } from "lucide-react";
 import type { GenerationCapabilities } from "@/lib/generation-capabilities";
@@ -10,52 +10,13 @@ import { GenerationDurationSlider } from "./generation-duration-slider";
 import type { GenerationFormState, WorkbenchMode } from "./generation-types";
 import { parseLimit } from "./generation-utils";
 import { ImageOutputPickers } from "@/components/generation/image-output-pickers";
+import { GenerationVideoOutputPickers } from "./generation-video-output-pickers";
 
 interface GenerationOutputSettingsProps {
   mode: WorkbenchMode;
   capabilities: GenerationCapabilities | null;
   form: GenerationFormState;
   onChange: (patch: Partial<GenerationFormState>) => void;
-}
-
-function ChoiceGroup({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-}) {
-  if (options.length === 0) {
-    return null;
-  }
-
-  return (
-    <div>
-      <p className="text-[10px] font-medium text-muted-foreground">{label}</p>
-      <div className="mt-1.5 flex flex-wrap gap-1.5">
-        {options.map((option) => (
-          <button
-            key={option}
-            type="button"
-            onClick={() => onChange(option)}
-            aria-pressed={value === option}
-            className={cn(
-              "h-7 rounded-lg border px-2.5 text-[11px] font-medium transition-all",
-              value === option
-                ? "border-primary/30 bg-primary/[0.08] text-primary shadow-sm"
-                : "border-border/40 bg-background/65 text-muted-foreground hover:border-primary/20 hover:bg-background hover:text-foreground",
-            )}
-          >
-            {option === "adaptive" || option === "auto" ? "自适应" : option}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
 }
 
 function Stepper({
@@ -168,27 +129,9 @@ export function GenerationOutputSettings({
             <ImageOutputPickers capabilities={capabilities} form={form} onChange={onChange} />
           </div>
         ) : (
-          <>
-            <ChoiceGroup
-              label="画面比例"
-              value={form.ratio}
-              options={videoRatioOptions(
-                capabilities?.supportedAspectRatios || [],
-                capabilities?.videoRules,
-                videoInputState(form),
-              )}
-              onChange={(ratio) => onChange({ ratio })}
-            />
-            <ChoiceGroup
-              label="分辨率"
-              value={form.resolution}
-              options={(capabilities?.supportedResolutions ?? [])}
-              onChange={(resolution) => {
-                const duration = capabilities ? videoDurationForResolution(form.duration, capabilities, resolution) : form.duration;
-                onChange({ resolution, duration });
-              }}
-            />
-          </>
+          <div className="grid grid-cols-2 gap-3">
+            <GenerationVideoOutputPickers capabilities={capabilities} form={form} onChange={onChange} />
+          </div>
         )}
 
         <div className="grid gap-2 sm:grid-cols-2">

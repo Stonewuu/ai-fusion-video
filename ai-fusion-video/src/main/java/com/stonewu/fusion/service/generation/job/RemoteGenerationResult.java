@@ -22,7 +22,7 @@ public record RemoteGenerationResult(State state, List<Output> outputs, String e
         if (outputs.size() > 64) {
             throw GenerationJobException.invalid("供应商输出数量超过接收上限");
         }
-        nextPollSeconds = Math.max(1, Math.min(60, nextPollSeconds));
+        nextPollSeconds = Math.max(1, nextPollSeconds);
     }
 
     public static RemoteGenerationResult pending(int seconds) {

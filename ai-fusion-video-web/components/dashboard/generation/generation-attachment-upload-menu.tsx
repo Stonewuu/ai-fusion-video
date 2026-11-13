@@ -52,7 +52,7 @@ export function GenerationAttachmentUploadMenu({
           <Button
             type="button"
             variant="ghost"
-            size="icon-sm"
+            size="icon"
             disabled={disabled}
             title={title}
             aria-label="添加附件"

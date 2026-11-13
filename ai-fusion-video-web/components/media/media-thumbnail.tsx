@@ -15,6 +15,7 @@ export function MediaThumbnail({
   alt,
   fit = "contain",
   interactive = true,
+  compact = false,
   className,
 }: {
   source: string;
@@ -22,6 +23,7 @@ export function MediaThumbnail({
   alt: string;
   fit?: "contain" | "cover";
   interactive?: boolean;
+  compact?: boolean;
   className?: string;
 }) {
   const container = useRef<HTMLDivElement>(null);
@@ -80,11 +82,11 @@ export function MediaThumbnail({
         />
       ) : error ? (
         <div
-          className="flex flex-col items-center gap-2 px-3 text-center"
+          className={cn("flex flex-col items-center gap-2 text-center", compact ? "p-1" : "px-3")}
           title={error}
         >
           <Icon className="size-6 text-muted-foreground" />
-          <span className="text-xs text-muted-foreground">{preview.deleted ? "素材已删除" : "预览暂不可用"}</span>
+          {!compact && <span className="text-xs text-muted-foreground">{preview.deleted ? "素材已删除" : "预览暂不可用"}</span>}
           {interactive && !preview.deleted && (
             <Button
               variant="ghost"
@@ -107,12 +109,12 @@ export function MediaThumbnail({
           className="flex items-center gap-2 text-xs text-muted-foreground"
         >
           <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
-          准备预览
+          {!compact && "准备预览"}
         </span>
       ) : (
         <Icon className="size-8 text-muted-foreground" />
       )}
-      {kind === "video" &&
+      {!compact && kind === "video" &&
         preview.view?.status === "SUCCEEDED" &&
         access.url &&
         !error && (

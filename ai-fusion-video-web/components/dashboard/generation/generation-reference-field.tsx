@@ -11,13 +11,14 @@ import {
   Music2,
   Plus,
 } from "lucide-react";
-import { uploadFile } from "@/lib/api/storage";
+import { uploadGenerationReference } from "./generation-reference-upload";
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SafeImage } from "@/components/media/managed-image";
 import { MediaReferenceActions } from "@/components/media/media-reference-actions";
+import { MediaThumbnail } from "@/components/media/media-thumbnail";
 
 type ReferenceMediaType = "image" | "video" | "audio";
 
@@ -34,21 +35,18 @@ interface GenerationReferenceFieldProps {
 
 const MEDIA_CONFIG: Record<
   ReferenceMediaType,
-  { accept: string; folder: string; emptyLabel: string }
+  { accept: string; emptyLabel: string }
 > = {
   image: {
     accept: "image/*",
-    folder: "generation-references",
     emptyLabel: "添加图片",
   },
   video: {
     accept: "video/*",
-    folder: "generation-video-references",
     emptyLabel: "添加视频",
   },
   audio: {
     accept: "audio/*",
-    folder: "generation-audio-references",
     emptyLabel: "添加音频",
   },
 };
@@ -72,28 +70,36 @@ export function GenerationReferenceField({
   const canUpload = canAdd && !uploadDisabledReason;
 
   const uploadFiles = async (files: File[]) => {
-    if (!canUpload) return;
+    if (!canUpload || uploading) {
+      return;
+    }
     const remaining = maxCount - values.length;
     const selected = files.slice(0, remaining);
-    if (!selected.length) return;
+    if (!selected.length) {
+      return;
+    }
 
     setUploading(true);
     try {
       const urls = await Promise.all(
-        selected.map((file) => uploadFile(file, config.folder)),
+        selected.map((file) => uploadGenerationReference(file, mediaType)),
       );
       onChange([...values, ...urls]);
     } catch (error) {
       toast.error(getApiErrorMessage(error));
     } finally {
       setUploading(false);
-      if (inputRef.current) inputRef.current.value = "";
+      if (inputRef.current) {
+        inputRef.current.value = "";
+      }
     }
   };
 
   const addUrl = () => {
     const value = url.trim();
-    if (!value || !canAdd) return;
+    if (!value || !canAdd) {
+      return;
+    }
     onChange([...values, value]);
     setUrl("");
     setShowUrl(false);
@@ -115,7 +121,7 @@ export function GenerationReferenceField({
         </span>
       </div>
 
-      <div className="mt-2.5 flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+      <div className="mt-2.5 flex gap-2 overflow-x-auto p-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {values.map((value, index) => (
           <div
             key={`${value}-${index}`}
@@ -129,11 +135,11 @@ export function GenerationReferenceField({
                 fallbackType="image"
               />
             ) : mediaType === "video" ? (
-              <FileVideo2 className="h-6 w-6 text-cyan-500/70" />
+              <MediaThumbnail source={value} kind="video" alt={`${label}${index + 1}`} fit="cover" compact interactive={false} />
             ) : (
               <Music2 className="h-6 w-6 text-violet-500/70" />
             )}
-            <MediaReferenceActions source={value} label={label}
+            <MediaReferenceActions label={label}
               onRemove={() => onChange(values.filter((_, itemIndex) => itemIndex !== index))} />
           </div>
         ))}
@@ -141,7 +147,7 @@ export function GenerationReferenceField({
         {canAdd && (
           <button
             type="button"
-            disabled={!canUpload}
+            disabled={!canUpload || uploading}
             onClick={() => inputRef.current?.click()}
             title={uploadDisabledReason}
             className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border/55 text-[10px] text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/[0.035] hover:text-primary disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-border/55 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
@@ -168,7 +174,7 @@ export function GenerationReferenceField({
       )}
 
       {showUrl ? (
-        <div className="mt-3 flex gap-2">
+        <div className="mt-3 flex min-w-0 items-center gap-2">
           <Input
             value={url}
             onChange={(event) => setUrl(event.target.value)}
@@ -181,11 +187,11 @@ export function GenerationReferenceField({
             placeholder={
               mediaType === "image" ? "输入图片 URL 或 Data URI" : "输入媒体 URL"
             }
-            className="h-8 rounded-lg text-xs"
+            className="min-w-0"
             autoFocus
           />
-          <Button size="xs" onClick={addUrl} disabled={!url.trim()}>
-            <Plus className="h-3 w-3" />
+          <Button onClick={addUrl} disabled={!url.trim()}>
+            <Plus />
             添加
           </Button>
         </div>

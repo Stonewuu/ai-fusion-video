@@ -44,6 +44,10 @@ public class CanvasRunInputs {
     }
 
     public Ports configured(NodePlan plan, Map<String, List<Value>> bound, CanvasActor actor) {
+        if (CanvasVideoPrompt.appliesTo(plan.node()) && bound.containsKey("prompt")
+                && CanvasVideoPrompt.emptyPrompt(bound.get("prompt"))) {
+            throw CanvasRunException.invalid("连接的创作要求为空，请补充上游镜头或文本内容");
+        }
         Map<String, List<Value>> result = new LinkedHashMap<>(bound);
         for (var port : capabilities.require(plan.node().kind()).inputs()) {
             var literal = plan.node().config().get(port.id());
