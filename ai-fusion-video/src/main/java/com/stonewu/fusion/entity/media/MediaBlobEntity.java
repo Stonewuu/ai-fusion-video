@@ -36,7 +36,7 @@ public class MediaBlobEntity {
     private Long ingestEpoch;
 
     /**
-     * 实际使用的存储配置编号
+     * 实际使用的存储配置编号；0 表示代码内置的本地存储，不对应配置表记录
      */
     private Long storageConfigId;
 

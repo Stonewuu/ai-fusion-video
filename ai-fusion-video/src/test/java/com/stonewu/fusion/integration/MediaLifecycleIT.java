@@ -20,6 +20,7 @@ import com.stonewu.fusion.service.media.model.MediaResource;
 import com.stonewu.fusion.service.media.model.MediaException;
 import com.stonewu.fusion.service.storage.S3ClientFactory;
 import com.stonewu.fusion.service.storage.S3StorageConfigResolver;
+import com.stonewu.fusion.service.storage.BuiltInLocalStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -229,7 +230,7 @@ class MediaLifecycleIT extends MediaResourceTestContext {
         var remoteLocks = new MediaBlobLocks(context.getBean(MediaBlobMapper.class),
                 context.getBean(CanvasExportBlobMapper.class), remoteRegistry);
         var store = new MediaBlobStore(storageMapper, context.getBean(S3StorageConfigResolver.class),
-                context.getBean(S3ClientFactory.class), cryptor, remoteLocks);
+                context.getBean(S3ClientFactory.class), cryptor, remoteLocks, context.getBean(BuiltInLocalStorage.class));
         var remoteWorker = new MediaCleanupWorker(mock(AgentWorkspaceMediaIndexer.class), jobs, store,
                 mock(CanvasExportCleanup.class));
         var writer = CompletableFuture.supplyAsync(() -> {

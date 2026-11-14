@@ -661,13 +661,15 @@ function GenerationWorkbenchContent({ mode }: GenerationWorkbenchProps) {
             模型配置
           </motion.a>
         </motion.header>
-        <GenerationSubmissionNotice
-          submission={submission}
-          onConfirmed={() => void loadHistory(historyLimit)}
-        />
-        {capabilities?.unavailable && (
-          <p role="alert" className="text-sm text-destructive">{capabilities.unavailable}</p>
-        )}
+        <div className={cn("mx-auto w-full", advancedMode ? "max-w-none" : "max-w-[1180px]")}>
+          <GenerationSubmissionNotice
+            submission={submission}
+            onConfirmed={() => void loadHistory(historyLimit)}
+          />
+          {capabilities?.unavailable && (
+            <p role="alert" className="text-sm text-destructive">{capabilities.unavailable}</p>
+          )}
+        </div>
       </div>
 
       <GenerationWorkspaceLayout

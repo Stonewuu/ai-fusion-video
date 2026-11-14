@@ -49,11 +49,7 @@ class AgentPersistenceMigrationIT {
         DataSource dataSource = new DriverManagerDataSource(
                 MYSQL.getJdbcUrl(), MYSQL.getUsername(), MYSQL.getPassword());
         jdbc = new JdbcTemplate(dataSource);
-        Flyway.configure()
-                .dataSource(dataSource)
-                .target(PREVIOUS_VERSION)
-                .load()
-                .migrate();
+        migrateLegacySchema(dataSource);
         seedLegacyMessageOrdering();
         Flyway.configure()
                 .dataSource(dataSource)
@@ -168,11 +164,7 @@ class AgentPersistenceMigrationIT {
                 UNSUPPORTED_MYSQL.getUsername(),
                 UNSUPPORTED_MYSQL.getPassword());
         JdbcTemplate unsupportedJdbc = new JdbcTemplate(unsupportedDataSource);
-        Flyway.configure()
-                .dataSource(unsupportedDataSource)
-                .target(PREVIOUS_VERSION)
-                .load()
-                .migrate();
+        migrateLegacySchema(unsupportedDataSource);
 
         assertThatThrownBy(() -> Flyway.configure()
                         .dataSource(unsupportedDataSource)
@@ -203,6 +195,17 @@ class AgentPersistenceMigrationIT {
                         "afv_agent_message",
                         "run_id"))
                 .isZero();
+    }
+
+    private static void migrateLegacySchema(DataSource dataSource) {
+        // 复现已有旧库的增量路径，避免全新空库直接采用晚于测试起点的 B 基线。
+        Flyway legacy = Flyway.configure()
+                .dataSource(dataSource)
+                .baselineVersion("0")
+                .target(PREVIOUS_VERSION)
+                .load();
+        legacy.baseline();
+        legacy.migrate();
     }
 
     private static void seedLegacyMessageOrdering() {

@@ -35,8 +35,15 @@ public final class AgentRuntimeContainers {
         properties.add("spring.datasource.username", mysql::getUsername);
         properties.add("spring.datasource.password", mysql::getPassword);
         properties.add("spring.datasource.hikari.minimum-idle", () -> 0);
+        registerRedisProperties(properties, redis);
+        properties.add("fusion.agentscope.v2.state.mode", () -> "in-memory");
+    }
+
+    public static void registerRedisProperties(
+            DynamicPropertyRegistry properties,
+            GenericContainer<?> redis) {
         properties.add("spring.data.redis.host", redis::getHost);
         properties.add("spring.data.redis.port", () -> redis.getMappedPort(REDIS_PORT));
-        properties.add("fusion.agentscope.v2.state.mode", () -> "in-memory");
+        properties.add("spring.data.redis.password", () -> "");
     }
 }

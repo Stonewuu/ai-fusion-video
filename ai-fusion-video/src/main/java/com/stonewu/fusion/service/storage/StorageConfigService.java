@@ -9,6 +9,7 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.common.PageResult;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.mapper.storage.StorageConfigMapper;
+import com.stonewu.fusion.service.media.ManagedStorageConfiguration;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -31,9 +32,14 @@ public class StorageConfigService {
     private final S3ClientFactory s3ClientFactory;
     private final ObjectProvider<StorageConfigReferenceGuard> referenceGuards;
     private final ObjectProvider<StorageConfigUpdateGuard> updateGuards;
+    private final BuiltInLocalStorage builtIn;
+    private final ManagedStorageConfiguration storage;
 
     @Cacheable(value = "storageConfig", key = "#id")
     public StorageConfig getById(Long id) {
+        if (Long.valueOf(BuiltInLocalStorage.CONFIG_ID).equals(id)) {
+            return builtIn.configuration();
+        }
         StorageConfig config = storageConfigMapper.selectById(id);
         if (config == null) {
             throw new BusinessException("存储配置不存在: " + id);
@@ -42,14 +48,16 @@ public class StorageConfigService {
     }
 
     /**
-     * 获取默认存储配置，未设置默认时返回 null（将回退到本地存储）
+     * 用户尚未配置时返回代码内置的本地存储；用户配置不完整时明确报错。
      */
     @Cacheable(value = "storageConfig", key = "'default'", unless = "#result == null")
     public StorageConfig getDefaultConfig() {
-        return storageConfigMapper.selectPage(new Page<>(1, 1, false),
-                new LambdaQueryWrapper<StorageConfig>()
-                        .eq(StorageConfig::getIsDefault, true)
-                        .eq(StorageConfig::getStatus, 1)).getRecords().stream().findFirst().orElse(null);
+        return storage.requireDefault();
+    }
+
+    public List<StorageConfig> getList() {
+        return storageConfigMapper.selectList(new LambdaQueryWrapper<StorageConfig>()
+                .orderByDesc(StorageConfig::getIsDefault).orderByAsc(StorageConfig::getId));
     }
 
     public List<StorageConfig> getEnabledList() {
@@ -72,6 +80,7 @@ public class StorageConfigService {
     @CacheEvict(value = "storageConfig", allEntries = true)
     @Transactional
     public Long create(StorageConfig config) {
+        requireUserConfiguration(config.getId());
         normalizeForSave(config);
         storageConfigMapper.insert(config);
         // 如果是默认配置，清除其他默认
@@ -84,6 +93,7 @@ public class StorageConfigService {
     @CacheEvict(value = "storageConfig", allEntries = true)
     @Transactional
     public void update(StorageConfig config) {
+        requireUserConfiguration(config.getId());
         normalizeForSave(config);
         StorageConfig current = storageConfigMapper.selectForUpdate(config.getId());
         if (current == null) {
@@ -101,6 +111,7 @@ public class StorageConfigService {
     @CacheEvict(value = "storageConfig", allEntries = true)
     @Transactional
     public void delete(Long id) {
+        requireUserConfiguration(id);
         if (storageConfigMapper.selectForUpdate(id) == null) {
             throw new BusinessException(404, "存储配置不存在");
         }
@@ -115,6 +126,7 @@ public class StorageConfigService {
     @CacheEvict(value = "storageConfig", allEntries = true)
     @Transactional
     public void setDefault(Long id) {
+        requireUserConfiguration(id);
         // 先清除所有默认标记
         storageConfigMapper.update(null,
                 new LambdaUpdateWrapper<StorageConfig>()
@@ -137,6 +149,12 @@ public class StorageConfigService {
                         .set(StorageConfig::getIsDefault, false)
                         .eq(StorageConfig::getIsDefault, true)
                         .ne(StorageConfig::getId, excludeId));
+    }
+
+    private void requireUserConfiguration(Long id) {
+        if (Long.valueOf(BuiltInLocalStorage.CONFIG_ID).equals(id)) {
+            throw new BusinessException(400, "内置本地存储为只读配置，不能修改或删除");
+        }
     }
 
     private void normalizeForSave(StorageConfig config) {

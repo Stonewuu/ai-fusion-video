@@ -425,7 +425,13 @@ class CanvasAgentWiringIT {
         jdbc.update("INSERT INTO afv_storyboard(id,project_id,script_id,title) VALUES(?,?,?,'雨夜分镜')", id, id, id);
         jdbc.update("INSERT INTO afv_storyboard_episode(id,storyboard_id,script_episode_id,episode_number,title) VALUES(?,?,?,1,'第一集')", id, id, id);
         jdbc.update("INSERT INTO afv_storyboard_scene(id,storyboard_id,episode_id) VALUES(?,?,?)", id, id, id);
-        jdbc.update("INSERT INTO afv_storyboard_item(id,storyboard_id,storyboard_episode_id,storyboard_scene_id) VALUES(?,?,?,?)", id, id, id, id);
+        long sceneItem = IDS.incrementAndGet();
+        jdbc.update("INSERT INTO afv_asset(id,project_id,name,type,owner_type,owner_id,user_id) VALUES(?,?,'基准场景','scene',1,?,?)",
+                sceneItem, id, f.user(), f.user());
+        jdbc.update("INSERT INTO afv_asset_item(id,asset_id,name,item_type) VALUES(?,?,'场景参考','original')",
+                sceneItem, sceneItem);
+        jdbc.update("INSERT INTO afv_storyboard_item(id,storyboard_id,storyboard_episode_id,storyboard_scene_id,scene_asset_item_id) VALUES(?,?,?,?,?)",
+                id, id, id, id, sceneItem);
         jdbc.update("INSERT INTO afv_asset(id,project_id,name,type,owner_type,owner_id,user_id) VALUES(?,?,'阿青','character',1,?,?)", id, id, f.user(), f.user());
         jdbc.update("INSERT INTO afv_asset_item(id,asset_id,name,item_type) VALUES(?,?,'雨夜造型','original')", id, id);
     }
@@ -1356,7 +1362,7 @@ class CanvasAgentWiringIT {
                     imageModel, "http://127.0.0.1:" + server.getAddress().getPort());
             jdbc.update("""
                     INSERT INTO afv_ai_model(id,name,code,model_type,model_protocol,api_config_id,config,max_concurrency,multimodal_input_types,multimodal_input_transports,reasoning_effort_levels)
-                    VALUES(?,'并发验收本机图片模型','gpt-image-2',2,'openai',?,'{"defaultWidth":32,"defaultHeight":32}',1,JSON_ARRAY(),JSON_OBJECT(),JSON_ARRAY())
+                    VALUES(?,'并发验收本机图片模型','gpt-image-2',2,'openai',?,'{"defaultWidth":1024,"defaultHeight":1024}',1,JSON_ARRAY(),JSON_OBJECT(),JSON_ARRAY())
                     """, imageModel, imageModel);
             if (jdbc.queryForObject("SELECT COUNT(*) FROM afv_storage_config WHERE is_default=TRUE AND deleted=FALSE", Long.class) == 0)
                 jdbc.update("INSERT INTO afv_storage_config(name,type,base_path,is_default) VALUES('智能体测试存储','local',?,TRUE)", FILES.toString());
@@ -1370,7 +1376,7 @@ class CanvasAgentWiringIT {
             operations.addAll(shot);
             var image = nodes("$image", "场次参考图");
             ((ObjectNode) image.get(0).path("node")).put("kind", "imageGeneration").set("config",
-                    mapper.valueToTree(Map.of("modelId", imageModel, "width", 32, "height", 32, "count", 1)));
+                    mapper.valueToTree(Map.of("modelId", imageModel, "width", 1024, "height", 1024, "count", 1)));
             operations.addAll(image);
             operations.addObject().put("type", "canvas.edge.create").set("edge", mapper.valueToTree(Map.of("id", "$scene-image", "kind", "execution",
                     "sourceNodeId", "$scene", "sourcePort", "text", "targetNodeId", "$image", "targetPort", "prompt", "inputIndex", 0, "version", 0)));
@@ -1564,7 +1570,7 @@ class CanvasAgentWiringIT {
                     imageModel, "http://127.0.0.1:" + server.getAddress().getPort());
             jdbc.update("""
                     INSERT INTO afv_ai_model(id,name,code,model_type,model_protocol,api_config_id,config,max_concurrency,multimodal_input_types,multimodal_input_transports,reasoning_effort_levels)
-                    VALUES(?,'专业节点选定图片模型','gpt-image-2',2,'openai',?,'{"defaultWidth":64,"defaultHeight":64}',1,JSON_ARRAY(),JSON_OBJECT(),JSON_ARRAY())
+                    VALUES(?,'专业节点选定图片模型','gpt-image-2',2,'openai',?,'{"defaultWidth":1024,"defaultHeight":1024}',1,JSON_ARRAY(),JSON_OBJECT(),JSON_ARRAY())
                     """, imageModel, imageModel);
             if (jdbc.queryForObject("SELECT COUNT(*) FROM afv_storage_config WHERE is_default=TRUE AND deleted=FALSE", Long.class) == 0)
                 jdbc.update("INSERT INTO afv_storage_config(name,type,base_path,is_default) VALUES('智能体测试存储','local',?,TRUE)", FILES.toString());
@@ -1648,6 +1654,7 @@ class CanvasAgentWiringIT {
     void professionalMediaExecutorsGenerateWaitAndAutomaticallyBindRealBusinessMedia(String profile, String kind, String port, String resultType, String frame) throws Exception {
         var f = fixture(); professionalInputTree(f); var model = model(f);
         boolean video = frame.equals("video");
+        boolean frameImage = !video && !frame.equals("asset");
         boolean delegated = profile.endsWith("_gen");
         var png = new ByteArrayOutputStream();
         ImageIO.write(new BufferedImage(16, 16, BufferedImage.TYPE_INT_RGB), "png", png);
@@ -1677,6 +1684,21 @@ class CanvasAgentWiringIT {
                 try (var output = exchange.getResponseBody()) { output.write(body); }
             });
         }
+        if (frameImage) {
+            var sceneMedia = intake.upload(new ByteArrayInputStream(png.toByteArray()), "scene-reference.png", "image/png",
+                    UUID.randomUUID().toString(), f.project(), ResourceCommandContext.user(actor(f), f.canvas()));
+            long sceneItem = jdbc.queryForObject("SELECT scene_asset_item_id FROM afv_storyboard_item WHERE id=?", Long.class, f.project());
+            jdbc.update("UPDATE afv_asset_item SET image_url=? WHERE id=?", "media://" + sceneMedia.id(), sceneItem);
+            server.createContext("/v1/images/edits", exchange -> {
+                exchange.getRequestBody().readAllBytes();
+                calls.incrementAndGet();
+                exchange.getResponseHeaders().add("Content-Type", "application/json");
+                exchange.sendResponseHeaders(200, result.length);
+                try (var output = exchange.getResponseBody()) {
+                    output.write(result);
+                }
+            });
+        }
         server.start();
         try {
             long imageModel = IDS.incrementAndGet();
@@ -1685,7 +1707,9 @@ class CanvasAgentWiringIT {
             jdbc.update("""
                     INSERT INTO afv_ai_model(id,name,code,model_type,model_protocol,api_config_id,config,max_concurrency,multimodal_input_types,multimodal_input_transports,reasoning_effort_levels)
                     VALUES(?,'业务生成媒体模型',?,?,'openai',?, ?,1,JSON_ARRAY(),JSON_OBJECT(),JSON_ARRAY())
-                    """, imageModel, video ? "sora-2" : "gpt-image-2", video ? 3 : 2, imageModel, video ? "{}" : "{\"defaultWidth\":64,\"defaultHeight\":64}");
+                    """, imageModel, video ? "sora-2" : "gpt-image-2", video ? 3 : 2, imageModel, video ? "{}" : mapper.writeValueAsString(Map.of(
+                            "defaultWidth", 1024, "defaultHeight", 1024,
+                            "supportsReferenceImages", true, "supportDataUriInput", true)));
             if (jdbc.queryForObject("SELECT COUNT(*) FROM afv_storage_config WHERE is_default=TRUE AND deleted=FALSE", Long.class) == 0)
                 jdbc.update("INSERT INTO afv_storage_config(name,type,base_path,is_default) VALUES('智能体测试存储','local',?,TRUE)", FILES.toString());
             var steps = new AtomicInteger(); var parentSteps = new AtomicInteger(); var reference = new AtomicReference<String>();
@@ -1709,7 +1733,16 @@ class CanvasAgentWiringIT {
                             }
                             int step = steps.getAndIncrement(); String tool; String id; Map<String, Object> args;
                             if (step == 0) {
-                                tool = generateTool; id = "business-generate"; args = video ? Map.of("prompt", "雨夜灯塔", "duration", 4) : Map.of("prompt", "雨夜灯塔 " + frame);
+                                tool = generateTool;
+                                id = "business-generate";
+                                if (video) {
+                                    args = Map.of("prompt", "雨夜灯塔", "duration", 4);
+                                } else if (frameImage) {
+                                    args = Map.of("prompt", "雨夜灯塔 " + frame, "storyboardItemId", f.project(),
+                                            "expectedVersion", 0, "expectedSceneAssetVersion", 0, "frameType", frame);
+                                } else {
+                                    args = Map.of("prompt", "雨夜灯塔 " + frame);
+                                }
                             } else if (step == 1) {
                                 var accepted = lastTool(messages, generateTool);
                                 assertThat(accepted.path("status").asText()).as(accepted.toString()).isEqualTo("pending");
@@ -1773,13 +1806,14 @@ class CanvasAgentWiringIT {
     void professionalCreatorsPublishOnlyTheAssetsAndShotsActuallyCommittedThroughTools(String profile, String kind, String port, String resultType, int count) throws Exception {
         var f = fixture(); professionalInputTree(f); var model = model(f);
         boolean asset = resultType.equals("asset");
+        long sceneItem = jdbc.queryForObject("SELECT scene_asset_item_id FROM afv_storyboard_item WHERE id=?", Long.class, f.project());
         String tool = asset ? "batch_create_assets" : "save_storyboard_scene_shots";
         Map<String, Object> args = asset ? Map.of("projectId", f.project(), "reuseExisting", false, "assets", List.of(Map.of(
                 "type", "scene", "name", "雨夜灯塔", "description", "海边石砌灯塔，铜门和螺旋楼梯", "properties", Map.of(),
                 "initialItem", Map.of("name", "雨夜灯塔外景", "properties", Map.of()))))
                 : Map.of("storyboardId", f.project(), "storyboardEpisodeId", f.project(), "expectedParentVersion", 0,
-                "sceneNumber", "1-2", "sceneHeading", "外景 灯塔 夜", "shots", List.of(Map.of("content", "阿青推开灯塔铜门", "duration", 3),
-                Map.of("content", "特写信封上的日期", "duration", 2)));
+                "sceneNumber", "1-2", "sceneHeading", "外景 灯塔 夜", "shots", List.of(Map.of("content", "阿青推开灯塔铜门", "duration", 3, "sceneAssetItemId", sceneItem),
+                Map.of("content", "特写信封上的日期", "duration", 2, "sceneAssetItemId", sceneItem)));
         var calls = new AtomicInteger();
         when(providers.provisionSingleRequestModel(any(AiModel.class))).thenAnswer(call -> new AiProviderService.AgentScopeModelProvision(
                 new ChatModelBase() {

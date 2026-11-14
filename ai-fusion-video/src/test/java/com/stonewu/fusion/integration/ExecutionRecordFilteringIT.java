@@ -9,6 +9,7 @@ import com.stonewu.fusion.mapper.generation.RemoteGenerationJobMapper;
 import com.stonewu.fusion.service.ai.run.AgentEventEnvelopeSanitizer;
 import com.stonewu.fusion.service.canvas.model.CanvasActor;
 import com.stonewu.fusion.service.execution.ExecutionRecordQueries;
+import com.stonewu.fusion.service.execution.ExecutionRecordGenerationDetails;
 import com.stonewu.fusion.service.execution.ExecutionRecordQueries.Filter;
 import com.stonewu.fusion.service.execution.recovery.ExecutionRecoveryData.Kind;
 import com.stonewu.fusion.service.execution.recovery.ExecutionRecoveryData.Ref;
@@ -74,7 +75,7 @@ class ExecutionRecordFilteringIT {
                         List.of(new Remote("生成", "attempt", null, false, false)));
             });
             var queries = new ExecutionRecordQueries(records, targets, mock(ExecutionRecoveryDecisionMapper.class),
-                    mock(AgentEventEnvelopeSanitizer.class));
+                    mock(AgentEventEnvelopeSanitizer.class), mock(ExecutionRecordGenerationDetails.class));
 
             var first = queries.list(1L, 0, Filter.ALL, 0);
             assertThat(first.total()).isEqualTo(27);

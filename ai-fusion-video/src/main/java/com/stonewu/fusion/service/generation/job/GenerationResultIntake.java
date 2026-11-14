@@ -5,6 +5,7 @@ import com.stonewu.fusion.entity.generation.VideoItem;
 import com.stonewu.fusion.service.generation.GenerationKind;
 import com.stonewu.fusion.service.media.GenerationFrameService;
 import com.stonewu.fusion.service.media.GenerationMediaService;
+import com.stonewu.fusion.service.media.ManagedStorageConfiguration;
 import com.stonewu.fusion.service.media.model.MediaKind;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
@@ -19,9 +20,11 @@ public class GenerationResultIntake {
     private final GenerationMediaService media;
     private final GenerationFrameService frames;
     private final GenerationJobRepository jobs;
+    private final ManagedStorageConfiguration storage;
 
     public List<RemoteGenerationResult.Output> receive(RemoteGenerationJob job, GenerationSubmission submission,
                                                        ApiConfig api) {
+        storage.requireDefault();
         var outputs = new ArrayList<>(job.result().outputs());
         if (outputs.size() > job.itemIds().size()) {
             throw new GenerationJobException(502, "GENERATION_OUTPUT_COUNT_MISMATCH",

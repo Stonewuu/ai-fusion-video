@@ -4,6 +4,7 @@ import com.stonewu.fusion.entity.generation.VideoTask;
 import com.stonewu.fusion.service.generation.GenerationKind;
 import com.stonewu.fusion.service.media.GenerationFrameService;
 import com.stonewu.fusion.service.media.GenerationMediaService;
+import com.stonewu.fusion.service.media.ManagedStorageConfiguration;
 import com.stonewu.fusion.service.media.model.MediaKind;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -58,7 +59,8 @@ class GenerationResultIntakeTests {
         when(submission.taskId()).thenReturn(201L);
         when(inputs.video(job, submission, null, false)).thenReturn(task);
         when(media.video(eq(task), eq("item-301-video"), anyString(), isNull(), eq(MediaKind.VIDEO))).thenReturn(VIDEO);
-        return new Fixture(job, submission, jobs, task, frames, new GenerationResultIntake(inputs, media, frames, jobs));
+        return new Fixture(job, submission, jobs, task, frames,
+                new GenerationResultIntake(inputs, media, frames, jobs, mock(ManagedStorageConfiguration.class)));
     }
     private record Fixture(RemoteGenerationJob job, GenerationSubmission submission, GenerationJobRepository jobs,
                            VideoTask task, GenerationFrameService frames, GenerationResultIntake intake) { }

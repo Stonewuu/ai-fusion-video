@@ -6,7 +6,8 @@ import { useConfirm } from "@/components/ui/confirm-dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import { scriptApi } from "@/lib/api/script";
 

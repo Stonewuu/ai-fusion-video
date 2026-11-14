@@ -7,7 +7,8 @@ import { Cloud, Loader2, Eye, EyeOff, TestTube2, Settings2, ChevronDown } from "
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { storageConfigApi, STORAGE_PROVIDER_OPTIONS, STORAGE_TYPE_OPTIONS, type StorageConfig as StorageConfigType, type StorageConfigSaveReq } from "@/lib/api/storage";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectGroup, SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,10 +20,11 @@ interface StorageConfigDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   editingConfig: StorageConfigType | null;
+  isFirstConfig: boolean;
   onSaved: () => void;
 }
 
-export function StorageConfigDialog({ open, onOpenChange, editingConfig, onSaved }: StorageConfigDialogProps) {
+export function StorageConfigDialog({ open, onOpenChange, editingConfig, isFirstConfig, onSaved }: StorageConfigDialogProps) {
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
   const [form, setForm] = useState<StorageConfigSaveReq>({ name: "", type: "local" });
@@ -37,7 +39,10 @@ export function StorageConfigDialog({ open, onOpenChange, editingConfig, onSaved
   useEffect(() => {
     if (open) {
       setSaveError(null);
-      const initializeForm = (value: StorageConfigSaveReq) => { setForm(value); setOriginal(value); };
+      const initializeForm = (value: StorageConfigSaveReq) => {
+        setForm(value);
+        setOriginal(value);
+      };
       if (editingConfig) {
         const type = normalizeStorageType(editingConfig);
         const provider = type === "s3" ? normalizeStorageProvider(editingConfig) : undefined;
@@ -66,13 +71,13 @@ export function StorageConfigDialog({ open, onOpenChange, editingConfig, onSaved
         });
         setEndpointManual(isManualEndpoint);
       } else {
-        initializeForm({ name: "", type: "local", basePath: "./data/media", status: 1 });
+        initializeForm({ name: "", type: "local", basePath: "./data/media", status: 1, isDefault: isFirstConfig });
         setEndpointManual(false);
       }
       setShowSecrets({});
       setShowAdvanced(false);
     }
-  }, [open, editingConfig]);
+  }, [open, editingConfig, isFirstConfig]);
 
   const updateField = <K extends keyof StorageConfigSaveReq>(key: K, value: StorageConfigSaveReq[K]) => {
     setForm(prev => ({ ...prev, [key]: value }));

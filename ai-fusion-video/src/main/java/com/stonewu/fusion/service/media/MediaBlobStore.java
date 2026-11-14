@@ -9,6 +9,7 @@ import com.stonewu.fusion.service.media.model.MediaException;
 import com.stonewu.fusion.service.storage.S3ClientFactory;
 import com.stonewu.fusion.service.storage.S3StorageConfigResolver;
 import com.stonewu.fusion.service.storage.StorageTypes;
+import com.stonewu.fusion.service.storage.BuiltInLocalStorage;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import software.amazon.awssdk.core.exception.SdkException;
@@ -33,6 +34,7 @@ public class MediaBlobStore {
     private final S3ClientFactory s3Clients;
     private final MediaCryptor cryptor;
     private final MediaBlobLocks locks;
+    private final BuiltInLocalStorage builtIn;
 
     public long write(MediaBlob blob, Path plaintext) throws IOException {
         return write(blob, plaintext, Domain.MEDIA);
@@ -149,10 +151,11 @@ public class MediaBlobStore {
 
     private StorageConfig configuration(MediaBlob blob) {
         // 密钥与配置不能从可回填旧值的内容缓存中取得。
-        StorageConfig config = configurations.selectById(blob.storageConfigId());
+        StorageConfig config = blob.storageConfigId() == BuiltInLocalStorage.CONFIG_ID
+                ? builtIn.configuration() : configurations.selectById(blob.storageConfigId());
         if (config == null || !Objects.equals(config.getStatus(), 1)
                 || !blob.backend().equals(StorageTypes.normalizeType(config.getType()))) {
-            throw MediaException.unavailable("媒体使用的存储配置不可用");
+            throw MediaException.storageConfiguration("媒体使用的存储配置不可用，请检查存储设置");
         }
         return config;
     }
@@ -160,7 +163,7 @@ public class MediaBlobStore {
     private Path localPath(StorageConfig config, String key, boolean create) throws IOException {
         validateKey(key);
         if (config.getBasePath() == null || config.getBasePath().isBlank()) {
-            throw MediaException.unavailable("本地媒体存储必须明确配置根目录");
+            throw MediaException.storageConfiguration("请填写本地媒体存储的根目录");
         }
         Path base = Path.of(config.getBasePath()).toAbsolutePath().normalize();
         if (create) {

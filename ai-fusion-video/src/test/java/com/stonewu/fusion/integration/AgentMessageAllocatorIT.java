@@ -1,5 +1,6 @@
 package com.stonewu.fusion.integration;
 
+import com.stonewu.fusion.integration.support.AgentRuntimeContainers;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.entity.ai.AgentMessage;
@@ -11,8 +12,10 @@ import com.stonewu.fusion.service.ai.run.AgentMessageAllocator;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -34,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers(disabledWithoutDocker = false)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AgentMessageAllocatorIT {
 
     private static final int CONCURRENT_WRITERS = 32;
@@ -46,11 +50,15 @@ class AgentMessageAllocatorIT {
             .withUsername("afv")
             .withPassword("afv-test");
 
+    @Container
+    private static final GenericContainer<?> REDIS = AgentRuntimeContainers.redis();
+
     @DynamicPropertySource
     static void configureDatabase(DynamicPropertyRegistry properties) {
         properties.add("spring.datasource.url", MYSQL::getJdbcUrl);
         properties.add("spring.datasource.username", MYSQL::getUsername);
         properties.add("spring.datasource.password", MYSQL::getPassword);
+        AgentRuntimeContainers.registerRedisProperties(properties, REDIS);
         properties.add("spring.datasource.hikari.maximum-pool-size", () -> 40);
         properties.add("spring.datasource.hikari.minimum-idle", () -> 0);
     }

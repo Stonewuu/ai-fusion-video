@@ -3,6 +3,7 @@
 import type { PointerEvent as ReactPointerEvent } from "react";
 import {
   Maximize2,
+  MessageSquarePlus,
   Minimize2,
   PanelRight,
   PanelRightClose,
@@ -50,7 +51,7 @@ function IconAction({
             <Button
               type="button"
               variant="ghost"
-              size="icon-sm"
+              size="icon"
               aria-label={label}
               disabled={disabled}
               data-assistant-interactive="true"
@@ -78,6 +79,7 @@ export function AssistantTitleBar({
   onStartDrag,
 }: TitleBarProps) {
   const selectedId = useAssistantStore((state) => state.selectedConversationId);
+  const startNewConversation = useAssistantStore((state) => state.startNewConversation);
   const title = useAssistantStore((state) =>
     selectedId ? state.conversationStates[selectedId]?.conversation.title : undefined,
   );
@@ -87,7 +89,7 @@ export function AssistantTitleBar({
     <Button
       type="button"
       variant="ghost"
-      size="icon-sm"
+      size="icon"
       aria-label="打开会话列表"
       title="打开会话列表"
       data-assistant-interactive="true"
@@ -109,7 +111,9 @@ export function AssistantTitleBar({
       className="flex h-14 shrink-0 touch-none select-none items-center gap-3 border-b border-border/20 px-3"
       onPointerDown={onStartDrag}
       onDoubleClick={(event) => {
-        if ((event.target as HTMLElement).closest("[data-assistant-interactive]")) return;
+        if ((event.target as HTMLElement).closest("[data-assistant-interactive]")) {
+          return;
+        }
         onToggleMaximize();
       }}
     >
@@ -136,6 +140,9 @@ export function AssistantTitleBar({
       </div>
 
       <div className="flex shrink-0 items-center gap-2" data-assistant-interactive="true">
+        <IconAction label="新建会话" onClick={startNewConversation}>
+          <MessageSquarePlus />
+        </IconAction>
         <IconAction
           label={isDocked ? "退出吸附" : canDock ? "吸附到右侧" : "当前宽度不足，无法吸附"}
           disabled={!isDocked && !canDock}

@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import { Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useAuthStore } from "@/lib/store/auth-store";

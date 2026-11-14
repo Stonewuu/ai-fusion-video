@@ -1,4 +1,6 @@
 spring:
+  main:
+    banner-mode: "off"
   # MySQL
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:mysql}:${MYSQL_PORT:3306}/${MYSQL_DATABASE:ai_fusion_video}?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Asia/Shanghai
@@ -21,10 +23,16 @@ spring:
     dashscope:
       api-key: ${AI_DASHSCOPE_API_KEY:sk-placeholder}
 
-# 日志级别
+# 容器部署只输出错误；本机调试使用 application-local.yaml。
 logging:
   level:
-    com.stonewu.fusion: INFO
+    root: ERROR
+    com.stonewu.fusion: ERROR
+    org.springframework.ai: ERROR
+
+mybatis-plus:
+  global-config:
+    banner: false
 
 fusion:
   agentscope:

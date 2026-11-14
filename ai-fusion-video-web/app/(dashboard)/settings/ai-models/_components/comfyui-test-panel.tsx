@@ -5,12 +5,12 @@ import { FlaskConical, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import type { ComfyUiWorkflowVersion } from "@/lib/api/comfyui-workflow";
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import { comfyUiTestInput } from "@/lib/comfyui-test-request";

@@ -1,13 +1,23 @@
 "use client";
 
-import { Loader2 } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { useState } from "react";
+import { ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ProviderVendorIcon } from "@/components/dashboard/model-vendor-icon";
+import {
+  Dialog,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
+import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
 import type { ProviderDefinition } from "@/lib/api/provider-catalog";
-import { cn } from "@/lib/utils";
-import { SponsorNotice } from "./sponsor-notice";
-import { orderProviderPresets } from "./provider-preset-order";
+import { ProviderPresetList } from "./provider-preset-list";
+import {
+  DEFAULT_PROVIDER_PRESET_LIMIT,
+  orderProviderPresets,
+} from "./provider-preset-order";
 
 interface ProviderPresetPickerProps {
   providers: ProviderDefinition[];
@@ -30,116 +40,88 @@ export function ProviderPresetPicker({
   onReload,
   onSelect,
 }: ProviderPresetPickerProps) {
+  const [showAll, setShowAll] = useState(false);
+  const orderedProviders = orderProviderPresets(providers);
+
+  const selectFromDialog = (provider: ProviderDefinition) => {
+    setShowAll(false);
+    onSelect(provider);
+  };
+
   return (
-    <section className="flex min-w-0 flex-col gap-3 rounded-xl border border-border/30 bg-muted/15 p-3">
-      <div className="flex flex-col gap-1">
-        <h3 className="text-xs font-medium">常用提供商</h3>
-        <p className="text-xs text-muted-foreground">
-          选择平台自动填写地址；赞助商可快速配置模型。
-        </p>
-      </div>
-      {loading && (
-        <p
-          className="flex items-center gap-2 text-xs text-muted-foreground"
-          role="status"
-        >
-          <Loader2 className="size-4 animate-spin" />
-          加载提供商…
-        </p>
-      )}
-      {error && (
-        <div className="flex items-center justify-between gap-2">
-          <p role="alert" className="text-xs text-destructive">
-            {error}
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={disabled || loading}
-            onClick={onReload}
-          >
-            重试
-          </Button>
-        </div>
-      )}
-      <div className="grid min-w-0 gap-2 sm:grid-cols-2">
-        {orderProviderPresets(providers).map((provider) => {
-          const selected = selectedId === provider.id;
-          const surface = cn(
-            "min-w-0 rounded-xl border p-3 text-left transition-colors",
-            selected
-              ? "border-primary/50 bg-primary/8"
-              : "border-border/40 bg-background/50",
-          );
-          const icon = (
-            <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted/60">
-              <ProviderVendorIcon
-                provider={provider.vendor ?? provider.id}
-                className="size-5"
-              />
-            </span>
-          );
-          if (provider.sponsored || provider.quickSetup) {
-            return (
-              <div key={provider.id} className={surface}>
-                <div className="flex items-center gap-2">
-                  {icon}
-                  <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium">
-                      {provider.label}
-                    </span>
-                    {provider.sponsored && (
-                      <Badge variant="secondary">赞助商</Badge>
-                    )}
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={disabled}
-                    aria-label={`配置 ${provider.label}`}
-                    onClick={() => onSelect(provider)}
-                  >
-                    {provider.quickSetup && allowQuickSetup ? "配置" : "选用"}
-                  </Button>
-                </div>
-                <div className="mt-2 min-w-0">
-                  {provider.sponsored ? (
-                    <SponsorNotice provider={provider} />
-                  ) : (
-                    <p className="break-all text-xs text-muted-foreground">
-                      {provider.hint ?? provider.url}
-                    </p>
-                  )}
-                </div>
-              </div>
-            );
-          }
-          return (
-            <button
-              key={provider.id}
-              type="button"
-              disabled={disabled}
-              aria-pressed={selected}
-              onClick={() => onSelect(provider)}
-              className={cn(
-                surface,
-                "flex items-center gap-2 outline-none hover:border-primary/40 hover:bg-muted/30 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
-              )}
+    <Dialog open={showAll} onOpenChange={setShowAll}>
+      <section className="flex min-w-0 flex-col gap-3 rounded-xl border border-border/30 bg-muted/15 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-1">
+            <h3 className="text-xs font-medium">常用提供商</h3>
+            <p className="text-xs text-muted-foreground">
+              选择平台自动填写地址；赞助商可快速配置模型。
+            </p>
+          </div>
+          {orderedProviders.length > DEFAULT_PROVIDER_PRESET_LIMIT && (
+            <DialogTrigger
+              render={
+                <Button
+                  type="button"
+                  variant="ghost"
+                  disabled={disabled || loading}
+                />
+              }
             >
-              {icon}
-              <span className="min-w-0">
-                <span className="block text-xs font-medium">
-                  {provider.label}
-                </span>
-                <span className="mt-1 block break-all text-xs text-muted-foreground">
-                  {provider.hint ?? provider.url}
-                </span>
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </section>
+              更多
+              <ChevronRight />
+            </DialogTrigger>
+          )}
+        </div>
+        {loading && (
+          <p
+            className="flex items-center gap-2 text-xs text-muted-foreground"
+            role="status"
+          >
+            <Loader2 className="size-4 animate-spin" />
+            加载提供商…
+          </p>
+        )}
+        {error && (
+          <div className="flex items-center justify-between gap-2">
+            <p role="alert" className="text-xs text-destructive">
+              {error}
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={disabled || loading}
+              onClick={onReload}
+            >
+              重试
+            </Button>
+          </div>
+        )}
+        <ProviderPresetList
+          providers={orderedProviders.slice(0, DEFAULT_PROVIDER_PRESET_LIMIT)}
+          selectedId={selectedId}
+          disabled={disabled}
+          allowQuickSetup={allowQuickSetup}
+          onSelect={onSelect}
+        />
+      </section>
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] flex-col overflow-hidden sm:max-w-3xl">
+        <DialogHeader className="shrink-0">
+          <DialogTitle>全部提供商</DialogTitle>
+          <DialogDescription>
+            选择平台自动填写地址；赞助商可快速配置模型。
+          </DialogDescription>
+        </DialogHeader>
+        <DialogScrollBody>
+          <ProviderPresetList
+            providers={orderedProviders}
+            selectedId={selectedId}
+            disabled={disabled}
+            allowQuickSetup={allowQuickSetup}
+            onSelect={selectFromDialog}
+          />
+        </DialogScrollBody>
+      </DialogContent>
+    </Dialog>
   );
 }

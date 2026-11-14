@@ -2,7 +2,7 @@ package com.stonewu.fusion.service.canvas.delivery;
 
 import com.stonewu.fusion.mapper.canvas.CanvasExportMapper;
 import com.stonewu.fusion.mapper.canvas.CanvasExportBlobMapper;
-import com.stonewu.fusion.mapper.storage.StorageConfigMapper;
+import com.stonewu.fusion.service.media.ManagedStorageConfiguration;
 import com.stonewu.fusion.mapper.system.UserMapper;
 import com.stonewu.fusion.entity.canvas.CanvasExportEntity;
 import com.stonewu.fusion.entity.canvas.CanvasExportBlobEntity;
@@ -36,7 +36,7 @@ import static com.stonewu.fusion.service.canvas.delivery.CanvasExportData.*;
 public class CanvasExportRepository {
     private final CanvasExportMapper exports;
     private final CanvasExportBlobMapper blobs;
-    private final StorageConfigMapper configurations;
+    private final ManagedStorageConfiguration storage;
     private final UserMapper users;
     private final CanvasJson json;
     private final MediaCryptor cryptor;
@@ -138,19 +138,8 @@ public class CanvasExportRepository {
     }
 
     public MediaBlob reserve(Job job) {
-        var configs = configurations.lockActiveDefaults();
-        if (configs.size() != 1) {
-            throw conflict("需要唯一且可用的默认存储配置来保存交付文件");
-        }
-        var config = configs.getFirst();
+        var config = storage.lockDefault();
         String backend = StorageTypes.normalizeType(config.getType());
-        if (!List.of("local", "s3").contains(backend)) {
-            throw invalid("交付文件需要本地或 S3 存储");
-        }
-        if (backend.equals("local") && (config.getBasePath() == null || config.getBasePath().toString()
-                .isBlank())) {
-            throw invalid("默认本地存储需要配置明确的根目录");
-        }
         var blob = new MediaBlob(UUID.randomUUID().toString(), job.id(), config.getId(),
                 backend, UUID.randomUUID() + ".afvblob", cryptor.newKeyset(), null);
         blobs.reserve(blob.id(), job.id(), blob.storageConfigId(), blob.backend(), blob.objectKey(), blob.keyset(),

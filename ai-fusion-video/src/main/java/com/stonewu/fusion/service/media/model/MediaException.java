@@ -21,4 +21,8 @@ public class MediaException extends BusinessException {
     public static MediaException unavailable(String message) {
         return new MediaException(503, "MEDIA_UNAVAILABLE", message);
     }
+
+    public static MediaException storageConfiguration(String message) {
+        return new MediaException(400, "MEDIA_STORAGE_CONFIGURATION_INVALID", message);
+    }
 }

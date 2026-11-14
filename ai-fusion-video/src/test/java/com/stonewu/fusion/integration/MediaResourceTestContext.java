@@ -25,6 +25,7 @@ import com.stonewu.fusion.service.media.MediaSourceFetcher;
 import com.stonewu.fusion.service.media.MediaSourceImportService;
 import com.stonewu.fusion.service.media.MediaRemoteAddressPolicy;
 import com.stonewu.fusion.service.storage.LegacyMediaRoot;
+import com.stonewu.fusion.service.storage.BuiltInLocalStorage;
 import com.stonewu.fusion.service.canvas.CanvasAccessPolicy;
 import com.stonewu.fusion.service.canvas.CanvasActorResolver;
 import com.stonewu.fusion.service.canvas.CanvasJson;
@@ -94,6 +95,7 @@ import com.stonewu.fusion.service.media.MediaMetadataCache;
 import com.stonewu.fusion.service.media.MediaProbe;
 import com.stonewu.fusion.service.media.MediaPresetReferences;
 import com.stonewu.fusion.service.media.MediaRegistryTransactions;
+import com.stonewu.fusion.service.media.ManagedStorageConfiguration;
 import com.stonewu.fusion.service.media.MediaResourceQueries;
 import com.stonewu.fusion.service.media.MediaStorageConfigGuard;
 import com.stonewu.fusion.service.media.model.MediaResource;
@@ -223,6 +225,7 @@ abstract class MediaResourceTestContext {
         context.registerBean(ValidatorFactory.class, Validation::buildDefaultValidatorFactory);
         context.registerBean(Validator.class, () -> context.getBean(ValidatorFactory.class).getValidator());
         context.registerBean(StorageConfigMapper.class, () -> storageMapper);
+        context.registerBean(BuiltInLocalStorage.class, () -> new BuiltInLocalStorage(directory.toString()));
         context.registerBean(MediaResourceRepository.class, () -> repository);
         context.registerBean(MediaCryptor.class, () -> spy(new MediaCryptor()));
         context.registerBean(S3ClientFactory.class, () -> spy(new S3ClientFactory()));
@@ -264,7 +267,7 @@ abstract class MediaResourceTestContext {
                 ComposeWritebackHandler.class,
                 MediaBlobLockConfiguration.class, MediaBlobLocks.class, MediaBlobStore.class,
                 S3StorageConfigResolver.class,
-                StorageProviderRegistry.class, MediaProbe.class, MediaRegistryTransactions.class,
+                StorageProviderRegistry.class, MediaProbe.class, ManagedStorageConfiguration.class, MediaRegistryTransactions.class,
                 MediaIntakeService.class,
                 MediaMetadataCache.class, MediaResourceQueries.class, MediaAccessTickets.class,
                 MediaDeletionService.class, MediaDeletionReferences.class,

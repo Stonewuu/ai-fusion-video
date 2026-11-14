@@ -33,6 +33,8 @@ import com.stonewu.fusion.service.generation.video.VideoGenerationService;
 import com.stonewu.fusion.service.generation.video.strategy.VideoGenerationStrategy;
 import com.stonewu.fusion.service.generation.video.strategy.VideoGenerationStrategyRouter;
 import com.stonewu.fusion.service.resource.model.ResourceCommandContext;
+import com.stonewu.fusion.service.media.ManagedStorageConfiguration;
+import com.stonewu.fusion.service.media.model.MediaException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import com.stonewu.fusion.mapper.generation.GenerationSubmissionMapper;
@@ -63,6 +65,7 @@ class GenerationSubmissionServiceTests {
     final VideoGenerationStrategy videoProtocol = mock(VideoGenerationStrategy.class);
     final GenerationModelCapabilityService capabilities = mock(GenerationModelCapabilityService.class);
     final AssetImageReferencePolicy assetReferences = mock(AssetImageReferencePolicy.class);
+    final ManagedStorageConfiguration storage = mock(ManagedStorageConfiguration.class);
     final ResourceCommandContext actor = ResourceCommandContext.user(new CanvasActor(9, null), null);
     final AiModel model = AiModel.builder().id(5L).apiConfigId(7L).comfyuiWorkflowId(12L).build();
     final RemoteGenerationJobMapper remoteJobs = mock(RemoteGenerationJobMapper.class);
@@ -71,7 +74,7 @@ class GenerationSubmissionServiceTests {
             mock(GenerationExecutionContexts.class), models, capabilities, workflows,
             images, videos, mock(GenerationJobRepository.class), mock(GenerationOutbox.class),
             mock(GenerationRequestRepository.class), imageProtocols, videoProtocols,
-            mock(GenerationInputVersions.class), mock(CanvasAgentNodeGeneration.class), assetReferences);
+            mock(GenerationInputVersions.class), mock(CanvasAgentNodeGeneration.class), assetReferences, storage);
 
     @BeforeEach
     void configure() {
@@ -110,6 +113,15 @@ class GenerationSubmissionServiceTests {
         service.image(task, UUID.randomUUID().toString(), actor, null);
         assertThat(task.getWorkflowVersionId()).isEqualTo(21L);
         verify(images).create(task);
+    }
+
+    @Test
+    void invalidStorageRejectsImageBeforeCreatingAPaidGenerationTask() {
+        when(storage.requireDefault()).thenThrow(MediaException.storageConfiguration("默认存储未启用"));
+        var task = ImageTask.builder().modelId(5L).prompt("测试").count(1).build();
+        assertThatThrownBy(() -> service.image(task, UUID.randomUUID().toString(), actor, null))
+                .isInstanceOf(MediaException.class).hasMessage("默认存储未启用");
+        verifyNoInteractions(images, remoteJobs, imageProtocols);
     }
 
     @Test

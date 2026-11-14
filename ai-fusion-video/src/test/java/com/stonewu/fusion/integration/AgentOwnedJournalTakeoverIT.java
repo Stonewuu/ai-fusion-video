@@ -1,5 +1,6 @@
 package com.stonewu.fusion.integration;
 
+import com.stonewu.fusion.integration.support.AgentRuntimeContainers;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -32,8 +33,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -51,6 +54,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers(disabledWithoutDocker = false)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_CLASS)
 class AgentOwnedJournalTakeoverIT {
 
     private static final long USER_ID = 42L;
@@ -69,11 +73,15 @@ class AgentOwnedJournalTakeoverIT {
             .withUsername("afv")
             .withPassword("afv-test");
 
+    @Container
+    private static final GenericContainer<?> REDIS = AgentRuntimeContainers.redis();
+
     @DynamicPropertySource
     static void configureDatabase(DynamicPropertyRegistry properties) {
         properties.add("spring.datasource.url", MYSQL::getJdbcUrl);
         properties.add("spring.datasource.username", MYSQL::getUsername);
         properties.add("spring.datasource.password", MYSQL::getPassword);
+        AgentRuntimeContainers.registerRedisProperties(properties, REDIS);
         properties.add("fusion.agentscope.v2.state.mode", () -> "IN_MEMORY");
         properties.add(
                 "fusion.agentscope.v2.execution.instance-id", () -> "takeover-node-a");

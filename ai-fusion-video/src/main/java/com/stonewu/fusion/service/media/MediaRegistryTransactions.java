@@ -9,7 +9,6 @@ import com.stonewu.fusion.mapper.media.MediaBlobMapper;
 import com.stonewu.fusion.mapper.media.MediaPreviewJobMapper;
 import com.stonewu.fusion.mapper.media.MediaJobMapper;
 import com.stonewu.fusion.mapper.media.MediaAccessTicketMapper;
-import com.stonewu.fusion.mapper.storage.StorageConfigMapper;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.mapper.system.UserMapper;
 import com.stonewu.fusion.mapper.execution.ExecutionCoordinationMapper;
@@ -48,7 +47,7 @@ public class MediaRegistryTransactions {
     private final MediaPreviewJobMapper previewJobs;
     private final MediaJobMapper mediaJobs;
     private final MediaAccessTicketMapper tickets;
-    private final StorageConfigMapper configurations;
+    private final ManagedStorageConfiguration storage;
     private final UserMapper users;
     private final ExecutionCoordinationMapper clock;
     private final MediaResourceRepository resources;
@@ -314,19 +313,8 @@ public class MediaRegistryTransactions {
                 resources.bindSource(id, source.reference());
             }
         }
-        var storage = configurations.lockActiveDefaults();
-        if (storage.size() != 1) {
-            throw MediaException.unavailable("请设置且只设置一个启用的默认存储配置");
-        }
-        StorageConfig config = storage.getFirst();
+        StorageConfig config = storage.lockDefault();
         String backend = StorageTypes.normalizeType(config.getType());
-        if (!"local".equals(backend) && !"s3".equals(backend)) {
-            throw MediaException.unavailable("默认存储后端不支持托管媒体");
-        }
-        if ("local".equals(backend) && (config.getBasePath() == null || config.getBasePath().toString()
-                .isBlank())) {
-            throw MediaException.unavailable("本地媒体存储必须明确配置根目录");
-        }
         blobs.insert(MediaBlobEntity.builder().id(blobId).resourceId(resource.id()).ingestEpoch(epoch)
                 .storageConfigId(config.getId()).backend(backend).objectKey(blobId + ".afvblob")
                 .keysetBytes(cryptor.newKeyset()).state("STAGING").build());

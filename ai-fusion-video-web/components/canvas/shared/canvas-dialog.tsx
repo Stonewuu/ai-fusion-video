@@ -3,7 +3,8 @@
 import type { ComponentProps } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DialogClose, DialogContent } from "@/components/ui/dialog";
+import { DialogClose } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 
 /** 沿用公共浮层与焦点行为，只补充画布的中文关闭名称。 */
 export function CanvasDialogContent({ children, showCloseButton = true, ...props }: ComponentProps<typeof DialogContent>) {

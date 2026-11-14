@@ -59,6 +59,7 @@ export function ExecutionRecordList({ records, selected, onSelect, showFilters }
           </p>}
           {items.map(item => (
             <TaskListItem key={`${item.kind}:${item.id}`} label={item.title}
+              description={item.message}
               subtitle={`${executionRecordStatus(item)} · ${formatDatetime(item.updatedAt)}`}
               icon={item.status === "CANCELLED" ? <Ban className="size-4 shrink-0 text-muted-foreground" />
                 : item.remoteUnknown || item.status === "NEEDS_REVIEW" ? <CircleHelp className="size-4 shrink-0 text-muted-foreground" />

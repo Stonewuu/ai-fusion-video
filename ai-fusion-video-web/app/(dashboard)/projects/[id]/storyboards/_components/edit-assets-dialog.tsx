@@ -10,7 +10,8 @@ import type { StoryboardItem } from "@/lib/api/storyboard";
 import { SafeImage } from "@/components/media/managed-image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
 
 export interface ShotAssets {

@@ -38,6 +38,7 @@ public final class GenerationHttpClients {
 
     public static OkHttpClient.Builder singleRequestBuilder() {
         return new OkHttpClient.Builder()
+                .eventListenerFactory(GenerationHttpLoggingListener::new)
                 .retryOnConnectionFailure(false)
                 .followRedirects(false)
                 .followSslRedirects(false)

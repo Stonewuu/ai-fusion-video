@@ -10,7 +10,7 @@ import type { GenerationExecution } from "@/lib/api/generation-execution";
 import { GenerationMediaPreviewDialog, type GenerationMediaPreview } from "./generation-media-preview-dialog";
 import { executionParameters, executionReferenceLabels } from "./generation-execution-presentation";
 
-export function GenerationExecutionInputSection({ data }: { data: GenerationExecution }) {
+export function GenerationExecutionInputSection({ data }: { data: Pick<GenerationExecution, "kind" | "input"> }) {
   const [preview, setPreview] = useState<GenerationMediaPreview | null>(null);
   const prompt = data.input.prompt;
   const copyPrompt = async () => {

@@ -5,13 +5,16 @@ import com.stonewu.fusion.service.generation.GenerationKind;
 import com.stonewu.fusion.service.generation.image.strategy.ImageGenerationStrategyRouter;
 import com.stonewu.fusion.service.generation.video.strategy.VideoGenerationStrategyRouter;
 import com.stonewu.fusion.service.media.model.MediaException;
+import com.stonewu.fusion.service.media.ManagedStorageConfiguration;
 import jakarta.annotation.PreDestroy;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
+import org.slf4j.MDC;
 
 import java.util.Optional;
+import java.util.Arrays;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -35,6 +38,7 @@ public class RemoteGenerationWorker {
     private final GenerationResultIntake intake;
     private final ImageGenerationStrategyRouter imageProtocols;
     private final VideoGenerationStrategyRouter videoProtocols;
+    private final ManagedStorageConfiguration storage;
     private final String instance = "generation-" + UUID.randomUUID();
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
     private final Semaphore slots = new Semaphore(16);
@@ -101,7 +105,10 @@ public class RemoteGenerationWorker {
 
     private void execute(RemoteGenerationJob initial) {
         var claim = initial.claim();
-        try (var ignored = GenerationLeaseScope.enter(claim)) {
+        try (var ignored = GenerationLeaseScope.enter(claim);
+             var logging = MDC.putCloseable("generationJobId", claim.id())) {
+            log.debug("生成任务开始执行: jobId={}, submissionId={}, phase={}, modelId={}, pollAttempts={}",
+                    initial.id(), initial.submissionId(), initial.phase(), initial.modelId(), initial.pollAttempts());
             var submission = lifecycle.start(claim);
             var job = jobs.get(claim.id());
             if (!identity.permitted(submission) && !job.cancelRequested()) {
@@ -168,7 +175,9 @@ public class RemoteGenerationWorker {
             } else if (job.result().state() == RemoteGenerationResult.State.FAILED) {
                 lifecycle.fail(claim, "FAILED", "PROVIDER_FAILED", job.result().error());
             } else {
+                log.debug("生成结果开始保存: jobId={}, outputs={}", job.id(), job.result().outputs().size());
                 lifecycle.succeed(claim, intake.receive(job, submission, api));
+                log.debug("生成结果保存完成: jobId={}", job.id());
             }
         } catch (Exception failure) {
             if (Thread.currentThread().isInterrupted()) {
@@ -179,6 +188,8 @@ public class RemoteGenerationWorker {
     }
 
     private void submit(RemoteGenerationJob job, GenerationSubmission submission, ApiConfig api) {
+        log.debug("生成请求开始准备: jobId={}, kind={}, model={}, protocol={}", job.id(), submission.kind(),
+                submission.model().getCode(), submission.model().getModelProtocol());
         attempts.prepare(job.claim());
         job = jobs.get(job.id());
         PreparedGenerationCall prepared;
@@ -194,7 +205,10 @@ public class RemoteGenerationWorker {
         try (prepared) {
             verifyBeforeSubmission(job, submission);
             var attempt = attempts.begin(job.claim(), prepared.intent());
+            log.debug("生成请求开始提交: jobId={}, attemptId={}", job.id(), attempt.id());
             var receipt = prepared.submit();
+            log.debug("生成请求已收到响应: jobId={}, attemptId={}, responseType={}", job.id(), attempt.id(),
+                    receipt.result() == null ? "异步受理" : "同步结果");
             attempts.acknowledge(attempt.id(), receipt);
             attempts.applyReceipt(job.claim());
         }
@@ -210,9 +224,12 @@ public class RemoteGenerationWorker {
             throw new GenerationJobException(409, "GENERATION_DEADLINE_EXCEEDED", "准备超过等待期限，未提交供应商");
         }
         models.forExecution(submission);
+        // 排队期间配置可能改变，发送付费请求前再次检查当前存储。
+        storage.requireDefault();
     }
 
     private RemoteGenerationResult query(RemoteGenerationJob job, GenerationSubmission submission, ApiConfig api) {
+        log.debug("查询生成进度: jobId={}, phase={}, pollAttempts={}", job.id(), job.phase(), job.pollAttempts());
         if (submission.kind() == GenerationKind.IMAGE) {
             return imageProtocols.resolve(submission.model(), api)
                     .query(job.providerTaskId(), inputs.image(job, submission, api, false), submission.model(), api);
@@ -245,7 +262,18 @@ public class RemoteGenerationWorker {
                 return;
             }
             String message = failure.getMessage() == null ? "生成任务执行异常" : failure.getMessage();
-            if (current.phase().equals("SUBMITTING")) {
+            log.debug("生成执行发生异常: jobId={}, phase={}, code={}, errorType={}, stack={}",
+                    claim.id(), current.phase(), code, failure.getClass().getSimpleName(),
+                    Arrays.toString(failure.getStackTrace()));
+            if (code.equals("GENERATION_LATE_RECEIPT")) {
+                lifecycle.fail(claim, "UNKNOWN_SUBMISSION", code, "远端结果未知：" + message);
+            } else if (current.phase().equals("NEW") || current.phase().equals("PREPARING")) {
+                lifecycle.fail(claim, current.cancelRequested() ? "CANCELLED" : "FAILED", code, message);
+            } else if (GenerationFailurePolicy.permanent(failure, code)) {
+                boolean remotePending = current.result() == null
+                        && (current.phase().equals("SUBMITTING") || current.phase().equals("POLLING"));
+                lifecycle.fail(claim, remotePending ? "UNKNOWN_SUBMISSION" : "FAILED", code, message);
+            } else if (current.phase().equals("SUBMITTING")) {
                 var intent = attempts.get(current.activeAttemptId());
                 if (intent.providerTaskId() != null || intent.acknowledged()) {
                     jobs.waitForNextPoll(claim, 5, "SUBMITTING", code, "正在查询原请求的受理状态");
@@ -253,26 +281,20 @@ public class RemoteGenerationWorker {
                     lifecycle.fail(claim, "UNKNOWN_SUBMISSION", "UNKNOWN_SUBMISSION",
                             "请求结果未确认，不能自动重发：" + message);
                 }
-            } else if (code.equals("GENERATION_LATE_RECEIPT")) {
-                lifecycle.fail(claim, "UNKNOWN_SUBMISSION", code, "远端结果未知：" + message);
-            } else if (current.phase().equals("NEW") || current.phase().equals("PREPARING")) {
-                lifecycle.fail(claim, current.cancelRequested() ? "CANCELLED" : "FAILED", code, message);
-            } else if (code.equals("PROVIDER_TASK_UNKNOWN") || code.equals(
-                    "GENERATION_PROVIDER_CHANGED") || code.equals("GENERATION_PROVIDER_UNAVAILABLE") || code.equals(
-                    "GENERATION_MODEL_DISABLED")) {
-                lifecycle.fail(claim, current.result() == null ? "UNKNOWN_SUBMISSION" : "FAILED", code, message);
             } else if (!current.phase().equals("INGESTING") || current.consecutiveErrors() < 8) {
                 int delay = Math.min(60, 1 << Math.min(6, current.consecutiveErrors() + 1));
+                log.debug("生成任务等待重试: jobId={}, phase={}, code={}, delaySeconds={}, consecutiveErrors={}",
+                        claim.id(), current.phase(), code, delay, current.consecutiveErrors() + 1);
                 jobs.waitForNextPoll(claim, delay, current.phase(), code, message);
             } else {
                 lifecycle.fail(claim, "FAILED", code, message);
             }
         } catch (GenerationJobException lost) {
             if (!lost.getErrorCode().equals("GENERATION_LEASE_LOST")) {
-                log.warn("生成任务状态记录失败: id={}, code={}", claim.id(), lost.getErrorCode());
+                log.error("生成任务状态记录失败: id={}, code={}", claim.id(), lost.getErrorCode());
             }
         } catch (Exception recordFailure) {
-            log.warn("生成状态暂未提交，将由到期租约恢复: id={}", claim.id(), recordFailure);
+            log.error("生成状态暂未提交，将由到期租约恢复: id={}", claim.id(), recordFailure);
         }
     }
 

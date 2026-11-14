@@ -269,6 +269,10 @@ class GenerationExecutionWiringIT {
         assertThat(record.at("/task/remoteUnknown").asBoolean()).isTrue();
         assertThat(record.at("/task/localFinished").asBoolean()).isTrue();
         assertThat(record.path("capacityHeld").asBoolean()).isFalse();
+        assertThat(record.at("/generation/modelName").asText()).isEqualTo(f.prompt);
+        assertThat(record.at("/generation/input/prompt").asText()).isEqualTo(f.prompt);
+        assertThat(record.at("/generation/attempts/0/submittedAt").isTextual()).isTrue();
+        assertThat(record.path("generation").toString()).doesNotContain("test-key", "apiKey", "executionContextJson");
         assertThat(ok(get("/api/execution-records", f.headers)).path("items").toString()).contains(item.path("id").asText());
         assertThat(f.remote.calls.get()).isEqualTo(1);
         f.remote.complete.set(true);
@@ -293,7 +297,7 @@ class GenerationExecutionWiringIT {
         var f = fixture("async");
         system.setValue(SystemConfigService.RESOURCE_BASE_URL_KEY, "https://media.example.test");
         jdbc.update("UPDATE afv_ai_model SET config = ? WHERE id = ?", JSON.writeValueAsString(Map.of(
-                "defaultWidth", 64, "defaultHeight", 64, "asyncMode", true, "asyncTaskPollIntervalSeconds", 1,
+                "defaultWidth", 1024, "defaultHeight", 1024, "asyncMode", true, "asyncTaskPollIntervalSeconds", 1,
                 "supportReferenceImages", true, "referenceImageInputFormats", List.of("url"))), f.id);
         var multipart = new LinkedMultiValueMap<String, Object>();
         multipart.add("file", new ByteArrayResource(PNG) { @Override public String getFilename() { return "reference.png"; } });
@@ -336,7 +340,7 @@ class GenerationExecutionWiringIT {
         String protocol = mode.equals("async") ? "newapi" : "openai";
         jdbc.update("INSERT INTO afv_api_config(id, name, platform, image_protocol, api_url, api_key) VALUES (?, ?, ?, ?, ?, 'test-key')",
                 id, prompt, mode.equals("async") ? "newapi" : "openai_compatible", protocol, "http://localhost:" + PROVIDER.getAddress().getPort());
-        String config = mode.equals("async") ? "{\"defaultWidth\":64,\"defaultHeight\":64,\"asyncMode\":true,\"asyncTaskPollIntervalSeconds\":1}" : "{\"defaultWidth\":64,\"defaultHeight\":64}";
+        String config = mode.equals("async") ? "{\"defaultWidth\":1024,\"defaultHeight\":1024,\"asyncMode\":true,\"asyncTaskPollIntervalSeconds\":1}" : "{\"defaultWidth\":1024,\"defaultHeight\":1024}";
         jdbc.update("""
                 INSERT INTO afv_ai_model(id, name, code, model_type, model_protocol, api_config_id, config, max_concurrency,
                     multimodal_input_types, multimodal_input_transports, reasoning_effort_levels)
@@ -461,12 +465,12 @@ class GenerationExecutionWiringIT {
     }
 
     private ImageTask agentImage(Fixture f) {
-        return ImageTask.builder().userId(f.id).modelId(f.id).prompt(f.prompt).count(1).width(64).height(64).build();
+        return ImageTask.builder().userId(f.id).modelId(f.id).prompt(f.prompt).count(1).width(1024).height(1024).build();
     }
 
     private Map<String, Object> referenceRequest(Fixture f) throws Exception {
         jdbc.update("UPDATE afv_ai_model SET config = ? WHERE id = ?", JSON.writeValueAsString(Map.of(
-                "defaultWidth", 64, "defaultHeight", 64, "supportReferenceImages", true,
+                "defaultWidth", 1024, "defaultHeight", 1024, "supportReferenceImages", true,
                 "referenceImageInputFormats", List.of("data_uri"))), f.id);
         var request = new HashMap<>(f.request(1));
         request.put("refImageUrls", JSON.writeValueAsString(List.of("http://localhost:" + PROVIDER.getAddress().getPort()
@@ -482,7 +486,7 @@ class GenerationExecutionWiringIT {
 
     private record Fixture(long id, String prompt, HttpHeaders headers, Remote remote) {
         Map<String, Object> request(int count) {
-            return Map.of("requestId", UUID.randomUUID().toString(), "scope", Map.of("userId", id), "modelId", id, "prompt", prompt, "width", 64, "height", 64, "count", count);
+            return Map.of("requestId", UUID.randomUUID().toString(), "scope", Map.of("userId", id), "modelId", id, "prompt", prompt, "width", 1024, "height", 1024, "count", count);
         }
     }
     private String submit(Fixture f, Map<String, Object> body) { return ok(post(f, body)).asText(); }

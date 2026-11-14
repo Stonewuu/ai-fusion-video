@@ -26,13 +26,13 @@ import {
 } from "@/lib/api/ai-model";
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
   DialogClose,
 } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import { Button } from "@/components/ui/button";
 import {
   containerVariants,

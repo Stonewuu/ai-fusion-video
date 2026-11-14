@@ -6,11 +6,11 @@ import { Button } from "@/components/ui/button";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import type { ApiConfig } from "@/lib/api/ai-model";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { comfyUiWorkflowApi, type ComfyUiWorkflow } from "@/lib/api/comfyui-workflow";

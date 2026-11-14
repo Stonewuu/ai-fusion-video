@@ -6,12 +6,12 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
 import { useUnsavedDialog } from "@/components/settings/use-unsaved-dialog";
 import {

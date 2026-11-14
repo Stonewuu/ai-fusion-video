@@ -32,6 +32,7 @@ public class ExecutionRecordQueries {
     private final ExecutionRecoveryTargets targets;
     private final ExecutionRecoveryDecisionMapper decisions;
     private final AgentEventEnvelopeSanitizer sanitizer;
+    private final ExecutionRecordGenerationDetails generationDetails;
 
     public enum Filter {
         ALL, REVIEW, FAILED, CANCELLED;
@@ -54,7 +55,7 @@ public class ExecutionRecordQueries {
     }
 
     public record Detail(Summary task, Long projectId, String canvasId, boolean capacityHeld,
-                         List<Remote> remote, List<Audit> history) {
+                         List<Remote> remote, List<Audit> history, ExecutionRecordGenerationDetails.View generation) {
     }
 
     public record Page(List<Summary> items, boolean hasMore, int page, long total, long matchedTotal) {
@@ -90,7 +91,7 @@ public class ExecutionRecordQueries {
                 .map(value -> new Audit(value.getAdminUserId(), safeMessage(value.getNote()),
                         value.getCreatedAt().toInstant(ZoneOffset.UTC))).toList();
         return new Detail(summary(row, target), target.projectId(), target.canvasId(), target.capacityHeld(),
-                target.remote(), history);
+                target.remote(), history, kind == Kind.GENERATION ? generationDetails.get(id) : null);
     }
 
     private Summary summary(ExecutionRecordMapper.Row row, Target target) {

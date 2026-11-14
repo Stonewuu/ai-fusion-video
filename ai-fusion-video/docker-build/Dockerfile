@@ -4,6 +4,8 @@ LABEL maintainer="Stonewu <https://github.com/Stonewuu>"
 
 WORKDIR /app
 
+ENV SPRING_PROFILES_ACTIVE=docker
+
 RUN set -eux; \
   if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
     sed -i 's|http://archive.ubuntu.com/ubuntu/|https://archive.ubuntu.com/ubuntu/|g; s|http://security.ubuntu.com/ubuntu/|https://security.ubuntu.com/ubuntu/|g' /etc/apt/sources.list.d/ubuntu.sources; \

@@ -102,7 +102,11 @@ class CanvasProjectForkIT {
         JsonNode receipt=first.join(); assertThat(second.join()).isEqualTo(receipt);
         long target=receipt.path("result").path("id").asLong(); String canvas=receipt.path("result").path("canvasId").asText();
         assertThat(target).isNotEqualTo(project);
-        long asset=one("SELECT id FROM afv_asset WHERE project_id=?",target);
+        long asset=one("SELECT id FROM afv_asset WHERE project_id=? AND type='character'",target);
+        long sceneAsset=one("SELECT id FROM afv_asset WHERE project_id=? AND type='scene'",target);
+        long sceneItem=one("SELECT id FROM afv_asset_item WHERE asset_id=?",sceneAsset);
+        long propAsset=one("SELECT id FROM afv_asset WHERE project_id=? AND type='prop'",target);
+        long propItem=one("SELECT id FROM afv_asset_item WHERE asset_id=?",propAsset);
         long item=one("SELECT id FROM afv_asset_item WHERE asset_id=?",asset);
         long script=one("SELECT id FROM afv_script WHERE project_id=? AND deleted=FALSE",target);
         long scriptEpisode=one("SELECT id FROM afv_script_episode WHERE script_id=?",script);
@@ -111,16 +115,17 @@ class CanvasProjectForkIT {
         long boardEpisode=one("SELECT id FROM afv_storyboard_episode WHERE storyboard_id=?",board);
         long boardScene=one("SELECT id FROM afv_storyboard_scene WHERE storyboard_id=?",board);
         long shot=one("SELECT id FROM afv_storyboard_item WHERE storyboard_id=?",board);
-        assertThat(List.of(asset,item,script,scriptEpisode,scene,board,boardEpisode,boardScene,shot)).doesNotContain(id);
+        assertThat(List.of(asset,item,sceneAsset,sceneItem,propAsset,propItem,script,scriptEpisode,scene,board,boardEpisode,boardScene,shot)).doesNotContain(id,id+10,id+20);
         assertThat(one("SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(characters_json,'$[0].assetId')) AS UNSIGNED) FROM afv_script WHERE id=?",script)).isEqualTo(asset);
-        assertThat(one("SELECT scene_asset_id FROM afv_script_scene_item WHERE id=?",scene)).isEqualTo(asset);
+        assertThat(one("SELECT scene_asset_id FROM afv_script_scene_item WHERE id=?",scene)).isEqualTo(sceneAsset);
         assertThat(one("SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(dialogues,'$[0].character_asset_id')) AS UNSIGNED) FROM afv_script_scene_item WHERE id=?",scene)).isEqualTo(asset);
         assertThat(one("SELECT episode_id FROM afv_script_scene_item WHERE id=?",scene)).isEqualTo(scriptEpisode);
         assertThat(one("SELECT script_episode_id FROM afv_storyboard_episode WHERE id=?",boardEpisode)).isEqualTo(scriptEpisode);
         assertThat(one("SELECT episode_id FROM afv_storyboard_scene WHERE id=?",boardScene)).isEqualTo(boardEpisode);
         assertThat(one("SELECT storyboard_scene_id FROM afv_storyboard_item WHERE id=?",shot)).isEqualTo(boardScene);
-        assertThat(one("SELECT scene_asset_item_id FROM afv_storyboard_item WHERE id=?",shot)).isEqualTo(item);
+        assertThat(one("SELECT scene_asset_item_id FROM afv_storyboard_item WHERE id=?",shot)).isEqualTo(sceneItem);
         assertThat(one("SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(character_ids,'$[0]')) AS UNSIGNED) FROM afv_storyboard_item WHERE id=?",shot)).isEqualTo(item);
+        assertThat(one("SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(prop_ids,'$[0]')) AS UNSIGNED) FROM afv_storyboard_item WHERE id=?",shot)).isEqualTo(propItem);
         assertThat(one("SELECT version FROM afv_script WHERE id=?",script)).isEqualTo(5);
         assertThat(one("SELECT parsing_status FROM afv_script WHERE id=?",script)).isZero();
         assertThat(one("SELECT compose_status FROM afv_storyboard_episode WHERE id=?",boardEpisode)).isZero();
@@ -129,7 +134,7 @@ class CanvasProjectForkIT {
         assertThat(jdbc.queryForObject("SELECT first_frame_image_url FROM afv_storyboard_item WHERE id=?",String.class,shot)).isEqualTo("media://"+copied);
         assertThat(jdbc.queryForObject("SELECT cover_url FROM afv_asset WHERE id=?",String.class,asset)).isEqualTo("media://"+copied);
         assertThat(one("SELECT COUNT(*) FROM afv_media_copy WHERE media_id=?",copied)).isEqualTo(1);
-        assertThat(one("SELECT COUNT(*) FROM afv_resource_revision WHERE command_id=? AND before_json IS NULL",receipt.path("commandId").asText())).isEqualTo(10);
+        assertThat(one("SELECT COUNT(*) FROM afv_resource_revision WHERE command_id=? AND before_json IS NULL",receipt.path("commandId").asText())).isEqualTo(14);
         var copy=new Fixture(f.user(),target,canvas,f.headers());
         var graph=ok(get(copy,""));
         assertThat(graph.path("document").path("projectId").asLong()).isEqualTo(target);
@@ -212,10 +217,10 @@ class CanvasProjectForkIT {
         assertThat(preview.path("historicalObjects").asInt()).isEqualTo(2);
         var created=ok(post(f,"/project-forks",request(f))).path("result");
         long project=created.path("id").asLong();
-        long asset=one("SELECT id FROM afv_asset WHERE project_id=?",project);
+        long asset=one("SELECT id FROM afv_asset WHERE project_id=? AND type='character'",project);
         assertThat(one("SELECT deleted FROM afv_asset WHERE id=?",asset)).isEqualTo(1);
         assertThat(one("SELECT deleted FROM afv_asset_item WHERE asset_id=?",asset)).isEqualTo(1);
-        assertThat(one("SELECT scene_asset_id FROM afv_script_scene_item s JOIN afv_script p ON p.id=s.script_id WHERE p.project_id=?",project)).isEqualTo(asset);
+        assertThat(one("SELECT CAST(JSON_UNQUOTE(JSON_EXTRACT(character_asset_ids,'$[0]')) AS UNSIGNED) FROM afv_script_scene_item s JOIN afv_script p ON p.id=s.script_id WHERE p.project_id=?",project)).isEqualTo(asset);
     }
 
     @Test void copiedFixedBusinessResultKeepsOldVersionWhileTheIndependentCurrentObjectCanBeEdited() {
@@ -265,20 +270,20 @@ class CanvasProjectForkIT {
                 node("image",Map.of("resourceId",media),null)),List.of());
         var template=template(f);
         assertThat(template.toString()).doesNotContain(media,f.canvas(),"ownerId","userId","bgmTaskId");
-        assertThat(template.path("objects")).hasSize(10);
+        assertThat(template.path("objects")).hasSize(14);
         var bindings=mediaBindings(f,template,media);
         var input=templateRequest(f,template,bindings);
         var first=CompletableFuture.supplyAsync(()->ok(templatePost(f,"import",input)));
         var second=CompletableFuture.supplyAsync(()->ok(templatePost(f,"import",input)));
         var receipt=first.join(); assertThat(second.join()).isEqualTo(receipt);
         var copy=imported(f,receipt);
-        long asset=one("SELECT id FROM afv_asset WHERE project_id=?",copy.project());
+        long asset=one("SELECT id FROM afv_asset WHERE project_id=? AND type='scene'",copy.project());
         long item=one("SELECT id FROM afv_asset_item WHERE asset_id=?",asset);
         assertThat(one("SELECT i.scene_asset_item_id FROM afv_storyboard_item i JOIN afv_storyboard b ON b.id=i.storyboard_id WHERE b.project_id=?",copy.project())).isEqualTo(item);
         assertThat(one("SELECT s.scene_asset_id FROM afv_script_scene_item s JOIN afv_script p ON p.id=s.script_id WHERE p.project_id=?",copy.project())).isEqualTo(asset);
         assertThat(one("SELECT version FROM afv_script WHERE project_id=?",copy.project())).isEqualTo(5);
         assertThat(one("SELECT COUNT(*) FROM afv_canvas_run WHERE canvas_id=?",copy.canvas())).isZero();
-        assertThat(one("SELECT COUNT(*) FROM afv_resource_revision WHERE command_id=? AND before_json IS NULL",receipt.path("commandId").asText())).isEqualTo(10);
+        assertThat(one("SELECT COUNT(*) FROM afv_resource_revision WHERE command_id=? AND before_json IS NULL",receipt.path("commandId").asText())).isEqualTo(14);
         String alias=jdbc.queryForObject("SELECT id FROM afv_media_resource WHERE project_id=?",String.class,copy.project());
         assertThat(alias).isNotEqualTo(media);
         assertThat(one("SELECT version FROM afv_media_resource WHERE id=?",alias)).isZero();
@@ -441,17 +446,29 @@ class CanvasProjectForkIT {
         form.add("requestId",UUID.randomUUID().toString()); var headers=new HttpHeaders(); headers.putAll(f.headers()); headers.setContentType(MediaType.MULTIPART_FORM_DATA);
         return ok(http.postForEntity("/api/media-resources/upload",new HttpEntity<>(form,headers),JsonNode.class)).path("id").asText();
     }
-    private void seedStory(Fixture f,String media) {
-        long id=f.user(),project=f.project();
-        long script=one("SELECT id FROM afv_script WHERE project_id=?",project),board=one("SELECT id FROM afv_storyboard WHERE project_id=?",project);
-        jdbc.update("INSERT INTO afv_asset(id,user_id,project_id,name,type,owner_type,owner_id,cover_url) VALUES(?,?,?,'阿青','character',1,?,?)",id,id,project,id,"media://"+media);
-        jdbc.update("INSERT INTO afv_asset_item(id,asset_id,name,image_url) VALUES(?,?,'正面',?)",id,id,"media://"+media);
-        jdbc.update("UPDATE afv_script SET summary='原项目概要',characters_json=JSON_ARRAY(JSON_OBJECT('name','阿青','assetId',?)),version=4,parsing_status=1 WHERE id=?",id,script);
-        jdbc.update("INSERT INTO afv_script_episode(id,script_id,episode_number,title) VALUES(?,?,1,'第一集')",id,script);
-        jdbc.update("INSERT INTO afv_script_scene_item(id,script_id,episode_id,scene_heading,character_asset_ids,scene_asset_id,prop_asset_ids,dialogues) VALUES(?,?,?,'灯塔',JSON_ARRAY(?),?,JSON_ARRAY(?),JSON_ARRAY(JSON_OBJECT('character_asset_id',?,'type',1,'content','收到回信')))",id,script,id,id,id,id,id);
-        jdbc.update("INSERT INTO afv_storyboard_episode(id,storyboard_id,script_episode_id,episode_number,title,compose_status) VALUES(?,?,?,1,'分镜第一集',1)",id,board,id);
-        jdbc.update("INSERT INTO afv_storyboard_scene(id,storyboard_id,episode_id,scene_heading) VALUES(?,?,?,'灯塔')",id,board,id);
-        jdbc.update("INSERT INTO afv_storyboard_item(id,storyboard_id,storyboard_episode_id,storyboard_scene_id,content,character_ids,scene_asset_item_id,prop_ids,first_frame_image_url) VALUES(?,?,?,?,'画面',JSON_ARRAY(?),?,JSON_ARRAY(?),?)",id,board,id,id,id,id,id,"media://"+media);
+    private void seedStory(Fixture f, String media) {
+        long id = f.user();
+        long project = f.project();
+        long sceneAsset = id + 10;
+        long propAsset = id + 20;
+        long script = one("SELECT id FROM afv_script WHERE project_id=?", project);
+        long board = one("SELECT id FROM afv_storyboard WHERE project_id=?", project);
+        // 复制用例使用真实的三类资产，分别验证人物、场景和道具引用的重映射。
+        for (var type : List.of("character", "scene", "prop")) {
+            long assetId = type.equals("character") ? id : type.equals("scene") ? sceneAsset : propAsset;
+            jdbc.update("INSERT INTO afv_asset(id,user_id,project_id,name,type,owner_type,owner_id,cover_url) VALUES(?,?,?,?,?,1,?,?)",
+                    assetId, id, project, type, type, id, "media://" + media);
+            jdbc.update("INSERT INTO afv_asset_item(id,asset_id,name,image_url) VALUES(?,?,?,?)",
+                    assetId, assetId, type, "media://" + media);
+        }
+        jdbc.update("UPDATE afv_script SET summary='原项目概要',characters_json=JSON_ARRAY(JSON_OBJECT('name','阿青','assetId',?)),version=4,parsing_status=1 WHERE id=?", id, script);
+        jdbc.update("INSERT INTO afv_script_episode(id,script_id,episode_number,title) VALUES(?,?,1,'第一集')", id, script);
+        jdbc.update("INSERT INTO afv_script_scene_item(id,script_id,episode_id,scene_heading,character_asset_ids,scene_asset_id,prop_asset_ids,dialogues) VALUES(?,?,?,'灯塔',JSON_ARRAY(?),?,JSON_ARRAY(?),JSON_ARRAY(JSON_OBJECT('character_asset_id',?,'type',1,'content','收到回信')))",
+                id, script, id, id, sceneAsset, propAsset, id);
+        jdbc.update("INSERT INTO afv_storyboard_episode(id,storyboard_id,script_episode_id,episode_number,title,compose_status) VALUES(?,?,?,1,'分镜第一集',1)", id, board, id);
+        jdbc.update("INSERT INTO afv_storyboard_scene(id,storyboard_id,episode_id,scene_heading) VALUES(?,?,?,'灯塔')", id, board, id);
+        jdbc.update("INSERT INTO afv_storyboard_item(id,storyboard_id,storyboard_episode_id,storyboard_scene_id,content,character_ids,scene_asset_item_id,prop_ids,first_frame_image_url) VALUES(?,?,?,?,'画面',JSON_ARRAY(?),?,JSON_ARRAY(?),?)",
+                id, board, id, id, id, sceneAsset, propAsset, "media://" + media);
     }
     private String upload(Fixture f) throws Exception {
         var bytes=new ByteArrayOutputStream(); ImageIO.write(new BufferedImage(4,4,BufferedImage.TYPE_INT_RGB),"png",bytes);

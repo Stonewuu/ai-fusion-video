@@ -1,4 +1,5 @@
 import { http } from "./client";
+import type { GenerationExecutionInput } from "./generation-execution";
 
 export type ExecutionRecordKind = "GENERATION" | "TEXT" | "CANVAS_MEDIA" | "COMFY_TEST" | "EPISODE_AUDIO" | "AGENT_MODEL" | "MCP";
 
@@ -40,6 +41,21 @@ export interface ExecutionRecordDetail {
     responseRecorded: boolean;
   }>;
   history: Array<{ adminUserId: number; note: string; createdAt: string }>;
+  generation: {
+    kind: "IMAGE" | "VIDEO";
+    modelName: string;
+    modelCode: string;
+    input: GenerationExecutionInput;
+    phase: string;
+    pollAttempts: number;
+    resultReceived: boolean;
+    attempts: Array<{
+      id: string;
+      number: number;
+      submittedAt: string | null;
+      acknowledgedAt: string | null;
+    }>;
+  } | null;
 }
 
 export const executionRecordApi = {

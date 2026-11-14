@@ -5,7 +5,7 @@
         SELECT * FROM afv_storage_config WHERE id = #{id} AND deleted = FALSE FOR UPDATE
     </select>
     <select id="lockActiveDefaults" resultType="com.stonewu.fusion.entity.storage.StorageConfig">
-        SELECT id, type, base_path FROM afv_storage_config WHERE is_default = TRUE
+        SELECT * FROM afv_storage_config WHERE is_default = TRUE
             AND status = 1 AND deleted = FALSE ORDER BY id LIMIT 2 FOR UPDATE
     </select>
 </mapper>

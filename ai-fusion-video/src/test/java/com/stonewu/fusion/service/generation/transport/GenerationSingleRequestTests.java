@@ -1,5 +1,10 @@
 package com.stonewu.fusion.service.generation.transport;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import org.slf4j.LoggerFactory;
 import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationMessage;
 import com.alibaba.dashscope.aigc.imagegeneration.ImageGenerationParam;
 import com.alibaba.dashscope.aigc.videosynthesis.VideoSynthesisParam;
@@ -51,6 +56,36 @@ class GenerationSingleRequestTests {
     private int responseCode;
     private String responseBody;
     private final List<Received> received = new CopyOnWriteArrayList<>();
+
+    @Test
+    void debugTransportLogsExposeStagesWithoutCredentialsOrPayloads() throws IOException {
+        responseCode = 200;
+        responseBody = "private-result";
+        var logger = (Logger) LoggerFactory.getLogger(GenerationHttpLoggingListener.class);
+        Level previous = logger.getLevel();
+        var output = new ListAppender<ILoggingEvent>();
+        output.start();
+        logger.setLevel(Level.DEBUG);
+        logger.addAppender(output);
+        try {
+            var request = new Request.Builder()
+                    .url(base.replace("http://", "http://private-user:private-password@") + "/image?api_key=private-query")
+                    .header("Authorization", "Bearer private-token")
+                    .post(RequestBody.create("private-prompt", MediaType.get("text/plain"))).build();
+            try (var response = client().newCall(request).execute()) {
+                assertThat(response.body().string()).isEqualTo("private-result");
+            }
+            String logged = String.join("\n", output.list.stream().map(ILoggingEvent::getFormattedMessage).toList());
+            assertThat(logged).contains("HTTP 开始", "请求已发送", "已收到响应头", "status=200", "响应接收完成", "elapsedMs=");
+            assertThat(logged).doesNotContain("private-user", "private-password", "private-query", "private-token",
+                    "private-prompt", "private-result");
+            assertThat(received).hasSize(1);
+        } finally {
+            logger.detachAppender(output);
+            logger.setLevel(previous);
+            output.stop();
+        }
+    }
 
     @BeforeEach
     void start() throws IOException {

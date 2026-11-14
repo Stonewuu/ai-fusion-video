@@ -14,12 +14,12 @@ import { toastApiError } from "@/lib/api/toast-api-error";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import { Input } from "@/components/ui/input";
 import { SafeImage } from "@/components/media/managed-image";
 import { Textarea } from "@/components/ui/textarea";

@@ -9,6 +9,7 @@ import com.stonewu.fusion.convert.storage.StorageConfigConvert;
 import com.stonewu.fusion.entity.storage.StorageConfig;
 import com.stonewu.fusion.service.storage.StorageConfigOptions;
 import com.stonewu.fusion.service.storage.StorageConfigService;
+import com.stonewu.fusion.service.storage.BuiltInLocalStorage;
 import com.stonewu.fusion.service.storage.StorageConnectionTestResult;
 import com.stonewu.fusion.service.storage.StorageConnectionTestService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -34,6 +35,7 @@ public class StorageConfigController {
 
     private final StorageConfigService storageConfigService;
     private final StorageConnectionTestService storageConnectionTestService;
+    private final BuiltInLocalStorage builtIn;
 
     @PostMapping("/create")
     @Operation(summary = "创建存储配置")
@@ -72,6 +74,17 @@ public class StorageConfigController {
     @Operation(summary = "获取启用的存储配置列表")
     public CommonResult<List<StorageConfigRespVO>> list() {
         return success(StorageConfigConvert.INSTANCE.convertList(storageConfigService.getEnabledList()));
+    }
+
+    @GetMapping("/overview")
+    @Operation(summary = "获取用户存储配置与只读内置默认项")
+    public CommonResult<Overview> overview() {
+        var configurations = storageConfigService.getList();
+        return success(new Overview(StorageConfigConvert.INSTANCE.convertList(configurations),
+                configurations.isEmpty() ? StorageConfigConvert.INSTANCE.convert(builtIn.configuration()) : null));
+    }
+
+    public record Overview(List<StorageConfigRespVO> configurations, StorageConfigRespVO builtIn) {
     }
 
     @PutMapping("/set-default")

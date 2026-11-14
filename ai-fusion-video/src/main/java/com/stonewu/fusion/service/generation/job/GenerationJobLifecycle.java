@@ -18,6 +18,7 @@ import com.stonewu.fusion.service.generation.image.ImageGenerationService;
 import com.stonewu.fusion.service.generation.video.VideoGenerationService;
 import com.stonewu.fusion.service.media.MediaReference;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -31,6 +32,7 @@ import java.util.List;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class GenerationJobLifecycle {
     private final GenerationTasks tasks;
     private final GenerationItemStateMapper itemStates;
@@ -130,6 +132,10 @@ public class GenerationJobLifecycle {
             itemStates.failTaskItem(submission.kind(), itemId, submission.taskId(), message);
         }
         aggregate(submission.id());
+        if (!state.equals("CANCELLED")) {
+            log.error("生成任务结束: jobId={}, submissionId={}, state={}, phase={}, code={}",
+                    job.id(), submission.id(), state, job.phase(), code);
+        }
     }
 
     @Transactional(isolation = Isolation.READ_COMMITTED)

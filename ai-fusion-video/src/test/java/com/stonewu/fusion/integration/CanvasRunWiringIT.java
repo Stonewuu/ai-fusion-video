@@ -861,7 +861,7 @@ class CanvasRunWiringIT {
         String asset = id(), batch = id();
         create(f, List.of(resourceNode(asset, "asset", f.id), node(batch, "foreach", Map.of(
                 "inputType", "assetItem", "resultType", "image", "maxItems", 2, "operationKind", "imageGeneration",
-                "inputPort", "context", "outputPort", "images", "operationConfig", Map.of("modelId", f.id, "width", 32, "height", 32, "count", 1)))),
+                "inputPort", "context", "outputPort", "images", "operationConfig", Map.of("modelId", f.id, "width", 1024, "height", 1024, "count", 1)))),
                 List.of(edge(asset, "items", batch, "items", 0)));
         var preview = plan(f, "ALL", List.of(), Map.of());
         assertThat(preview.path("issues")).isEmpty();
@@ -874,7 +874,7 @@ class CanvasRunWiringIT {
         var f = fixture();
         model(f);
         String image = id();
-        create(f, List.of(node(image, "imageGeneration", Map.of("modelId", f.id, "prompt", "canvas-" + f.id, "width", 32, "height", 32, "count", 1))), List.of());
+        create(f, List.of(node(image, "imageGeneration", Map.of("modelId", f.id, "prompt", "canvas-" + f.id, "width", 1024, "height", 1024, "count", 1))), List.of());
         var p = plan(f, "ALL", List.of(), Map.of());
         assertThat(p.path("issues")).isEmpty();
         assertThat(p.at("/cost/images").asInt()).isEqualTo(1);
@@ -910,7 +910,7 @@ class CanvasRunWiringIT {
         long secondModel = IDS.incrementAndGet();
         model(new Fixture(secondModel, f.canvas, f.headers));
         jdbc.update("UPDATE afv_ai_model SET config=? WHERE id IN (?,?)", JSON.writeValueAsString(Map.of(
-                "defaultWidth", 32, "defaultHeight", 32, "supportReferenceImages", true,
+                "defaultWidth", 1024, "defaultHeight", 1024, "supportReferenceImages", true,
                 "referenceImageInputFormats", List.of("data_uri"), "maxReferenceImages", 1)), f.id, secondModel);
         String promptA = "journey-branch-a-" + f.id, promptB = "journey-branch-b-" + f.id;
         var red = new BufferedImage(32, 32, BufferedImage.TYPE_INT_RGB);
@@ -923,11 +923,15 @@ class CanvasRunWiringIT {
         jdbc.update("INSERT INTO afv_storyboard(id,project_id,title) VALUES(?,?,'分支验收分镜')", f.id, f.id);
         jdbc.update("INSERT INTO afv_storyboard_episode(id,storyboard_id,episode_number,title) VALUES(?,?,1,'雨夜灯塔')", f.id, f.id);
         jdbc.update("INSERT INTO afv_storyboard_scene(id,storyboard_id,episode_id) VALUES(?,?,?)", f.id, f.id, f.id);
-        jdbc.update("INSERT INTO afv_storyboard_item(id,storyboard_id,storyboard_episode_id,storyboard_scene_id,content) VALUES(?,?,?,?,'保持人物造型的灯塔镜头')", f.id, f.id, f.id, f.id);
+        jdbc.update("INSERT INTO afv_asset(id,project_id,name,type,owner_type,owner_id,user_id) VALUES(?,?,'雨夜灯塔','scene',1,?,?)",
+                f.id, f.id, f.id, f.id);
+        jdbc.update("INSERT INTO afv_asset_item(id,asset_id,name,item_type) VALUES(?,?,'灯塔外景','original')", f.id, f.id);
+        jdbc.update("INSERT INTO afv_storyboard_item(id,storyboard_id,storyboard_episode_id,storyboard_scene_id,content,scene_asset_item_id) VALUES(?,?,?,?,'保持人物造型的灯塔镜头',?)",
+                f.id, f.id, f.id, f.id, f.id);
         String source = id(), a = id(), b = id(), choice = id(), target = id(), write = id();
         create(f, List.of(node(source, "image", Map.of("resourceId", reference)),
-                        node(a, "imageGeneration", Map.of("modelId", f.id, "prompt", promptA, "width", 32, "height", 32, "count", 1)),
-                        node(b, "imageGeneration", Map.of("modelId", secondModel, "prompt", promptB, "width", 32, "height", 32, "count", 1)),
+                        node(a, "imageGeneration", Map.of("modelId", f.id, "prompt", promptA, "width", 1024, "height", 1024, "count", 1)),
+                        node(b, "imageGeneration", Map.of("modelId", secondModel, "prompt", promptB, "width", 1024, "height", 1024, "count", 1)),
                         node(choice, "selection", Map.of("valueType", "image")), resourceNode(target, "shot", f.id),
                         node(write, "writeback", writeback("shot", "image", "firstFrameImageUrl"))),
                 List.of(edge(source, "media", a, "referenceImages", 0), edge(source, "media", b, "referenceImages", 0),
@@ -1464,7 +1468,7 @@ class CanvasRunWiringIT {
         jdbc.update("""
                 INSERT INTO afv_ai_model(id, name, code, model_type, model_protocol, api_config_id, config, max_concurrency,
                     multimodal_input_types, multimodal_input_transports, reasoning_effort_levels)
-                VALUES (?, '模拟图片模型', 'gpt-image-2', 2, 'openai', ?, '{"defaultWidth":32,"defaultHeight":32}', 1, JSON_ARRAY(), JSON_OBJECT(), JSON_ARRAY())
+                VALUES (?, '模拟图片模型', 'gpt-image-2', 2, 'openai', ?, '{"defaultWidth":1024,"defaultHeight":1024}', 1, JSON_ARRAY(), JSON_OBJECT(), JSON_ARRAY())
                 """, f.id, f.id);
     }
     private void audioModel(Fixture f) {

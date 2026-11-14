@@ -2,10 +2,10 @@
 import { SafeImage } from "@/components/media/managed-image";
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 export function ImageLightbox({
   src,
   alt,

@@ -42,6 +42,11 @@ export interface StorageConfigSaveReq {
   remark?: string;
 }
 
+export interface StorageOverview {
+  configurations: StorageConfig[];
+  builtIn: StorageConfig | null;
+}
+
 export interface StorageConfigOptions {
   pathStyleAccessEnabled?: boolean;
   chunkedEncodingEnabled?: boolean;
@@ -167,6 +172,9 @@ export function renderEndpointTemplate(provider?: string, region?: string) {
 // ============================================================
 
 export const storageConfigApi = {
+  async overview(): Promise<StorageOverview> {
+    return http.get("/api/storage/config/overview");
+  },
   async create(data: StorageConfigSaveReq): Promise<number> {
     return http.post("/api/storage/config/create", data);
   },

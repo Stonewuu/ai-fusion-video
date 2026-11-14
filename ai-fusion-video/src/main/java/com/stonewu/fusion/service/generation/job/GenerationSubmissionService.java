@@ -25,7 +25,9 @@ import com.stonewu.fusion.service.generation.image.strategy.ImageGenerationStrat
 import com.stonewu.fusion.service.generation.video.VideoGenerationService;
 import com.stonewu.fusion.service.generation.video.strategy.VideoGenerationStrategyRouter;
 import com.stonewu.fusion.service.resource.model.ResourceCommandContext;
+import com.stonewu.fusion.service.media.ManagedStorageConfiguration;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Isolation;
@@ -41,6 +43,7 @@ import java.util.UUID;
  */
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class GenerationSubmissionService {
     private final GenerationSubmissionMapper submissions;
     private final RemoteGenerationJobMapper remoteJobs;
@@ -59,6 +62,7 @@ public class GenerationSubmissionService {
     private final GenerationInputVersions inputVersions;
     private final CanvasAgentNodeGeneration agentNodes;
     private final AssetImageReferencePolicy assetImageReferences;
+    private final ManagedStorageConfiguration storage;
 
     @CacheEvict(value = {"imageTask", "imageItems"}, allEntries = true)
     @Transactional(isolation = Isolation.READ_COMMITTED)
@@ -90,6 +94,7 @@ public class GenerationSubmissionService {
         }
         task.setWorkflowVersionId(version(model, task.getWorkflowVersionId()));
         capabilities.validateImageTask(model, task);
+        storage.requireDefault();
         nodeRunId = agentNodes.admit(context, GenerationKind.IMAGE, model, task.getCount(), null, nodeRunId);
         assetImageReferences.enforce(task, context);
         inputVersions.freeze(task, context.actor());
@@ -154,6 +159,7 @@ public class GenerationSubmissionService {
                     rules != null && rules.defaultGenerateAudio() != null ? rules.defaultGenerateAudio() : true);
         }
         capabilities.validateVideoTask(model, task);
+        storage.requireDefault();
         Integer budgetDuration = rules == null ? task.getDuration() : Integer.valueOf(
                 VideoModelRules.budgetSeconds(modelConfig, task.getDuration()));
         nodeRunId = agentNodes.admit(context, GenerationKind.VIDEO, model, task.getCount(), budgetDuration, nodeRunId);
@@ -238,6 +244,7 @@ public class GenerationSubmissionService {
 
     private void accepted(String id) {
         outbox.enqueue("generation:" + id + ":1", "GENERATION_ACCEPTED", id, GenerationOutbox.state(id, 1, "QUEUED"));
+        log.debug("生成任务已受理: submissionId={}", id);
     }
 
     private AiModel freeze(Long modelId, GenerationKind kind, Long versionId) {

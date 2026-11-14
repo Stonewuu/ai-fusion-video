@@ -5,12 +5,12 @@ import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import type { useGenerationSubmission } from "./use-generation-submission";
 
 export function GenerationSubmissionNotice({
@@ -28,9 +28,9 @@ export function GenerationSubmissionNotice({
   return (
     <section
       role="status"
-      className="mb-3 space-y-3 rounded-lg border border-border/30 bg-card p-4"
+      className="mb-3 flex min-w-0 flex-col gap-3 rounded-xl border border-border/30 bg-card p-3 sm:flex-row sm:items-start sm:justify-between"
     >
-      <div className="space-y-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <h2 className="flex items-center gap-2 text-sm font-medium">
           {submission.busy && (
             <Loader2 className="size-4 animate-spin motion-reduce:animate-none" />
@@ -64,11 +64,10 @@ export function GenerationSubmissionNotice({
           </p>
         )}
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex shrink-0 flex-wrap gap-2">
         {submission.pending ? (
           <>
             <Button
-              size="sm"
               disabled={submission.busy}
               onClick={() =>
                 void submission.retry().then((receipt) => {
@@ -82,7 +81,6 @@ export function GenerationSubmissionNotice({
             </Button>
             <Button
               variant="outline"
-              size="sm"
               disabled={submission.busy}
               onClick={() => setWithdrawing(true)}
             >
@@ -91,13 +89,13 @@ export function GenerationSubmissionNotice({
           </>
         ) : (
           submission.error && (
-            <Button variant="outline" size="sm" onClick={submission.reload}>
+            <Button variant="outline" onClick={submission.reload}>
               重新读取状态
             </Button>
           )
         )}
         {submission.corrupt && (
-          <Button variant="ghost" size="sm" onClick={() => setClearing(true)}>
+          <Button variant="ghost" onClick={() => setClearing(true)}>
             清理本地记录
           </Button>
         )}

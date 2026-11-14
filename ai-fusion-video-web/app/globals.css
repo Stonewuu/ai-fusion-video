@@ -470,6 +470,27 @@ html.dark :where([data-slot="dialog-content"],
   backdrop-filter: none;
 }
 
+/* 二级弹窗使用实色表面；遮罩只叠加主题色，不重复模糊。
+ * 覆盖嵌套弹窗，以及全局确认框等独立 Portal 的叠加场景。
+ */
+[data-slot="dialog-content"][data-nested],
+:is([data-slot="dialog-portal"], [data-slot="sheet-portal"]):has(
+  > :is([data-slot="dialog-content"], [data-slot="sheet-content"])[data-open]
+) ~ :is([data-slot="dialog-portal"], [data-slot="sheet-portal"])
+  > :is([data-slot="dialog-content"], [data-slot="sheet-content"]) {
+  background-color: var(--background);
+  backdrop-filter: none;
+}
+
+[data-slot="dialog-overlay"][data-modal-layer="nested"],
+:is([data-slot="dialog-portal"], [data-slot="sheet-portal"]):has(
+  > :is([data-slot="dialog-content"], [data-slot="sheet-content"])[data-open]
+) ~ :is([data-slot="dialog-portal"], [data-slot="sheet-portal"])
+  > :is([data-slot="dialog-overlay"], [data-slot="sheet-overlay"]) {
+  background-color: color-mix(in oklab, var(--background) 65%, transparent);
+  backdrop-filter: none;
+}
+
 /* View Transitions API - 主题切换动画（动画由 JS animate() 控制） */
 ::view-transition-old(root) {
   animation: none;

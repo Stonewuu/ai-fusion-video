@@ -49,7 +49,7 @@ export function executionGuidance(item: GenerationExecutionItem) {
   return null;
 }
 
-export function executionParameters(data: GenerationExecution) {
+export function executionParameters(data: Pick<GenerationExecution, "kind" | "input">) {
   const p = data.input.parameters;
   const video = data.kind === "VIDEO";
   const parameters = [

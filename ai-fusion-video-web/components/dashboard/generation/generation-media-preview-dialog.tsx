@@ -14,11 +14,11 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogClose,
-  DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
 import { SafeImage } from "@/components/media/managed-image";
 import { cn } from "@/lib/utils";
 

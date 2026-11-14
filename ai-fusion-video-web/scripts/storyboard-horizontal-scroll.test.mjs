@@ -27,18 +27,16 @@ class Viewport extends EventTarget {
 }
 
 function fixture(t) {
-  let observer;
+  const observer = { disconnected: false };
   const previous = globalThis.ResizeObserver;
   globalThis.ResizeObserver = class {
-    disconnected = false;
     constructor(callback) {
-      this.notify = callback;
-      observer = this;
+      observer.notify = callback;
     }
     observe() {
     }
     disconnect() {
-      this.disconnected = true;
+      observer.disconnected = true;
     }
   };
   t.after(() => {

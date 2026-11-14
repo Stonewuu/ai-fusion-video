@@ -32,7 +32,7 @@ Thank you to the following sponsors for supporting AI Fusion Video!
       <td colspan="2" valign="top">
         <p align="center">
           <a href="https://www.infistar.cc/register?aff=KRJVKLFP&amp;ref_source=link" target="_blank" rel="noopener noreferrer">
-            <img src="assets/sponsors/infistar-banner.png" alt="Infistar.cc: a one-stop API platform for leading AI models worldwide" width="920" />
+            <img src="assets/sponsors/infistar-banner-en.png" alt="Infistar.cc: a one-stop API platform for leading AI models worldwide" width="920" />
           </a>
         </p>
         <p><strong>Thank you to <a href="https://www.infistar.cc/register?aff=KRJVKLFP&amp;ref_source=link" target="_blank" rel="noopener noreferrer">Infistar.cc (无限星河)</a> for sponsoring this project! | All-model API access · Powering AI video creation</strong></p>
