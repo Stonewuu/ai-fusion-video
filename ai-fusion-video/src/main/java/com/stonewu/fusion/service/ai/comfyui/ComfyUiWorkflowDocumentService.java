@@ -161,7 +161,19 @@ public class ComfyUiWorkflowDocumentService {
                 String inputName = requiredText(binding, "inputName", "输入绑定缺少 inputName");
                 String valueType = requiredText(binding, "valueType", "输入绑定缺少 valueType")
                         .toLowerCase(Locale.ROOT);
-                Integer index = binding.hasNonNull("index") ? binding.get("index").asInt() : null;
+                if (binding.hasNonNull("index") && (!binding.get("index").isIntegralNumber()
+                        || !binding.get("index").canConvertToInt())) {
+                    throw invalid("输入绑定 index 必须是非负整数");
+                }
+                Integer index = binding.hasNonNull("index") ? binding.get("index").intValue() : null;
+                if (binding.has("optional") && !binding.get("optional").isBoolean()) {
+                    throw invalid("输入绑定 optional 必须为布尔值");
+                }
+                boolean optional = binding.path("optional").asBoolean(false);
+                if (optional && !Set.of("referenceImages", "firstFrame", "lastFrame", "referenceVideos",
+                        "referenceAudios").contains(businessField)) {
+                    throw invalid("只有媒体输入可以设置为可选");
+                }
                 if (!VALUE_TYPES.contains(valueType)) {
                     throw invalid("不支持的输入绑定 valueType: " + valueType);
                 }
@@ -180,7 +192,7 @@ public class ComfyUiWorkflowDocumentService {
                     throw invalid("同一个节点输入不能重复绑定: " + nodeId + "." + inputName);
                 }
                 resolved.add(new ComfyUiInputBinding(
-                        businessField, nodeId, inputName, valueType, index));
+                        businessField, nodeId, inputName, valueType, index, optional));
                 if (resolved.size() > MAX_BINDINGS) {
                     throw invalid("输入绑定数量不能超过 " + MAX_BINDINGS);
                 }

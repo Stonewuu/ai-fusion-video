@@ -7,12 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { getApiErrorMessage } from "@/lib/api/api-error";
-import { uploadFile } from "@/lib/api/storage";
+import { uploadGenerationReference } from "@/components/dashboard/generation/generation-reference-upload";
 import type { ComfyUiBindingValueType } from "@/lib/api/comfyui-workflow";
 
 export interface ComfyUiTestField {
   name: string;
   type: ComfyUiBindingValueType;
+  optional?: boolean;
 }
 const labels: Record<string, string> = {
   prompt: "提示词",
@@ -22,10 +23,22 @@ const labels: Record<string, string> = {
   seed: "随机种子",
   count: "数量",
   duration: "时长",
+  referenceImages: "参考图片",
+  firstFrame: "首帧",
+  lastFrame: "尾帧",
+  referenceVideos: "参考视频",
+  referenceAudios: "参考音频",
   referenceImageUrls: "参考图片",
   firstFrameUrl: "首帧",
   lastFrameUrl: "尾帧",
 };
+
+const uploadSettings = {
+  image: { label: "图片", accept: "image/*", maxMb: 20 },
+  video: { label: "视频", accept: "video/*", maxMb: 100 },
+  audio: { label: "音频", accept: "audio/*", maxMb: 100 },
+} as const;
+type UploadKind = keyof typeof uploadSettings;
 
 export function ComfyUiTestFields({
   fields,
@@ -43,7 +56,7 @@ export function ComfyUiTestFields({
   onUploading: (field: string, uploading: boolean) => void;
 }) {
   return (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid min-w-0 gap-4 md:grid-cols-2">
       {fields.map((field) => (
         <TestField
           key={field.name}
@@ -81,7 +94,16 @@ function TestField({
   const list =
     field.type === "string_list" || field.type.startsWith("uploaded_");
   const label = labels[field.name] ?? field.name;
-  const upload = async (files: File[]) => {
+  const mediaKind =
+    field.type === "uploaded_image"
+      ? "image"
+      : field.type === "uploaded_video"
+        ? "video"
+        : field.type === "uploaded_audio"
+          ? "audio"
+          : null;
+  const upload = async (files: File[], kind: UploadKind) => {
+    const config = uploadSettings[kind];
     setUploading(true);
     onUploading(true);
     setError(null);
@@ -90,11 +112,17 @@ function TestField({
         files.length > 64 ||
         files.some(
           (file) =>
-            !file.type.startsWith("image/") || file.size > 20 * 1024 * 1024,
+            !file.type.startsWith(`${kind}/`) ||
+            file.size > config.maxMb * 1024 * 1024,
         )
-      )
-        throw new Error("每次最多上传 64 张不超过 20MB 的图片。");
-      for (const file of files) onAppend([await uploadFile(file, "images")]);
+      ) {
+        throw new Error(
+          `每次最多上传 64 个不超过 ${config.maxMb}MB 的${config.label}文件。`,
+        );
+      }
+      for (const file of files) {
+        onAppend([await uploadGenerationReference(file, kind)]);
+      }
     } catch (failure) {
       setError(getApiErrorMessage(failure));
     } finally {
@@ -103,13 +131,20 @@ function TestField({
     }
   };
   return (
-    <div className="space-y-2">
-      <Label htmlFor={id}>{label}</Label>
+    <div className="flex min-w-0 flex-col gap-2 p-1">
+      <Label htmlFor={id}>
+        {label}
+        {field.optional && (
+          <span className="text-xs text-muted-foreground">（可选）</span>
+        )}
+      </Label>
       {list ? (
         <Textarea
           id={id}
           value={value}
           disabled={disabled || uploading}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${id}-error` : undefined}
           onChange={(event) => onChange(event.target.value)}
           placeholder="每行一项，可填写媒体引用、URL 或 Data URI"
         />
@@ -124,6 +159,8 @@ function TestField({
           step={field.type === "integer" ? "1" : "any"}
           value={value}
           disabled={disabled}
+          aria-invalid={Boolean(error)}
+          aria-describedby={error ? `${id}-error` : undefined}
           placeholder={
             field.type === "boolean"
               ? "true 或 false"
@@ -132,19 +169,22 @@ function TestField({
           onChange={(event) => onChange(event.target.value)}
         />
       )}
-      {field.type === "uploaded_image" && (
+      {field.optional && (
+        <p className="text-xs text-muted-foreground">留空时不使用此输入</p>
+      )}
+      {mediaKind && (
         <>
           <input
             ref={input}
             type="file"
             multiple
-            accept="image/*"
+            accept={uploadSettings[mediaKind].accept}
             className="hidden"
             aria-label={`上传${label}`}
             onChange={(event) => {
               const files = Array.from(event.target.files ?? []);
               event.target.value = "";
-              void upload(files);
+              void upload(files, mediaKind);
             }}
           />
           <Button
@@ -154,12 +194,12 @@ function TestField({
             onClick={() => input.current?.click()}
           >
             <Upload />
-            {uploading ? "上传中…" : "上传图片"}
+            {uploading ? "上传中…" : `上传${uploadSettings[mediaKind].label}`}
           </Button>
         </>
       )}
       {error && (
-        <p role="alert" className="text-xs text-destructive">
+        <p id={`${id}-error`} role="alert" className="text-xs text-destructive">
           {error}
         </p>
       )}

@@ -73,27 +73,29 @@ public class ComfyUiWorkflowCapabilities {
         JSONObject inputs = new JSONObject();
         for (String field : fields) {
             var matching = bindings.stream().filter(binding -> field.equals(binding.businessField())).toList();
-            if (matching.stream().anyMatch(binding -> "uploaded_video".equals(binding.valueType())
-                    || "uploaded_audio".equals(binding.valueType()))) {
-                throw invalid("当前接入不支持视频或音频文件上传绑定：" + field);
-            }
             var indices = new TreeSet<Integer>();
+            var requiredIndices = new TreeSet<Integer>();
             boolean wholeList = false;
             for (var binding : matching) {
                 if (binding.index() == null && "string_list".equals(binding.valueType())) {
                     wholeList = true;
                 } else {
-                    indices.add(binding.index() == null ? 0 : binding.index());
+                    int index = binding.index() == null ? 0 : binding.index();
+                    indices.add(index);
+                    if (!binding.optional()) {
+                        requiredIndices.add(index);
+                    }
                 }
             }
-            int minimumWhenProvided = indices.isEmpty() ? 0 : indices.last() + 1;
-            if (List.of("firstFrame", "lastFrame").contains(field) && minimumWhenProvided > 1) {
+            int workflowMaximum = indices.isEmpty() ? 0 : indices.last() + 1;
+            int minimumWhenProvided = requiredIndices.isEmpty() ? 0 : requiredIndices.last() + 1;
+            if (List.of("firstFrame", "lastFrame").contains(field) && workflowMaximum > 1) {
                 throw invalid(inputLabel(field) + " 只接收一张图片，不能绑定多个索引");
             }
-            if (!wholeList && indices.size() != minimumWhenProvided) {
+            if (!wholeList && indices.size() != workflowMaximum) {
                 throw invalid("输入 " + inputLabel(field) + " 的索引必须从 0 连续绑定，不能遗漏素材");
             }
-            Integer maximum = wholeList ? null : minimumWhenProvided;
+            Integer maximum = wholeList ? null : workflowMaximum;
             Integer usageLimit = MEDIA_FIELDS.contains(field) ? limit(configured, limits, field) : null;
             if (usageLimit != null) {
                 maximum = maximum == null ? usageLimit : Math.min(maximum, usageLimit);
@@ -104,7 +106,7 @@ public class ComfyUiWorkflowCapabilities {
             }
             inputs.set(field, new JSONObject().set("maximum", maximum).set("minimum", 0)
                     .set("minimumWhenProvided", minimumWhenProvided)
-                    .set("workflowMaximum", wholeList ? null : minimumWhenProvided)
+                    .set("workflowMaximum", wholeList ? null : workflowMaximum)
                     .set("usageMaximum", usageLimit));
         }
         Integer totalLimit = limit(configured, limits, "imageInputs");
@@ -143,6 +145,10 @@ public class ComfyUiWorkflowCapabilities {
         boolean anyImages = result.getBool("supportReferenceImages") || result.getBool("supportFirstFrame")
                 || result.getBool("supportLastFrame");
         result.set("referenceImageInputFormats", anyImages ? List.of("url", "data_uri") : List.of());
+        result.set("referenceVideoInputFormats", result.getBool("supportReferenceVideos")
+                ? List.of("url", "data_uri") : List.of());
+        result.set("referenceAudioInputFormats", result.getBool("supportReferenceAudios")
+                ? List.of("url", "data_uri") : List.of());
         result.set("supportDataUriInput", anyImages);
         Integer imageMaximum = sumMaximum(inputs, "firstFrame", "lastFrame", "referenceImages");
         if (totalLimit != null) {

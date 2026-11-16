@@ -76,7 +76,7 @@ public class ComfyUiGenerationExecutor {
                                              String taskKey,
                                              Map<String, Object> rawValues) {
         Map<String, Object> values = new LinkedHashMap<>(rawValues == null ? Map.of() : rawValues);
-        uploadBoundImages(context, taskKey, values);
+        uploadBoundMedia(context, taskKey, values);
         ObjectNode prompt = renderer.render(context.model().getModelType(), context.version(), values);
         return new ComfyUiPreparedSubmission(context, UUID.randomUUID().toString(), prompt);
     }
@@ -121,32 +121,36 @@ public class ComfyUiGenerationExecutor {
         return nativeClient.cancelJob(context.apiConfig(), promptId);
     }
 
-    private void uploadBoundImages(ComfyUiExecutionContext context,
+    private void uploadBoundMedia(ComfyUiExecutionContext context,
                                    String taskKey,
                                    Map<String, Object> values) {
         List<ComfyUiInputBinding> bindings = documentService.parseInputBindings(
                 context.model().getModelType(), context.version().getApiWorkflowJson(),
                 context.version().getInputBindingsJson());
         validateMediaCoverage(bindings, values);
-        Set<String> imageFields = new LinkedHashSet<>();
+        Map<String, String> mediaFields = new LinkedHashMap<>();
         for (ComfyUiInputBinding binding : bindings) {
-            if ("uploaded_video".equals(binding.valueType())
-                    || "uploaded_audio".equals(binding.valueType())) {
-                throw new BusinessException(400,
-                        "Native API 第一版不支持视频/音频文件上传绑定: " + binding.businessField());
-            }
-            if ("uploaded_image".equals(binding.valueType())) {
-                imageFields.add(binding.businessField());
+            if (binding.valueType().startsWith("uploaded_")) {
+                String kind = binding.valueType().substring("uploaded_".length());
+                String previous = mediaFields.putIfAbsent(binding.businessField(), kind);
+                if (previous != null && !previous.equals(kind)) {
+                    throw new BusinessException(400, "同一工作流输入不能绑定不同媒体类型: " + binding.businessField());
+                }
             }
         }
-        for (String field : imageFields) {
+        for (var entry : mediaFields.entrySet()) {
+            String field = entry.getKey();
             Object raw = values.get(field);
             if (raw == null) {
                 continue;
             }
             List<String> sources = toStringList(raw, field);
-            values.put(field, inputResourceService.uploadImages(
-                    context.apiConfig(), taskKey, field, sources));
+            if ("image".equals(entry.getValue())) {
+                values.put(field, inputResourceService.uploadImages(context.apiConfig(), taskKey, field, sources));
+            } else {
+                values.put(field, inputResourceService.uploadMedia(
+                        context.apiConfig(), taskKey, field, sources, entry.getValue()));
+            }
         }
     }
 
@@ -172,6 +176,9 @@ public class ComfyUiGenerationExecutor {
                     }
                 } else {
                     if (binding.index() >= count) {
+                        if (binding.optional()) {
+                            continue;
+                        }
                         throw new BusinessException(400, "工作流输入 " + field + " 缺少索引 " + binding.index());
                     }
                     covered.add(binding.index());
@@ -193,13 +200,13 @@ public class ComfyUiGenerationExecutor {
         if (raw instanceof List<?> list) {
             return list.stream().map(value -> {
                 if (value == null || value.toString().isBlank()) {
-                    throw new BusinessException(400, "ComfyUI 图片输入包含空值: " + field);
+                    throw new BusinessException(400, "ComfyUI 媒体输入包含空值: " + field);
                 }
                 return value.toString();
             }).toList();
         }
         if (raw.toString().isBlank()) {
-            throw new BusinessException(400, "ComfyUI 图片输入不能为空: " + field);
+            throw new BusinessException(400, "ComfyUI 媒体输入不能为空: " + field);
         }
         return List.of(raw.toString());
     }

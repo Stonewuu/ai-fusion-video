@@ -16,8 +16,17 @@ export interface FlatComfyUiInputBinding extends ComfyUiInputBinding {
   businessField: string;
 }
 
-export const COMFYUI_COMMON_INPUTS = ["prompt", "negativePrompt", "seed", "count"] as const;
-export const COMFYUI_IMAGE_INPUTS = ["width", "height", "referenceImages"] as const;
+export const COMFYUI_COMMON_INPUTS = [
+  "prompt",
+  "negativePrompt",
+  "seed",
+  "count",
+] as const;
+export const COMFYUI_IMAGE_INPUTS = [
+  "width",
+  "height",
+  "referenceImages",
+] as const;
 export const COMFYUI_VIDEO_INPUTS = [
   "width",
   "height",
@@ -55,14 +64,44 @@ export const COMFYUI_OUTPUT_ROLE_OPTIONS = [
   { value: "auxiliary", label: "附加结果" },
 ] as const;
 
-export function getComfyUiBusinessFields(modelType: ComfyUiWorkflowModelType): string[] {
+export function getComfyUiBusinessFields(
+  modelType: ComfyUiWorkflowModelType,
+): string[] {
   return [
     ...COMFYUI_COMMON_INPUTS,
     ...(modelType === 2 ? COMFYUI_IMAGE_INPUTS : COMFYUI_VIDEO_INPUTS),
   ];
 }
 
-export function parseComfyUiNodes(apiWorkflowJson: string): ComfyUiNodeOption[] {
+export function isComfyUiMediaField(field: string): boolean {
+  return [
+    "referenceImages",
+    "firstFrame",
+    "lastFrame",
+    "referenceVideos",
+    "referenceAudios",
+  ].includes(field);
+}
+
+export function updateComfyUiInputBinding(
+  row: FlatComfyUiInputBinding,
+  patch: Partial<FlatComfyUiInputBinding>,
+  nodes: ComfyUiNodeOption[],
+): FlatComfyUiInputBinding {
+  const next = { ...row, ...patch };
+  if (patch.nodeId !== undefined) {
+    next.inputName =
+      nodes.find((node) => node.id === patch.nodeId)?.inputNames[0] || "";
+  }
+  if (!isComfyUiMediaField(next.businessField)) {
+    delete next.optional;
+  }
+  return next;
+}
+
+export function parseComfyUiNodes(
+  apiWorkflowJson: string,
+): ComfyUiNodeOption[] {
   if (!apiWorkflowJson.trim()) return [];
   const parsed = JSON.parse(apiWorkflowJson) as Record<string, unknown>;
   if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
@@ -72,17 +111,31 @@ export function parseComfyUiNodes(apiWorkflowJson: string): ComfyUiNodeOption[] 
     throw new Error("检测到 UI-format，请在 ComfyUI 中使用 Export (API) 导出");
   }
   return Object.entries(parsed).map(([id, rawNode]) => {
-    const node = rawNode as { class_type?: unknown; inputs?: unknown; _meta?: unknown };
-    if (!node || typeof node !== "object" || typeof node.class_type !== "string") {
+    const node = rawNode as {
+      class_type?: unknown;
+      inputs?: unknown;
+      _meta?: unknown;
+    };
+    if (
+      !node ||
+      typeof node !== "object" ||
+      typeof node.class_type !== "string"
+    ) {
       throw new Error(`节点 ${id} 缺少 class_type`);
     }
-    if (!node.inputs || Array.isArray(node.inputs) || typeof node.inputs !== "object") {
+    if (
+      !node.inputs ||
+      Array.isArray(node.inputs) ||
+      typeof node.inputs !== "object"
+    ) {
       throw new Error(`节点 ${id} 缺少 inputs 对象`);
     }
-    const metadata = node._meta && !Array.isArray(node._meta) && typeof node._meta === "object"
-      ? node._meta as { title?: unknown }
-      : undefined;
-    const title = typeof metadata?.title === "string" ? metadata.title.trim() : "";
+    const metadata =
+      node._meta && !Array.isArray(node._meta) && typeof node._meta === "object"
+        ? (node._meta as { title?: unknown })
+        : undefined;
+    const title =
+      typeof metadata?.title === "string" ? metadata.title.trim() : "";
     return {
       id,
       classType: node.class_type,
@@ -98,13 +151,17 @@ export function formatComfyUiNodeLabel(node: ComfyUiNodeOption): string {
     : `${node.id} · ${node.classType}`;
 }
 
-export function flattenInputBindings(bindings: ComfyUiInputBindings): FlatComfyUiInputBinding[] {
+export function flattenInputBindings(
+  bindings: ComfyUiInputBindings,
+): FlatComfyUiInputBinding[] {
   return Object.entries(bindings).flatMap(([businessField, items]) =>
-    items.map(item => ({ ...item, businessField })),
+    items.map((item) => ({ ...item, businessField })),
   );
 }
 
-export function groupInputBindings(rows: FlatComfyUiInputBinding[]): ComfyUiInputBindings {
+export function groupInputBindings(
+  rows: FlatComfyUiInputBinding[],
+): ComfyUiInputBindings {
   return rows.reduce<ComfyUiInputBindings>((result, row) => {
     const { businessField, ...binding } = row;
     result[businessField] = [...(result[businessField] || []), binding];

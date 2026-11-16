@@ -441,6 +441,8 @@ public class GenerationModelCapabilityService {
                 .set("supportsReferenceImages", capability.supportsReferenceImages())
                 .set("supportsReferenceVideos", capability.supportsReferenceVideos())
                 .set("supportsReferenceAudios", capability.supportsReferenceAudios())
+                .set("referenceVideoInputFormats", getStringList(config, "referenceVideoInputFormats"))
+                .set("referenceAudioInputFormats", getStringList(config, "referenceAudioInputFormats"))
                 .set("referenceImageInputFormats", capability.referenceImageInputFormats())
                 .set("supportsReferenceImageUrlInput", capability.supportsReferenceImageUrlInput())
                 .set("supportsReferenceImageBase64Input", capability.supportsReferenceImageBase64Input())

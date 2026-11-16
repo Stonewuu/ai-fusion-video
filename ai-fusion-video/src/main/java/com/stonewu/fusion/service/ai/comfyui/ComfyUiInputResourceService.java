@@ -10,6 +10,8 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -22,9 +24,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Loads platform image references and uploads them through ComfyUI /upload/image.
- */
+/** 将图片、音频和视频输入上传到 ComfyUI 的通用文件上传接口。 */
 @Service
 public class ComfyUiInputResourceService {
 
@@ -40,6 +40,31 @@ public class ComfyUiInputResourceService {
         this.nativeClient = nativeClient;
     }
 
+    @Transactional(propagation = Propagation.NEVER)
+    public List<String> uploadMedia(ApiConfig apiConfig, String taskKey, String field,
+                                     List<String> sources, String mediaType) {
+        if ("image".equals(mediaType)) {
+            return uploadImages(apiConfig, taskKey, field, sources);
+        }
+        if (!"audio".equals(mediaType) && !"video".equals(mediaType)) {
+            throw new BusinessException(400, "ComfyUI 上传类型必须是图片、音频或视频");
+        }
+        List<String> uploaded = new ArrayList<>();
+        for (int index = 0; index < sources.size(); index++) {
+            try (var media = ComfyUiMediaInputFile.load(apiConfig, sources.get(index), mediaType, baseClient)) {
+                String fileName = sanitizePart(taskKey) + "-" + sanitizePart(field) + "-" + index + "." + media.extension();
+                uploaded.add(nativeClient.uploadFile(apiConfig, media.path(), fileName, media.contentType(),
+                        "ai-fusion-video").workflowValue());
+            } catch (IOException failure) {
+                var error = new BusinessException(502, "ComfyUI 输入媒体传输失败，请重试");
+                error.initCause(failure);
+                throw error;
+            }
+        }
+        return List.copyOf(uploaded);
+    }
+
+    @Transactional(propagation = Propagation.NEVER)
     public List<String> uploadImages(ApiConfig apiConfig,
                                      String taskKey,
                                      String field,

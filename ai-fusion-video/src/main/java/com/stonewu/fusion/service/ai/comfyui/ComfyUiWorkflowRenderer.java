@@ -32,8 +32,20 @@ public class ComfyUiWorkflowRenderer {
         ObjectNode workflow = documentService.parseApiWorkflow(version.getApiWorkflowJson()).deepCopy();
         List<ComfyUiInputBinding> bindings = documentService.parseInputBindings(
                 modelType, version.getApiWorkflowJson(), version.getInputBindingsJson());
+        List<ComfyUiInputBinding> omitted = bindings.stream()
+                .filter(binding -> binding.optional() && ComfyUiOptionalInputs.isMissing(binding, values)).toList();
+        if (!omitted.isEmpty()) {
+            ObjectNode original = workflow.deepCopy();
+            var plan = ComfyUiOptionalInputs.plan(original, omitted);
+            ComfyUiOptionalInputs.apply(workflow, plan, documentService.parseOutputBindings(
+                    modelType, version.getApiWorkflowJson(), version.getOutputBindingsJson()));
+            ComfyUiOptionalInputs.requirePreservedBindings(workflow, plan, bindings, omitted);
+        }
         Map<String, JsonNode> writtenInputs = new HashMap<>();
         for (ComfyUiInputBinding binding : bindings) {
+            if (omitted.contains(binding)) {
+                continue;
+            }
             if (values == null || !values.containsKey(binding.businessField())) {
                 continue;
             }
@@ -43,25 +55,10 @@ public class ComfyUiWorkflowRenderer {
             }
             Object selectedValue = selectIndexedValue(rawValue, binding);
             JsonNode renderedValue = convertValue(selectedValue, binding);
-            String targetNodeId = binding.nodeId();
-            String targetInputName = binding.inputName();
+            var target = ComfyUiOptionalInputs.uploadTarget(workflow, binding);
+            String targetNodeId = target.nodeId();
+            String targetInputName = target.inputName();
             ObjectNode nodeInputs = (ObjectNode) workflow.path(targetNodeId).path("inputs");
-            JsonNode current = nodeInputs.get(binding.inputName());
-            if (isUploadedMedia(binding.valueType()) && isLink(current)) {
-                JsonNode sourceNode = workflow.path(current.get(0).asText());
-                // 只支持内置 LoadImage 的 IMAGE 输出；其他链路必须明确绑定加载节点的文件字段。
-                if (!"uploaded_image".equals(binding.valueType())
-                        || current.get(1).asInt() != 0
-                        || !"LoadImage".equals(sourceNode.path("class_type").asText())
-                        || !sourceNode.path("inputs").path("image").isTextual()) {
-                    throw new BusinessException(400,
-                            "上传媒体请直接绑定加载节点的文件输入；图片连线仅支持 LoadImage 的 IMAGE 输出: "
-                                    + binding.nodeId() + "." + binding.inputName());
-                }
-                targetNodeId = current.get(0).asText();
-                targetInputName = "image";
-                nodeInputs = (ObjectNode) sourceNode.get("inputs");
-            }
             String targetKey = targetNodeId + "." + targetInputName;
             JsonNode previous = writtenInputs.putIfAbsent(targetKey, renderedValue);
             if (previous != null && !previous.equals(renderedValue)) {
@@ -70,20 +67,6 @@ public class ComfyUiWorkflowRenderer {
             nodeInputs.set(targetInputName, renderedValue);
         }
         return workflow;
-    }
-
-    private static boolean isUploadedMedia(String valueType) {
-        return "uploaded_image".equals(valueType)
-                || "uploaded_video".equals(valueType)
-                || "uploaded_audio".equals(valueType);
-    }
-
-    /**
-     * ComfyUI 连线格式：["源节点ID", 槽位索引]。
-     */
-    private static boolean isLink(JsonNode value) {
-        return value != null && value.isArray() && value.size() == 2
-                && value.get(0).isTextual() && value.get(1).isInt();
     }
 
     private Object selectIndexedValue(Object rawValue, ComfyUiInputBinding binding) {

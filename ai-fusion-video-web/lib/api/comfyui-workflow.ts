@@ -20,6 +20,7 @@ export interface ComfyUiInputBinding {
   inputName: string;
   valueType: ComfyUiBindingValueType;
   index?: number;
+  optional?: boolean;
 }
 
 export type ComfyUiInputBindings = Record<string, ComfyUiInputBinding[]>;

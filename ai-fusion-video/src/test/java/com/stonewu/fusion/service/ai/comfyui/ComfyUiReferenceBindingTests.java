@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.comfyui;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
@@ -137,5 +138,48 @@ class ComfyUiReferenceBindingTests {
         var version = ComfyUiWorkflowVersion.builder().apiWorkflowJson(workflow.toString())
                 .inputBindingsJson(bindings.toString()).build();
         return new ComfyUiExecutionContext(AiModel.builder().modelType(2).build(), api, null, version);
+    }
+
+    @Test
+    void uploadsOnlyProvidedReferencesAndDisconnectsUnusedOptionalSlots() throws Exception {
+        var context = context(0, 1, 2, 3);
+        var bindings = json.readTree(context.version().getInputBindingsJson());
+        for (var binding : bindings.path("referenceImages")) {
+            ((ObjectNode) binding).put("optional", true);
+        }
+        var graph = (ObjectNode) json.readTree(context.version().getApiWorkflowJson());
+        var consumer = graph.putObject("9").put("class_type", "H3").putObject("inputs");
+        for (int index = 0; index < 4; index++) {
+            consumer.putArray("reference_" + index).add(String.valueOf(index + 1)).add(0);
+        }
+        context.version().setApiWorkflowJson(graph.toString());
+        context.version().setInputBindingsJson(bindings.toString());
+        context.version().setOutputBindingsJson("[{\"nodeId\":\"9\",\"mediaType\":\"image\",\"role\":\"primary\"}]");
+        var prepared = executor.prepare(context, "task", Map.of("referenceImages", sources.subList(0, 2)));
+        assertThat(prepared.prompt().path("1").path("inputs").path("image").asText()).isEqualTo(sources.get(0));
+        assertThat(prepared.prompt().path("9").path("inputs").has("reference_2")).isFalse();
+        assertThat(prepared.prompt().has("3") || prepared.prompt().has("4")).isFalse();
+        assertThat(json.readTree(context.version().getApiWorkflowJson()).has("3")).isTrue();
+        verifyNoInteractions(client);
+    }
+
+    @Test
+    void uploadsAudioWithoutDemandingAnOptionalVideo() {
+        var version = ComfyUiWorkflowVersion.builder().apiWorkflowJson("""
+                {"a":{"class_type":"LoadAudio","inputs":{"audio":"old.wav"}},
+                 "v":{"class_type":"LoadVideo","inputs":{"file":"old.mp4"}},
+                 "out":{"class_type":"H3","inputs":{"audio":["a",0],"video":["v",0]}}}
+                """).inputBindingsJson("""
+                {"referenceAudios":[{"nodeId":"a","inputName":"audio","valueType":"uploaded_audio","optional":true}],
+                 "referenceVideos":[{"nodeId":"v","inputName":"file","valueType":"uploaded_video","optional":true}]}
+                """).outputBindingsJson("[{\"nodeId\":\"out\",\"mediaType\":\"video\",\"role\":\"primary\"}]").build();
+        var context = new ComfyUiExecutionContext(AiModel.builder().modelType(3).build(), api, null, version);
+        when(resources.uploadMedia(api, "task", "referenceAudios", List.of("https://example.test/voice.wav"), "audio"))
+                .thenReturn(List.of("uploads/voice.wav"));
+        var prepared = executor.prepare(context, "task", Map.of("referenceAudios", List.of("https://example.test/voice.wav")));
+        assertThat(prepared.prompt().at("/a/inputs/audio").asText()).isEqualTo("uploads/voice.wav");
+        assertThat(prepared.prompt().path("out").path("inputs").has("video")).isFalse();
+        assertThat(prepared.prompt().has("v")).isFalse();
+        verifyNoInteractions(client);
     }
 }

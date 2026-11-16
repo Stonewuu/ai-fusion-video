@@ -3,6 +3,7 @@ package com.stonewu.fusion.service.ai.comfyui;
 import cn.hutool.json.JSONObject;
 import cn.hutool.json.JSONUtil;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.AiModelController;
 import com.stonewu.fusion.entity.ai.AiModel;
@@ -233,6 +234,65 @@ class ComfyUiWorkflowCapabilitiesTests {
         gapped.setInputBindingsJson(gapped.getInputBindingsJson().replace("\"index\":1", "\"index\":2"));
         when(workflows.requireVersion(20L)).thenReturn(gapped);
         assertThatThrownBy(() -> capabilities.getMergedModelConfig(model)).hasMessageContaining("索引必须从 0 连续绑定");
+    }
+
+    @Test
+    void optionalNineImageSlotsAllowZeroOrPartialReferencesForApiAndAgent() throws Exception {
+        var optional = version(20L, 9);
+        var inputBindings = json.readTree(optional.getInputBindingsJson());
+        for (var binding : inputBindings.path("referenceImages")) {
+            ((ObjectNode) binding).put("optional", true);
+        }
+        optional.setInputBindingsJson(inputBindings.toString());
+        when(workflows.requireVersion(20L)).thenReturn(optional);
+        for (int count : List.of(0, 1, 3, 9)) {
+            capabilities.validateImageTask(model, image(count));
+        }
+        var snapshot = capabilities.buildImageCapabilitySnapshot(model);
+        assertThat(snapshot.getInt("maxReferenceImages")).isEqualTo(9);
+        assertThat(snapshot.getInt("minReferenceImages")).isZero();
+        assertThat(snapshot.getJSONObject(ComfyUiWorkflowCapabilities.INPUTS_KEY)
+                .getJSONObject("referenceImages").getInt("minimumWhenProvided")).isZero();
+        assertThatThrownBy(() -> capabilities.validateImageTask(model, image(10)))
+                .hasMessageContaining("最多支持 9 张");
+        ((ObjectNode) inputBindings.path("referenceImages").get(0)).put("optional", false);
+        optional.setInputBindingsJson(inputBindings.toString());
+        model.setConfig("{\"comfyuiInputLimits\":{\"referenceImages\":3}}");
+        var mixed = capabilities.getMergedModelConfig(model);
+        assertThat(mixed.getInt("maxReferenceImages")).isEqualTo(3);
+        assertThat(mixed.getInt("minReferenceImages")).isEqualTo(1);
+        capabilities.validateImageTask(model, image(1));
+    }
+
+    @Test
+    void optionalAudioAndVideoSlotsExposePartialInputCapability() {
+        model.setModelType(3);
+        workflow.setModelType(3);
+        var optional = version(20L, 1);
+        optional.setApiWorkflowJson("""
+                {"a":{"class_type":"LoadAudio","inputs":{"audio":"example.mp3"}},
+                 "v":{"class_type":"LoadVideo","inputs":{"file":"example.mp4"}}}
+                """);
+        optional.setInputBindingsJson("""
+                {"referenceAudios":[{"nodeId":"a","inputName":"audio","valueType":"uploaded_audio","index":0,"optional":true}],
+                 "referenceVideos":[{"nodeId":"v","inputName":"file","valueType":"uploaded_video","index":0,"optional":true}]}
+                """);
+        when(workflows.requireVersion(20L)).thenReturn(optional);
+        var snapshot = capabilities.buildVideoCapabilitySnapshot(model);
+        for (String field : List.of("referenceAudios", "referenceVideos")) {
+            var input = snapshot.getJSONObject(ComfyUiWorkflowCapabilities.INPUTS_KEY).getJSONObject(field);
+            assertThat(input.getInt("minimumWhenProvided")).isZero();
+            assertThat(input.getInt("maximum")).isEqualTo(1);
+        }
+        assertThat(snapshot.getBool("supportsReferenceVideos")).isTrue();
+        assertThat(snapshot.getBool("supportsReferenceAudios")).isTrue();
+        assertThat(snapshot.getJSONArray("referenceAudioInputFormats")).contains("url", "data_uri");
+        assertThat(snapshot.getJSONArray("referenceVideoInputFormats")).contains("url", "data_uri");
+        capabilities.validateVideoTask(model, VideoTask.builder().build());
+        capabilities.validateVideoTask(model, VideoTask.builder()
+                .referenceVideoUrls("[\"https://example.test/reference.mp4\"]").build());
+        capabilities.validateVideoTask(model, VideoTask.builder()
+                .referenceAudioUrls("[\"https://example.test/reference.wav\"]").build());
     }
 
     private ImageTask image(int count) {

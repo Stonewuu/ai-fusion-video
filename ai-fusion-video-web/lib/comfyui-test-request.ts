@@ -67,6 +67,20 @@ export function comfyUiTestInput(
   }
   return text;
 }
+
+export function comfyUiTestInputs(
+  values: Record<string, string>,
+  fields: ReadonlyArray<{ name: string; type: ComfyUiBindingValueType }>,
+): Record<string, unknown> {
+  const inputs: Record<string, unknown> = {};
+  for (const field of fields) {
+    const raw = values[field.name]?.trim();
+    if (raw) {
+      inputs[field.name] = comfyUiTestInput(raw, field.type);
+    }
+  }
+  return inputs;
+}
 export const comfyUiTestActive = (run: ComfyUiTestRun) =>
   ["QUEUED", "WAITING", "RUNNING"].includes(run.status);
 export function comfyUiTestStatus(run: ComfyUiTestRun) {

@@ -67,6 +67,23 @@ class ComfyUiWorkflowDocumentServiceTests {
     }
 
     @Test
+    void preservesOptionalMediaAndRejectsMalformedBindingFlags() {
+        String workflow = "{\"1\":{\"class_type\":\"LoadImage\",\"inputs\":{\"image\":\"example.png\"}}}";
+        String binding = "{\"referenceImages\":[{\"nodeId\":\"1\",\"inputName\":\"image\",\"valueType\":\"uploaded_image\",\"index\":0,\"optional\":true}]}";
+        assertThat(documentService.parseInputBindings(2, workflow, binding).getFirst().optional()).isTrue();
+        assertThat(documentService.parseInputBindings(2, workflow, binding.replace(",\"optional\":true", ""))
+                .getFirst().optional()).isFalse();
+        assertThatThrownBy(() -> documentService.parseInputBindings(2, workflow,
+                binding.replace("\"optional\":true", "\"optional\":\"true\"")))
+                .hasMessageContaining("optional 必须为布尔值");
+        assertThatThrownBy(() -> documentService.parseInputBindings(2, workflow,
+                binding.replace("\"index\":0", "\"index\":0.5")))
+                .hasMessageContaining("index 必须是非负整数");
+        assertThatThrownBy(() -> documentService.parseInputBindings(2, workflow,
+                binding.replace("referenceImages", "prompt"))).hasMessageContaining("只有媒体输入可以设置为可选");
+    }
+
+    @Test
     void normalizeRequiresPrimaryOutputMatchingModelType() {
         assertThatThrownBy(() -> documentService.normalize(
                 3,

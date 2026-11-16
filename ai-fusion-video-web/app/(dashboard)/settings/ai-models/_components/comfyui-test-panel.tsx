@@ -13,7 +13,7 @@ import {
 import { DialogContent } from "@/components/shared/dialog-content";
 import type { ComfyUiWorkflowVersion } from "@/lib/api/comfyui-workflow";
 import { getApiErrorMessage } from "@/lib/api/api-error";
-import { comfyUiTestInput } from "@/lib/comfyui-test-request";
+import { comfyUiTestInputs } from "@/lib/comfyui-test-request";
 import { parseInputBindingsJson } from "./comfyui-workflow-support";
 import { ComfyUiTestFields } from "./comfyui-test-fields";
 import { ComfyUiTestHistory } from "./comfyui-test-history";
@@ -44,16 +44,14 @@ export function ComfyUiTestPanel({
         if (
           !items[0] ||
           items.some((item) => item.valueType !== items[0].valueType)
-        )
+        ) {
           throw new Error(`字段 ${name} 的绑定类型不一致，请先修复版本。`);
-        if (
-          items[0].valueType === "uploaded_video" ||
-          items[0].valueType === "uploaded_audio"
-        )
-          throw new Error(
-            "当前 ComfyUI Native API 尚不支持视频或音频上传绑定。",
-          );
-        return { name, type: items[0].valueType };
+        }
+        return {
+          name,
+          type: items[0].valueType,
+          optional: items.every((item) => item.optional === true),
+        };
       });
       return { fields, error: null };
     } catch (error) {
@@ -69,11 +67,7 @@ export function ComfyUiTestPanel({
     uploads.length > 0;
   const submit = async () => {
     try {
-      const inputs: Record<string, unknown> = {};
-      for (const field of parsed.fields) {
-        const raw = values[field.name]?.trim();
-        if (raw) inputs[field.name] = comfyUiTestInput(raw, field.type);
-      }
+      const inputs = comfyUiTestInputs(values, parsed.fields);
       setFormError(null);
       await tests.submit(version.workflowHash, inputs);
     } catch (error) {

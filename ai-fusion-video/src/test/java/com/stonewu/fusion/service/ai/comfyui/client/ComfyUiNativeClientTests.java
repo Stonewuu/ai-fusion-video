@@ -149,6 +149,32 @@ class ComfyUiNativeClientTests {
     }
 
     @Test
+    void uploadFileStreamsAudioAndVideoThroughTheOfficialMultipartRoute() throws IOException {
+        AtomicReference<String> authorization = new AtomicReference<>();
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        server.createContext("/upload/image", exchange -> {
+            authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            json(exchange, 200, "{\"name\":\"received.media\",\"subfolder\":\"ai-fusion-video\",\"type\":\"input\"}");
+        });
+        Path input = Files.createTempFile("comfyui-media-test-", ".input");
+        try {
+            Files.writeString(input, "source-media-bytes", StandardCharsets.UTF_8);
+            for (String mime : new String[]{"audio/wav", "video/mp4"}) {
+                String filename = mime.equals("audio/wav") ? "voice.wav" : "reference.mp4";
+                var result = client.uploadFile(apiConfig, input, filename, mime, "ai-fusion-video");
+                assertThat(result.workflowValue()).isEqualTo("ai-fusion-video/received.media");
+                assertThat(authorization.get()).isEqualTo("Bearer test-token");
+                assertThat(requestBody.get()).contains("name=\"image\"; filename=\"" + filename + "\"",
+                        "Content-Type: " + mime, "source-media-bytes", "name=\"type\"", "name=\"overwrite\"");
+                assertThat(Files.exists(input)).isTrue();
+            }
+        } finally {
+            Files.deleteIfExists(input);
+        }
+    }
+
+    @Test
     void getJobParsesOfficialCompletedOutputs() {
         String promptId = UUID.randomUUID().toString();
         server.createContext("/api/jobs/" + promptId, exchange -> json(exchange, 200,
