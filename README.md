@@ -91,6 +91,18 @@
         <p>百款模型 · 几十个渠道 · 自由选</p>
       </td>
     </tr>
+    <tr>
+      <td width="180" align="center" valign="middle">
+        <a href="https://apixo.ai/zh?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=ai_fusion_video&amp;utm_content=logo" target="_blank" rel="noopener noreferrer">
+          <img src="assets/sponsors/apixo-card-seedream-zh.svg" alt="APIXO AI：Seedream 5.5 官价七折，$0.014/张起" width="144" />
+        </a>
+      </td>
+      <td valign="middle">
+        <p><strong><a href="https://apixo.ai/zh?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=ai_fusion_video&amp;utm_content=brand_mention" target="_blank" rel="noopener noreferrer">APIXO AI</a>：一站式 AI 视频制作与多模态创作平台</strong></p>
+        <p>用 Seedream 5.5 制作分镜参考图，搭配视频模型探索从创意到镜头的创作流程。<strong><a href="https://apixo.ai/zh/models/seedream-5-5?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=ai_fusion_video&amp;utm_content=seedream_5_5" target="_blank" rel="noopener noreferrer">Seedream 5.5 生图 API</a> 限时七折，输出图像 $0.014/张起</strong>（按输出规格计费，输入图像另计）。</p>
+        <p>支持在线创作、API 与 <strong><a href="https://apixo.ai/zh/mcp?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=ai_fusion_video&amp;utm_content=mcp_page" target="_blank" rel="noopener noreferrer">MCP 接入 →</a></strong>，按你的工作流灵活使用。</p>
+      </td>
+    </tr>
   </tbody>
 </table>
 
