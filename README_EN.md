@@ -91,6 +91,18 @@ Thank you to the following sponsors for supporting AI Fusion Video!
         <p>Hundreds of models · Dozens of channels · Choose freely</p>
       </td>
     </tr>
+    <tr>
+      <td width="180" align="center" valign="middle">
+        <a href="https://apixo.ai/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=ai_fusion_video&amp;utm_content=logo" target="_blank" rel="noopener noreferrer">
+          <img src="assets/sponsors/apixo-card-seedream-en.svg" alt="APIXO AI: Seedream 5.5, 30% OFF, from $0.014/img" width="144" />
+        </a>
+      </td>
+      <td valign="middle">
+        <p><strong><a href="https://apixo.ai/?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=ai_fusion_video&amp;utm_content=brand_mention" target="_blank" rel="noopener noreferrer">APIXO AI</a>: All-in-One AI Video Maker &amp; Multimodal Creation Platform</strong></p>
+        <p>Create storyboard references with Seedream 5.5 and explore idea-to-shot workflows with video models. <strong><a href="https://apixo.ai/models/seedream-5-5?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=ai_fusion_video&amp;utm_content=seedream_5_5" target="_blank" rel="noopener noreferrer">Seedream 5.5 image API</a>: limited-time 30% off, output images from $0.014 each</strong> (rates vary by output size; input images billed separately).</p>
+        <p>Create online or connect through API and <strong><a href="https://apixo.ai/mcp?utm_source=github&amp;utm_medium=sponsorship&amp;utm_campaign=ai_fusion_video&amp;utm_content=mcp_page" target="_blank" rel="noopener noreferrer">MCP →</a></strong> to fit your workflow.</p>
+      </td>
+    </tr>
   </tbody>
 </table>
 
