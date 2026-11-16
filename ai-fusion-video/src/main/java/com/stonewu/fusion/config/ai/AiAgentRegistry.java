@@ -161,14 +161,14 @@ public class AiAgentRegistry {
                 .name("完整剧本解析")
                 .toolNames(List.of(
                         "get_project_script", "list_project_assets", "batch_create_assets",
-                        "update_script_info", "save_script_episode",
+                        "update_script_info",
                         "get_script_structure", "query_asset_metadata"))
                 .subAgentTools(List.of(
                         AiAgentDefinition.SubAgentToolDef.builder()
                                 .toolName("episode_scene_writer")
                                 .displayName("分集场次编写器")
                                 .description(
-                                        "传入实际 scriptEpisodeId，子智能体读取本集完整原文，解析并保存场次。可并行处理独立分集，不传 session_id。")
+                                        "传入实际 scriptEpisodeId，子智能体读取本集原文并保存场次。replaceExisting 仅在用户授权重解析时为 true；task 传递续跑范围和已保存进度。可分批并行处理独立分集，不传 session_id。")
                                 .parametersSchema(
                                         """
                                                 {
@@ -176,7 +176,15 @@ public class AiAgentRegistry {
                                                   "properties": {
                                                     "scriptEpisodeId": {
                                                       "type": "integer",
-                                                      "description": "剧本分集记录ID（从 save_script_episode 的返回值中获取）"
+                                                      "description": "剧本分集记录ID（从 get_project_script 的分集目录中获取）"
+                                                    },
+                                                    "replaceExisting": {
+                                                      "type": "boolean",
+                                                      "description": "用户授权重解析当前集时为 true；默认 false，继续未完成内容"
+                                                    },
+                                                    "task": {
+                                                      "type": "string",
+                                                      "description": "本集处理范围、已保存场次和续跑位置；若本轮已经替换旧场次，必须明确继续追加"
                                                     }
                                                   },
                                                   "additionalProperties": false,
@@ -187,11 +195,12 @@ public class AiAgentRegistry {
                                         {
                                           "type": "object",
                                           "description": "子 Agent 的场次解析输出",
+                                          "additionalProperties": false,
                                           "properties": {
                                             "scriptEpisodeId": { "type": "integer", "description": "处理的剧本分集ID" },
                                             "sceneCount": { "type": "integer", "description": "解析出的场次数量" },
                                             "status": { "type": "string", "enum": ["success", "partial", "failed"], "description": "处理状态" },
-                                            "message": { "type": "string", "description": "处理结果描述" }
+                                            "message": { "type": "string", "maxLength": 600, "description": "简述已保存结果或待处理事项，不含原文及场次全文" }
                                           },
                                           "required": ["scriptEpisodeId", "sceneCount", "status"]
                                         }""")
@@ -266,7 +275,7 @@ public class AiAgentRegistry {
                 .name("分集上传解析")
                 .toolNames(List.of(
                         "list_project_assets", "batch_create_assets",
-                        "update_script_info", "save_script_scene_items",
+                        "update_script_info", "save_script_episode", "save_script_scene_items", "update_script_scene",
                         "get_script_episode", "get_script_structure",
                         "manage_script_scenes", "query_asset_metadata", "get_project"))
                 .systemPrompt(loadSystemPrompt("script-episode-upload.system.md"))
@@ -392,7 +401,7 @@ public class AiAgentRegistry {
                 .name("分集场次编写器")
                 .toolNames(List.of(
                         "get_script_episode", "list_project_assets", "query_asset_metadata", "batch_create_assets",
-                        "save_script_scene_items", "get_project_script",
+                        "save_script_scene_items", "save_script_episode", "update_script_scene", "get_project_script",
                         "get_script_scene"))
                 .systemPrompt(loadSystemPrompt("episode-scene-writer.system.md"))
                 .instructionTemplate("""

@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Set;
+import java.util.Objects;
 
 import static com.stonewu.fusion.service.canvas.model.CanvasValueType.*;
 
@@ -46,10 +47,18 @@ public class ScriptResourcePatchHandler implements ResourceCommandHandler {
     @Override
     public ResourceMutation apply(ResourceCommand input, ResourceCommandContext context) {
         var command = (ResourcePatchCommand) input;
+        if (command.resourceType() == SCRIPT && command.patch().has("rawContent")) {
+            throw ScriptFields.invalid("请通过“导入原文”保存分集原文");
+        }
         var values = fields.values(command.resourceType(), command.patch());
         var change = writes.lock(command.resourceType(), command.resourceId());
         ResourceMutations.requireVersion(change.target, command.expectedVersion());
         change.validateAssets(command.patch());
+        if (command.resourceType() == SCRIPT_EPISODE && values.containsKey("rawContent")
+                && !Objects.equals(change.data(change.target).path("rawContent").asText(null), values.get("rawContent"))) {
+            values.put("parsingStatus", 0);
+            values.put("synopsis", null);
+        }
         if (command.resourceType() == SCRIPT_EPISODE && values.containsKey("episodeNumber")) {
             change.requireEpisodeNumber((Integer) values.get("episodeNumber"), command.resourceId());
         }

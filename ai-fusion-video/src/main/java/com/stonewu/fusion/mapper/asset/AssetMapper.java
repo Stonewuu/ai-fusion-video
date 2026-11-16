@@ -7,6 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 
 import java.util.List;
+import java.util.Map;
 
 @Mapper
 public interface AssetMapper extends BaseMapper<Asset> {
@@ -17,6 +18,10 @@ public interface AssetMapper extends BaseMapper<Asset> {
     }
 
     List<Long> accessibleIds(IPage<?> page, @Param("filter") AccessFilter filter);
+
+    List<Map<String, Object>> accessibleSummaries(IPage<?> page, @Param("filter") AccessFilter filter);
+
+    Map<String, Object> summary(@Param("id") long id);
 
     long countAccessible(@Param("filter") AccessFilter filter);
 

@@ -20,6 +20,7 @@ import com.stonewu.fusion.service.ai.run.kernel.CanonicalAgentKernelSnapshotBuil
 import com.stonewu.fusion.service.ai.run.kernel.ToolManifestSnapshot;
 import com.stonewu.fusion.service.ai.run.model.ChildRunAdmission;
 import com.stonewu.fusion.service.ai.run.model.ChildRunIdentityConflictException;
+import com.stonewu.fusion.service.ai.run.model.ChildRunCapacityUnavailableException;
 import com.stonewu.fusion.service.ai.run.model.StartAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartChildAgentRunCommand;
 import com.stonewu.fusion.service.ai.run.model.StartedAgentRun;
@@ -37,8 +38,10 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -134,7 +137,7 @@ class AgentRunStartIT {
         String pastConversation = createConversation(userId, projectId);
         StartAgentRunCommand pastDeadline = rootCommand(
                 uniqueId("past-root"), pastConversation, userId, projectId,
-                snapshot, Instant.now().minusSeconds(1), null, null, null);
+                snapshot, runMapper.selectDatabaseNow().minusSeconds(1).toInstant(ZoneOffset.UTC), null, null, null);
         assertThatThrownBy(() -> await(coordinator.start(pastDeadline)))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("deadline");
@@ -381,6 +384,61 @@ class AgentRunStartIT {
                 conversationId, userId, projectId, "project", projectId,
                 "assistant", "Run start test", "chat");
         return conversationId;
+    }
+
+    @Test
+    void differentAgentTypesShareFiveChildSlotsAcrossConcurrentRequests() throws Exception {
+        String conversation = createConversation(42L, 7L);
+        var snapshot = snapshot("capacity-test", 1L);
+        StartedAgentRun parent = await(coordinator.start(rootCommand(uniqueId("parent"), conversation, 42L, 7L,
+                snapshot, Instant.now().plusSeconds(300), null, null, null)));
+        List<StartChildAgentRunCommand> commands = new ArrayList<>();
+        List<String> childTypes = List.of("episode_scene_writer", "episode_script_creator", "episode_storyboard_writer",
+                "asset_image_executor", "storyboard_frame_executor", "storyboard_video_executor");
+        for (int index = 0; index < childTypes.size(); index++) {
+            String childType = childTypes.get(index);
+            commands.add(childCommand(uniqueId("child"), parent.runId(), "capacity-" + index,
+                    parent.ownerInstanceId(), parent.ownerEpoch(), childType, childType, snapshot(childType, 1L),
+                    parent.deadline().minusSeconds(1)));
+        }
+        CountDownLatch start = new CountDownLatch(1);
+        List<ChildRunAdmission> accepted = new ArrayList<>();
+        try (var pool = Executors.newVirtualThreadPerTaskExecutor()) {
+            List<Future<ChildRunAdmission>> futures = commands.stream().map(command -> pool.submit(() -> {
+                start.await();
+                try {
+                    return await(coordinator.startChild(command));
+                } catch (ChildRunCapacityUnavailableException full) {
+                    return null;
+                }
+            })).toList();
+            start.countDown();
+            for (Future<ChildRunAdmission> future : futures) {
+                ChildRunAdmission admission = future.get(15, TimeUnit.SECONDS);
+                if (admission != null) {
+                    accepted.add(admission);
+                }
+            }
+        }
+        assertThat(accepted).hasSize(5);
+        assertThat(runMapper.selectActiveChildren(parent.runId())).hasSize(5)
+                .allSatisfy(child -> assertThat(child.getConversationId()).isEqualTo(conversation));
+        var waiting = commands.stream().filter(command -> run(command.childRunId()) == null).findFirst().orElseThrow();
+        var replay = commands.stream().filter(command -> run(command.childRunId()) != null).findFirst().orElseThrow();
+        assertThat(await(coordinator.startChild(replay)).created()).isFalse();
+        assertThatThrownBy(() -> await(coordinator.startChild(waiting)))
+                .isInstanceOf(ChildRunCapacityUnavailableException.class);
+        assertThat(runMapper.update(null, new LambdaUpdateWrapper<AgentRun>()
+                .eq(AgentRun::getRunId, accepted.getFirst().run().runId()).set(AgentRun::getStatus, "FAILED"))).isEqualTo(1);
+        assertThat(await(coordinator.startChild(waiting)).created()).isTrue();
+        assertThat(runMapper.selectActiveChildren(parent.runId())).hasSize(5);
+
+        var secondParent = await(coordinator.start(rootCommand(uniqueId("other-parent"), createConversation(42L, 7L),
+                42L, 7L, snapshot, Instant.now().plusSeconds(300), null, null, null)));
+        assertThat(await(coordinator.startChild(childCommand(uniqueId("other-child"), secondParent.runId(), "other-tool",
+                secondParent.ownerInstanceId(), secondParent.ownerEpoch(), "worker", "worker", snapshot,
+                secondParent.deadline().minusSeconds(1)))).created()).isTrue();
+        assertThat(runMapper.selectActiveChildren(secondParent.runId())).hasSize(1);
     }
 
     private StartAgentRunCommand rootCommand(

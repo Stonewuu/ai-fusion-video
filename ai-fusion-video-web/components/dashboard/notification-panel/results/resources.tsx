@@ -15,6 +15,12 @@ export function AssetListResult({ data }: { data: unknown }) {
     <div className="space-y-1.5">
       <p className="text-xs text-muted-foreground">
         共 <span className="font-medium text-foreground">{total}</span> 项
+        {typeof obj.page === "number" && (
+          <span>
+            {" "}
+            · 第 {obj.page} 页 · 本页 {assets.length} 项
+          </span>
+        )}
         {typeStr && typeStr !== "all" && (
           <span className="ml-1 px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 text-[10px]">
             {assetTypeNames[typeStr] || typeStr}
@@ -38,7 +44,9 @@ export function AssetListResult({ data }: { data: unknown }) {
                 </span>
               )}
               {asset.itemCount !== undefined && (
-                <span className="text-[10px]">{String(asset.itemCount)} 个子项</span>
+                <span className="text-[10px]">
+                  {String(asset.itemCount)} 个子项
+                </span>
               )}
             </li>
           ))}
@@ -77,7 +85,9 @@ export function MetadataResult({ data }: { data: unknown }) {
             {assetTypeNames[assetType] || assetType}
           </span>
         )}
-        共 <span className="font-medium text-foreground">{properties.length}</span> 个属性
+        共{" "}
+        <span className="font-medium text-foreground">{properties.length}</span>{" "}
+        个属性
       </p>
       <ul className="space-y-0.5">
         {properties.slice(0, 15).map((prop, index) => (
@@ -92,7 +102,7 @@ export function MetadataResult({ data }: { data: unknown }) {
                   prop.fieldKey ||
                   prop.name ||
                   prop.key ||
-                  `属性${index + 1}`
+                  `属性${index + 1}`,
               )}
             </span>
             {!!(prop.fieldType || prop.type) && (
@@ -150,7 +160,8 @@ export function BatchCreateResult({ data }: { data: unknown }) {
                 </span>
                 {!!current.type && (
                   <span className="px-1.5 py-0.5 rounded bg-muted/50 text-[10px]">
-                    {assetTypeNames[String(current.type)] || String(current.type)}
+                    {assetTypeNames[String(current.type)] ||
+                      String(current.type)}
                   </span>
                 )}
               </li>
@@ -181,21 +192,31 @@ export function AssetItemsResult({ data }: { data: unknown }) {
   const obj = data as Record<string, unknown>;
   const assets = obj.assets as Array<Record<string, unknown>> | undefined;
 
+  if (obj.view === "asset_candidates") {
+    return <AssetListResult data={data} />;
+  }
+
   if (assets && Array.isArray(assets)) {
     const totalAssets = (obj.totalAssets as number) ?? assets.length;
     const totalItems = assets.reduce((sum, asset) => {
-      const assetItems = asset.items as Array<Record<string, unknown>> | undefined;
+      const assetItems = asset.items as
+        | Array<Record<string, unknown>>
+        | undefined;
       const assetTotalItems =
-        typeof asset.totalItems === "number"
-          ? asset.totalItems
-          : assetItems?.length ?? 0;
+        typeof asset.itemCount === "number"
+          ? asset.itemCount
+          : typeof asset.totalItems === "number"
+            ? asset.totalItems
+            : (assetItems?.length ?? 0);
       return sum + assetTotalItems;
     }, 0);
 
     return (
       <div className="space-y-1.5">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-medium text-foreground">子资产列表</span>
+          <span className="text-xs font-medium text-foreground">
+            子资产列表
+          </span>
           <span className="text-[10px] text-muted-foreground/50">
             共 {totalAssets} 个资产
           </span>
@@ -209,12 +230,18 @@ export function AssetItemsResult({ data }: { data: unknown }) {
             const status = asset.status as string | undefined;
             const message = asset.message as string | undefined;
             const assetType =
-              asset.assetType == null ? undefined : String(asset.assetType);
-            const assetItems = asset.items as Array<Record<string, unknown>> | undefined;
+              (asset.type ?? asset.assetType) == null
+                ? undefined
+                : String(asset.type ?? asset.assetType);
+            const assetItems = asset.items as
+              | Array<Record<string, unknown>>
+              | undefined;
             const assetTotalItems =
-              typeof asset.totalItems === "number"
-                ? asset.totalItems
-                : assetItems?.length ?? 0;
+              typeof asset.itemCount === "number"
+                ? asset.itemCount
+                : typeof asset.totalItems === "number"
+                  ? asset.totalItems
+                  : (assetItems?.length ?? 0);
             const previewNames = assetItems
               ?.slice(0, 3)
               .map((item) => String(item.name || item.id || "未命名子资产"))
@@ -227,7 +254,7 @@ export function AssetItemsResult({ data }: { data: unknown }) {
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-teal-400/40 shrink-0" />
                 <span className="font-medium text-foreground">
-                  {String(asset.assetName || `资产${index + 1}`)}
+                  {String(asset.name || asset.assetName || `资产${index + 1}`)}
                 </span>
                 {assetType ? (
                   <span className="px-1.5 py-0.5 rounded bg-teal-500/10 text-teal-400 text-[10px]">
@@ -242,6 +269,8 @@ export function AssetItemsResult({ data }: { data: unknown }) {
                   <>
                     <span className="text-[10px] text-muted-foreground/50">
                       {assetTotalItems} 个子资产
+                      {typeof asset.page === "number" &&
+                        ` · 第 ${asset.page} 页 · 本页 ${assetItems?.length ?? 0} 项`}
                     </span>
                     {previewNames && (
                       <span className="text-[10px] text-muted-foreground/60 truncate">
@@ -324,7 +353,9 @@ export function ProjectInfoResult({ data }: { data: unknown }) {
       </span>
       {description && (
         <p className="text-[10px] text-muted-foreground/70 leading-relaxed">
-          {description.length > 200 ? `${description.slice(0, 200)}…` : description}
+          {description.length > 200
+            ? `${description.slice(0, 200)}…`
+            : description}
         </p>
       )}
     </div>
@@ -374,7 +405,8 @@ export function CreateResult({
         ) : (
           <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
         )}
-        {message || (status === "error" ? `${label}创建失败` : `${label}创建成功`)}
+        {message ||
+          (status === "error" ? `${label}创建失败` : `${label}创建成功`)}
       </p>
       {name && <p className="text-[10px] text-foreground/80">名称: {name}</p>}
     </div>

@@ -82,6 +82,7 @@ public class StoryboardToolQueries {
         episode = boards.tree(STORYBOARD_EPISODE, episodeId, 1, actor);
         List<ObjectNode> items = boards.children(SHOT, STORYBOARD_EPISODE, episodeId, actor);
         episode.put("storyboardEpisodeId", episodeId).put("itemCount", items.size());
+        projectScriptBinding(episode);
         media(episode);
         Map<Long, ObjectNode> sceneById = new HashMap<>();
         for (JsonNode scene : episode.path("scenes")) {
@@ -126,6 +127,7 @@ public class StoryboardToolQueries {
         }
         for (JsonNode episode : board.path("episodes")) {
             ObjectNode value = (ObjectNode) episode;
+            projectScriptBinding(value);
             long episodeId = value.path("id").longValue();
             value.put("storyboardEpisodeId", episodeId).put("itemCount", episodeCounts.getOrDefault(episodeId, 0L))
                     .put("missingSceneCount", episodeMissingScenes.getOrDefault(episodeId, 0L))
@@ -144,6 +146,13 @@ public class StoryboardToolQueries {
                 .put("unassignedItems", counts.stream().filter(count -> count.episodeId() == null)
                         .mapToLong(ShotCount::itemCount).sum());
         return board;
+    }
+
+    private void projectScriptBinding(ObjectNode episode) {
+        if ("missing".equals(episode.path("scriptBindingStatus").asText())) {
+            episode.remove("scriptEpisodeId");
+            episode.put("scriptBindingMessage", "原剧本分集已删除或替换，请在分镜目录重新关联剧本集。已有镜头和媒体保留。");
+        }
     }
 
     private ObjectNode scene(ObjectNode params, CanvasActor actor) {

@@ -2,8 +2,8 @@
 为任务范围内的子资产生成并保存图片。只负责范围、依赖顺序和结果核对，具体图片提示词由 generate_asset_image 编写。
 
 1. selectedAssetIds 限定主资产，selectedAssetItemIds 进一步限定子资产；指定 ID 时直接查询这些对象。按名称或项目范围处理时再用 list_project_assets 查找。选中资产只确定范围，不等于授权覆盖已有图片；明确要求重新生成时才覆盖，否则只补无图项。
-2. query_asset_items 支持 assetIds 批量查询，每批最多 10 个。读取目标类型、外观、imageUrl、version、assetVersion，区分基础形象和变体：基础项可标记为 initial，也可与主资产类型一致（character、scene、prop），不能只靠 initial 这个字符串判断。
+2. query_asset_items 支持 assetIds 批量查询，每批最多 10 个；按各资产的 hasMore、nextPage 读完目标子项目录。根据类型、描述摘要、hasImage 和版本确定待生成项，完整外观与图片地址由单项执行器按需读取。基础项可标记为 initial，也可与主资产类型一致（character、scene、prop），不能只靠 initial 这个字符串判断。
 3. 先生成缺失基础图，成功保存后再生成依赖它的变体。基础图已有图时直接复用。若变体依赖的基础图不在用户指定范围且尚未生成，说明需要先完成基础图，不扩大任务范围。不同基础资产可并行；同一主资产的子项按顺序写回，避免父版本冲突。
-4. 每次 generate_asset_image 的 message 包含 assetId、itemId、projectId，只处理一个子资产，不传 session_id。每轮最多 10 个独立任务。等待结果后检查图片是否已自动保存，再继续依赖任务。
+4. 每次 generate_asset_image 的 message 包含 assetId、itemId、projectId，只处理一个子资产，不传 session_id。每轮最多 5 个独立子任务。等待结果后检查图片是否已自动保存，再继续依赖任务。
 5. 初始图失败、结果待确认或参考图能力不足时，暂停依赖它的变体；不以新建子任务绕过参考图约束。只重试明确失败且允许重试的任务，等待中不重复提交。
 6. 按实际回执汇总已保存、未完成及待确认的图片数量。不要把受理、生成成功但未保存、已有图片分别当作本次生成成功。

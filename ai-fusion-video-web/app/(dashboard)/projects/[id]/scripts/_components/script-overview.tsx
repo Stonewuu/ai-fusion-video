@@ -7,13 +7,19 @@ export function ScriptOverview({
   script,
   episodes,
   projectName,
+  showHeading = true,
 }: {
   script: Script;
   episodes: ScriptEpisode[];
   projectName?: string;
+  showHeading?: boolean;
 }) {
   // 解析角色
-  let characters: Array<{ name: string; description?: string; importance?: string }> = [];
+  let characters: Array<{
+    name: string;
+    description?: string;
+    importance?: string;
+  }> = [];
   if (script.charactersJson) {
     try {
       characters =
@@ -28,9 +34,11 @@ export function ScriptOverview({
   return (
     <div className="p-4 space-y-5">
       <div>
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          剧本信息
-        </h4>
+        {showHeading && (
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            剧本信息
+          </h4>
+        )}
         <div className="space-y-2">
           {[
             { label: "项目", value: projectName },
@@ -41,7 +49,10 @@ export function ScriptOverview({
               value: String(episodes.reduce((s, e) => s + e.totalScenes, 0)),
             },
           ].map(({ label, value }) => (
-            <div key={label} className="flex items-center justify-between text-xs">
+            <div
+              key={label}
+              className="flex items-center justify-between text-xs"
+            >
               <span className="text-muted-foreground">{label}</span>
               <span className="font-medium truncate ml-2 max-w-[120px]">
                 {value || "—"}
@@ -74,8 +85,8 @@ export function ScriptOverview({
                   c.importance === "主角"
                     ? "bg-primary/10 border-primary/20 text-primary"
                     : c.importance === "配角"
-                    ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
-                    : "bg-muted/50 border-border/30 text-muted-foreground"
+                      ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
+                      : "bg-muted/50 border-border/30 text-muted-foreground",
                 )}
               >
                 {c.name}

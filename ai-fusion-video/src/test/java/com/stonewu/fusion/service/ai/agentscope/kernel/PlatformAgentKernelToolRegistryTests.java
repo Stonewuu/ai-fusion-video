@@ -7,6 +7,7 @@ import com.stonewu.fusion.service.ai.configuration.AgentConfigurationTestSupport
 import com.stonewu.fusion.service.ai.AiToolConfigService;
 import com.stonewu.fusion.service.ai.ToolExecutorRegistry;
 import com.stonewu.fusion.service.ai.agentscope.context.AgentRunContext;
+import com.stonewu.fusion.service.ai.agentscope.AgentScopeSubAgentToolAdapter;
 import com.stonewu.fusion.service.ai.agentscope.context.AuthenticatedUserContext;
 import com.stonewu.fusion.service.ai.agentscope.context.CancellationContext;
 import com.stonewu.fusion.service.ai.agentscope.mcp.AgentScopeMcpRegistry;
@@ -32,6 +33,8 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +44,44 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class PlatformAgentKernelToolRegistryTests {
+    @Test
+    void everyBuiltinSubAgentUsesTheSharedDurableAdmissionAdapter() {
+        var json = new ObjectMapper();
+        var catalog = new AiAgentRegistry();
+        var mcp = mock(AgentScopeMcpRegistry.class);
+        @SuppressWarnings("unchecked")
+        ObjectProvider<PlatformSubAgentRunPort> children = mock(ObjectProvider.class);
+        var registry = new PlatformAgentKernelToolRegistry(mock(ToolExecutorRegistry.class), mock(AiToolConfigService.class),
+                AgentConfigurationTestSupport.agents(catalog), mock(AgentKernelSpecFactory.class), children,
+                mock(AgentRuntimeSchedulers.class), mock(RunLeaseGuard.class), json, mcp, List.of());
+        var checked = new ArrayList<String>();
+        for (var definition : catalog.getAll()) {
+            if (definition.getSubAgentTools() == null || definition.getSubAgentTools().isEmpty()) {
+                continue;
+            }
+            var manifests = definition.getSubAgentTools().stream().map(child -> {
+                var schema = AgentScopeToolSchema.prepareSubAgent(json, child.getParametersSchema(), child.getToolName());
+                return new AgentKernelToolManifest(child.getToolName(),
+                        AgentKernelToolManifest.schemaSha256(schema.canonicalJson()), false, true);
+            }).toList();
+            var spec = mock(AgentKernelSpec.class);
+            when(spec.agentDefinitionStableKey()).thenReturn(definition.getType());
+            when(spec.promptVariables()).thenReturn(Map.of());
+            when(spec.toolManifest()).thenReturn(manifests);
+            when(spec.toolWhitelist()).thenReturn(manifests.stream().map(AgentKernelToolManifest::toolName)
+                    .collect(Collectors.toSet()));
+            var toolkit = new Toolkit();
+            registry.register(spec, toolkit);
+            for (var child : definition.getSubAgentTools()) {
+                assertThat(toolkit.getTool(child.getToolName())).as(definition.getType() + "/" + child.getToolName())
+                        .isInstanceOf(AgentScopeSubAgentToolAdapter.class);
+            }
+            checked.add(definition.getType());
+        }
+        assertThat(checked).contains("script_full_parse", "story_to_script", "script_to_storyboard",
+                "asset_image_gen", "storyboard_frame_gen", "storyboard_video_gen");
+    }
+
     @Test void registeredMcpToolUsesTheGuardAndRechecksItsCapturedConfiguration() throws Exception {
         var json = new ObjectMapper();
         var mcp = mock(AgentScopeMcpRegistry.class);

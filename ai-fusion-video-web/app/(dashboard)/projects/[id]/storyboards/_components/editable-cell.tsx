@@ -11,6 +11,7 @@ export function EditableCell({
   placeholder,
   onSave,
   onCellClick,
+  onEditingChange,
   className,
   multiline,
   singleLine,
@@ -19,6 +20,7 @@ export function EditableCell({
   placeholder?: string;
   onSave: (value: string) => Promise<void>;
   onCellClick?: () => void;
+  onEditingChange?: (editing: boolean) => void;
   className?: string;
   multiline?: boolean;
   singleLine?: boolean;
@@ -31,6 +33,15 @@ export function EditableCell({
   const pending = useRef(false);
   // 回调同时捕获开始编辑时的业务对象版本；刷新不能替换本次草稿的前置条件。
   const session = useRef<{ value: string; save: typeof onSave } | null>(null);
+
+  useLayoutEffect(() => {
+    if (!editing) {
+      return;
+    }
+    // 编辑会话包含保存中和失败后的草稿，不能因失焦就让虚拟列表卸载。
+    onEditingChange?.(true);
+    return () => onEditingChange?.(false);
+  }, [editing, onEditingChange]);
 
   useLayoutEffect(() => {
     if (!editing || !control.current) {
@@ -106,7 +117,12 @@ export function EditableCell({
           className,
         )}
       >
-        <span className={cn("block min-w-0", singleLine ? "truncate" : "whitespace-pre-wrap break-words")}>
+        <span
+          className={cn(
+            "block min-w-0",
+            singleLine ? "truncate" : "whitespace-pre-wrap break-words",
+          )}
+        >
           {value || placeholder || "\u00a0"}
         </span>
       </button>

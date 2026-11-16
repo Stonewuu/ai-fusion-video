@@ -65,6 +65,10 @@ public class StoryboardChildrenHandler implements ResourceCommandHandler {
                 }
                 boolean replace = command.mode() == StoryboardChildrenCommand.Mode.REPLACE;
                 if (replace) {
+                    if (command.resourceType() == STORYBOARD_EPISODE && "missing".equals(
+                            versions.attach(STORYBOARD_EPISODE, change.data(change.target)).path("scriptBindingStatus").asText())) {
+                        throw StoryboardFields.invalid("原剧本集已删除或替换，请先重新关联剧本集");
+                    }
                     change.clear(change.target);
                 }
                 var order = new ArrayList<>(replace ? List.<Long>of() : ids);
@@ -78,6 +82,12 @@ public class StoryboardChildrenHandler implements ResourceCommandHandler {
                     throw StoryboardFields.invalid("清空模式不接受子对象参数");
                 }
                 change.clear(change.target);
+                if (command.resourceType() == STORYBOARD) {
+                    Map<String, Object> cleared = new LinkedHashMap<>();
+                    cleared.put("status", 0);
+                    cleared.put("description", null);
+                    change.patch(change.target, cleared);
+                }
             }
             case DELETE -> {
                 if (!command.children().isEmpty() || command.childIds().isEmpty() || !ids.containsAll(

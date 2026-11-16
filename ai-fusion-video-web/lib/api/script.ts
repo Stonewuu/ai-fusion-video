@@ -8,10 +8,18 @@ export interface Script {
   projectId: number;
   title: string;
   content: string | null;
-  rawContent: string | null;
+  rawContent?: string | null;
+  rawContentLength?: number;
   totalEpisodes: number;
   storySynopsis: string | null;
-  charactersJson: { name: string; assetId?: number; description?: string; importance?: string }[] | null;
+  charactersJson:
+    | {
+        name: string;
+        assetId?: number;
+        description?: string;
+        importance?: string;
+      }[]
+    | null;
   sourceType: number;
   parsingStatus: number;
   parsingProgress: string | null;
@@ -31,7 +39,8 @@ export interface ScriptEpisode {
   episodeNumber: number;
   title: string;
   synopsis: string | null;
-  rawContent: string | null;
+  rawContent?: string | null;
+  rawContentLength?: number;
   durationEstimate: number | null;
   totalScenes: number;
   sourceType: number;
@@ -79,7 +88,6 @@ export interface ScriptUpdateReq {
   id: number;
   version: number;
   content?: string | null;
-  rawContent?: string | null;
   storySynopsis?: string | null;
   genre?: string | null;
   targetAudience?: string | null;
@@ -147,13 +155,40 @@ export const scriptApi = {
   /** 获取剧本详情 */
   get: (id: number) => http.get<never, Script>(`/api/script/${id}`),
 
+  clearContent: (
+    id: number,
+    version: number,
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.post<never, Script>(`/api/script/${id}/clearContent`, {
+      version,
+      requestId,
+    }),
+
   /** 更新剧本 */
-  update: ({ id, version, ...patch }: ScriptUpdateReq, requestId: string = crypto.randomUUID()) =>
+  update: (
+    { id, version, ...patch }: ScriptUpdateReq,
+    requestId: string = crypto.randomUUID(),
+  ) =>
     http.put<never, Script>("/api/script", { id, version, requestId, patch }),
 
-  /** 替换原文并重置结构化分集与场次 */
-  replaceSource: (id: number, version: number, rawContent: string, requestId: string = crypto.randomUUID()) =>
-    http.put<never, Script>(`/api/script/${id}/source`, { version, requestId, rawContent }),
+  previewSource: (
+    id: number,
+    rawContent: string,
+    rule: ScriptSplitRule,
+    targetLength: number,
+  ) =>
+    http.post<never, ScriptSourcePreview>(`/api/script/${id}/source/preview`, {
+      rawContent,
+      rule,
+      targetLength,
+    }),
+
+  importSource: (id: number, payload: ScriptSourceImport, requestId: string) =>
+    http.put<never, Script>(`/api/script/${id}/source`, {
+      ...payload,
+      requestId,
+    }),
 
   // ========== 分集 ==========
 
@@ -166,16 +201,38 @@ export const scriptApi = {
     http.get<never, ScriptEpisode>(`/api/script/episode/${id}`),
 
   /** 创建分集 */
-  createEpisode: ({ scriptId: parentId, parentVersion, ...fields }: EpisodeCreateReq, requestId: string = crypto.randomUUID()) =>
-    http.post<never, ScriptEpisode>("/api/script/episode", { parentId, parentVersion, requestId, fields }),
+  createEpisode: (
+    { scriptId: parentId, parentVersion, ...fields }: EpisodeCreateReq,
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.post<never, ScriptEpisode>("/api/script/episode", {
+      parentId,
+      parentVersion,
+      requestId,
+      fields,
+    }),
 
   /** 更新分集 */
-  updateEpisode: ({ id, version, ...patch }: EpisodeUpdateReq, requestId: string = crypto.randomUUID()) =>
-    http.put<never, ScriptEpisode>("/api/script/episode", { id, version, requestId, patch }),
+  updateEpisode: (
+    { id, version, ...patch }: EpisodeUpdateReq,
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.put<never, ScriptEpisode>("/api/script/episode", {
+      id,
+      version,
+      requestId,
+      patch,
+    }),
 
   /** 删除分集 */
-  deleteEpisode: (id: number, version: number, requestId: string = crypto.randomUUID()) =>
-    http.delete<never, boolean>(`/api/script/episode/${id}`, { params: { version, requestId } }),
+  deleteEpisode: (
+    id: number,
+    version: number,
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.delete<never, boolean>(`/api/script/episode/${id}`, {
+      params: { version, requestId },
+    }),
 
   // ========== 场次 ==========
 
@@ -184,22 +241,77 @@ export const scriptApi = {
     http.get<never, SceneItem[]>(`/api/script/episode/${episodeId}/scenes`),
 
   /** 获取场次详情 */
-  getScene: (id: number) => http.get<never, SceneItem>(`/api/script/scene/${id}`),
+  getScene: (id: number) =>
+    http.get<never, SceneItem>(`/api/script/scene/${id}`),
 
   /** 创建场次 */
-  createScene: ({ episodeId: parentId, parentVersion, ...fields }: SceneCreateReq, requestId: string = crypto.randomUUID()) =>
-    http.post<never, SceneItem>("/api/script/scene", { parentId, parentVersion, requestId, fields }),
+  createScene: (
+    { episodeId: parentId, parentVersion, ...fields }: SceneCreateReq,
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.post<never, SceneItem>("/api/script/scene", {
+      parentId,
+      parentVersion,
+      requestId,
+      fields,
+    }),
 
   /** 更新场次 */
-  updateScene: ({ id, version, ...patch }: SceneUpdateReq, requestId: string = crypto.randomUUID()) =>
-    http.put<never, SceneItem>("/api/script/scene", { id, version, requestId, patch }),
+  updateScene: (
+    { id, version, ...patch }: SceneUpdateReq,
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.put<never, SceneItem>("/api/script/scene", {
+      id,
+      version,
+      requestId,
+      patch,
+    }),
 
   /** 删除场次 */
-  deleteScene: (id: number, version: number, requestId: string = crypto.randomUUID()) =>
-    http.delete<never, boolean>(`/api/script/scene/${id}`, { params: { version, requestId } }),
-
-  reorderScenes: (resourceId: number, expectedVersion: number, sceneIds: number[], requestId: string = crypto.randomUUID()) =>
-    http.post<never, { episode: ScriptEpisode; scenes: SceneItem[] }>("/api/script/scenes/commands", {
-      requestId, resourceId, expectedVersion, mode: "REORDER", scenes: [], sceneIds,
+  deleteScene: (
+    id: number,
+    version: number,
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.delete<never, boolean>(`/api/script/scene/${id}`, {
+      params: { version, requestId },
     }),
+
+  reorderScenes: (
+    resourceId: number,
+    expectedVersion: number,
+    sceneIds: number[],
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.post<never, { episode: ScriptEpisode; scenes: SceneItem[] }>(
+      "/api/script/scenes/commands",
+      {
+        requestId,
+        resourceId,
+        expectedVersion,
+        mode: "REORDER",
+        scenes: [],
+        sceneIds,
+      },
+    ),
 };
+
+export type ScriptSplitRule = "AUTO" | "CHAPTER" | "EPISODE" | "LENGTH";
+export interface ScriptSourceSegment {
+  start: number;
+  end: number;
+  title: string;
+}
+export interface ScriptSourcePreview {
+  segments: ScriptSourceSegment[];
+  totalChars: number;
+  headingCount: number;
+  splitCount: number;
+}
+export interface ScriptSourceImport {
+  version: number;
+  rawContent: string;
+  mode: "APPEND" | "REPLACE";
+  segments: ScriptSourceSegment[];
+}

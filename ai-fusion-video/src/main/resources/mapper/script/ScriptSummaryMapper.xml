@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.stonewu.fusion.mapper.script.ScriptSummaryMapper">
+    <select id="script" resultType="java.util.LinkedHashMap">
+        SELECT id, project_id, title, total_episodes, story_synopsis, characters_json,
+               source_type, parsing_status, parsing_progress, summary, genre, target_audience,
+               duration_estimate, ai_generated, status, version, create_time, update_time,
+               COALESCE(CHAR_LENGTH(raw_content), 0) AS raw_content_length
+        FROM afv_script WHERE id = #{id} AND deleted = 0
+    </select>
+    <select id="episodes" resultType="java.util.LinkedHashMap">
+        SELECT id, script_id, episode_number, title, synopsis, duration_estimate, total_scenes,
+               source_type, sort_order, parsing_status, status, version, create_time, update_time,
+               COALESCE(CHAR_LENGTH(raw_content), 0) AS raw_content_length
+        FROM afv_script_episode WHERE script_id = #{scriptId} AND deleted = 0
+        ORDER BY sort_order, id
+    </select>
+</mapper>

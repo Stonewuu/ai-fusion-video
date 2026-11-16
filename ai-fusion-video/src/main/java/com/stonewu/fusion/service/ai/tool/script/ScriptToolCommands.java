@@ -159,6 +159,7 @@ public class ScriptToolCommands {
         try {
             var receipt = action.get();
             ObjectNode result = receipt.result().deepCopy();
+            ScriptToolContent.omitSource(result);
             result.put("status", "success").put("commandId", receipt.commandId());
             result.set("changes", json.object(Map.of("changes", receipt.changes())).get("changes"));
             for (var change : receipt.changes()) {

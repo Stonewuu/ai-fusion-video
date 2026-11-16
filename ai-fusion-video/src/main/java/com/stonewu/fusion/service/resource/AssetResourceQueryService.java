@@ -80,6 +80,49 @@ public class AssetResourceQueryService {
         }));
     }
 
+    public ObjectNode summaryPage(Long projectId, String type, String keyword, int page, int size, CanvasActor actor) {
+        validatePage(page, size);
+        validateFilters(type, keyword);
+        return Objects.requireNonNull(reads.execute(ignored -> {
+            var projects = authorize(projectId, actor);
+            var rows = assets.summaries(actor, projects, projectId, type, keyword, page, size);
+            long total = assets.count(actor, projects, projectId, type, keyword);
+            ObjectNode result = json.object(Map.of("assets", rows, "total", total));
+            pageMetadata(result, page, size, total);
+            return result;
+        }));
+    }
+
+    public ObjectNode itemSummaryPage(long assetId, int page, int size, CanvasActor actor) {
+        validatePage(page, size);
+        return Objects.requireNonNull(reads.execute(ignored -> {
+            resources.authorizedHeader(ASSET, assetId, actor);
+            ObjectNode result = assets.summary(assetId);
+            var items = assets.itemSummaries(assetId, page, size);
+            result.set("items", json.object(Map.of("items", items)).get("items"));
+            long total = assets.itemCount(assetId);
+            result.put("itemCount", total);
+            pageMetadata(result, page, size, total);
+            return result;
+        }));
+    }
+
+    private void validatePage(int page, int size) {
+        if (page < 1 || size < 1 || size > 100) {
+            throw AssetFields.invalid("页码须大于 0，每页数量为 1 至 100");
+        }
+    }
+
+    private void pageMetadata(ObjectNode result, int page, int size, long total) {
+        boolean hasMore = (long) page * size < total;
+        result.put("page", page).put("pageSize", size).put("hasMore", hasMore);
+        if (hasMore) {
+            result.put("nextPage", page + 1);
+        } else {
+            result.putNull("nextPage");
+        }
+    }
+
     private List<Long> authorize(Long projectId, CanvasActor actor) {
         access.requireActorScope(actor);
         if (projectId != null) {

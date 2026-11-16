@@ -12,6 +12,7 @@ import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.model.*;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import reactor.util.retry.Retry;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -83,6 +84,8 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
                     inputHistory.userContent(safeCommand.messages()),
                     null);
             return coordinator.startChild(admission)
+                    .retryWhen(Retry.fixedDelay(Long.MAX_VALUE, Duration.ofMillis(250))
+                            .filter(ChildRunCapacityUnavailableException.class::isInstance))
                     .flatMap(result -> projections
                             .projectCommitted(safeCommand.parentRunId())
                             .then(startIfCreated(safeCommand, snapshot, result)));

@@ -44,6 +44,7 @@ public class SaveScriptEpisodeToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "parsingStatus": { "type": "integer", "enum": [0, 1, 2, 3], "description": "0 未解析，1 解析中，2 全集场次和梗概均已保存，3 解析失败" },
                         "scriptEpisodeId": { "type": "integer", "description": "更新时必填实际分集ID；创建时不传，已有集号不会隐式覆盖" },
                         "expectedVersion": { "type": "integer", "minimum": 0, "description": "刚刚读取的对象版本；创建分集传剧本版本，更新分集传分集版本" },
                         "scriptId": {

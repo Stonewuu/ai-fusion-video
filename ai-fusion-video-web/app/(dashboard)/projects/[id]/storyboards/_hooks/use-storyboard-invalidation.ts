@@ -14,7 +14,8 @@ export function useStoryboardInvalidation(projectId: number, refresh: () => Prom
     const coordinator = createStoryboardRefreshCoordinator(() => refreshRef.current());
     const unsubscribe = useResourceChangeStore.subscribe((state, previous) => {
       coordinator.update(
-        state.revisions.storyboards !== previous.revisions.storyboards,
+        state.revisions.storyboards !== previous.revisions.storyboards ||
+          state.revisions.scripts !== previous.revisions.scripts,
         false,
       );
     });

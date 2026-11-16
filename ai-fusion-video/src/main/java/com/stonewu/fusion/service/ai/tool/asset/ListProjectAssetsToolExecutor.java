@@ -36,15 +36,16 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
     @Override
     public String getToolDescription() {
         return """
-                列出项目下的资产列表（含子资产信息）。
+                分页查询项目资产目录，仅返回 ID、名称、类型、描述摘要、版本和子项数量。
+                不返回完整属性、提示词或子资产正文。默认每页 50 项，按 keyword 名称筛选可减少读取。
                 支持的资产类型：character（角色）、scene（场景）、prop（道具）
 
                 使用场景：
                 - 创建资产前先查看已有资产，避免重复创建
-                - 查看角色/场景/道具的详细信息和图片
+                - 找到目标 ID 后，用 get_asset 读取主资产详情，query_asset_items 查看子资产目录
 
                 如果提供了 projectId，则返回该项目下的资产（需有权限）。
-                如果没有 projectId，则返回当前用户可访问的资产。
+                如果没有 projectId，则查询当前用户可访问的资产。hasMore 为 true 时用 nextPage 继续。
                 """;
     }
 
@@ -62,7 +63,10 @@ public class ListProjectAssetsToolExecutor implements ToolExecutor {
                             "type": "string",
                             "enum": ["character", "scene", "prop"],
                             "description": "资产类型筛选（可选）"
-                        }
+                        },
+                        "keyword": { "type": "string", "maxLength": 200, "description": "按名称筛选候选资产" },
+                        "page": { "type": "integer", "minimum": 1, "description": "页码，默认 1" },
+                        "pageSize": { "type": "integer", "minimum": 1, "maximum": 100, "description": "每页数量，默认 50" }
                     },
                     "required": []
                 }

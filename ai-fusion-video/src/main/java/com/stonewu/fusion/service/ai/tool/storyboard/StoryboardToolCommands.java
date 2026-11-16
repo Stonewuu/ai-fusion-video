@@ -12,6 +12,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
+import java.util.List;
 import java.util.Set;
 
 import static com.stonewu.fusion.service.canvas.model.CanvasValueType.*;
@@ -125,6 +126,10 @@ public class StoryboardToolCommands {
         long board = StoryboardFields.id(fields.remove("storyboardId"), "storyboardId");
         long episode = StoryboardFields.id(fields.remove("storyboardEpisodeId"), "storyboardEpisodeId");
         int expected = version(fields.remove("expectedParentVersion"), "expectedParentVersion");
+        JsonNode replace = fields.remove("replaceEpisodeContent");
+        if (replace != null && !replace.isBoolean()) {
+            throw StoryboardFields.invalid("replaceEpisodeContent 必须为布尔值");
+        }
         if (resources.get(STORYBOARD_EPISODE, episode, actor.actor()).data().path("storyboardId")
                 .longValue() != board) {
             throw StoryboardFields.invalid("分镜集不属于指定分镜");
@@ -139,6 +144,10 @@ public class StoryboardToolCommands {
             }
             requireText(item.get("content"), "镜头 content");
             item.put("aiGenerated", true);
+        }
+        if (replace != null && replace.booleanValue()) {
+            return new StoryboardChildrenCommand(request, STORYBOARD_EPISODE, episode, expected,
+                    StoryboardChildrenCommand.Mode.REPLACE, List.of(fields), List.of());
         }
         fields.put("episodeId", episode).put("parentVersion", expected);
         return new ResourceCreateCommand(request, STORYBOARD_SCENE, null, fields);

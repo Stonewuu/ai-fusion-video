@@ -112,9 +112,9 @@ class AgentKernelSpecFactoryTests {
     }
 
     @Test
-    void selectingAScriptQueryAutomaticallyIncludesItsContentReaders() {
+    void selectingOneEpisodeAutomaticallyIncludesItsContentReaders() {
         ToolExecutor query = mock(ToolExecutor.class);
-        when(query.getToolName()).thenReturn("get_script");
+        when(query.getToolName()).thenReturn("get_script_episode");
         when(query.isEnabled()).thenReturn(true);
         when(query.isReadOnly()).thenReturn(true);
         when(query.getParametersSchema()).thenReturn("{\"type\":\"object\",\"properties\":{}}");
@@ -124,10 +124,28 @@ class AgentKernelSpecFactoryTests {
         var configured = new AgentKernelSpecFactory(agents, new AiToolConfigService(List.of(query), registry), models,
                 new AgentScopeV2Properties(), new ObjectMapper(), mcp, AgentConfigurationTestSupport.skills(agents));
 
-        var spec = configured.createRoot(request().setEnabledTools(List.of("get_script")), model, "查询剧本");
+        var spec = configured.createRoot(request().setEnabledTools(List.of("get_script_episode")), model, "查询剧本");
 
-        assertThat(spec.toolWhitelist()).containsExactlyInAnyOrder("get_script", "read_script_content", "read_tool_result");
+        assertThat(spec.toolWhitelist()).containsExactlyInAnyOrder("get_script_episode", "read_script_content", "read_tool_result");
         assertThat(spec.systemPrompt()).contains("nextOffset", "contentVersion", "hasMore=false");
+    }
+
+    @Test
+    void selectingAssetDirectoryIncludesTargetedDetailTools() {
+        ToolExecutor query = mock(ToolExecutor.class);
+        when(query.getToolName()).thenReturn("list_project_assets");
+        when(query.isEnabled()).thenReturn(true);
+        when(query.isReadOnly()).thenReturn(true);
+        when(query.getParametersSchema()).thenReturn("{\"type\":\"object\",\"properties\":{}}");
+        var models = mock(AgentScopeModelFactory.class);
+        when(models.modelConfigFingerprint(model)).thenReturn("a".repeat(64));
+        var agents = AgentConfigurationTestSupport.agents(registry);
+        var configured = new AgentKernelSpecFactory(agents, new AiToolConfigService(List.of(query), registry), models,
+                new AgentScopeV2Properties(), new ObjectMapper(), mcp, AgentConfigurationTestSupport.skills(agents));
+        var spec = configured.createRoot(request().setEnabledTools(List.of("list_project_assets")), model, "查询资产");
+        assertThat(spec.toolWhitelist()).containsExactlyInAnyOrder("list_project_assets", "get_asset",
+                "query_asset_items", "get_asset_item", "read_tool_result");
+        assertThat(spec.systemPrompt()).contains("descriptionPreview", "nextPage", "get_asset_item");
     }
 
     @Test

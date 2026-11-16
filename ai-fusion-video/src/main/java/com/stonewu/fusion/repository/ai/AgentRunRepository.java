@@ -1,5 +1,6 @@
 package com.stonewu.fusion.repository.ai;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.entity.ai.AgentRun;
@@ -67,6 +68,13 @@ public class AgentRunRepository {
 
     public List<AgentRun> findActiveChildren(String parentRunId) {
         return runMapper.selectActiveChildren(parentRunId);
+    }
+
+    public long countActiveChildren(String parentRunId) {
+        return runMapper.selectCount(new LambdaQueryWrapper<AgentRun>()
+                .eq(AgentRun::getParentRunId, parentRunId)
+                .in(AgentRun::getStatus, AgentRunStatus.RUNNING.name(), AgentRunStatus.WAITING_CONFIRMATION.name(),
+                        AgentRunStatus.WAITING_EXTERNAL.name(), AgentRunStatus.CANCEL_REQUESTED.name()));
     }
 
     public LocalDateTime databaseNow() {

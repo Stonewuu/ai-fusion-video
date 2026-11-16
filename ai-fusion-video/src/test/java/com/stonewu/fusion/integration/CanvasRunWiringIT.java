@@ -363,7 +363,11 @@ class CanvasRunWiringIT {
         assertThat(jdbc.queryForObject("SELECT deleted FROM afv_script_episode WHERE id = ?", Boolean.class, f.id)).isFalse();
         payload.put("acceptReset", true); ok(post(f, path, payload));
         awaitState(f, run, "SUCCEEDED");
-        assertThat(jdbc.queryForObject("SELECT raw_content FROM afv_script WHERE id = ?", String.class, f.id)).isEqualTo("确认后的新剧本原文");
+        var imported = resourceQueries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, f.id, new CanvasActor(f.id, null));
+        assertThat(imported).hasSize(1);
+        assertThat(resourceQueries.get(CanvasValueType.SCRIPT_EPISODE, imported.getFirst().path("id").asLong(),
+                new CanvasActor(f.id, null)).data().path("rawContent").asText()).isEqualTo("确认后的新剧本原文");
+        assertThat(resourceQueries.get(CanvasValueType.SCRIPT, f.id, new CanvasActor(f.id, null)).data().path("rawContent").isNull()).isTrue();
         assertThat(jdbc.queryForObject("SELECT deleted FROM afv_script_episode WHERE id = ?", Boolean.class, f.id)).isTrue();
         assertThat(jdbc.queryForObject("SELECT deleted FROM afv_script_scene_item WHERE id = ?", Boolean.class, f.id)).isTrue();
     }
@@ -402,9 +406,9 @@ class CanvasRunWiringIT {
         assertThat(beforeRebind.get(oldEpisode).at("/resource/id").asLong()).isEqualTo(f.id);
 
         var context = ResourceCommandContext.user(actor, f.canvas);
-        var episode = resourceCommands.execute(new ResourceCreateCommand(id(), CanvasValueType.SCRIPT_EPISODE, f.id,
-                JSON.createObjectNode().put("scriptId", f.id).put("parentVersion", 1).put("episodeNumber", 1).put("title", "重解析后的新分集")), context);
-        long episodeId = episode.result().path("id").asLong();
+        var episodes = resourceQueries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, f.id, actor);
+        assertThat(episodes).hasSize(1);
+        long episodeId = episodes.getFirst().path("id").asLong();
         var scene = resourceCommands.execute(new ResourceCreateCommand(id(), CanvasValueType.SCRIPT_SCENE, f.id,
                 JSON.createObjectNode().put("episodeId", episodeId).put("parentVersion", 0).put("sceneNumber", "1").put("sceneHeading", "重解析后的新场次")), context);
         long sceneId = scene.result().path("id").asLong();

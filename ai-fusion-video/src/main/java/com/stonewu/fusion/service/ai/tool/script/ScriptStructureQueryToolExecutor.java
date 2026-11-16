@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 /**
  * 剧本结构查询工具（get_script_structure）
  * <p>
- * 支持三级粒度返回：outline / summary / full
+ * 分页返回分集目录与梗概，具体场次按集读取。
  */
 @Component
 @RequiredArgsConstructor
@@ -38,11 +38,9 @@ public class ScriptStructureQueryToolExecutor implements ToolExecutor {
     @Override
     public String getToolDescription() {
         return """
-                查询剧本的整体结构，支持不同详细程度：
-                - outline（默认）：集列表和场次标题，快速了解骨架
-                - summary：集概述 + 场次概述（含场景描述和角色列表，不含对白），适合了解剧情上下文
-                - full：完整信息含所有对白，数据量大，慎用
-                剧本和分集正文通过 contentReads 提供入口，使用 read_script_content 分段读取。
+                分页查询剧本与分集梗概，不返回原文或场次全文。默认每页 30 集，最多 50 集。
+                hasMore=true 时使用 nextOffset 继续读取目录；用 get_script_episode 读取一集的场次，get_script_scene 读取具体场次。
+                全量解析将分集 ID 交给单集解析子任务；分镜和视频流程直接使用已解析的场次与梗概。
                 """;
     }
 
@@ -52,14 +50,16 @@ public class ScriptStructureQueryToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "offset": {"type":"integer","minimum":0,"description":"目录起始位置；继续读取使用 nextOffset"},
+                        "limit": {"type":"integer","minimum":1,"maximum":50,"description":"每页集数，默认 30"},
                         "projectId": {
                             "type": "integer",
                             "description": "项目ID"
                         },
                         "detailLevel": {
                             "type": "string",
-                            "enum": ["outline", "summary", "full"],
-                            "description": "返回详细程度。outline=集列表+场次标题（默认）；summary=集概述+场次概述（含描述和角色）；full=完整信息含对白"
+                            "enum": ["outline", "summary"],
+                            "description": "目录粒度，默认 summary；各级均保留分集梗概，不含原文和场次全文"
                         }
                     },
                     "required": ["projectId"]

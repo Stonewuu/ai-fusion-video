@@ -50,10 +50,12 @@ class ScriptContentReadingTests {
     @DisplayName("查询返回可用的读取入口，长篇单行原文连续分页后逐字一致")
     void queryReferenceReadsTheWholeNovelIncludingSupplementaryUnicodeCharacters() {
         String source = "序章🌕" + "中间剧情𠮷".repeat(19_000) + "终章";
-        ObjectNode data = mapper.createObjectNode().put("id", 10).put("version", 2).put("rawContent", source);
-        when(queries.get(CanvasValueType.SCRIPT, 10, actor))
+        ObjectNode data = mapper.createObjectNode().put("id", 10).put("scriptId", 1).put("episodeNumber", 1).put("version", 2).put("rawContent", source);
+        data.putArray("scenes");
+        when(queries.get(CanvasValueType.SCRIPT_EPISODE, 10, actor))
                 .thenAnswer(ignored -> new ResourceSnapshot(null, data.deepCopy()));
-        String query = new ScriptToolQueries(queries, json).execute("get_script", "{\"scriptId\":10}", context);
+        when(queries.scriptTree(CanvasValueType.SCRIPT_EPISODE, 10, actor)).thenReturn(data.deepCopy());
+        String query = new ScriptToolQueries(queries, json).execute("get_script_episode", "{\"scriptEpisodeId\":10}", context);
         ObjectNode result = json.read(query, ObjectNode.class);
         assertThat(result.has("rawContent")).isFalse();
         ObjectNode request = (ObjectNode) result.path("contentReads").path("rawContent").deepCopy();
@@ -108,9 +110,9 @@ class ScriptContentReadingTests {
     @DisplayName("继续读取时重新检查权限，已读取一页不代表之后仍有访问权限")
     void revokedAccessStopsTheNextPage() {
         ObjectNode data = mapper.createObjectNode().put("rawContent", "原文内容").put("version", 1);
-        when(queries.get(CanvasValueType.SCRIPT, 10, actor)).thenReturn(new ResourceSnapshot(null, data))
+        when(queries.get(CanvasValueType.SCRIPT_EPISODE, 10, actor)).thenReturn(new ResourceSnapshot(null, data))
                 .thenThrow(new BusinessException(403, "无权读取剧本"));
-        ObjectNode request = json.object(Map.of("resourceType", "script", "resourceId", 10, "field", "rawContent",
+        ObjectNode request = json.object(Map.of("resourceType", "episode", "resourceId", 10, "field", "rawContent",
                 "limit", 2));
         var page = json.read(reader.execute(json.write(request), context), ObjectNode.class);
         request.set("offset", page.get("nextOffset"));
@@ -152,9 +154,9 @@ class ScriptContentReadingTests {
     @DisplayName("大容量模型减少长正文往返，小容量模型限制单次读取并保留完整续读位置")
     void readingBudgetFollowsTheConfiguredModelAndKeepsExplicitSmallerRequests() {
         String source = "剧情🌕".repeat(30_000);
-        when(queries.get(CanvasValueType.SCRIPT, 10, actor)).thenReturn(new ResourceSnapshot(null,
+        when(queries.get(CanvasValueType.SCRIPT_EPISODE, 10, actor)).thenReturn(new ResourceSnapshot(null,
                 mapper.createObjectNode().put("rawContent", source).put("version", 1)));
-        String request = "{\"resourceType\":\"script\",\"resourceId\":10,\"field\":\"rawContent\"}";
+        String request = "{\"resourceType\":\"episode\",\"resourceId\":10,\"field\":\"rawContent\"}";
         context.setModel(AiModel.builder().contextWindow(1_000_000).build());
         var large = json.read(reader.execute(request, context), ObjectNode.class);
         assertThat(large.path("endOffset").intValue()).isEqualTo(64_000);
@@ -166,6 +168,31 @@ class ScriptContentReadingTests {
         assertThat(bounded.path("endOffset").intValue()).isEqualTo(4_000);
         var shortRead = json.read(reader.execute(request.replace("}", ",\"limit\":1000}"), context), ObjectNode.class);
         assertThat(shortRead.path("endOffset").intValue()).isEqualTo(1_000);
+    }
+
+    @Test
+    void wholeScriptCannotBeReadAndDirectoriesStayPagedWithoutSource() {
+        assertThat(json.read(reader.execute("{\"resourceType\":\"script\",\"resourceId\":10,\"field\":\"rawContent\"}", context), ObjectNode.class)
+                .path("status").asText()).isEqualTo("error");
+        ObjectNode root = mapper.createObjectNode().put("id", 1).put("version", 1).put("rawContent", "全书原文");
+        var episodes = root.putArray("episodes");
+        for (int i = 0; i < 72; i++) {
+            episodes.addObject().put("id", i + 1).put("scriptId", 1).put("episodeNumber", i + 1)
+                    .put("synopsis", "本集梗概").put("rawContent", "不能返回的原文");
+        }
+        when(queries.projectScriptTree(7, false, actor)).thenAnswer(ignored -> root.deepCopy());
+        var query = new ScriptToolQueries(queries, json);
+        var page = json.read(query.execute("get_script_structure", "{\"projectId\":7}", context), ObjectNode.class);
+        assertThat(page.path("episodes")).hasSize(30);
+        assertThat(page.path("hasMore").asBoolean()).isTrue();
+        assertThat(page.path("nextOffset").asInt()).isEqualTo(30);
+        assertThat(page.path("episodes").get(0).path("synopsis").asText()).isEqualTo("本集梗概");
+        assertThat(page.toString()).doesNotContain("rawContent", "contentReads", "全书原文", "不能返回的原文");
+        var last = json.read(query.execute("get_project_script", "{\"projectId\":7,\"offset\":60}", context), ObjectNode.class);
+        assertThat(last.path("episodes")).hasSize(12);
+        assertThat(last.path("hasMore").asBoolean()).isFalse();
+        assertThat(json.read(query.execute("get_script_structure", "{\"projectId\":7,\"detailLevel\":\"full\"}", context),
+                ObjectNode.class).path("status").asText()).isEqualTo("error");
     }
 
     @Test

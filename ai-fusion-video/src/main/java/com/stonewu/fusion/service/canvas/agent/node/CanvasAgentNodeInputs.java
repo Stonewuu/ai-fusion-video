@@ -6,6 +6,7 @@ import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.service.ai.AiModelMultimodalCapabilities;
 import com.stonewu.fusion.service.ai.agentscope.message.AgentScopeMessageMapper;
 import com.stonewu.fusion.service.canvas.CanvasJson;
+import com.stonewu.fusion.service.script.ScriptContextProjection;
 import com.stonewu.fusion.service.canvas.capability.CanvasCapabilityRegistry;
 import com.stonewu.fusion.service.canvas.model.CanvasNode;
 import com.stonewu.fusion.service.canvas.model.CanvasValueType;
@@ -161,7 +162,9 @@ public class CanvasAgentNodeInputs {
         if (attachments.size() > 32) {
             throw CanvasRunException.invalid("单次智能体最多观察 32 个媒体输入，请按批次处理");
         }
-        String instruction = json.write(input);
+        ObjectNode context = input.deepCopy();
+        ScriptContextProjection.omitSource(context);
+        String instruction = json.write(context);
         if (!attachments.isEmpty()) {
             instruction += "\n附带的是所选媒体原文件。视频采样和文档读取范围取决于模型能力，请明确观察范围，不能仅根据文件名或地址声称已经检查全部内容。";
         }

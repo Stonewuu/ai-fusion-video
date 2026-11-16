@@ -54,7 +54,7 @@ public class CanvasAgentOutputBinding {
                 throw new BusinessException(400, "不能写入空的生成文本");
             }
             command = ref.type() == SCRIPT && field.path().equals("rawContent")
-                    ? new ScriptSourceCommand(session.requestId(), ref.id(), version, value.text())
+                    ? ScriptSourceCommand.automatic(session.requestId(), ref.id(), version, value.text())
                     : new ResourcePatchCommand(session.requestId(), ref.type(), ref.id(), version,
                     json.object(Map.of(field.path(), value.text())), parentVersion);
         } else {

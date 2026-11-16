@@ -14,6 +14,19 @@ import org.springframework.stereotype.Component;
 @Slf4j
 public class AssetQueryToolExecutor implements ToolExecutor {
 
+    public static final String SCHEMA = """
+                {
+                    "type": "object",
+                    "properties": {
+                        "assetId": {
+                            "type": "integer",
+                            "description": "资产ID（必填）"
+                        }
+                    },
+                    "required": ["assetId"]
+                }
+                """;
+
     private final AssetToolQueries queries;
 
 
@@ -44,18 +57,7 @@ public class AssetQueryToolExecutor implements ToolExecutor {
 
     @Override
     public String getParametersSchema() {
-        return """
-                {
-                    "type": "object",
-                    "properties": {
-                        "assetId": {
-                            "type": "integer",
-                            "description": "资产ID（必填）"
-                        }
-                    },
-                    "required": ["assetId"]
-                }
-                """;
+        return SCHEMA;
     }
 
     @Override

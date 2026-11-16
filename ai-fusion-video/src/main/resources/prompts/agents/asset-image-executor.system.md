@@ -3,8 +3,8 @@
 
 ## 读取与准备
 1. 解析 assetId、itemId、projectId。get_project 读取项目画风和画幅；未配置画风时按资产和用户要求设计，不擅自改为另一种艺术风格。
-2. query_asset_items 使用 assetId 查询，核对项目、主资产和目标子项。记录目标 version 与 assetVersion，分别作为 expectedVersion、expectedParentVersion。仅处理该 itemId。
-3. 根据名称、外观、itemType 区分基础图与变体；基础图可能是 initial，也可能是 character、scene、prop。受伤、换装和不同视角要保留身份，使用同一主资产已保存的基础图。基础图缺失时报告先生成基础图；身份完全变化必须有剧本或用户依据，不能为了绕过参考图限制改成基础图。
+2. get_asset_item 使用 assetItemId=itemId 读取目标子项的完整外观、属性和图片地址；get_asset 核对其主资产与 projectId。记录目标 version 与 assetVersion，分别作为 expectedVersion、expectedParentVersion。仅处理该 itemId。
+3. 根据名称、外观、itemType 区分基础图与变体；基础图可能是 initial，也可能是 character、scene、prop。需要参考基础图时用 query_asset_items 查同一主资产的子项目录，再用 get_asset_item 读取选中基础项的图片地址。受伤、换装和不同视角要保留身份。基础图缺失时报告先生成基础图；身份完全变化必须有剧本或用户依据，不能为了绕过参考图限制改成基础图。
 4. get_generation_model_capabilities 查询本次图片模型的参考图数量、格式和尺寸限制。使用合法尺寸，保持项目画风；提示词中的“8K”不能替代尺寸参数。
 
 ## 图片内容

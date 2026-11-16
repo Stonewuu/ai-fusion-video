@@ -34,6 +34,7 @@ import java.util.Objects;
 public class AgentRunCoordinator {
 
     private static final long INITIAL_OWNER_EPOCH = 1L;
+    private static final int MAX_ACTIVE_CHILDREN = 5;
 
     private final AgentRunRepository runRepository;
     private final AgentMessageAllocator messageAllocator;
@@ -122,6 +123,14 @@ public class AgentRunCoordinator {
         if (deadline.isAfter(parent.getDeadlineAt())) {
             throw new IllegalArgumentException("Child run deadline must not exceed parent deadline");
         }
+        AgentRun existing = runRepository.lockChild(command.parentRunId(), command.parentToolCallId());
+        if (existing != null) {
+            return existingChildAdmission(command, deadline, existing);
+        }
+        // 父任务行锁让多实例申请串行化；等待名额时退出本事务，不占用连接或锁。
+        if (runRepository.countActiveChildren(parent.getRunId()) >= MAX_ACTIVE_CHILDREN) {
+            throw new ChildRunCapacityUnavailableException();
+        }
         LocalDateTime leaseUntil = leaseUntil(databaseNow, command.ownerLease(), deadline);
         AgentRun child = AgentRun.builder()
                 .runId(command.childRunId())
@@ -159,19 +168,18 @@ public class AgentRunCoordinator {
                     AgentRunStatus.RUNNING,
                     true);
         } catch (DuplicateKeyException duplicate) {
-            return existingChildAdmission(command, deadline, duplicate);
+            AgentRun replay = runRepository.lockChild(command.parentRunId(), command.parentToolCallId());
+            if (replay == null) {
+                throw duplicate;
+            }
+            return existingChildAdmission(command, deadline, replay);
         }
     }
 
     private ChildRunAdmission existingChildAdmission(
             StartChildAgentRunCommand command,
             LocalDateTime persistedDeadline,
-            DuplicateKeyException duplicate) {
-        AgentRun existing = runRepository.lockChild(
-                command.parentRunId(), command.parentToolCallId());
-        if (existing == null) {
-            throw duplicate;
-        }
+            AgentRun existing) {
         if (!Objects.equals(existing.getAgentName(), command.agentName())
                 || !Objects.equals(existing.getAgentType(), command.agentDefinitionStableKey())
                 || !Objects.equals(existing.getKernelFingerprint(),

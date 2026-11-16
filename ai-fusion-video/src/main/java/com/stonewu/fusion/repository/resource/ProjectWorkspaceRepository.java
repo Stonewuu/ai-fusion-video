@@ -139,7 +139,7 @@ public class ProjectWorkspaceRepository {
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("projectVersion", resources.require(CanvasValueType.PROJECT, projectId, false).version());
         result.put("script",
-                scriptId == null ? null : resources.data(resources.require(CanvasValueType.SCRIPT, scriptId, false)));
+                scriptId == null ? null : resources.scriptSummary(scriptId));
         result.put("scriptEpisodeCount", scriptId == null ? 0 : episodes.selectCount(
                 new LambdaQueryWrapper<ScriptEpisode>().eq(ScriptEpisode::getScriptId, scriptId)));
         result.put("scriptSceneCount", scriptId == null ? 0 : scenes.selectCount(

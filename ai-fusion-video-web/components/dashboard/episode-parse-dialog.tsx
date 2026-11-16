@@ -1,179 +1,211 @@
 "use client";
 
-import { useState } from "react";
-import { X, Sparkles, Loader2, AlertTriangle } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
-import type { ScriptEpisode } from "@/lib/api/script";
+import { useEffect, useState } from "react";
+import { Loader2, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
+import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
+import { scriptApi, type ScriptEpisode } from "@/lib/api/script";
 
-interface EpisodeParseDialogProps {
+interface Props {
   open: boolean;
   episode: ScriptEpisode | null;
-  /** 该集是否已有场次数据 */
   hasExistingScenes: boolean;
   existingSceneCount?: number;
   onClose: () => void;
-  /** 用户确认后回调，传入粘贴的剧本原文 */
-  onStartParse: (rawContent: string) => void;
+  onStartParse: (
+    source: string,
+    version: number,
+    replaceExisting: boolean,
+  ) => Promise<void>;
 }
 
-export function EpisodeParseDialog({
-  open,
+export function EpisodeParseDialog(props: Props) {
+  return props.open && props.episode ? (
+    <ParseForm {...props} episode={props.episode} />
+  ) : null;
+}
+
+function ParseForm({
   episode,
-  hasExistingScenes,
-  existingSceneCount = 0,
   onClose,
   onStartParse,
-}: EpisodeParseDialogProps) {
-  const [rawContent, setRawContent] = useState("");
+}: Props & { episode: ScriptEpisode }) {
+  const [source, setSource] = useState("");
+  const [loaded, setLoaded] = useState<ScriptEpisode | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
   const [error, setError] = useState("");
+  const [revision, setRevision] = useState(0);
 
-  const handleSubmit = () => {
-    if (!rawContent.trim()) {
-      setError("请粘贴该集的剧本原文");
+  useEffect(() => {
+    let active = true;
+    scriptApi
+      .getEpisode(episode.id)
+      .then((value) => {
+        if (active) {
+          setLoaded(value);
+          setSource(value.rawContent ?? "");
+          setError("");
+        }
+      })
+      .catch((failure) => {
+        if (active) {
+          setError(
+            failure instanceof Error
+              ? failure.message
+              : "本集原文加载失败，请重试",
+          );
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [episode.id, revision]);
+
+  const submit = async () => {
+    if (!loaded || !source.trim()) {
+      setError("请输入本集原文");
       return;
     }
-    if (hasExistingScenes && !confirmed) {
-      setError("请先确认覆盖现有数据");
-      return;
+    setBusy(true);
+    setError("");
+    try {
+      await onStartParse(source, loaded.version, confirmed);
+      onClose();
+    } catch (failure) {
+      setError(
+        failure instanceof Error ? failure.message : "无法开始解析，请重试",
+      );
+    } finally {
+      setBusy(false);
     }
-    setError("");
-    onStartParse(rawContent.trim());
-    // 重置状态
-    setRawContent("");
-    setConfirmed(false);
-    onClose();
   };
-
-  const handleClose = () => {
-    setRawContent("");
-    setConfirmed(false);
-    setError("");
-    onClose();
-  };
-
-  if (!episode) return null;
 
   return (
-    <AnimatePresence>
-      {open && (
-        <>
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="modal-overlay fixed inset-0 z-50"
-            onClick={handleClose}
-          />
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            transition={{ duration: 0.2 }}
-            className="fixed left-1/2 top-1/2 z-50 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg"
-          >
-            <div className="modal-surface rounded-2xl border border-border/40 p-6">
-              {/* 标题栏 */}
-              <div className="flex items-center justify-between mb-5">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="h-5 w-5 text-purple-400" />
-                  <h2 className="text-lg font-semibold">
-                    AI 解析 · 第 {episode.episodeNumber} 集
-                  </h2>
-                </div>
-                <button
-                  onClick={handleClose}
-                  className="p-1.5 rounded-lg hover:bg-muted transition-colors"
-                >
-                  <X className="h-4 w-4 text-muted-foreground" />
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                {/* 覆盖警告 */}
-                {hasExistingScenes && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className={cn(
-                      "flex items-start gap-3 p-3.5 rounded-xl",
-                      "bg-amber-500/10 border border-amber-500/20"
-                    )}
-                  >
-                    <AlertTriangle className="h-4 w-4 text-amber-400 shrink-0 mt-0.5" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-amber-800 dark:text-amber-200 font-semibold">
-                        该集已有 {existingSceneCount} 个场次
-                      </p>
-                      <p className="text-xs text-amber-700 dark:text-amber-300/80 mt-0.5">
-                        AI 解析将覆盖现有的所有场次和对白数据
-                      </p>
-                      <label className="flex items-center gap-2.5 mt-2.5 cursor-pointer select-none">
-                        <Checkbox
-                          checked={confirmed}
-                          onCheckedChange={(checked) => setConfirmed(!!checked)}
-                          className="border-amber-500/40 data-checked:border-amber-600 data-checked:bg-amber-600 dark:data-checked:bg-amber-500 dark:border-amber-500/30"
-                        />
-                        <span className="text-xs text-amber-900 dark:text-amber-200/90 font-medium">
-                          我已了解，确认覆盖现有数据
-                        </span>
-                      </label>
-                    </div>
-                  </motion.div>
-                )}
-
-                {/* 剧本原文输入 */}
-                <div>
-                  <label className="block text-sm font-medium mb-1.5">
-                    该集剧本原文 <span className="text-destructive">*</span>
-                  </label>
-                  <textarea
-                    value={rawContent}
-                    onChange={(e) => setRawContent(e.target.value)}
-                    placeholder="在此粘贴该集的剧本原文，AI 将解析为结构化的场次和对白数据……"
-                    rows={10}
-                    className={cn(
-                      "w-full px-3.5 py-2.5 rounded-xl text-sm resize-none",
-                      "bg-muted/50 border border-border/40",
-                      "focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary/50",
-                      "placeholder:text-muted-foreground/50 transition-all"
-                    )}
-                    autoFocus
-                  />
-                </div>
-
-                {error && <p className="text-sm text-destructive">{error}</p>}
-              </div>
-
-              {/* 按钮区 */}
-              <div className="flex justify-end gap-3 mt-6">
-                <button
-                  onClick={handleClose}
-                  className="px-4 py-2 rounded-xl text-sm font-medium hover:bg-muted transition-colors"
-                >
-                  取消
-                </button>
-                <button
-                  onClick={handleSubmit}
-                  disabled={hasExistingScenes && !confirmed}
-                  className={cn(
-                    "flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-medium",
-                    "bg-linear-to-r from-purple-600 to-pink-600",
-                    "text-white shadow-lg shadow-purple-500/20",
-                    "hover:shadow-purple-500/30 active:scale-[0.98] transition-all",
-                    "disabled:opacity-50 disabled:cursor-not-allowed"
-                  )}
-                >
-                  <Sparkles className="h-4 w-4" />
-                  开始解析
-                </button>
-              </div>
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open && !busy) {
+          onClose();
+        }
+      }}
+    >
+      <DialogContent
+        showCloseButton={!busy}
+        className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-2xl"
+      >
+        <DialogHeader className="shrink-0">
+          <DialogTitle>解析第 {episode.episodeNumber} 集</DialogTitle>
+          <DialogDescription>
+            {episode.title} · 提取场次、对白并生成本集梗概
+          </DialogDescription>
+        </DialogHeader>
+        <DialogScrollBody className="flex flex-col gap-4">
+          {loading ? (
+            <div className="flex items-center gap-2 py-8 text-sm text-muted-foreground">
+              <Loader2 className="size-4 animate-spin" />
+              正在加载本集原文
             </div>
-          </motion.div>
-        </>
-      )}
-    </AnimatePresence>
+          ) : (
+            loaded && (
+              <div className="flex min-w-0 flex-col gap-2">
+                <label
+                  htmlFor="parse-episode-source"
+                  className="text-sm font-medium"
+                >
+                  本集原文
+                </label>
+                <Textarea
+                  id="parse-episode-source"
+                  value={source}
+                  disabled={busy}
+                  onChange={(event) => setSource(event.target.value)}
+                  rows={12}
+                  className="field-sizing-fixed min-h-64 resize-y"
+                  placeholder="填写本集原文"
+                />
+              </div>
+            )
+          )}
+          {!!loaded?.totalScenes && (
+            <label className="flex items-start gap-2 text-sm">
+              <Checkbox
+                checked={confirmed}
+                disabled={busy}
+                onCheckedChange={(checked) => setConfirmed(checked === true)}
+              />
+              <span>
+                重新解析并替换本集 {loaded.totalScenes}{" "}
+                个场次。已有分镜保留，可按更新后的剧本重新生成。
+              </span>
+            </label>
+          )}
+          {!!loaded?.totalScenes &&
+            source !== (loaded.rawContent ?? "") &&
+            !confirmed && (
+              <p role="alert" className="text-sm text-destructive">
+                原文已修改，请勾选重新解析后继续。
+              </p>
+            )}
+          {error && (
+            <p role="alert" className="text-sm text-destructive">
+              {error}
+            </p>
+          )}
+        </DialogScrollBody>
+        <DialogFooter className="shrink-0 gap-2">
+          {!loaded && !loading && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setLoading(true);
+                setRevision((value) => value + 1);
+              }}
+            >
+              重新加载
+            </Button>
+          )}
+          <Button variant="outline" disabled={busy} onClick={onClose}>
+            取消
+          </Button>
+          <Button
+            variant="ai"
+            disabled={
+              busy ||
+              loading ||
+              !loaded ||
+              !source.trim() ||
+              (!!loaded.totalScenes &&
+                source !== (loaded.rawContent ?? "") &&
+                !confirmed)
+            }
+            onClick={submit}
+          >
+            {busy ? <Loader2 className="animate-spin" /> : <Sparkles />}
+            {busy
+              ? "正在启动"
+              : loaded?.totalScenes && !confirmed
+                ? "继续解析"
+                : "开始解析"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

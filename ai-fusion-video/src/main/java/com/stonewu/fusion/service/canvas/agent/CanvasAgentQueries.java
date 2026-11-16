@@ -12,6 +12,7 @@ import com.stonewu.fusion.service.canvas.capability.CanvasNodeCapability;
 import com.stonewu.fusion.service.canvas.model.CanvasNode;
 import com.stonewu.fusion.service.canvas.model.CanvasNodeKind;
 import com.stonewu.fusion.service.resource.ResourceQueryService;
+import com.stonewu.fusion.service.script.ScriptContextProjection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -123,7 +124,7 @@ public class CanvasAgentQueries {
         result.put("totalEdges", edges.size());
         if (node.resource() != null) {
             var resource = resources.get(node.resource().type(), node.resource().id(), session.context().actor());
-            String content = json.write(resource.data());
+            String content = json.write(ScriptContextProjection.summary(node.resource().type(), resource.data()));
             result.put("resource", resource.header());
             result.put("content", CanvasAgentLibrary.page(content, offset, limit));
         }

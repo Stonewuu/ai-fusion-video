@@ -96,6 +96,7 @@ public class AssetToolCommands {
             };
             ObjectNode result = receipt.result().deepCopy();
             aliases(result);
+            AssetToolContent.summarize(result);
             if (operation.equals("delete_asset_resource") && values.path("resourceType").asText().equals("item")) {
                 result.remove("assetId");
                 result.put("assetItemId", receipt.result().path("id").longValue());

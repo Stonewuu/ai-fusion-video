@@ -141,7 +141,7 @@ public class CanvasWritebackPreview {
         int version = Math.toIntExact(ref.version());
         if (source.type() == TEXT) {
             if (ref.type() == SCRIPT && field.path().equals("rawContent")) {
-                return new ScriptSourceCommand(requestId, ref.id(), version, source.text());
+                return ScriptSourceCommand.automatic(requestId, ref.id(), version, source.text());
             }
             return new ResourcePatchCommand(requestId, ref.type(), ref.id(), version,
                     json.object(Map.of(field.path(), source.text())), parent);

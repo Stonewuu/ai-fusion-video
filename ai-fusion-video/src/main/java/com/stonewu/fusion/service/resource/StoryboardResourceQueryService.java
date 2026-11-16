@@ -33,9 +33,8 @@ public class StoryboardResourceQueryService {
     }
 
     public List<ObjectNode> children(CanvasValueType type, CanvasValueType parentType, long parent, CanvasActor actor) {
-        resources.get(parentType, parent, actor);
-        return boards.children(type, parentType, parent).stream().map(id -> resources.get(type, id, actor).data())
-                .toList();
+        resources.authorizedHeader(parentType, parent, actor);
+        return boards.childrenData(type, parentType, parent);
     }
 
     public StoryboardStatistics statistics(long board, CanvasActor actor) {

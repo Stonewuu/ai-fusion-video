@@ -35,6 +35,7 @@ import com.stonewu.fusion.service.canvas.model.CanvasValueType;
 import com.stonewu.fusion.service.resource.ResourceCommandService;
 import com.stonewu.fusion.service.resource.ResourceEventProjectionService;
 import com.stonewu.fusion.service.resource.model.ResourceCreateCommand;
+import com.stonewu.fusion.service.resource.model.ScriptSourceCommand;
 import com.stonewu.fusion.service.resource.model.ResourcePatchCommand;
 import com.stonewu.fusion.service.canvas.CanvasJson;
 import com.stonewu.fusion.service.canvas.run.CanvasRunService;
@@ -574,32 +575,39 @@ class CanvasAgentWiringIT {
 
     @Test void professionalScriptNodeAutomaticallyPublishesTheActuallyCommittedBusinessResult() throws Exception {
         var f = fixture();
+        resources.execute(ScriptSourceCommand.automatic("prepare-episode-source", f.project(), 0,
+                "第一集：雨夜来信\n不得注入主任务的原文正文。"), ResourceCommandContext.user(actor(f), null));
+        // 先投递准备数据产生的事件，避免后台投递在预览和启动之间推进画布版本。
+        while (resourceEvents.publishNext()) {
+        }
         var model = model(f);
         var calls = new AtomicInteger();
-        var arguments = Map.<String, Object>of("scriptId", f.project(), "expectedVersion", 0, "episodeNumber", 1,
-                "title", "雨夜来信", "synopsis", "阿青在雨夜收到一封信", "rawContent", "第一集：雨夜来信", "sourceType", 2);
+        var arguments = Map.<String, Object>of("scriptId", f.project(), "expectedVersion", 1,
+                "storySynopsis", "阿青在雨夜收到一封信");
         String encoded = mapper.writeValueAsString(arguments);
         when(providers.agentScopeModelFingerprint(any(AiModel.class))).thenAnswer(call -> AgentKernelKey.modelRecordFingerprint(call.getArgument(0)));
         when(providers.provisionSingleRequestModel(any(AiModel.class))).thenAnswer(call -> new AiProviderService.AgentScopeModelProvision(
                 new ChatModelBase() {
                     @Override public String getModelName() { return "professional-script-contract"; }
                     @Override protected Flux<ChatResponse> doStream(List<Msg> messages, List<ToolSchema> schema, GenerateOptions options) {
-                        assertThat(schema).anyMatch(tool -> tool.getName().equals("save_script_episode"));
+                        assertThat(schema).anyMatch(tool -> tool.getName().equals("update_script_info"));
+                        assertThat(schema).noneMatch(tool -> tool.getName().equals("read_script_content"));
+                        assertThat(new CanvasJson(mapper).write(messages)).doesNotContain("不得注入主任务的原文正文");
                         if (calls.getAndIncrement() == 0) return Flux.just(ChatResponse.builder().id("save-episode")
-                                .content(List.of(ToolUseBlock.builder().id("save-real-episode").name("save_script_episode")
+                                .content(List.of(ToolUseBlock.builder().id("save-real-episode").name("update_script_info")
                                         .input(arguments).content(encoded).build())).finishReason("tool_calls").build());
-                        assertThat(new CanvasJson(mapper).write(messages)).contains("episode_version", "success");
-                        return Flux.just(ChatResponse.builder().content(List.of(TextBlock.builder().text("分集已写入正式剧本").build()))
+                        assertThat(new CanvasJson(mapper).write(messages)).contains("scriptVersion", "success");
+                        return Flux.just(ChatResponse.builder().content(List.of(TextBlock.builder().text("已保存故事梗概").build()))
                                 .finishReason("stop").build());
                     }
                 }, AgentKernelKey.modelRecordFingerprint(call.getArgument(0))));
         var input = nodes("$script", "原剧本");
         var source = (ObjectNode) input.get(0).path("node");
         source.put("kind", "script").set("config", mapper.createObjectNode());
-        source.set("resource", mapper.valueToTree(Map.of("type", "script", "id", f.project(), "version", 0)));
+        source.set("resource", mapper.valueToTree(Map.of("type", "script", "id", f.project(), "version", 1)));
         var operation = nodes("$parse", "解析剧本");
         ((ObjectNode) operation.get(0).path("node")).put("kind", "scriptParse").set("config", mapper.valueToTree(Map.of(
-                "agentType", "script_full_parse", "modelId", model.getId(), "instruction", "创建雨夜来信分集", "maxAgentRuns", 1)));
+                "agentType", "script_full_parse", "modelId", model.getId(), "instruction", "根据分集梗概整理故事梗概", "maxAgentRuns", 1)));
         input.addAll(operation);
         input.addObject().put("type", "canvas.edge.create").set("edge", mapper.valueToTree(Map.of("id", "$input", "kind", "execution",
                 "sourceNodeId", "$script", "sourcePort", "script", "targetNodeId", "$parse", "targetPort", "script", "inputIndex", 0, "version", 0)));
@@ -617,11 +625,11 @@ class CanvasAgentWiringIT {
             var node = current.nodes().stream().filter(item -> item.id().equals(nodeRunId)).findFirst().orElseThrow();
             assertThat(node.outputs().at("script")).singleElement().satisfies(output -> {
                 assertThat(output.resource().id()).isEqualTo(f.project());
-                assertThat(output.resource().version()).isEqualTo(1);
+                assertThat(output.resource().version()).isEqualTo(2);
             });
         });
         assertThat(calls).hasValue(2);
-        assertThat(jdbc.queryForObject("SELECT title FROM afv_script_episode WHERE script_id=? AND deleted=FALSE", String.class, f.project())).isEqualTo("雨夜来信");
+        assertThat(jdbc.queryForObject("SELECT story_synopsis FROM afv_script WHERE id=? AND deleted=FALSE", String.class, f.project())).isEqualTo("阿青在雨夜收到一封信");
         var task = agentDetails.detail(run.id(), nodeRunId, actor(f)).tasks().getFirst();
         assertAutomaticNodeTasks(nodeRunId);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_resource_command WHERE agent_run_id=? AND tool_call_id='save-real-episode' AND origin='agent'", Long.class, task.id())).isEqualTo(1);

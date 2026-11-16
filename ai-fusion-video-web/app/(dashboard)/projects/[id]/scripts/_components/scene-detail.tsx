@@ -47,8 +47,12 @@ type AssetWithItems = Asset & { items: AssetItem[] };
 
 /** 安全解析 ID 数组（兼容后端返回的 JSON 字符串或原生数组） */
 function parseIds(raw: number[] | string | null | undefined): number[] {
-  if (!raw) return [];
-  if (Array.isArray(raw)) return raw;
+  if (!raw) {
+    return [];
+  }
+  if (Array.isArray(raw)) {
+    return raw;
+  }
   if (typeof raw === "string") {
     try {
       const parsed = JSON.parse(raw);
@@ -63,9 +67,11 @@ function parseIds(raw: number[] | string | null | undefined): number[] {
 export function SceneDetail({
   scene,
   projectId,
+  showHeading = true,
 }: {
   scene: SceneItem;
   projectId: number;
+  showHeading?: boolean;
 }) {
   const router = useRouter();
   const dialogues: DialogueElement[] = parseDialogues(scene);
@@ -108,7 +114,7 @@ export function SceneDetail({
           } catch {
             return null;
           }
-        })
+        }),
       );
 
       const valid = results.filter((r): r is AssetWithItems => r !== null);
@@ -136,9 +142,11 @@ export function SceneDetail({
     <div className="p-4 space-y-5">
       {/* 场景头部信息 */}
       <div>
-        <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
-          <Info className="h-3 w-3" /> 场景详情
-        </h4>
+        {showHeading && (
+          <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3 flex items-center gap-1.5">
+            <Info className="h-3 w-3" /> 场景详情
+          </h4>
+        )}
 
         {/* 场号和内外景 */}
         <div className="flex items-center gap-2 mb-3">
@@ -149,7 +157,7 @@ export function SceneDetail({
                 "text-[11px] px-2 py-0.5 rounded-md font-medium",
                 scene.intExt === "内"
                   ? "bg-violet-500/10 text-violet-400 border border-violet-500/20"
-                  : "bg-orange-500/10 text-orange-400 border border-orange-500/20"
+                  : "bg-orange-500/10 text-orange-400 border border-orange-500/20",
               )}
             >
               {scene.intExt}
@@ -254,9 +262,7 @@ export function SceneDetail({
               type={type}
               assets={assets}
               onAssetClick={(id) =>
-                router.push(
-                  `/projects/${projectId}/assets?highlight=${id}`
-                )
+                router.push(`/projects/${projectId}/assets?highlight=${id}`)
               }
             />
           ))}
@@ -293,55 +299,71 @@ function SceneAssetGroup({
           <p className="text-xs text-muted-foreground/50 px-2.5 py-1">无</p>
         ) : (
           assets.map((asset) => (
-          <div key={asset.id} className="space-y-2">
-            <button
-              onClick={() => onAssetClick(asset.id)}
-              className={cn(
-                "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left group",
-                "hover:bg-muted/30"
-              )}
-            >
-              <SafeImage
-                src={resolveMediaUrl(asset.coverUrl) || undefined}
-                alt={asset.name}
-                className="h-9 w-9 rounded-lg object-cover"
-                fallbackType={type === "character" ? "avatar" : type === "scene" ? "scene" : type === "prop" ? "prop" : "image"}
-              />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium truncate">{asset.name}</p>
-                {asset.description && (
-                  <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">
-                    {asset.description}
-                  </p>
+            <div key={asset.id} className="space-y-2">
+              <button
+                onClick={() => onAssetClick(asset.id)}
+                className={cn(
+                  "w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left group",
+                  "hover:bg-muted/30",
                 )}
-              </div>
-              <ExternalLink className="h-3 w-3 text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
-            </button>
+              >
+                <SafeImage
+                  src={resolveMediaUrl(asset.coverUrl) || undefined}
+                  alt={asset.name}
+                  className="h-9 w-9 rounded-lg object-cover"
+                  fallbackType={
+                    type === "character"
+                      ? "avatar"
+                      : type === "scene"
+                        ? "scene"
+                        : type === "prop"
+                          ? "prop"
+                          : "image"
+                  }
+                />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-medium truncate">{asset.name}</p>
+                  {asset.description && (
+                    <p className="text-[10px] text-muted-foreground/60 truncate mt-0.5">
+                      {asset.description}
+                    </p>
+                  )}
+                </div>
+                <ExternalLink className="h-3 w-3 text-muted-foreground/30 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+              </button>
 
-            {/* 子资产图片网格 */}
-            {asset.items.length > 0 && (
-              <div className="grid grid-cols-3 gap-1.5 px-1">
-                {asset.items
-                  .filter((sub) => sub.imageUrl)
-                  .slice(0, 6)
-                  .map((sub) => (
-                    <div
-                      key={sub.id}
-                      className="aspect-square rounded-lg overflow-hidden border border-border/10 bg-muted/20"
-                      title={sub.name || undefined}
-                    >
-                      <SafeImage
-                        src={resolveMediaUrl(sub.imageUrl) || undefined}
-                        alt={sub.name || "子资产"}
-                        className="w-full h-full object-cover"
-                        fallbackType={type === "character" ? "avatar" : type === "scene" ? "scene" : type === "prop" ? "prop" : "image"}
-                      />
-                    </div>
-                  ))}
-              </div>
-            )}
-          </div>
-        ))
+              {/* 子资产图片网格 */}
+              {asset.items.length > 0 && (
+                <div className="grid grid-cols-3 gap-1.5 px-1">
+                  {asset.items
+                    .filter((sub) => sub.imageUrl)
+                    .slice(0, 6)
+                    .map((sub) => (
+                      <div
+                        key={sub.id}
+                        className="aspect-square rounded-lg overflow-hidden border border-border/10 bg-muted/20"
+                        title={sub.name || undefined}
+                      >
+                        <SafeImage
+                          src={resolveMediaUrl(sub.imageUrl) || undefined}
+                          alt={sub.name || "子资产"}
+                          className="w-full h-full object-cover"
+                          fallbackType={
+                            type === "character"
+                              ? "avatar"
+                              : type === "scene"
+                                ? "scene"
+                                : type === "prop"
+                                  ? "prop"
+                                  : "image"
+                          }
+                        />
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          ))
         )}
       </div>
     </div>

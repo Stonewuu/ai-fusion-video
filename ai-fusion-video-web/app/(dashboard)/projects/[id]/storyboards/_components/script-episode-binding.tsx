@@ -18,12 +18,14 @@ interface ScriptEpisodeBindingProps {
   boundEpisodeIds: Set<number>;
   suggestedEpisodeId?: number;
   isBinding: boolean;
+  sourceMissing?: boolean;
   onBind: (scriptEpisodeId: number) => Promise<void> | void;
 }
 
 interface ScriptEpisodeBindingReminderProps {
   isOpen: boolean;
   isBinding: boolean;
+  sourceMissing?: boolean;
   panelId: string;
   onToggle: () => void;
 }
@@ -38,6 +40,7 @@ function getEpisodeLabel(episode: ScriptEpisode) {
 export function ScriptEpisodeBindingReminder({
   isOpen,
   isBinding,
+  sourceMissing = false,
   panelId,
   onToggle,
 }: ScriptEpisodeBindingReminderProps) {
@@ -51,7 +54,13 @@ export function ScriptEpisodeBindingReminder({
         aria-controls={panelId}
         aria-expanded={isOpen}
         disabled={isBinding}
-        title={isOpen ? "收起剧本集绑定" : "该分镜集尚未绑定剧本集"}
+        title={
+          isOpen
+            ? "收起剧本关联"
+            : sourceMissing
+              ? "原剧本集已删除或替换，请重新关联"
+              : "选择要关联的剧本集"
+        }
         onClick={(event) => {
           event.stopPropagation();
           onToggle();
@@ -62,7 +71,7 @@ export function ScriptEpisodeBindingReminder({
         ) : (
           <Link2 className="text-amber-600 dark:text-amber-300" />
         )}
-        {isBinding ? "绑定中" : "待绑定"}
+        {isBinding ? "关联中" : sourceMissing ? "重新关联" : "待关联"}
       </Button>
     </div>
   );
@@ -73,6 +82,7 @@ export function ScriptEpisodeBinding({
   boundEpisodeIds,
   suggestedEpisodeId,
   isBinding,
+  sourceMissing = false,
   onBind,
 }: ScriptEpisodeBindingProps) {
   const options = episodes.map((episode) => {
@@ -87,7 +97,7 @@ export function ScriptEpisodeBinding({
     };
   });
   const suggestedEpisode = episodes.find(
-    (episode) => episode.id === suggestedEpisodeId
+    (episode) => episode.id === suggestedEpisodeId,
   );
   const hasAvailableEpisode = options.some((option) => !option.isBound);
   const placeholder = isBinding
@@ -118,7 +128,9 @@ export function ScriptEpisodeBinding({
             </p>
           </div>
           <p className="mt-0.5 text-[10px] leading-4 text-muted-foreground">
-            用于重新生成本集分镜
+            {sourceMissing
+              ? "原剧本集已删除或替换。选择新剧本集后，已有镜头和媒体继续保留。"
+              : "用于重新生成本集分镜"}
           </p>
         </div>
       </div>
@@ -126,7 +138,9 @@ export function ScriptEpisodeBinding({
       <Select
         value={null}
         onValueChange={(value) => {
-          if (value != null) void onBind(Number(value));
+          if (value != null) {
+            void onBind(Number(value));
+          }
         }}
         items={options.map(({ value, label }) => ({ value, label }))}
         disabled={isBinding || !hasAvailableEpisode}

@@ -83,7 +83,7 @@ public class CanvasAgentMutations {
                 if (ref.type() != CanvasValueType.SCRIPT || fields == null || !fields.path("rawContent").isTextual()) {
                     throw new BusinessException(400, "替换原文只接受剧本节点及 rawContent 字段");
                 }
-                yield resources.execute(new ScriptSourceCommand(session.requestId(), ref.id(), expectedVersion,
+                yield resources.execute(ScriptSourceCommand.automatic(session.requestId(), ref.id(), expectedVersion,
                         fields.path("rawContent").asText()), session.context());
             }
             default -> throw new BusinessException(400, "业务操作必须为 create、patch、delete 或 replaceSource");

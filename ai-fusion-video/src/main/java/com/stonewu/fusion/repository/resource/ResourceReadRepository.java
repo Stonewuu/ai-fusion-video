@@ -10,6 +10,7 @@ import com.stonewu.fusion.mapper.project.ProjectMapper;
 import com.stonewu.fusion.mapper.script.ScriptMapper;
 import com.stonewu.fusion.mapper.script.ScriptEpisodeMapper;
 import com.stonewu.fusion.mapper.script.ScriptSceneItemMapper;
+import com.stonewu.fusion.mapper.script.ScriptSummaryMapper;
 import com.stonewu.fusion.mapper.resource.ResourceReadMapper;
 
 import java.time.LocalDateTime;
@@ -41,6 +42,23 @@ public class ResourceReadRepository {
     private final ScriptEpisodeMapper episodes;
     private final ScriptSceneItemMapper scenes;
     private final CanvasJson json;
+    private final ScriptSummaryMapper scriptSummaries;
+
+    public ObjectNode scriptSummary(long id) {
+        return data(scriptSummaries.script(id));
+    }
+
+    public List<ObjectNode> episodeSummaries(long scriptId) {
+        return scriptSummaries.episodes(scriptId).stream().map(this::data).toList();
+    }
+
+    public List<ObjectNode> rows(List<Map<String, Object>> rows) {
+        return rows.stream().map(this::data).toList();
+    }
+
+    public ObjectNode row(Map<String, Object> row) {
+        return data(row);
+    }
 
     public Optional<ResourceHeader> find(CanvasValueType type, long id, boolean lock, boolean includeDeleted) {
         ResourceTables.of(type);

@@ -1,6 +1,7 @@
 package com.stonewu.fusion.repository.resource;
 
 import com.stonewu.fusion.mapper.resource.ResourceReadMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.service.canvas.model.CanvasValueType;
 import com.stonewu.fusion.service.resource.StoryboardFields;
 import lombok.RequiredArgsConstructor;
@@ -15,12 +16,23 @@ import static com.stonewu.fusion.service.canvas.model.CanvasValueType.*;
 @RequiredArgsConstructor
 public class StoryboardReadRepository {
     private final ResourceReadMapper records;
+    private final ResourceReadRepository resourceRows;
 
     public Optional<Long> forProject(long project) {
         return Optional.ofNullable(records.currentStoryboard(project));
     }
 
     public List<Long> children(CanvasValueType type, CanvasValueType parentType, long parent) {
+        requireChildType(type, parentType);
+        return records.storyboardChildren(type, parentType, parent);
+    }
+
+    public List<ObjectNode> childrenData(CanvasValueType type, CanvasValueType parentType, long parent) {
+        requireChildType(type, parentType);
+        return resourceRows.rows(records.storyboardChildData(type, parentType, parent));
+    }
+
+    private void requireChildType(CanvasValueType type, CanvasValueType parentType) {
         boolean valid = switch (parentType) {
             case STORYBOARD -> List.of(STORYBOARD_EPISODE, STORYBOARD_SCENE, SHOT).contains(type);
             case STORYBOARD_EPISODE -> type == STORYBOARD_SCENE || type == SHOT;
@@ -30,7 +42,6 @@ public class StoryboardReadRepository {
         if (!valid) {
             throw StoryboardFields.invalid("分镜父子查询类型不匹配");
         }
-        return records.storyboardChildren(type, parentType, parent);
     }
 
     public long count(CanvasValueType type, long board) {

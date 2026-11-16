@@ -88,24 +88,30 @@ function formatValue(val: unknown): string {
   if (val === null || val === undefined) return "—";
   if (typeof val === "boolean") return val ? "是" : "否";
   if (typeof val === "number") return String(val);
-  if (typeof val === "string") return val.length > 120 ? val.slice(0, 120) + "…" : val;
+  if (typeof val === "string")
+    return val.length > 120 ? val.slice(0, 120) + "…" : val;
   if (Array.isArray(val)) return `[${val.length} 项]`;
-  if (typeof val === "object") return `{${Object.keys(val as object).length} 个字段}`;
+  if (typeof val === "object")
+    return `{${Object.keys(val as object).length} 个字段}`;
   return String(val);
 }
 
 /** 获取字段中文标签 */
 function getFieldLabel(toolName: string, key: string): string {
-  return toolResultLabels[toolName]?.[key] ?? toolResultLabels._common[key] ?? key;
+  return (
+    toolResultLabels[toolName]?.[key] ?? toolResultLabels._common[key] ?? key
+  );
 }
 
 /** 判断是否为图片 URL */
 function isImageUrl(val: unknown): boolean {
   if (typeof val !== "string" || !val) return false;
   if (/^(https?:\/\/|\/|data:image\/)/.test(val)) {
-    return /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(val)
-      || val.startsWith("data:image/")
-      || val.includes("/image/");
+    return (
+      /\.(png|jpe?g|gif|webp|bmp|svg)(\?.*)?$/i.test(val) ||
+      val.startsWith("data:image/") ||
+      val.includes("/image/")
+    );
   }
   return false;
 }
@@ -131,23 +137,44 @@ function AssetListResult({ data }: { data: unknown }) {
     <div className="space-y-1.5">
       <p className="text-xs text-muted-foreground">
         共 <span className="font-medium text-foreground">{total}</span> 项
-        {typeStr && typeStr !== "all" && <span>（类型：{assetTypeNames[typeStr] ?? typeStr}）</span>}
+        {typeof obj.page === "number" && (
+          <span>
+            {" "}
+            · 第 {obj.page} 页 · 本页 {assets.length} 项
+          </span>
+        )}
+        {typeStr && typeStr !== "all" && (
+          <span>（类型：{assetTypeNames[typeStr] ?? typeStr}）</span>
+        )}
       </p>
       {assets.length > 0 && (
         <ul className="space-y-1">
           {assets.slice(0, 10).map((asset, i) => (
-            <li key={String(asset.id ?? i)} className="flex items-center gap-2 text-xs text-muted-foreground/90">
+            <li
+              key={String(asset.id ?? i)}
+              className="flex items-center gap-2 text-xs text-muted-foreground/90"
+            >
               <span className="w-1 h-1 rounded-full bg-muted-foreground/40 shrink-0" />
-              <span className="font-medium text-foreground">{String(asset.name ?? "未命名")}</span>
+              <span className="font-medium text-foreground">
+                {String(asset.name ?? "未命名")}
+              </span>
               {!!asset.type && (
                 <span className="px-1.5 py-0.5 rounded bg-muted/50 text-[10px]">
                   {assetTypeNames[String(asset.type)] ?? String(asset.type)}
                 </span>
               )}
-              {asset.itemCount != null && <span className="text-[10px]">{String(asset.itemCount)} 个子项</span>}
+              {asset.itemCount != null && (
+                <span className="text-[10px]">
+                  {String(asset.itemCount)} 个子项
+                </span>
+              )}
             </li>
           ))}
-          {assets.length > 10 && <li className="text-[10px] text-muted-foreground/60 pl-3">…还有 {assets.length - 10} 项</li>}
+          {assets.length > 10 && (
+            <li className="text-[10px] text-muted-foreground/60 pl-3">
+              …还有 {assets.length - 10} 项
+            </li>
+          )}
         </ul>
       )}
     </div>
@@ -161,21 +188,38 @@ function MetadataResult({ data }: { data: unknown }) {
     (obj.fields as Array<Obj>) ??
     (obj.properties as Array<Obj>) ??
     (obj.attributes as Array<Obj>);
-  if (!Array.isArray(props)) return <GenericResult data={data} toolName="query_asset_metadata" />;
+  if (!Array.isArray(props))
+    return <GenericResult data={data} toolName="query_asset_metadata" />;
   return (
     <div className="space-y-1.5">
-      <p className="text-xs text-muted-foreground">共 <span className="font-medium text-foreground">{props.length}</span> 个属性</p>
+      <p className="text-xs text-muted-foreground">
+        共 <span className="font-medium text-foreground">{props.length}</span>{" "}
+        个属性
+      </p>
       <ul className="space-y-0.5">
         {props.slice(0, 15).map((prop, i) => (
-          <li key={i} className="flex items-center gap-2 text-xs text-muted-foreground/90">
+          <li
+            key={i}
+            className="flex items-center gap-2 text-xs text-muted-foreground/90"
+          >
             <span className="w-1 h-1 rounded-full bg-muted-foreground/40 shrink-0" />
             <span className="font-medium text-foreground">
-              {String(prop.fieldLabel ?? prop.fieldKey ?? prop.name ?? prop.key ?? `属性${i + 1}`)}
+              {String(
+                prop.fieldLabel ??
+                  prop.fieldKey ??
+                  prop.name ??
+                  prop.key ??
+                  `属性${i + 1}`,
+              )}
             </span>
             {!!(prop.fieldType ?? prop.type) && (
-              <span className="px-1.5 py-0.5 rounded bg-muted/50 text-[10px]">{String(prop.fieldType ?? prop.type)}</span>
+              <span className="px-1.5 py-0.5 rounded bg-muted/50 text-[10px]">
+                {String(prop.fieldType ?? prop.type)}
+              </span>
             )}
-            {prop.required === true && <span className="text-[10px] text-orange-400">必填</span>}
+            {prop.required === true && (
+              <span className="text-[10px] text-orange-400">必填</span>
+            )}
           </li>
         ))}
       </ul>
@@ -194,7 +238,8 @@ function BatchCreateResult({ data }: { data: unknown }) {
       {message && <p className="text-xs text-muted-foreground">{message}</p>}
       {total != null && (
         <p className="text-xs text-muted-foreground">
-          ✅ 成功创建 <span className="font-medium text-foreground">{total}</span> 项
+          ✅ 成功创建{" "}
+          <span className="font-medium text-foreground">{total}</span> 项
         </p>
       )}
       {Array.isArray(created) && created.length > 0 && (
@@ -202,7 +247,10 @@ function BatchCreateResult({ data }: { data: unknown }) {
           {created.slice(0, 8).map((item, i) => {
             const it = item as Obj;
             return (
-              <li key={i} className="flex items-center gap-2 text-xs text-muted-foreground/90">
+              <li
+                key={i}
+                className="flex items-center gap-2 text-xs text-muted-foreground/90"
+              >
                 <span className="w-1 h-1 rounded-full bg-green-400/60 shrink-0" />
                 <span>{String(it.name ?? it.id ?? `#${i + 1}`)}</span>
               </li>
@@ -215,7 +263,13 @@ function BatchCreateResult({ data }: { data: unknown }) {
 }
 
 /** 通用结果展示 */
-function GenericResult({ data, toolName }: { data: unknown; toolName: string }) {
+function GenericResult({
+  data,
+  toolName,
+}: {
+  data: unknown;
+  toolName: string;
+}) {
   if (typeof data !== "object" || data === null) {
     return <p className="text-xs text-muted-foreground">{formatValue(data)}</p>;
   }
@@ -223,25 +277,46 @@ function GenericResult({ data, toolName }: { data: unknown; toolName: string }) 
     return (
       <div className="space-y-1">
         <p className="text-xs text-muted-foreground">
-          返回 <span className="font-medium text-foreground">{data.length}</span> 条记录
+          返回{" "}
+          <span className="font-medium text-foreground">{data.length}</span>{" "}
+          条记录
         </p>
         {data.slice(0, 5).map((item, i) => (
-          <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground/90">
+          <div
+            key={i}
+            className="flex items-center gap-2 text-xs text-muted-foreground/90"
+          >
             <span className="w-1 h-1 rounded-full bg-muted-foreground/40 shrink-0" />
             <span>
               {typeof item === "object" && item !== null
-                ? String((item as Obj).name ?? (item as Obj).id ?? JSON.stringify(item).slice(0, 80))
+                ? String(
+                    (item as Obj).name ??
+                      (item as Obj).id ??
+                      JSON.stringify(item).slice(0, 80),
+                  )
                 : formatValue(item)}
             </span>
           </div>
         ))}
-        {data.length > 5 && <p className="text-[10px] text-muted-foreground/60 pl-3">…还有 {data.length - 5} 条</p>}
+        {data.length > 5 && (
+          <p className="text-[10px] text-muted-foreground/60 pl-3">
+            …还有 {data.length - 5} 条
+          </p>
+        )}
       </div>
     );
   }
 
   const obj = data as Obj;
-  const priorityKeys = ["status", "message", "total", "id", "name", "type", "count"];
+  const priorityKeys = [
+    "status",
+    "message",
+    "total",
+    "id",
+    "name",
+    "type",
+    "count",
+  ];
   const entries = Object.entries(obj).sort((a, b) => {
     const ai = priorityKeys.indexOf(a[0]);
     const bi = priorityKeys.indexOf(b[0]);
@@ -252,7 +327,9 @@ function GenericResult({ data, toolName }: { data: unknown; toolName: string }) 
   });
 
   const imgEntries = entries.filter(([, v]) => isImageUrl(v));
-  const textEntries = entries.filter(([, v]) => !isImageUrl(v) && !(typeof v === "string" && v.length > 200));
+  const textEntries = entries.filter(
+    ([, v]) => !isImageUrl(v) && !(typeof v === "string" && v.length > 200),
+  );
 
   return (
     <div className="space-y-1.5">
@@ -269,14 +346,18 @@ function GenericResult({ data, toolName }: { data: unknown; toolName: string }) 
       })}
       {textEntries.slice(0, 8).map(([key, val]) => (
         <div key={key} className="flex items-baseline gap-2 text-xs">
-          <span className="text-muted-foreground/70 shrink-0">{getFieldLabel(toolName, key)}:</span>
+          <span className="text-muted-foreground/70 shrink-0">
+            {getFieldLabel(toolName, key)}:
+          </span>
           <span className="text-muted-foreground">
             {key === "status" ? friendlyStatus(val) : formatValue(val)}
           </span>
         </div>
       ))}
       {textEntries.length > 8 && (
-        <p className="text-[10px] text-muted-foreground/60">…还有 {textEntries.length - 8} 个字段</p>
+        <p className="text-[10px] text-muted-foreground/60">
+          …还有 {textEntries.length - 8} 个字段
+        </p>
       )}
     </div>
   );
@@ -284,8 +365,27 @@ function GenericResult({ data, toolName }: { data: unknown; toolName: string }) 
 
 // ========== 入口组件（按工具名路由）==========
 
-export function ToolResultDisplay({ toolName, result }: { toolName: string; result: string }) {
-  if (["read_script_content", "read_tool_result", "get_script", "get_project_script", "get_script_episode", "get_script_structure", "get_storyboard", "get_storyboard_scene_items", "await_generation_task", "get_generation_task"].includes(toolName)) {
+export function ToolResultDisplay({
+  toolName,
+  result,
+}: {
+  toolName: string;
+  result: string;
+}) {
+  if (
+    [
+      "read_script_content",
+      "read_tool_result",
+      "get_script",
+      "get_project_script",
+      "get_script_episode",
+      "get_script_structure",
+      "get_storyboard",
+      "get_storyboard_scene_items",
+      "await_generation_task",
+      "get_generation_task",
+    ].includes(toolName)
+  ) {
     return <SharedToolResultDisplay toolName={toolName} content={result} />;
   }
   let parsed: unknown;
@@ -300,9 +400,17 @@ export function ToolResultDisplay({ toolName, result }: { toolName: string; resu
   }
 
   // 错误统一展示
-  if (typeof parsed === "object" && parsed !== null && (parsed as Obj).status === "error") {
+  if (
+    typeof parsed === "object" &&
+    parsed !== null &&
+    (parsed as Obj).status === "error"
+  ) {
     const msg = (parsed as Obj).message;
-    return <p className="text-xs text-destructive">❌ {typeof msg === "string" ? msg : "操作失败"}</p>;
+    return (
+      <p className="text-xs text-destructive">
+        ❌ {typeof msg === "string" ? msg : "操作失败"}
+      </p>
+    );
   }
 
   const savedChars = savedTextResult(parsed);

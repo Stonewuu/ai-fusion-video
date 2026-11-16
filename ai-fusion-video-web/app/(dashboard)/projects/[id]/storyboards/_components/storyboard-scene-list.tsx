@@ -1,11 +1,16 @@
 "use client";
+import { useMemo } from "react";
 import { Camera, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StoryboardTableView } from "./storyboard-table-view";
 import { StoryboardCardView } from "./storyboard-card-view";
 import type { useStoryboardWorkspace } from "../_hooks/use-storyboard-workspace";
-
-export function StoryboardSceneList({ workspace }: { workspace: ReturnType<typeof useStoryboardWorkspace> }) {
+import { StoryboardScrollContext } from "./use-storyboard-virtual-rows";
+export function StoryboardSceneList({
+  workspace,
+}: {
+  workspace: ReturnType<typeof useStoryboardWorkspace>;
+}) {
   const {
     assetLookup,
     setEditAssetsOpen,
@@ -16,6 +21,7 @@ export function StoryboardSceneList({ workspace }: { workspace: ReturnType<typeo
     loadingScenes,
     sceneRefs,
     scrollContainerRef,
+    isUserScrollRef,
     activeSceneId,
     setActiveSceneId,
     handleSelectItem,
@@ -26,12 +32,17 @@ export function StoryboardSceneList({ workspace }: { workspace: ReturnType<typeo
     handleReorderItems,
     handleVideoGen,
   } = workspace;
+  const scrollContext = useMemo(
+    () => ({ scrollRef: scrollContainerRef, navigatingRef: isUserScrollRef }),
+    [scrollContainerRef, isUserScrollRef],
+  );
   return (
-
-        <div
-          ref={scrollContainerRef}
-          className="flex-1 overflow-y-auto px-6 py-5 space-y-8"
-        >
+    <StoryboardScrollContext.Provider value={scrollContext}>
+      <div
+        ref={scrollContainerRef}
+        className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-5 [overflow-anchor:none]"
+      >
+        <div data-storyboard-list-content className="space-y-8">
           {loadingScenes ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -55,23 +66,31 @@ export function StoryboardSceneList({ workspace }: { workspace: ReturnType<typeo
                   "scroll-mt-4 p-5 rounded-xl border transition-colors duration-200 motion-reduce:transition-none",
                   activeSceneId === scene.id
                     ? "bg-primary/5 border-primary/30"
-                    : "border-transparent bg-transparent"
+                    : "border-transparent bg-transparent",
                 )}
                 onClick={() => setActiveSceneId(scene.id)}
               >
                 {/* 场次标题：点击时亦可切换激活场次 */}
-                <div 
+                <div
                   className="flex items-center gap-2 mb-3 cursor-pointer group/title"
                   onClick={() => setActiveSceneId(scene.id)}
                 >
-                  <Camera className={cn(
-                    "h-3.5 w-3.5 transition-colors",
-                    activeSceneId === scene.id ? "text-primary" : "text-primary/60 group-hover/title:text-primary"
-                  )} />
-                  <h3 className={cn(
-                    "text-sm font-semibold transition-colors",
-                    activeSceneId === scene.id ? "text-primary" : "group-hover/title:text-primary"
-                  )}>
+                  <Camera
+                    className={cn(
+                      "h-3.5 w-3.5 transition-colors",
+                      activeSceneId === scene.id
+                        ? "text-primary"
+                        : "text-primary/60 group-hover/title:text-primary",
+                    )}
+                  />
+                  <h3
+                    className={cn(
+                      "text-sm font-semibold transition-colors",
+                      activeSceneId === scene.id
+                        ? "text-primary"
+                        : "group-hover/title:text-primary",
+                    )}
+                  >
                     {scene.sceneHeading ||
                       `场次 ${scene.sceneNumber || scene.id}`}
                   </h3>
@@ -94,9 +113,7 @@ export function StoryboardSceneList({ workspace }: { workspace: ReturnType<typeo
                     selectedItemId={selectedItemId}
                     onSelectItem={handleSelectItem}
                     onUpdateItemField={handleUpdateItemField}
-                    onAddItem={() =>
-                      handleAddItem(scene.id)
-                    }
+                    onAddItem={() => handleAddItem(scene.id)}
                     onDeleteItem={handleDeleteItem}
                     onReorderItems={(reordered) =>
                       handleReorderItems(scene.id, reordered)
@@ -114,9 +131,7 @@ export function StoryboardSceneList({ workspace }: { workspace: ReturnType<typeo
                     items={items}
                     selectedItemId={selectedItemId}
                     onSelectItem={handleSelectItem}
-                    onAddItem={() =>
-                      handleAddItem(scene.id)
-                    }
+                    onAddItem={() => handleAddItem(scene.id)}
                     onDeleteItem={handleDeleteItem}
                     onReorderItems={(reordered) =>
                       handleReorderItems(scene.id, reordered)
@@ -129,6 +144,7 @@ export function StoryboardSceneList({ workspace }: { workspace: ReturnType<typeo
             ))
           )}
         </div>
-
+      </div>
+    </StoryboardScrollContext.Provider>
   );
 }

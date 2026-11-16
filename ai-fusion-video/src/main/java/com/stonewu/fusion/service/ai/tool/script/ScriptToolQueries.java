@@ -30,21 +30,27 @@ public class ScriptToolQueries {
             ObjectNode params = json.read(input, ObjectNode.class);
             var actor = context.requireMutationContext().actor();
             ObjectNode result = switch (operation) {
-                case "get_script" -> queries.get(SCRIPT, id(params, "scriptId"), actor).data();
+                case "get_script" -> queries.scriptSummary(id(params, "scriptId"), actor);
                 case "get_script_scene" -> queries.get(SCRIPT_SCENE, id(params, "scriptSceneItemId"), actor).data();
                 case "get_script_episode" -> queries.scriptTree(SCRIPT_EPISODE, id(params, "scriptEpisodeId"), actor);
                 case "get_project_script", "get_script_structure" ->
-                        queries.projectScriptTree(id(params, "projectId"), operation.equals("get_script_structure"),
-                                actor);
+                        queries.projectScriptTree(id(params, "projectId"), false, actor);
                 default -> throw ScriptFields.invalid("未登记的剧本查询");
             };
             if (result == null) {
                 return json.write(Map.of("status", "empty", "message", "项目暂无剧本"));
             }
             aliases(result);
-            contentReads(result);
+            if (operation.equals("get_script_episode")) {
+                contentReads(result);
+            } else {
+                ScriptToolContent.omitSource(result);
+            }
+            if (result.has("episodes")) {
+                paginate(result, params);
+            }
             String detail = params.path("detailLevel")
-                    .asText(operation.equals("get_script_structure") ? "outline" : "summary");
+                    .asText("summary");
             if (operation.equals("get_script_episode")) {
                 if (!Set.of("summary", "full", "scenes_only").contains(detail)) {
                     throw ScriptFields.invalid("详细程度无效");
@@ -73,12 +79,10 @@ public class ScriptToolQueries {
                 }
             }
             if (operation.equals("get_script_structure")) {
-                if (!Set.of("outline", "summary", "full").contains(detail)) {
-                    throw ScriptFields.invalid("详细程度无效");
+                if (!Set.of("outline", "summary").contains(detail)) {
+                    throw ScriptFields.invalid("整体查询只返回目录和梗概，请用 get_script_episode 读取目标集场次");
                 }
-                if (!detail.equals("full")) {
-                    trim(result, detail);
-                }
+                trim(result, detail);
             }
             result.put("status", "success");
             return json.write(result);
@@ -139,12 +143,34 @@ public class ScriptToolQueries {
     private void trim(ObjectNode item, String detail) {
         item.remove(List.of("rawContent", "content", "dialogues"));
         if (detail.equals("outline")) {
-            item.remove(List.of("synopsis", "storySynopsis", "charactersJson", "characters", "sceneDescription"));
+            item.remove(List.of("charactersJson", "characters", "sceneDescription"));
         }
         for (String key : List.of("episodes", "scenes")) {
             for (JsonNode child : item.path(key)) {
                 trim((ObjectNode) child, detail);
             }
+        }
+    }
+
+    private void paginate(ObjectNode result, ObjectNode params) {
+        int offset = params.has("offset") ? ScriptFields.integer(params.get("offset"), 0, Integer.MAX_VALUE, "offset") : 0;
+        int limit = params.has("limit") ? ScriptFields.integer(params.get("limit"), 1, 50, "limit") : 30;
+        ArrayNode episodes = (ArrayNode) result.get("episodes");
+        int total = episodes.size();
+        if (offset > total) {
+            throw ScriptFields.invalid("分集目录位置超出范围，请从头读取");
+        }
+        int end = Math.min(total, offset + limit);
+        ArrayNode page = episodes.arrayNode();
+        for (int i = offset; i < end; i++) {
+            page.add(episodes.get(i));
+        }
+        result.set("episodes", page);
+        result.put("offset", offset).put("totalEpisodes", total).put("hasMore", end < total);
+        if (end < total) {
+            result.put("nextOffset", end);
+        } else {
+            result.putNull("nextOffset");
         }
     }
 }

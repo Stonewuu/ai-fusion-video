@@ -1,6 +1,7 @@
 package com.stonewu.fusion.integration;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.stonewu.fusion.entity.ai.AgentRun;
 import com.stonewu.fusion.entity.ai.AiModel;
@@ -36,6 +37,7 @@ import io.agentscope.core.message.UserMessage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.awaitility.Awaitility;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
@@ -53,12 +55,14 @@ import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -309,6 +313,62 @@ class PlatformSubAgentRunServiceIT {
                 "parent input",
                 null,
                 null, null)));
+    }
+
+    @Test
+    void sixthChildWaitsOutsideTheTransactionAndStartsAfterAChildFinishes() throws Exception {
+        StartedAgentRun parent = startParent();
+        List<PlatformSubAgentRun> children = fillChildCapacity(parent);
+        setStatus(children.get(0).childRunId(), AgentRunStatus.WAITING_CONFIRMATION);
+        setStatus(children.get(1).childRunId(), AgentRunStatus.WAITING_EXTERNAL);
+        var waiting = service.start(childCommand(parent, "capacity-6", "researcher")).toFuture();
+        Awaitility.await().during(Duration.ofMillis(600)).atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+            assertThat(waiting).isNotDone();
+            assertThat(runMapper.selectActiveChildren(parent.runId())).hasSize(5);
+        });
+        assertThat(await(service.start(childCommand(parent, "capacity-2", "researcher"))))
+                .isEqualTo(children.get(2));
+        // 在等待期间仍能更新任务状态，等待方没有持有父任务锁或数据库连接。
+        setStatus(children.get(2).childRunId(), AgentRunStatus.COMPLETED);
+        var admitted = waiting.get(5, TimeUnit.SECONDS);
+        assertThat(admitted.status()).isEqualTo(AgentRunStatus.RUNNING);
+        assertThat(runMapper.selectActiveChildren(parent.runId())).hasSize(5);
+        assertThat(run(admitted.childRunId()).getConversationId()).isEqualTo(parent.conversationId());
+    }
+
+    @Test
+    void waitingChildStopsWhenParentIsCancelledOrLosesItsLease() throws Exception {
+        for (boolean cancel : List.of(true, false)) {
+            StartedAgentRun parent = startParent();
+            fillChildCapacity(parent);
+            var waiting = service.start(childCommand(parent, "capacity-6", "researcher")).toFuture();
+            Awaitility.await().during(Duration.ofMillis(350)).atMost(Duration.ofSeconds(3))
+                    .untilAsserted(() -> assertThat(waiting).isNotDone());
+            if (cancel) {
+                await(shutdownCancellation.request(parent.runId()));
+            } else {
+                assertThat(runMapper.update(null, new LambdaUpdateWrapper<AgentRun>()
+                        .eq(AgentRun::getRunId, parent.runId())
+                        .set(AgentRun::getLeaseUntil, runMapper.selectDatabaseNow().minusSeconds(1)))).isEqualTo(1);
+            }
+            assertThatThrownBy(() -> waiting.get(5, TimeUnit.SECONDS))
+                    .isInstanceOf(ExecutionException.class).hasCauseInstanceOf(BusinessException.class);
+            assertThat(runMapper.selectCount(new LambdaQueryWrapper<AgentRun>()
+                    .eq(AgentRun::getParentRunId, parent.runId()))).isEqualTo(5);
+        }
+    }
+
+    private List<PlatformSubAgentRun> fillChildCapacity(StartedAgentRun parent) {
+        List<PlatformSubAgentRun> children = new ArrayList<>();
+        for (int index = 0; index < 5; index++) {
+            children.add(await(service.start(childCommand(parent, "capacity-" + index, "researcher"))));
+        }
+        return children;
+    }
+
+    private void setStatus(String runId, AgentRunStatus status) {
+        assertThat(runMapper.update(null, new LambdaUpdateWrapper<AgentRun>()
+                .eq(AgentRun::getRunId, runId).set(AgentRun::getStatus, status.name()))).isEqualTo(1);
     }
 
     private PlatformSubAgentCommand childCommand(

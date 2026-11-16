@@ -173,6 +173,8 @@ export function useStoryboardWorkspace(projectId: number) {
   const [activeSceneId, setActiveSceneId] = useState<number | null>(null);
   // 标记是否由用户点击触发的滚动（此时不要通过 observer 覆盖）
   const isUserScrollRef = useRef(false);
+  const sceneScrollFrameRef = useRef(0);
+  useEffect(() => () => cancelAnimationFrame(sceneScrollFrameRef.current), []);
 
   // ========== 派生数据 ==========
 
@@ -355,7 +357,13 @@ export function useStoryboardWorkspace(projectId: number) {
 
   // 当侧边栏选择变化时加载数据
   useEffect(() => {
-    if (!storyboardId) return;
+    cancelAnimationFrame(sceneScrollFrameRef.current);
+    isUserScrollRef.current = false;
+    if (!storyboardId) {
+      return;
+    }
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
 
     if (sidebarSelection.type === "all") {
       setActiveSceneId(null);
@@ -378,33 +386,54 @@ export function useStoryboardWorkspace(projectId: number) {
         loadedEpisodeIdRef.current === sidebarSelection.episodeId &&
         sceneExists
       ) {
-        setTimeout(() => {
+        timer = setTimeout(() => {
           scrollToScene(sidebarSelection.sceneId!);
         }, 50);
       } else if (sidebarSelection.episodeId) {
         // 不同集 / 首次加载 / 新添加的场次：重新加载数据再滚动
         loadedEpisodeIdRef.current = sidebarSelection.episodeId;
         loadSceneGroups(sidebarSelection.episodeId).then(() => {
-          setTimeout(() => {
+          if (!active) {
+            return;
+          }
+          timer = setTimeout(() => {
             scrollToScene(sidebarSelection.sceneId!);
           }, 100);
         });
       }
     }
+    return () => {
+      active = false;
+      clearTimeout(timer);
+      cancelAnimationFrame(sceneScrollFrameRef.current);
+      isUserScrollRef.current = false;
+    };
   }, [sidebarSelection, storyboardId, loadSceneGroups]);
 
-  // 滚动到指定场次
+  // 场次高度会随虚拟行测量变化，每帧使用当前目标位置，避免原生平滑滚动被尺寸修正打断。
   const scrollToScene = (sceneId: number) => {
+    const element = sceneRefs.current[sceneId];
+    const viewport = scrollContainerRef.current;
+    if (!element || !viewport) {
+      return;
+    }
+    cancelAnimationFrame(sceneScrollFrameRef.current);
     isUserScrollRef.current = true;
     setActiveSceneId(sceneId);
-    const el = sceneRefs.current[sceneId];
-    if (el && scrollContainerRef.current) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
-    // 滚动动画完成后恢复 observer
-    setTimeout(() => {
-      isUserScrollRef.current = false;
-    }, 600);
+    const startOffset = viewport.scrollTop;
+    const started = performance.now();
+    const duration = window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 240;
+    const step = (now: number) => {
+      const progress = duration === 0 ? 1 : Math.min((now - started) / duration, 1);
+      const target = viewport.scrollTop + element.getBoundingClientRect().top - viewport.getBoundingClientRect().top - 16;
+      viewport.scrollTop = startOffset + (target - startOffset) * (1 - (1 - progress) ** 3);
+      if (progress < 1) {
+        sceneScrollFrameRef.current = requestAnimationFrame(step);
+      } else {
+        isUserScrollRef.current = false;
+      }
+    };
+    sceneScrollFrameRef.current = requestAnimationFrame(step);
   };
 
   // ========== 滚动监听：更新当前可视场次 ==========
@@ -794,6 +823,7 @@ export function useStoryboardWorkspace(projectId: number) {
     submittingComposeEpisodeIds,
     sceneRefs,
     scrollContainerRef,
+    isUserScrollRef,
     activeSceneId,
     setActiveSceneId,
     allItems,

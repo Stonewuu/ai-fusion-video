@@ -37,6 +37,7 @@ export interface StoryboardEpisode {
   version: number;
   storyboardId: number;
   scriptEpisodeId: number | null;
+  scriptBindingStatus: "linked" | "missing" | "unbound";
   episodeNumber: number | null;
   title: string | null;
   synopsis: string | null;
@@ -118,7 +119,9 @@ export interface StoryboardItem {
 }
 
 /** 可修改字段与读模型共用原生 JSON 类型；集合排序单独提交。 */
-export type StoryboardUpdateReq = { id: number; version: number } & Partial<Pick<Storyboard, "description" | "customColumns" | "status">>;
+export type StoryboardUpdateReq = { id: number; version: number } & Partial<
+  Pick<Storyboard, "description" | "customColumns" | "status">
+>;
 export interface StoryboardEpisodeCreateReq {
   storyboardId: number;
   parentVersion: number;
@@ -128,8 +131,15 @@ export interface StoryboardEpisodeCreateReq {
   synopsis?: string | null;
   sortOrder?: number;
 }
-export type StoryboardEpisodeUpdateReq = { id: number; version: number } &
-  Partial<Pick<StoryboardEpisode, "scriptEpisodeId" | "episodeNumber" | "title" | "synopsis" | "status">>;
+export type StoryboardEpisodeUpdateReq = {
+  id: number;
+  version: number;
+} & Partial<
+  Pick<
+    StoryboardEpisode,
+    "scriptEpisodeId" | "episodeNumber" | "title" | "synopsis" | "status"
+  >
+>;
 export interface StoryboardSceneCreateReq {
   episodeId: number;
   parentVersion: number;
@@ -140,14 +150,54 @@ export interface StoryboardSceneCreateReq {
   intExt?: string;
   sortOrder?: number;
 }
-export type StoryboardSceneUpdateReq = { id: number; version: number } &
-  Partial<Pick<StoryboardScene, "sceneNumber" | "sceneHeading" | "location" | "timeOfDay" | "intExt" | "status">>;
-export type StoryboardItemFields = Pick<StoryboardItem,
-  "shotNumber" | "shotType" | "duration" | "content" | "sceneExpectation" | "sound" | "dialogue" |
-  "soundEffect" | "music" | "cameraMovement" | "cameraAngle" | "cameraEquipment" | "focalLength" |
-  "transition" | "characterIds" | "sceneAssetItemId" | "propIds" | "remark" | "customData" |
-  "aiGenerated" | "status" | "imageUrl" | "referenceImageUrl" | "videoUrl" | "generatedImageUrl" |
-  "firstFrameImageUrl" | "lastFrameImageUrl" | "firstFramePrompt" | "lastFramePrompt" | "generatedVideoUrl" | "videoPrompt">;
+export type StoryboardSceneUpdateReq = {
+  id: number;
+  version: number;
+} & Partial<
+  Pick<
+    StoryboardScene,
+    | "sceneNumber"
+    | "sceneHeading"
+    | "location"
+    | "timeOfDay"
+    | "intExt"
+    | "status"
+  >
+>;
+export type StoryboardItemFields = Pick<
+  StoryboardItem,
+  | "shotNumber"
+  | "shotType"
+  | "duration"
+  | "content"
+  | "sceneExpectation"
+  | "sound"
+  | "dialogue"
+  | "soundEffect"
+  | "music"
+  | "cameraMovement"
+  | "cameraAngle"
+  | "cameraEquipment"
+  | "focalLength"
+  | "transition"
+  | "characterIds"
+  | "sceneAssetItemId"
+  | "propIds"
+  | "remark"
+  | "customData"
+  | "aiGenerated"
+  | "status"
+  | "imageUrl"
+  | "referenceImageUrl"
+  | "videoUrl"
+  | "generatedImageUrl"
+  | "firstFrameImageUrl"
+  | "lastFrameImageUrl"
+  | "firstFramePrompt"
+  | "lastFramePrompt"
+  | "generatedVideoUrl"
+  | "videoPrompt"
+>;
 export type StoryboardItemCreateReq = Partial<StoryboardItemFields> & {
   sceneAssetItemId: number;
   storyboardSceneId: number;
@@ -155,7 +205,10 @@ export type StoryboardItemCreateReq = Partial<StoryboardItemFields> & {
   sortOrder?: number;
   insertAfterId?: number;
 };
-export type StoryboardItemUpdateReq = { id: number; version: number } & Partial<StoryboardItemFields>;
+export type StoryboardItemUpdateReq = {
+  id: number;
+  version: number;
+} & Partial<StoryboardItemFields>;
 export interface StoryboardItemAssetsUpdateReq {
   version: number;
   characterIds?: number[];
@@ -181,82 +234,272 @@ export interface StoryboardBatchPatchEntry {
   patch: Record<string, unknown>;
 }
 
-function patch<T>(path: string, data: { id: number; version: number }, requestId: string) {
+function patch<T>(
+  path: string,
+  data: { id: number; version: number },
+  requestId: string,
+) {
   const { id, version, ...fields } = data;
   return http.put<never, T>(path, { id, version, requestId, patch: fields });
 }
 function remove(path: string, version: number, requestId: string) {
   return http.delete<never, boolean>(path, { params: { version, requestId } });
 }
-function create<T>(path: string, parentId: number, parentVersion: number, fields: unknown, requestId: string) {
-  return http.post<never, T>(path, { parentId, parentVersion, requestId, fields });
+function create<T>(
+  path: string,
+  parentId: number,
+  parentVersion: number,
+  fields: unknown,
+  requestId: string,
+) {
+  return http.post<never, T>(path, {
+    parentId,
+    parentVersion,
+    requestId,
+    fields,
+  });
 }
 
 export const storyboardApi = {
   get: (id: number) => http.get<never, Storyboard>("/api/storyboard/" + id),
-  getByProject: (projectId: number) => http.get<never, Storyboard | null>("/api/storyboard/project/" + projectId),
-  update: (data: StoryboardUpdateReq, requestId: string = crypto.randomUUID()) => patch<Storyboard>("/api/storyboard", data, requestId),
-  clearContent: (id: number, version: number, requestId: string = crypto.randomUUID()) =>
-    http.post<never, Storyboard>("/api/storyboard/" + id + "/clearContent", { version, requestId }),
-  getStatistics: (storyboardId: number) => http.get<never, StoryboardStatistics>("/api/storyboard/" + storyboardId + "/statistics"),
+  getByProject: (projectId: number) =>
+    http.get<never, Storyboard | null>("/api/storyboard/project/" + projectId),
+  update: (
+    data: StoryboardUpdateReq,
+    requestId: string = crypto.randomUUID(),
+  ) => patch<Storyboard>("/api/storyboard", data, requestId),
+  clearContent: (
+    id: number,
+    version: number,
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.post<never, Storyboard>("/api/storyboard/" + id + "/clearContent", {
+      version,
+      requestId,
+    }),
+  getStatistics: (storyboardId: number) =>
+    http.get<never, StoryboardStatistics>(
+      "/api/storyboard/" + storyboardId + "/statistics",
+    ),
 
-  listEpisodes: (storyboardId: number) => http.get<never, StoryboardEpisode[]>("/api/storyboard/" + storyboardId + "/episodes"),
-  getEpisode: (id: number) => http.get<never, StoryboardEpisode>("/api/storyboard/episode/" + id),
-  createEpisode: (data: StoryboardEpisodeCreateReq, requestId: string = crypto.randomUUID()) => {
+  listEpisodes: (storyboardId: number) =>
+    http.get<never, StoryboardEpisode[]>(
+      "/api/storyboard/" + storyboardId + "/episodes",
+    ),
+  getEpisode: (id: number) =>
+    http.get<never, StoryboardEpisode>("/api/storyboard/episode/" + id),
+  createEpisode: (
+    data: StoryboardEpisodeCreateReq,
+    requestId: string = crypto.randomUUID(),
+  ) => {
     const { storyboardId, parentVersion, ...fields } = data;
-    return create<StoryboardEpisode>("/api/storyboard/episode", storyboardId, parentVersion, fields, requestId);
+    return create<StoryboardEpisode>(
+      "/api/storyboard/episode",
+      storyboardId,
+      parentVersion,
+      fields,
+      requestId,
+    );
   },
-  updateEpisode: (data: StoryboardEpisodeUpdateReq, requestId: string = crypto.randomUUID()) => patch<StoryboardEpisode>("/api/storyboard/episode", data, requestId),
-  deleteEpisode: (id: number, version: number, requestId: string = crypto.randomUUID()) => remove("/api/storyboard/episode/" + id, version, requestId),
-  bindScriptEpisode: (id: number, version: number, scriptEpisodeId: number | null, requestId: string = crypto.randomUUID()) =>
-    http.put<never, StoryboardEpisode>("/api/storyboard/episode/" + id + "/bindScriptEpisode", { version, requestId, patch: { scriptEpisodeId } }),
-  clearEpisodeContent: (id: number, version: number, requestId: string = crypto.randomUUID()) =>
-    http.post<never, StoryboardEpisode>("/api/storyboard/episode/" + id + "/clearContent", { version, requestId }),
-  composeEpisodeVideo: (episodeId: number, version: number, requestId: string, includeBgm: boolean) => http.post<never, string>("/api/storyboard/episode/" + episodeId + "/compose-video", { version, requestId, includeBgm }),
+  updateEpisode: (
+    data: StoryboardEpisodeUpdateReq,
+    requestId: string = crypto.randomUUID(),
+  ) => patch<StoryboardEpisode>("/api/storyboard/episode", data, requestId),
+  deleteEpisode: (
+    id: number,
+    version: number,
+    requestId: string = crypto.randomUUID(),
+  ) => remove("/api/storyboard/episode/" + id, version, requestId),
+  bindScriptEpisode: (
+    id: number,
+    version: number,
+    scriptEpisodeId: number | null,
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.put<never, StoryboardEpisode>(
+      "/api/storyboard/episode/" + id + "/bindScriptEpisode",
+      { version, requestId, patch: { scriptEpisodeId } },
+    ),
+  clearEpisodeContent: (
+    id: number,
+    version: number,
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.post<never, StoryboardEpisode>(
+      "/api/storyboard/episode/" + id + "/clearContent",
+      { version, requestId },
+    ),
+  composeEpisodeVideo: (
+    episodeId: number,
+    version: number,
+    requestId: string,
+    includeBgm: boolean,
+  ) =>
+    http.post<never, string>(
+      "/api/storyboard/episode/" + episodeId + "/compose-video",
+      { version, requestId, includeBgm },
+    ),
 
-  listScenesByEpisode: (episodeId: number) => http.get<never, StoryboardScene[]>("/api/storyboard/episode/" + episodeId + "/scenes"),
-  listScenesByStoryboard: (storyboardId: number) => http.get<never, StoryboardScene[]>("/api/storyboard/" + storyboardId + "/scenes"),
-  getScene: (id: number) => http.get<never, StoryboardScene>("/api/storyboard/scene/" + id),
-  createScene: (data: StoryboardSceneCreateReq, requestId: string = crypto.randomUUID()) => {
+  listScenesByEpisode: (episodeId: number) =>
+    http.get<never, StoryboardScene[]>(
+      "/api/storyboard/episode/" + episodeId + "/scenes",
+    ),
+  listScenesByStoryboard: (storyboardId: number) =>
+    http.get<never, StoryboardScene[]>(
+      "/api/storyboard/" + storyboardId + "/scenes",
+    ),
+  getScene: (id: number) =>
+    http.get<never, StoryboardScene>("/api/storyboard/scene/" + id),
+  createScene: (
+    data: StoryboardSceneCreateReq,
+    requestId: string = crypto.randomUUID(),
+  ) => {
     const { episodeId, parentVersion, ...fields } = data;
-    return create<StoryboardScene>("/api/storyboard/scene", episodeId, parentVersion, fields, requestId);
+    return create<StoryboardScene>(
+      "/api/storyboard/scene",
+      episodeId,
+      parentVersion,
+      fields,
+      requestId,
+    );
   },
-  updateScene: (data: StoryboardSceneUpdateReq, requestId: string = crypto.randomUUID()) => patch<StoryboardScene>("/api/storyboard/scene", data, requestId),
-  deleteScene: (id: number, version: number, requestId: string = crypto.randomUUID()) => remove("/api/storyboard/scene/" + id, version, requestId),
+  updateScene: (
+    data: StoryboardSceneUpdateReq,
+    requestId: string = crypto.randomUUID(),
+  ) => patch<StoryboardScene>("/api/storyboard/scene", data, requestId),
+  deleteScene: (
+    id: number,
+    version: number,
+    requestId: string = crypto.randomUUID(),
+  ) => remove("/api/storyboard/scene/" + id, version, requestId),
 
-  listItems: (storyboardId: number) => http.get<never, StoryboardItem[]>("/api/storyboard/" + storyboardId + "/items"),
-  listItemsByScene: (sceneId: number) => http.get<never, StoryboardItem[]>("/api/storyboard/scene/" + sceneId + "/items"),
-  getItem: (id: number) => http.get<never, StoryboardItem>("/api/storyboard/item/" + id),
-  createItem: (data: StoryboardItemCreateReq, requestId: string = crypto.randomUUID()) => {
+  listItems: (storyboardId: number) =>
+    http.get<never, StoryboardItem[]>(
+      "/api/storyboard/" + storyboardId + "/items",
+    ),
+  listItemsByScene: (sceneId: number) =>
+    http.get<never, StoryboardItem[]>(
+      "/api/storyboard/scene/" + sceneId + "/items",
+    ),
+  getItem: (id: number) =>
+    http.get<never, StoryboardItem>("/api/storyboard/item/" + id),
+  createItem: (
+    data: StoryboardItemCreateReq,
+    requestId: string = crypto.randomUUID(),
+  ) => {
     const { storyboardSceneId, parentVersion, ...fields } = data;
-    return create<StoryboardItem>("/api/storyboard/item", storyboardSceneId, parentVersion, fields, requestId);
+    return create<StoryboardItem>(
+      "/api/storyboard/item",
+      storyboardSceneId,
+      parentVersion,
+      fields,
+      requestId,
+    );
   },
-  updateItem: (data: StoryboardItemUpdateReq, requestId: string = crypto.randomUUID()) => patch<StoryboardItem>("/api/storyboard/item", data, requestId),
-  updateItemAssets: (id: number, data: StoryboardItemAssetsUpdateReq, requestId: string = crypto.randomUUID()) => {
+  updateItem: (
+    data: StoryboardItemUpdateReq,
+    requestId: string = crypto.randomUUID(),
+  ) => patch<StoryboardItem>("/api/storyboard/item", data, requestId),
+  updateItemAssets: (
+    id: number,
+    data: StoryboardItemAssetsUpdateReq,
+    requestId: string = crypto.randomUUID(),
+  ) => {
     const { version, ...fields } = data;
-    return http.patch<never, StoryboardItem>("/api/storyboard/item/" + id + "/assets", { version, requestId, patch: fields });
+    return http.patch<never, StoryboardItem>(
+      "/api/storyboard/item/" + id + "/assets",
+      { version, requestId, patch: fields },
+    );
   },
-  updateFrame: (id: number, data: StoryboardFrameUpdateReq, requestId: string = crypto.randomUUID()) => {
+  updateFrame: (
+    id: number,
+    data: StoryboardFrameUpdateReq,
+    requestId: string = crypto.randomUUID(),
+  ) => {
     const { version, ...fields } = data;
-    return http.put<never, StoryboardItem>("/api/storyboard/item/" + id + "/updateFrame", { version, requestId, patch: fields });
+    return http.put<never, StoryboardItem>(
+      "/api/storyboard/item/" + id + "/updateFrame",
+      { version, requestId, patch: fields },
+    );
   },
-  deleteItem: (id: number, version: number, requestId: string = crypto.randomUUID()) => remove("/api/storyboard/item/" + id, version, requestId),
-  reorderScenes: (episodeId: number, version: number, ids: number[], requestId: string = crypto.randomUUID()) =>
-    http.post<never, StoryboardChildrenResult<StoryboardEpisode, StoryboardScene>>("/api/storyboard/children", {
-      requestId, resourceType: "storyboardEpisode", resourceId: episodeId, expectedVersion: version,
-      mode: "REORDER", children: [], childIds: ids,
+  deleteItem: (
+    id: number,
+    version: number,
+    requestId: string = crypto.randomUUID(),
+  ) => remove("/api/storyboard/item/" + id, version, requestId),
+  reorderScenes: (
+    episodeId: number,
+    version: number,
+    ids: number[],
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.post<
+      never,
+      StoryboardChildrenResult<StoryboardEpisode, StoryboardScene>
+    >("/api/storyboard/children", {
+      requestId,
+      resourceType: "storyboardEpisode",
+      resourceId: episodeId,
+      expectedVersion: version,
+      mode: "REORDER",
+      children: [],
+      childIds: ids,
     }),
-  reorderItems: (sceneId: number, version: number, ids: number[], requestId: string = crypto.randomUUID()) =>
-    http.post<never, StoryboardChildrenResult<StoryboardScene, StoryboardItem>>("/api/storyboard/children", {
-      requestId, resourceType: "storyboardScene", resourceId: sceneId, expectedVersion: version,
-      mode: "REORDER", children: [], childIds: ids,
-    }),
-  batchCreateItems: (sceneId: number, version: number, items: Partial<StoryboardItemFields>[], requestId: string = crypto.randomUUID()) =>
-    http.post<never, StoryboardChildrenResult<StoryboardScene, StoryboardItem>>("/api/storyboard/children", {
-      requestId, resourceType: "storyboardScene", resourceId: sceneId, expectedVersion: version,
-      mode: "APPEND", children: items, childIds: [],
-    }),
-  batchPatch: (storyboardId: number, entries: StoryboardBatchPatchEntry[], requestId: string = crypto.randomUUID()) =>
-    http.post<never, { storyboardId: number; storyboardVersion: number; resources: { resourceType: string; resourceId: number; data: Storyboard | StoryboardEpisode | StoryboardScene | StoryboardItem }[] }>(
-      "/api/storyboard/batch", { requestId, storyboardId, entries }),
+  reorderItems: (
+    sceneId: number,
+    version: number,
+    ids: number[],
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.post<never, StoryboardChildrenResult<StoryboardScene, StoryboardItem>>(
+      "/api/storyboard/children",
+      {
+        requestId,
+        resourceType: "storyboardScene",
+        resourceId: sceneId,
+        expectedVersion: version,
+        mode: "REORDER",
+        children: [],
+        childIds: ids,
+      },
+    ),
+  batchCreateItems: (
+    sceneId: number,
+    version: number,
+    items: Partial<StoryboardItemFields>[],
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.post<never, StoryboardChildrenResult<StoryboardScene, StoryboardItem>>(
+      "/api/storyboard/children",
+      {
+        requestId,
+        resourceType: "storyboardScene",
+        resourceId: sceneId,
+        expectedVersion: version,
+        mode: "APPEND",
+        children: items,
+        childIds: [],
+      },
+    ),
+  batchPatch: (
+    storyboardId: number,
+    entries: StoryboardBatchPatchEntry[],
+    requestId: string = crypto.randomUUID(),
+  ) =>
+    http.post<
+      never,
+      {
+        storyboardId: number;
+        storyboardVersion: number;
+        resources: {
+          resourceType: string;
+          resourceId: number;
+          data:
+            | Storyboard
+            | StoryboardEpisode
+            | StoryboardScene
+            | StoryboardItem;
+        }[];
+      }
+    >("/api/storyboard/batch", { requestId, storyboardId, entries }),
 };

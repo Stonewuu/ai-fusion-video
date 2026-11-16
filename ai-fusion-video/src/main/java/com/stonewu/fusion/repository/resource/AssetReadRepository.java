@@ -2,6 +2,7 @@ package com.stonewu.fusion.repository.resource;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.entity.asset.AssetItem;
 import com.stonewu.fusion.mapper.asset.AssetItemMapper;
 import com.stonewu.fusion.mapper.asset.AssetMapper;
@@ -19,6 +20,25 @@ import java.util.Map;
 public class AssetReadRepository {
     private final AssetMapper assets;
     private final AssetItemMapper items;
+    private final ResourceReadRepository resourceRows;
+
+    public List<ObjectNode> summaries(CanvasActor actor, List<Long> projects, Long projectId, String type,
+                                      String keyword, int page, int size) {
+        return resourceRows.rows(assets.accessibleSummaries(new Page<>(page, size, false),
+                filter(actor, projects, projectId, type, keyword)));
+    }
+
+    public List<ObjectNode> itemSummaries(long assetId, int page, int size) {
+        return resourceRows.rows(items.summaries(new Page<>(page, size, false), assetId));
+    }
+
+    public ObjectNode summary(long assetId) {
+        return resourceRows.row(assets.summary(assetId));
+    }
+
+    public long itemCount(long assetId) {
+        return items.selectCount(new LambdaQueryWrapper<AssetItem>().eq(AssetItem::getAssetId, assetId));
+    }
 
     public List<Long> ids(CanvasActor actor, List<Long> projects, Long projectId, String type, String keyword,
                           Integer page, Integer size) {

@@ -32,7 +32,8 @@ import java.util.Set;
 
 @Component
 public final class AgentScopeHarnessFactory {
-    private static final int COMPACTION_TRIGGER_PERCENT = 80;
+    private static final int COMPACTION_TRIGGER_PERCENT = 90;
+    private static final int DEFAULT_CONTEXT_WINDOW = 262_144;
 
     private final AgentKernelModelFactory modelFactory;
     private final AgentKernelToolRegistry toolRegistry;
@@ -140,8 +141,7 @@ public final class AgentScopeHarnessFactory {
                         "Tool registry result does not match kernel whitelist: registered="
                                 + toolkit.getToolNames() + ", expected=" + spec.toolWhitelist());
             }
-            Integer contextWindow = resolveContextWindow(
-                    spec.model().getContextWindow(), ownedModel.model().getContextWindowSize());
+            Integer contextWindow = resolveContextWindow(spec.model().getContextWindow());
             HarnessAgent.Builder builder = HarnessAgent.builder()
                     .agentId(spec.agentDefinitionStableKey())
                     .name(spec.agentName())
@@ -229,12 +229,9 @@ public final class AgentScopeHarnessFactory {
         }
     }
 
-    static CompactionConfig compactionConfig(Integer contextWindow) {
+    static CompactionConfig compactionConfig(int contextWindow) {
         // 摘要前的全文由平台日志保存；不另写包含会话标识的本地文件。
         var builder = CompactionConfig.builder().offloadBeforeCompact(false).flushBeforeCompact(false);
-        if (contextWindow == null || contextWindow <= 0) {
-            return builder.build();
-        }
         int triggerTokens = Math.max(
                 1,
                 (int) ((long) contextWindow * COMPACTION_TRIGGER_PERCENT / 100));
@@ -244,11 +241,11 @@ public final class AgentScopeHarnessFactory {
                 .build();
     }
 
-    static Integer resolveContextWindow(Integer configuredContextWindow, int modelContextWindow) {
+    static int resolveContextWindow(Integer configuredContextWindow) {
         if (configuredContextWindow != null && configuredContextWindow > 0) {
             return configuredContextWindow;
         }
-        return modelContextWindow > 0 ? modelContextWindow : null;
+        return DEFAULT_CONTEXT_WINDOW;
     }
 
     private static AgentScopeSkillRegistry disabledSkillRegistry() {

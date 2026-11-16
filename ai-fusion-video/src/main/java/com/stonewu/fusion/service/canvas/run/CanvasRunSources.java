@@ -9,6 +9,7 @@ import com.stonewu.fusion.service.media.model.MediaSourceReference;
 import com.stonewu.fusion.service.resource.ResourceQueryService;
 import com.stonewu.fusion.service.resource.model.ResourceCommandContext;
 import com.stonewu.fusion.service.resource.model.ResourceSnapshot;
+import com.stonewu.fusion.service.script.ScriptContextProjection;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -52,6 +53,7 @@ public class CanvasRunSources {
                 document.projectId())) {
             throw CanvasRunException.invalid("业务对象不属于当前画布项目");
         }
+        snapshot = new ResourceSnapshot(snapshot.header(), ScriptContextProjection.summary(node.resource().type(), snapshot.data()));
         var data = snapshot.data();
         Map<String, List<Value>> output = new LinkedHashMap<>();
         String port = switch (node.kind()) {
@@ -71,8 +73,8 @@ public class CanvasRunSources {
                 output.put("style", List.of(text(data.path("artStyleDescription").asText(""))));
                 mediaField(output, "image", snapshot, "artStyleImageUrl", usedPorts, actor, document.projectId());
             }
-            case SCRIPT -> output.put("text", List.of(text(data.path("rawContent").asText(""))));
-            case SCRIPT_EPISODE -> output.put("text", List.of(text(data.path("rawContent").asText(""))));
+            case SCRIPT -> output.put("text", List.of(text(data.path("storySynopsis").asText(""))));
+            case SCRIPT_EPISODE -> output.put("text", List.of(text(data.path("synopsis").asText(""))));
             case SCRIPT_SCENE -> output.put("text", List.of(text(sceneText(data))));
             case SHOT -> {
                 output.put("prompt", List.of(text(CanvasVideoPrompt.shot(data))));
@@ -198,7 +200,7 @@ public class CanvasRunSources {
         var header = snapshot.header();
         return value(header.resourceType(), null, null, null,
                 new CanvasResourceReference(header.resourceType(), header.resourceId(), (long) header.version()),
-                snapshot.data());
+                ScriptContextProjection.summary(header.resourceType(), snapshot.data()));
     }
 
     private Value value(CanvasValueType type, String text, String mediaId, Integer version,

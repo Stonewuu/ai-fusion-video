@@ -3,3 +3,5 @@
 先用 get_script_structure 确认目标范围，读取已经解析的分集和场次；尚未解析时按受控正文工具完整读取授权原文。list_project_assets、query_asset_metadata 核对已有资产，使用实际返回的 ID 和版本。
 每个实际拍摄地点都应有场景资产，包括过渡道路、车辆内部、空镜地点；同一地点复用，日夜、毁坏等外观状态按需要区分。人物按身份复用，重要服饰与伤势记录依据。道具覆盖参与动作、影响空间或重复出现的车辆、动物、武器及器物，不只提取有专名的物品。
 用 batch_create_assets 创建缺失主资产，按工具回执确认基础子资产。描述来自剧本，不用外部知识补出未发生的经历。完成后核对目标场次覆盖，按实际创建与复用数量汇报。
+
+资产查询先按名称、类型筛选分页摘要，按 hasMore、nextPage 翻页。query_asset_items 按 assetName 返回主资产候选，选定 assetId 后再查询子资产目录；需要核对完整设定时只对候选调用 get_asset 或 get_asset_item，不将 descriptionPreview 当作完整设定。

@@ -1,10 +1,9 @@
 "use client";
-import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import { useCallback } from "react";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { scriptApi, type ScriptEpisode } from "@/lib/api/script";
-import { storyboardApi, type Storyboard, type StoryboardEpisode, type StoryboardItem, type StoryboardFrameType } from "@/lib/api/storyboard";
+import { type Storyboard, type StoryboardEpisode, type StoryboardItem, type StoryboardFrameType } from "@/lib/api/storyboard";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { buildBatchFrameContext } from "@/lib/storyboard/frame-prompts";
 import type { BatchFrameGeneratePayload } from "../_components/storyboard-ref-panel";
@@ -22,7 +21,6 @@ interface StoryboardGenerationOptions {
 
 export function useStoryboardGeneration({ projectId, projectName, storyboard, scriptEpisodes, currentEpisode, sceneGroups, refreshStoryboardItems }: StoryboardGenerationOptions) {
   const { confirm, alert } = useConfirm();
-  const requests = useCommandRequestKey();
   const addPipeline = usePipelineStore((state) => state.addPipeline);
   const setPanelExpanded = usePipelineStore((state) => state.setPanelExpanded);
   const setExpandedTaskId = usePipelineStore((state) => state.setExpandedTaskId);
@@ -72,7 +70,9 @@ const handleAiStoryboard = useCallback(async () => {
   ]);
 
 const handleGenerateEpisodeStoryboard = useCallback(async (episode: StoryboardEpisode) => {
-    if (!storyboard) return;
+    if (!storyboard) {
+      return;
+    }
     if (!storyboard.scriptId) {
       await alert({ title: "未关联剧本", description: "当前分镜未关联剧本，无法按单集重新生成。", variant: "warning" });
       return;
@@ -83,13 +83,18 @@ const handleGenerateEpisodeStoryboard = useCallback(async (episode: StoryboardEp
     }
 
     const scriptEpisode = scriptEpisodes.find((item) => item.id === episode.scriptEpisodeId);
+    if (!scriptEpisode) {
+      await alert({ title: "请重新关联剧本", description: "原剧本集已删除或替换，请在分镜目录选择对应的剧本集。", variant: "warning" });
+      return;
+    }
     const displayNumber = scriptEpisode?.episodeNumber ?? episode.episodeNumber ?? "?";
     const confirmed = await confirm({ title: "覆盖生成本集分镜", description: `将覆盖第 ${displayNumber} 集已有分镜内容，不影响其它集。确定继续？`, variant: "ai", confirmText: "确定覆盖生成" });
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
     try {
-      await storyboardApi.clearEpisodeContent(episode.id, episode.version, requests.forPayload({ clearEpisode: episode.id, version: episode.version }));
-      requests.clear();
+      await scriptApi.getEpisode(episode.scriptEpisodeId);
       const pipelineId = addPipeline({
         label: `AI 分镜 · 第 ${displayNumber} 集`,
         projectId,
@@ -98,7 +103,7 @@ const handleGenerateEpisodeStoryboard = useCallback(async (episode: StoryboardEp
           toolExecutionMode: "FULL_ACCESS",
           category: "pipeline",
           title: `AI 分镜 · 第 ${displayNumber} 集`,
-          message: `请为剧本分集（scriptEpisodeId: ${episode.scriptEpisodeId}）生成分镜，并保存到分镜脚本 ${storyboard.id}。`,
+          message: `请为剧本分集（scriptEpisodeId: ${episode.scriptEpisodeId}）生成分镜，并覆盖分镜集 ${episode.id}（storyboardId: ${storyboard.id}）。覆盖已确认，先读取剧本并设计第一场，再以 replaceEpisodeContent=true 保存第一场，后续逐场追加。`,
           projectId,
           context: {
             scriptId: storyboard.scriptId,
@@ -123,7 +128,6 @@ const handleGenerateEpisodeStoryboard = useCallback(async (episode: StoryboardEp
     setExpandedTaskId,
     setPanelExpanded,
     storyboard,
-  requests,
   ]);
 
 const handleGenerateItemFrame = useCallback(

@@ -2,6 +2,7 @@ package com.stonewu.fusion.controller.script;
 
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.stonewu.fusion.common.GlobalExceptionHandler;
+import com.stonewu.fusion.service.script.ScriptSourceSplitter;
 import com.stonewu.fusion.service.canvas.CanvasActorResolver;
 import com.stonewu.fusion.service.canvas.model.CanvasActor;
 import com.stonewu.fusion.service.canvas.model.CanvasErrorCode;
@@ -13,6 +14,7 @@ import com.stonewu.fusion.service.resource.model.ResourceCommandContext;
 import com.stonewu.fusion.service.resource.model.ResourceCommandReceipt;
 import com.stonewu.fusion.service.resource.model.ResourcePatchCommand;
 import com.stonewu.fusion.service.resource.model.ResourceCreateCommand;
+import com.stonewu.fusion.service.resource.model.ScriptClearCommand;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -38,7 +40,7 @@ class ScriptCommandControllerTests {
         commands = mock(ResourceCommandService.class);
         CanvasActorResolver actors = mock(CanvasActorResolver.class);
         when(actors.current()).thenReturn(actor.actor());
-        mvc = MockMvcBuilders.standaloneSetup(new ScriptController(commands, mock(ResourceQueryService.class), actors))
+        mvc = MockMvcBuilders.standaloneSetup(new ScriptController(commands, mock(ResourceQueryService.class), actors, new ScriptSourceSplitter()))
                 .setControllerAdvice(new ScriptCommandExceptionHandler(), new GlobalExceptionHandler()).build();
     }
 
@@ -91,7 +93,22 @@ class ScriptCommandControllerTests {
         when(commands.execute(any(), eq(actor))).thenThrow(new CanvasException(409, CanvasErrorCode.VERSION_CONFLICT,
                 "剧本已有结构修改", Map.of("currentVersion", 9)));
         mvc.perform(put("/api/script/3/source").contentType(MediaType.APPLICATION_JSON).content("""
-                {"requestId":"replace-1","version":7,"rawContent":"新故事"}
+                {"requestId":"replace-1","version":7,"rawContent":"新故事","mode":"REPLACE","segments":[{"start":0,"end":3,"title":"第一集"}]}
                 """)).andExpect(status().isConflict()).andExpect(jsonPath("$.data.details.currentVersion").value(9));
+    }
+
+    @Test
+    void clearRequiresObservedVersionAndUsesAuthenticatedActor() throws Exception {
+        mvc.perform(post("/api/script/3/clearContent").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestId\":\"clear-1\"}"))
+                .andExpect(status().isBadRequest());
+        verifyNoInteractions(commands);
+        when(commands.execute(any(ScriptClearCommand.class), eq(actor))).thenReturn(
+                new ResourceCommandReceipt("cleared", "clear-1", JsonNodeFactory.instance.objectNode()
+                        .put("id", 3).put("version", 8).put("totalEpisodes", 0), List.of()));
+        mvc.perform(post("/api/script/3/clearContent").contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"requestId\":\"clear-1\",\"version\":7}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.data.totalEpisodes").value(0));
+        verify(commands).execute(new ScriptClearCommand("clear-1", 3, 7), actor);
     }
 }

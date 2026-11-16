@@ -35,7 +35,7 @@ public class ScriptQueryToolExecutor implements ToolExecutor {
     @Override
     public String getToolDescription() {
         return "查询剧本的基本信息（分集详情请使用 get_script_structure）。"
-                + "正文通过 contentReads 提供读取入口，使用 read_script_content 分段读取。";
+                + "仅返回剧本梗概和元数据；原文按集保存，使用 get_script_episode 选择目标分集。";
     }
 
     @Override

@@ -49,6 +49,9 @@ public class UpdateScriptSceneItemToolExecutor implements ToolExecutor {
                         "timeOfDay": { "type": "string", "description": "时间" },
                         "intExt": { "type": "string", "description": "内外景" },
                         "characters": { "type": "array", "items": { "type": "string" }, "description": "出场角色名列表" },
+                        "sceneAssetId": { "type": ["integer", "null"], "minimum": 1, "description": "当前项目的场景主资产 ID；null 清除关联" },
+                        "characterAssetIds": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "description": "当前项目的角色主资产 ID" },
+                        "propAssetIds": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "description": "当前项目的道具主资产 ID" },
                         "sceneDescription": { "type": "string", "description": "场景描述" },
                         "dialogues": {
                             "type": "array",

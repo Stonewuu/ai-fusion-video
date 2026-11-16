@@ -34,6 +34,7 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
         return """
                 创建一个分镜场次，并批量保存该场次下的所有镜头。
                 可一次性保存一个场次的完整分镜数据。
+                用户明确要求覆盖本集时，第一场设置 replaceEpisodeContent=true；本场保存成功时原子替换旧场次，后续场次不再设置。失败时保留旧内容。
 
                 【参数说明】
                 - storyboardId：所属分镜脚本ID（必填）
@@ -53,6 +54,10 @@ public class SaveStoryboardSceneShotsToolExecutor implements ToolExecutor {
                 {
                     "type": "object",
                     "properties": {
+                        "replaceEpisodeContent": {
+                            "type": "boolean",
+                            "description": "已获本集覆盖授权时，仅第一场设为 true，原子替换本集原有场次"
+                        },
                         "storyboardId": {
                             "type": "integer",
                             "description": "所属分镜脚本ID（必填）"

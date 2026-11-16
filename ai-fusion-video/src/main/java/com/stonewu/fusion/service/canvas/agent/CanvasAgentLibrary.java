@@ -10,6 +10,7 @@ import com.stonewu.fusion.service.media.MediaResourceQueries;
 import com.stonewu.fusion.service.media.model.MediaResource;
 import com.stonewu.fusion.service.resource.AssetResourceQueryService;
 import com.stonewu.fusion.service.resource.ResourceQueryService;
+import com.stonewu.fusion.service.script.ScriptContextProjection;
 import com.stonewu.fusion.service.resource.StoryboardResourceQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -114,7 +115,7 @@ public class CanvasAgentLibrary {
             throw new BusinessException(403, "资源不属于当前画布的项目范围");
         }
         return Map.of("status", "success", "resource", resource.header(), "content",
-                page(json.write(resource.data()), offset, limit));
+                page(json.write(ScriptContextProjection.summary(resource.header().resourceType(), resource.data())), offset, limit));
     }
 
     private Object resource(CanvasValueType type, JsonNode data) {

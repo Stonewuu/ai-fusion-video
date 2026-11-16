@@ -135,24 +135,24 @@ class AgentScopeHarnessFactoryTests {
     }
 
     @Test
-    void configuresConversationCompactionAtEightyPercentOfTheModelWindow() {
+    void configuresConversationCompactionAtNinetyPercentOfTheModelWindow() {
         var configured = AgentScopeHarnessFactory.compactionConfig(262_144);
 
         assertThat(configured.getTriggerMessages()).isZero();
-        assertThat(configured.getTriggerTokens()).isEqualTo(209_715);
+        assertThat(configured.getTriggerTokens()).isEqualTo(235_929);
         assertThat(configured.isOffloadBeforeCompact()).isFalse();
         assertThat(configured.isFlushBeforeCompact()).isFalse();
 
-        var fallback = AgentScopeHarnessFactory.compactionConfig(null);
-        assertThat(fallback.getTriggerMessages()).isEqualTo(50);
-        assertThat(fallback.getTriggerTokens()).isZero();
-        assertThat(fallback.isOffloadBeforeCompact()).isFalse();
+        var defaults = AgentScopeHarnessFactory.compactionConfig(AgentScopeHarnessFactory.resolveContextWindow(null));
+        assertThat(defaults.getTriggerTokens()).isEqualTo(235_929);
+        assertThat(defaults.getTriggerMessages()).isZero();
+        assertThat(AgentScopeHarnessFactory.compactionConfig(1_000_000).getTriggerTokens()).isEqualTo(900_000);
 
-        assertThat(AgentScopeHarnessFactory.resolveContextWindow(1_000_000, 8_192))
+        assertThat(AgentScopeHarnessFactory.resolveContextWindow(1_000_000))
                 .isEqualTo(1_000_000);
-        assertThat(AgentScopeHarnessFactory.resolveContextWindow(null, 8_192))
-                .isEqualTo(8_192);
-        assertThat(AgentScopeHarnessFactory.resolveContextWindow(null, 0)).isNull();
+        assertThat(AgentScopeHarnessFactory.resolveContextWindow(null))
+                .isEqualTo(262_144);
+        assertThat(AgentScopeHarnessFactory.resolveContextWindow(0)).isEqualTo(262_144);
     }
 
     @Test

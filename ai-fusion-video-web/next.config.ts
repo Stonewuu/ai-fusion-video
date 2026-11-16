@@ -13,6 +13,8 @@ if (process.env.NODE_ENV === "development" && !developmentBackendUrl) {
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // 导入请求包含整本原文，分集预览和保存都需要完整的请求内容。
+  experimental: { proxyClientMaxBodySize: "100mb" },
   output: "standalone",
   serverExternalPackages: ["pdfjs-dist"],
   outputFileTracingIncludes: {

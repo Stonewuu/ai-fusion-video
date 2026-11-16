@@ -107,6 +107,40 @@
         </choose>
         r.sort_order, r.id
     </select>
+    <select id="storyboardChildData" resultType="java.util.LinkedHashMap">
+        <bind name="historical" value="false"/>
+        SELECT r.*, p.version AS storyboard_version
+        <if test="type.name() == 'STORYBOARD_EPISODE'">
+            , CASE WHEN r.script_episode_id IS NULL THEN 'unbound'
+                WHEN EXISTS (SELECT 1 FROM afv_script_episode source_ep
+                    JOIN afv_script source_script ON source_script.id = source_ep.script_id AND source_script.deleted = FALSE
+                    WHERE source_ep.id = r.script_episode_id AND source_ep.deleted = FALSE) THEN 'linked'
+                ELSE 'missing' END AS script_binding_status
+        </if>
+        <if test="type.name() == 'STORYBOARD_SCENE'">, e.version AS episode_version</if>
+        <if test="type.name() == 'SHOT'">, ordering_ep.version AS episode_version, ordering_scene.version AS scene_version</if>
+        FROM <include refid="table"/> r <include refid="joins"/>
+        <if test="type.name() == 'SHOT'">
+            LEFT JOIN afv_storyboard_episode ordering_ep ON ordering_ep.id = r.storyboard_episode_id
+            LEFT JOIN afv_storyboard_scene ordering_scene ON ordering_scene.id = r.storyboard_scene_id
+        </if>
+        WHERE
+        <choose>
+            <when test="parentType.name() == 'STORYBOARD'">r.storyboard_id</when>
+            <when test="parentType.name() == 'STORYBOARD_EPISODE' and type.name() == 'STORYBOARD_SCENE'">r.episode_id</when>
+            <when test="parentType.name() == 'STORYBOARD_EPISODE' and type.name() == 'SHOT'">r.storyboard_episode_id</when>
+            <when test="parentType.name() == 'STORYBOARD_SCENE' and type.name() == 'SHOT'">r.storyboard_scene_id</when>
+        </choose>
+        = #{parentId} AND r.deleted = FALSE ORDER BY
+        <choose>
+            <when test="type.name() == 'SHOT'">
+                CASE WHEN ordering_ep.id IS NULL THEN 1 ELSE 0 END, ordering_ep.sort_order, ordering_ep.id,
+                CASE WHEN ordering_scene.id IS NULL THEN 1 ELSE 0 END, ordering_scene.sort_order, ordering_scene.id,
+            </when>
+            <when test="type.name() == 'STORYBOARD_SCENE'">e.sort_order, e.id,</when>
+        </choose>
+        r.sort_order, r.id
+    </select>
     <select id="countStoryboardChildren" resultType="long">
         <bind name="historical" value="false"/>
         SELECT COUNT(*) FROM <include refid="table"/> r <include refid="joins"/>

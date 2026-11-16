@@ -79,8 +79,12 @@ import com.stonewu.fusion.service.resource.ScriptResourcePatchHandler;
 import com.stonewu.fusion.service.resource.ScriptResourceCreateHandler;
 import com.stonewu.fusion.service.resource.ScriptResourceDeleteHandler;
 import com.stonewu.fusion.service.resource.ScriptSourceHandler;
+import com.stonewu.fusion.service.resource.ScriptClearHandler;
+import com.stonewu.fusion.service.script.ScriptSourceSplitter;
+import com.stonewu.fusion.mapper.script.ScriptSummaryMapper;
 import com.stonewu.fusion.service.resource.ScriptScenesHandler;
 import com.stonewu.fusion.service.resource.model.ScriptSourceCommand;
+import com.stonewu.fusion.service.resource.model.ScriptClearCommand;
 import com.stonewu.fusion.service.resource.model.ScriptScenesCommand;
 import com.stonewu.fusion.service.ai.ToolExecutionContext;
 import com.stonewu.fusion.service.ai.tool.script.ScriptToolCommands;
@@ -177,7 +181,7 @@ class ResourceCommandIT {
         fence = spy(new ResourceAgentFence(session.getMapper(AgentRunMapper.class)));
         resources = spy(new ResourceReadRepository(session.getMapper(ResourceReadMapper.class), session.getMapper(ProjectMapper.class),
                 session.getMapper(ScriptMapper.class), session.getMapper(ScriptEpisodeMapper.class),
-                session.getMapper(ScriptSceneItemMapper.class), json));
+                session.getMapper(ScriptSceneItemMapper.class), json, session.getMapper(ScriptSummaryMapper.class)));
         journal = spy(new ResourceCommandRepository(session.getMapper(ResourceCommandMapper.class), json,
                 new ResourceRevisionRepository(session.getMapper(ResourceRevisionMapper.class), json, resources)));
         validation = Validation.buildDefaultValidatorFactory();
@@ -196,7 +200,7 @@ class ResourceCommandIT {
                 ProjectWorkspaceRepository.class, ProjectCreateHandler.class, ProjectDeleteHandler.class, ProjectInitializeHandler.class,
                 ResourceQueryService.class, ResourceAccessPolicy.class, ResourceSnapshotCache.class, ScriptMutationRepository.class, ScriptFields.class, ScriptCommandSupport.class,
                 ScriptResourcePatchHandler.class, ScriptResourceCreateHandler.class, ScriptResourceDeleteHandler.class,
-                ScriptSourceHandler.class, ScriptScenesHandler.class, AssetFields.class, AssetCommandSupport.class,
+                ScriptSourceSplitter.class, ScriptSourceHandler.class, ScriptClearHandler.class, ScriptScenesHandler.class, AssetFields.class, AssetCommandSupport.class,
                 AssetMutationRepository.class, AssetResourceCreateHandler.class, AssetResourcePatchHandler.class, AssetResourceDeleteHandler.class,
                 AssetReadRepository.class, AssetResourceQueryService.class, AssetBatchCreateHandler.class,
                 StoryboardMutationRepository.class, StoryboardReadRepository.class, StoryboardFields.class, StoryboardCommandSupport.class, StoryboardRelations.class, StoryboardCreation.class, StoryboardVersionView.class, StoryboardResourceQueryService.class, StoryboardResourceCreateHandler.class, StoryboardResourcePatchHandler.class, StoryboardResourceDeleteHandler.class, StoryboardChildrenHandler.class, StoryboardBatchPatchHandler.class);
@@ -469,7 +473,9 @@ class ResourceCommandIT {
         var command = new InitializeProjectWorkspaceCommand(UUID.randomUUID().toString(), project, 0);
         var result = commands.execute(command, USER);
         assertThat(commands.execute(command, USER)).isEqualTo(result);
-        assertThat(result.result().path("script").path("rawContent").textValue()).isEqualTo("不要覆盖的原文");
+        assertThat(result.result().path("script").has("rawContent")).isFalse();
+        assertThat(queries.get(CanvasValueType.SCRIPT, result.result().path("script").path("id").longValue(), ACTOR)
+                .data().path("rawContent").asText()).isEqualTo("不要覆盖的原文");
         assertThat(result.result().path("script").path("version").intValue()).isEqualTo(4);
         assertThat(result.result().path("projectVersion").intValue()).isEqualTo(1);
         assertThat(result.changes()).extracting(change -> change.resourceType()).containsExactly(CanvasValueType.STORYBOARD, CanvasValueType.PROJECT);
@@ -630,17 +636,53 @@ class ResourceCommandIT {
         int viewedVersion = version("afv_script", script);
         commands.patch(new ResourcePatchCommand(UUID.randomUUID().toString(), CanvasValueType.SCRIPT_SCENE, scene, 0,
                 mapper.createObjectNode().put("sceneDescription", "另一个用户刚刚修改")), USER);
-        rejects(() -> commands.execute(new ScriptSourceCommand(UUID.randomUUID().toString(), script, viewedVersion, "新原文"), USER),
+        rejects(() -> commands.execute(ScriptSourceCommand.automatic(UUID.randomUUID().toString(), script, viewedVersion, "新原文"), USER),
                 CanvasErrorCode.VERSION_CONFLICT);
-        var replacement = new ScriptSourceCommand(UUID.randomUUID().toString(), script, viewedVersion + 1, "新原文");
+        var replacement = ScriptSourceCommand.automatic(UUID.randomUUID().toString(), script, viewedVersion + 1, "新原文");
         var receipt = commands.execute(replacement, USER);
         assertThat(commands.execute(replacement, USER)).isEqualTo(receipt);
-        assertThat(receipt.result().path("rawContent").textValue()).isEqualTo("新原文");
-        assertThat(receipt.result().path("totalEpisodes").intValue()).isZero();
+        assertThat(receipt.result().has("rawContent")).isFalse();
+        assertThat(receipt.result().path("totalEpisodes").intValue()).isOne();
         assertThat(receipt.changes()).filteredOn(c -> c.deleted()).hasSize(2);
         assertThat(jdbc.queryForObject("SELECT scene_description FROM afv_script_scene_item WHERE id = ?", String.class, scene))
                 .isEqualTo("另一个用户刚刚修改");
-        assertThat(queries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, script, ACTOR)).isEmpty();
+        var imported = queries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, script, ACTOR);
+        assertThat(imported).hasSize(1);
+        assertThat(imported.getFirst().has("rawContent")).isFalse();
+        assertThat(queries.get(CanvasValueType.SCRIPT_EPISODE, imported.getFirst().path("id").longValue(), ACTOR)
+                .data().path("rawContent").asText()).isEqualTo("新原文");
+    }
+
+    @Test
+    void sourceImportPreservesDuplicatesAppendsAtomicallyAndRejectsGaps() {
+        long script = script();
+        rejects(() -> commands.patch(new ResourcePatchCommand(UUID.randomUUID().toString(), CanvasValueType.SCRIPT,
+                script, 0, mapper.createObjectNode().put("rawContent", "未分集的原文")), USER), CanvasErrorCode.INVALID_COMMAND);
+        String source = "第一章 归来\n剧情甲。\n第一章 归来\n剧情乙。";
+        var preview = new ScriptSourceSplitter().split(source, ScriptSourceSplitter.Rule.AUTO, 12000);
+        var command = new ScriptSourceCommand(UUID.randomUUID().toString(), script, 0, source,
+                ScriptSourceCommand.Mode.APPEND, preview.segments());
+        var saved = commands.execute(command, USER);
+        assertThat(commands.execute(command, USER)).isEqualTo(saved);
+        var first = queries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, script, ACTOR);
+        assertThat(first).hasSize(2);
+        assertThat(first).extracting(item -> item.path("title").asText()).containsOnly("第一章 归来");
+        assertThat(first).extracting(item -> item.path("episodeNumber").asInt()).containsExactly(1, 2);
+        assertThat(first.toString()).doesNotContain("rawContent\"", "剧情甲", "剧情乙");
+        String actual = first.stream().map(item -> queries.get(CanvasValueType.SCRIPT_EPISODE,
+                item.path("id").asLong(), ACTOR).data().path("rawContent").asText()).reduce("", String::concat);
+        assertThat(actual).isEqualTo(source);
+        assertThat(queries.get(CanvasValueType.SCRIPT, script, ACTOR).data().path("rawContent").asText("")).isEmpty();
+        var append = new ScriptSourceCommand(UUID.randomUUID().toString(), script, 1, source,
+                ScriptSourceCommand.Mode.APPEND, preview.segments());
+        commands.execute(append, USER);
+        var all = queries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, script, ACTOR);
+        assertThat(all).extracting(item -> item.path("episodeNumber").asInt()).containsExactly(1, 2, 3, 4);
+        assertThat(all.getFirst().path("id")).isEqualTo(first.getFirst().path("id"));
+        var invalid = new ScriptSourceCommand(UUID.randomUUID().toString(), script, 2, source,
+                ScriptSourceCommand.Mode.REPLACE, List.of(new ScriptSourceSplitter.Segment(1, source.length(), "缺字")));
+        rejects(() -> commands.execute(invalid, USER), CanvasErrorCode.INVALID_COMMAND);
+        assertThat(queries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, script, ACTOR)).isEqualTo(all);
     }
 
     @Test
@@ -958,6 +1000,78 @@ class ResourceCommandIT {
         assertThat(deleted.path("status").textValue()).isEqualTo("success");
         assertThat(deleted.path("assetItemId").longValue()).isEqualTo(item);
         assertThat(deleted.has("assetId")).isFalse();
+    }
+
+    @Test
+    void assetSummaryPagesKeepPermissionsVersionsAndDetailsWithoutLoadingLongFields() {
+        long project = project();
+        var service = context.getBean(AssetResourceQueryService.class);
+        String description = "外观设定".repeat(1000);
+        var fields = mapper.createObjectNode().put("type", "prop").put("name", "分页资产甲")
+                .put("description", description);
+        fields.set("properties", mapper.createObjectNode().put("custom", description));
+        var first = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(),
+                CanvasValueType.ASSET, project, fields), USER).result();
+        commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET,
+                project, mapper.createObjectNode().put("type", "prop").put("name", "分页资产乙")), USER);
+        long assetId = first.path("id").longValue();
+        var variantFields = mapper.createObjectNode().put("assetId", assetId).put("parentVersion", 0)
+                .put("itemType", "variant").put("name", "晚间变体").put("sortOrder", 1)
+                .put("imageUrl", "https://example.com/variant.png");
+        variantFields.set("properties", mapper.createObjectNode().put("description", description));
+        var variant = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET_ITEM,
+                null, variantFields), USER).result();
+        var page = service.summaryPage(project, "prop", "分页资产", 1, 1, ACTOR);
+        assertThat(page.path("total").longValue()).isEqualTo(2);
+        assertThat(page.path("hasMore").booleanValue()).isTrue();
+        assertThat(page.path("nextPage").intValue()).isEqualTo(2);
+        var summary = page.path("assets").get(0);
+        assertThat(summary.path("id").longValue()).isEqualTo(assetId);
+        assertThat(summary.path("version").intValue()).isEqualTo(1);
+        assertThat(summary.path("descriptionPreview").textValue()).hasSize(200);
+        assertThat(summary.has("properties") || summary.has("description") || summary.has("items")).isFalse();
+        assertThat(summary.path("itemCount").intValue()).isEqualTo(2);
+        var next = service.summaryPage(project, "prop", "分页资产", 2, 1, ACTOR);
+        assertThat(next.path("assets").get(0).path("id").longValue()).isNotEqualTo(assetId);
+        assertThat(next.path("hasMore").booleanValue()).isFalse();
+        assertThat(next.path("nextPage").isNull()).isTrue();
+        assertThat(service.summaryPage(project, null, "%", 1, 10, ACTOR).path("total").intValue()).isZero();
+        var items = service.itemSummaryPage(assetId, 2, 1, ACTOR);
+        assertThat(items.path("itemCount").intValue()).isEqualTo(2);
+        var item = items.path("items").get(0);
+        assertThat(item.path("id").longValue()).isEqualTo(variant.path("id").longValue());
+        assertThat(item.path("assetVersion").intValue()).isEqualTo(1);
+        assertThat(item.has("imageUrl") || item.has("properties") || item.has("description")).isFalse();
+        assertThat(queries.get(CanvasValueType.ASSET_ITEM, item.path("id").longValue(), ACTOR)
+                .data().path("properties").path("description").textValue()).isEqualTo(description);
+        var other = new CanvasActor(52, null);
+        assertThat(service.summaryPage(null, null, "分页资产", 1, 10, other).path("total").intValue()).isZero();
+        rejects(() -> service.summaryPage(project, null, null, 1, 10, other), CanvasErrorCode.ACCESS_DENIED);
+        rejects(() -> service.itemSummaryPage(assetId, 1, 10, other), CanvasErrorCode.ACCESS_DENIED);
+    }
+
+    @Test
+    void storyboardBatchReadsKeepDetailShapeCurrentVersionsAndAuthorization() throws Exception {
+        long board = storyboard();
+        var episode = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(),
+                CanvasValueType.STORYBOARD_EPISODE, null, storyboardDraft(board, 0, 1)), USER).result();
+        var service = context.getBean(StoryboardResourceQueryService.class);
+        for (CanvasValueType type : List.of(CanvasValueType.STORYBOARD_EPISODE, CanvasValueType.STORYBOARD_SCENE,
+                CanvasValueType.SHOT)) {
+            var rows = service.children(type, CanvasValueType.STORYBOARD, board, ACTOR);
+            assertThat(rows).isNotEmpty();
+            for (ObjectNode row : rows) {
+                assertThat(mapper.readTree(row.toString())).isEqualTo(mapper.readTree(
+                        queries.get(type, row.path("id").longValue(), ACTOR).data().toString()));
+            }
+            rejects(() -> service.children(type, CanvasValueType.STORYBOARD, board, new CanvasActor(52, null)),
+                    CanvasErrorCode.ACCESS_DENIED);
+        }
+        commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.STORYBOARD_EPISODE,
+                null, storyboardDraft(board, 1, 2)), USER);
+        var row = service.children(CanvasValueType.STORYBOARD_EPISODE, CanvasValueType.STORYBOARD, board, ACTOR).get(0);
+        assertThat(row.path("id").longValue()).isEqualTo(episode.path("id").longValue());
+        assertThat(row.path("storyboardVersion").intValue()).isEqualTo(2);
     }
 
     private long script() {
@@ -1306,12 +1420,132 @@ class ResourceCommandIT {
                 mapper.createObjectNode().put("name", "分镜项目-" + UUID.randomUUID())), USER).result().path("id").longValue();
         return queries.workspace(project, ACTOR).path("storyboard").path("id").longValue();
     }
+
+    @Test
+    void scriptReparseRetainsBindingAndReplacementRequiresExplicitRebindWithoutDeletingShots() {
+        long board = storyboard();
+        long script = queries.get(CanvasValueType.STORYBOARD, board, ACTOR).data().path("scriptId").longValue();
+        long source = episode(script, 0, 1);
+        var draft = storyboardDraft(board, 0, 1).put("scriptEpisodeId", source);
+        long target = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(),
+                CanvasValueType.STORYBOARD_EPISODE, null, draft), USER).result().path("id").longValue();
+        var reads = context.getBean(StoryboardResourceQueryService.class);
+        var before = reads.children(CanvasValueType.SHOT, CanvasValueType.STORYBOARD_EPISODE, target, ACTOR);
+        commands.execute(new ScriptScenesCommand(UUID.randomUUID().toString(), source, 0, ScriptScenesCommand.Mode.REPLACE,
+                List.of(mapper.createObjectNode().put("sceneHeading", "重新解析后的场次")), List.of()), USER);
+        assertThat(queries.get(CanvasValueType.STORYBOARD_EPISODE, target, ACTOR).data().path("scriptBindingStatus").asText())
+                .isEqualTo("linked");
+        commands.execute(ScriptSourceCommand.automatic(UUID.randomUUID().toString(), script,
+                queries.get(CanvasValueType.SCRIPT, script, ACTOR).header().version(), "第一章 新故事\n新的正文。"), USER);
+        var missing = queries.get(CanvasValueType.STORYBOARD_EPISODE, target, ACTOR).data();
+        assertThat(missing.path("scriptBindingStatus").asText()).isEqualTo("missing");
+        assertThat(reads.children(CanvasValueType.STORYBOARD_EPISODE, CanvasValueType.STORYBOARD, board, ACTOR)
+                .getFirst().path("scriptBindingStatus").asText()).isEqualTo("missing");
+        assertThat(reads.children(CanvasValueType.SHOT, CanvasValueType.STORYBOARD_EPISODE, target, ACTOR))
+                .extracting(item -> item.path("id").longValue()).containsExactlyElementsOf(
+                        before.stream().map(item -> item.path("id").longValue()).toList());
+        var replacement = mapper.createObjectNode().put("sceneHeading", "新的分镜");
+        replacement.putArray("shots").addObject().put("content", "新镜头");
+        rejects(() -> commands.execute(new StoryboardChildrenCommand(UUID.randomUUID().toString(),
+                CanvasValueType.STORYBOARD_EPISODE, target, missing.path("version").intValue(),
+                StoryboardChildrenCommand.Mode.REPLACE, List.of(replacement), List.of()), USER), CanvasErrorCode.INVALID_COMMAND);
+        long newSource = queries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, script, ACTOR).getFirst().path("id").longValue();
+        var rebound = commands.patch(new ResourcePatchCommand(UUID.randomUUID().toString(),
+                CanvasValueType.STORYBOARD_EPISODE, target, missing.path("version").intValue(),
+                mapper.createObjectNode().put("scriptEpisodeId", newSource)), USER).result();
+        assertThat(rebound.path("scriptBindingStatus").asText()).isEqualTo("linked");
+        assertThat(reads.children(CanvasValueType.SHOT, CanvasValueType.STORYBOARD_EPISODE, target, ACTOR)).hasSize(2);
+        var invalid = mapper.createObjectNode().put("sceneHeading", "无效的替换内容");
+        invalid.putArray("shots").addObject().put("content", "不能保存").put("sceneAssetItemId", -1);
+        rejects(() -> commands.execute(new StoryboardChildrenCommand(UUID.randomUUID().toString(),
+                CanvasValueType.STORYBOARD_EPISODE, target, rebound.path("version").intValue(),
+                StoryboardChildrenCommand.Mode.REPLACE, List.of(invalid), List.of()), USER), CanvasErrorCode.INVALID_COMMAND);
+        assertThat(reads.children(CanvasValueType.SHOT, CanvasValueType.STORYBOARD_EPISODE, target, ACTOR)).hasSize(2);
+        commands.execute(new StoryboardChildrenCommand(UUID.randomUUID().toString(), CanvasValueType.STORYBOARD_EPISODE,
+                target, rebound.path("version").intValue(), StoryboardChildrenCommand.Mode.REPLACE,
+                List.of(replacement), List.of()), USER);
+        assertThat(reads.children(CanvasValueType.SHOT, CanvasValueType.STORYBOARD_EPISODE, target, ACTOR))
+                .extracting(item -> item.path("content").asText()).containsExactly("新镜头");
+    }
     private ObjectNode storyboardDraft(long board, int version, int number) {
         var root = mapper.createObjectNode().put("storyboardId", board).put("parentVersion", version).put("episodeNumber", number).put("title", "测试集");
         var shots = root.putArray("scenes").addObject().put("sceneNumber", number + "-1").put("sceneHeading", "内景 客厅 夜").putArray("shots");
         shots.addObject().put("content", "镜头甲").put("duration", 4.25);
         shots.addObject().put("content", "镜头乙").put("duration", 4.25);
         return root;
+    }
+
+    @Test
+    void clearingScriptPreservesWorkspaceAndStoryboardAndChecksVersionsPermissionsAndReplay() {
+        long board = storyboard();
+        var boardData = queries.get(CanvasValueType.STORYBOARD, board, ACTOR).data();
+        long script = boardData.path("scriptId").longValue();
+        long project = boardData.path("projectId").longValue();
+        long source = episode(script, 0, 1);
+        scene(source, 0, "清空前的场次");
+        var scriptBefore = queries.get(CanvasValueType.SCRIPT, script, ACTOR);
+        commands.patch(new ResourcePatchCommand(UUID.randomUUID().toString(), CanvasValueType.SCRIPT, script,
+                scriptBefore.header().version(), mapper.createObjectNode().put("storySynopsis", "旧故事梗概")
+                        .put("parsingStatus", 2).put("summary", "旧摘要")), USER);
+        long bound = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(),
+                CanvasValueType.STORYBOARD_EPISODE, null, storyboardDraft(board, 0, 1).put("scriptEpisodeId", source)), USER)
+                .result().path("id").longValue();
+        long asset = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET,
+                project, mapper.createObjectNode().put("name", "清空后保留的资产").put("type", "prop")), USER)
+                .result().path("id").longValue();
+        int version = queries.get(CanvasValueType.SCRIPT, script, ACTOR).header().version();
+        var clear = new ScriptClearCommand(UUID.randomUUID().toString(), script, version);
+        rejects(() -> commands.execute(clear, ResourceCommandContext.user(new CanvasActor(52, null), null)),
+                CanvasErrorCode.ACCESS_DENIED);
+        rejects(() -> commands.execute(new ScriptClearCommand(UUID.randomUUID().toString(), script, version - 1), USER),
+                CanvasErrorCode.VERSION_CONFLICT);
+        assertThat(queries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, script, ACTOR)).hasSize(1);
+        var receipt = commands.execute(clear, USER);
+        assertThat(commands.execute(clear, USER)).isEqualTo(receipt);
+        var empty = queries.get(CanvasValueType.SCRIPT, script, ACTOR).data();
+        assertThat(empty.path("id").longValue()).isEqualTo(script);
+        assertThat(empty.path("title")).isEqualTo(scriptBefore.data().path("title"));
+        assertThat(empty.path("totalEpisodes").intValue()).isZero();
+        assertThat(empty.path("parsingStatus").intValue()).isZero();
+        assertThat(empty.path("summary").isNull()).isTrue();
+        assertThat(empty.path("storySynopsis").isNull()).isTrue();
+        assertThat(queries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, script, ACTOR)).isEmpty();
+        assertThat(receipt.changes()).filteredOn(change -> change.deleted()).hasSize(2);
+        assertThat(queries.get(CanvasValueType.STORYBOARD_EPISODE, bound, ACTOR).data().path("scriptBindingStatus").asText())
+                .isEqualTo("missing");
+        assertThat(context.getBean(StoryboardResourceQueryService.class).statistics(board, ACTOR).itemCount()).isEqualTo(2);
+        assertThat(queries.get(CanvasValueType.ASSET, asset, ACTOR).data().path("name").asText()).isEqualTo("清空后保留的资产");
+    }
+
+    @Test
+    void clearingStoryboardRemovesHierarchyAndResetsMetadataWithoutClearingScriptOrAssets() {
+        long board = storyboard();
+        var boardData = queries.get(CanvasValueType.STORYBOARD, board, ACTOR).data();
+        long project = boardData.path("projectId").longValue();
+        long script = boardData.path("scriptId").longValue();
+        episode(script, 0, 1);
+        commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.STORYBOARD_EPISODE,
+                null, storyboardDraft(board, 0, 1)), USER);
+        commands.patch(new ResourcePatchCommand(UUID.randomUUID().toString(), CanvasValueType.STORYBOARD, board, 1,
+                mapper.createObjectNode().put("status", 1).put("description", "需要清空的分镜说明")), USER);
+        long asset = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET,
+                project, mapper.createObjectNode().put("name", "分镜清空后保留").put("type", "scene")), USER)
+                .result().path("id").longValue();
+        var clear = new StoryboardChildrenCommand(UUID.randomUUID().toString(), CanvasValueType.STORYBOARD, board, 2,
+                StoryboardChildrenCommand.Mode.CLEAR, List.of(), List.of());
+        var receipt = commands.execute(clear, USER);
+        assertThat(commands.execute(clear, USER)).isEqualTo(receipt);
+        var statistics = context.getBean(StoryboardResourceQueryService.class).statistics(board, ACTOR);
+        assertThat(statistics.episodeCount()).isZero();
+        assertThat(statistics.sceneCount()).isZero();
+        assertThat(statistics.itemCount()).isZero();
+        var empty = queries.get(CanvasValueType.STORYBOARD, board, ACTOR).data();
+        assertThat(empty.path("description").isNull()).isTrue();
+        assertThat(empty.path("status").intValue()).isZero();
+        assertThat(empty.path("totalDuration").intValue()).isZero();
+        assertThat(empty.path("title")).isEqualTo(boardData.path("title"));
+        assertThat(queries.scriptChildren(CanvasValueType.SCRIPT_EPISODE, script, ACTOR)).hasSize(1);
+        assertThat(queries.get(CanvasValueType.ASSET, asset, ACTOR).data().path("name").asText()).isEqualTo("分镜清空后保留");
     }
 
     private long episode(long script, int version, int number) {

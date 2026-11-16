@@ -1,316 +1,131 @@
 "use client";
-
-import {
-  Film,
-  Clapperboard,
-  Loader2,
-  Plus,
-  Trash2,
-  GripVertical,
-  PanelLeftClose,
-  PanelLeftOpen,
-  RotateCw,
-} from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
-import { cn } from "@/lib/utils";
+import { useCallback, useMemo, useState, type ReactNode } from "react";
+import { useReducedMotion } from "framer-motion";
+import { Plus, RotateCw } from "lucide-react";
+import { DirectoryTooltipScope } from "@/components/shared/directory-tooltip";
+import { VirtualDirectory } from "@/components/shared/virtual-directory";
+import { Button } from "@/components/ui/button";
 import type { ScriptEpisode, SceneItem } from "@/lib/api/script";
+import { duplicateTitles, titleKey } from "@/lib/scripts/source-import";
+import { cn } from "@/lib/utils";
+import { EpisodeTreeBlock } from "./episode-tree-block";
 import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-} from "@dnd-kit/core";
-import type { DragEndEvent } from "@dnd-kit/core";
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
-import { EpisodeTreeRow } from "./episode-tree-row";
+  useEpisodeTreeActions,
+  type EpisodeTreeActions,
+} from "./episode-tree-actions";
 
-// ========== 可拖拽场次项 ==========
-
-function SortableSceneItem({
-  scene,
-  isSelected,
-  onSelect,
-  onDelete,
-}: {
-  scene: SceneItem;
-  isSelected: boolean;
-  onSelect: () => void;
-  onDelete: () => void;
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: scene.id });
-
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      data-sidebar-row
-      style={style}
-      className={cn(
-        "flex items-center group/scene rounded-md overflow-hidden",
-        isDragging && "opacity-50 z-10",
-        isSelected ? "bg-primary/10" : "hover:bg-primary/5"
-      )}
-    >
-      <span
-        {...attributes}
-        {...listeners}
-        className="px-1.5 self-stretch flex items-center opacity-0 group-hover/scene:opacity-40 hover:opacity-100! text-muted-foreground cursor-grab active:cursor-grabbing transition-opacity shrink-0"
-        onPointerDown={(e) => {
-          // 阻止 click 冒泡到 onSelect
-          e.stopPropagation();
-          listeners?.onPointerDown?.(e);
-        }}
-      >
-        <GripVertical className="h-3 w-3" />
-      </span>
-      <button
-        onClick={onSelect}
-        className={cn(
-          "flex-1 flex items-center gap-1.5 py-1.5 pr-2 min-w-0 outline-none text-left text-[11px]",
-          isSelected
-            ? "text-primary font-medium"
-            : "text-muted-foreground hover:text-foreground"
-        )}
-      >
-        <Clapperboard className={cn("h-3 w-3 shrink-0", isSelected && "text-primary")} />
-        <span className="truncate">
-          {scene.sceneNumber} {scene.sceneHeading || `场次`}
-        </span>
-      </button>
-      <button
-        onClick={onDelete}
-        className="p-1.5 mr-1 flex items-center shrink-0 rounded-full opacity-0 group-hover/scene:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-        title="删除场次"
-      >
-        <Trash2 className="h-3 w-3" />
-      </button>
-    </div>
-  );
-}
-
-// ========== 主组件 ==========
-
-export function EpisodeTree({
-  episodes,
-  expandedEpisodes,
-  activeEpisodeId,
-  selectedSceneId,
-  loadingEpisodes,
-  episodeScenes,
-  collapsed = false,
-  onRefresh,
-  isRefreshing = false,
-  onToggleEpisode,
-  onSelectEpisode,
-  onSelectScene,
-  onCollapsedChange,
-  onAddEpisode,
-  onDeleteEpisode,
-  onAddScene,
-  onDeleteScene,
-  onReorderScenes,
-  onParseEpisode,
-  onGenerateStoryboard,
-}: {
+interface Props extends EpisodeTreeActions {
   episodes: ScriptEpisode[];
   expandedEpisodes: Set<number>;
   activeEpisodeId: number | null;
   selectedSceneId: number | null;
   loadingEpisodes: Set<number>;
   episodeScenes: Record<number, SceneItem[]>;
-  collapsed?: boolean;
+  headerAction?: ReactNode;
   onRefresh?: () => void;
   isRefreshing?: boolean;
-  onToggleEpisode: (id: number) => void;
-  onSelectEpisode: (id: number) => void;
-  onSelectScene: (sceneId: number, episodeId: number) => void;
-  onCollapsedChange?: (collapsed: boolean) => void;
-  onAddEpisode: () => void;
-  onDeleteEpisode: (id: number) => void;
-  onAddScene: (episodeId: number) => void;
-  onDeleteScene: (sceneId: number, episodeId: number) => void;
-  onReorderScenes?: (episodeId: number, oldIndex: number, newIndex: number) => void;
-  onParseEpisode?: (episodeId: number) => void;
-  onGenerateStoryboard?: (episodeId: number) => void;
-}) {
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+}
+
+export function EpisodeTree(props: Props) {
+  const {
+    episodes,
+    expandedEpisodes,
+    activeEpisodeId,
+    selectedSceneId,
+    loadingEpisodes,
+    episodeScenes,
+    headerAction,
+    onRefresh,
+    isRefreshing = false,
+  } = props;
+  const reduceMotion = !!useReducedMotion();
+  const [draggingId, setDraggingId] = useState<number | null>(null);
+  const actions = useEpisodeTreeActions(props);
+  const repeated = useMemo(
+    () => duplicateTitles(episodes.map((episode) => episode.title)),
+    [episodes],
+  );
+  const estimateSize = useCallback(
+    (index: number) => {
+      const episode = episodes[index];
+      return expandedEpisodes.has(episode.id)
+        ? 74 +
+            Math.max(
+              1,
+              episodeScenes[episode.id]?.length ?? episode.totalScenes,
+            ) *
+              36
+        : 42;
+    },
+    [episodes, expandedEpisodes, episodeScenes],
   );
 
-  const handleDragEnd = (episodeId: number) => (event: DragEndEvent) => {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const scenes = episodeScenes[episodeId] || [];
-    const oldIndex = scenes.findIndex((s) => s.id === active.id);
-    const newIndex = scenes.findIndex((s) => s.id === over.id);
-    if (oldIndex !== -1 && newIndex !== -1) {
-      onReorderScenes?.(episodeId, oldIndex, newIndex);
-    }
-  };
-
-  if (collapsed) {
-    return (
-      <div data-sidebar-navigation="scripts" className="w-12 border-r border-border/20 flex flex-col shrink-0 bg-card/20 h-full transition-[width] duration-200">
-        <div className="px-2 py-3 border-b border-primary/8 flex flex-col items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onCollapsedChange?.(false)}
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/8 transition-colors"
-            title="展开剧本目录"
-            aria-label="展开剧本目录"
-          >
-            <PanelLeftOpen className="h-4 w-4" />
-          </button>
-          <Film className="h-4 w-4 text-primary/70" />
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div data-sidebar-navigation="scripts" className="w-full lg:w-64 border-r border-border/20 flex flex-col shrink-0 bg-card/20 h-full transition-[width] duration-200">
-      <div className="px-4 py-3 border-b border-primary/8 flex items-center justify-between">
-        <h3 className="text-xs font-semibold text-primary/80 uppercase tracking-wider">
-          剧本目录
-        </h3>
-        <div className="flex items-center gap-1">
-          {onRefresh && (
-            <button
-              type="button"
-              onClick={onRefresh}
-              disabled={isRefreshing}
-              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground/70 hover:text-primary hover:bg-primary/8 transition-colors disabled:opacity-50"
-              title="刷新剧本目录"
-              aria-label="刷新剧本目录"
-            >
-              <RotateCw className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")} />
-            </button>
+    <DirectoryTooltipScope>
+      <div
+        data-sidebar-navigation="scripts"
+        className="flex h-full min-h-0 w-full flex-col bg-card/20"
+      >
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/20 p-3">
+          <h3 className="text-sm font-semibold">剧本目录</h3>
+          <div className="flex items-center gap-2">
+            {onRefresh && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={onRefresh}
+                disabled={isRefreshing}
+                title="刷新剧本目录"
+                aria-label="刷新剧本目录"
+              >
+                <RotateCw className={cn(isRefreshing && "animate-spin")} />
+              </Button>
+            )}
+            <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
+              {episodes.length} 集
+            </span>
+            {headerAction}
+          </div>
+        </div>
+        <VirtualDirectory
+          items={episodes}
+          activeId={activeEpisodeId}
+          expandedIds={expandedEpisodes}
+          draggingId={draggingId}
+          estimateSize={estimateSize}
+          onToggle={actions.onToggleEpisode}
+          label="分集列表"
+        >
+          {(episode) => (
+            <EpisodeTreeBlock
+              episode={episode}
+              duplicate={repeated.has(titleKey(episode.title))}
+              expanded={expandedEpisodes.has(episode.id)}
+              active={activeEpisodeId === episode.id}
+              loading={loadingEpisodes.has(episode.id)}
+              scenes={episodeScenes[episode.id]}
+              selectedSceneId={
+                activeEpisodeId === episode.id ? selectedSceneId : null
+              }
+              actions={actions}
+              canParse={!!props.onParseEpisode}
+              canGenerateStoryboard={!!props.onGenerateStoryboard}
+              onDraggingChange={setDraggingId}
+              reduceMotion={reduceMotion}
+            />
           )}
-          <span className="text-[10px] text-primary/50 bg-primary/6 px-1.5 py-0.5 rounded-full tabular-nums font-medium">
-            {episodes.length} 集
-          </span>
-          {onCollapsedChange && (
-            <button
-              type="button"
-              onClick={() => onCollapsedChange(true)}
-              className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground/70 hover:text-primary hover:bg-primary/8 transition-colors"
-              title="收起剧本目录"
-              aria-label="收起剧本目录"
-            >
-              <PanelLeftClose className="h-3.5 w-3.5" />
-            </button>
-          )}
+        </VirtualDirectory>
+        <div className="shrink-0 border-t border-border/20 px-3 py-2">
+          <Button
+            variant="ghost"
+            onClick={actions.onAddEpisode}
+            className="w-full"
+          >
+            <Plus />
+            新建分集
+          </Button>
         </div>
       </div>
-      <div className="flex-1 overflow-y-auto py-1.5 px-1.5">
-        {episodes.map((ep) => {
-          const expanded = expandedEpisodes.has(ep.id);
-          const scenes = episodeScenes[ep.id] || [];
-          const isLoading = loadingEpisodes.has(ep.id);
-          const isActive = ep.id === activeEpisodeId;
-
-          return (
-            <div key={ep.id} className="mb-0.5">
-              <EpisodeTreeRow
-                episode={ep}
-                expanded={expanded}
-                active={isActive}
-                onToggle={() => onToggleEpisode(ep.id)}
-                onSelect={() => onSelectEpisode(ep.id)}
-                onDelete={() => onDeleteEpisode(ep.id)}
-                onParse={onParseEpisode ? () => onParseEpisode(ep.id) : undefined}
-                onGenerateStoryboard={onGenerateStoryboard ? () => onGenerateStoryboard(ep.id) : undefined}
-              />
-              <AnimatePresence initial={false}>
-                {expanded && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    transition={{ duration: 0.2, ease: "easeInOut" }}
-                    className="overflow-hidden"
-                  >
-                    <div className="ml-3 pl-3 border-l border-primary/15 py-0.5">
-                      {isLoading ? (
-                        <div className="flex items-center gap-2 px-4 py-2">
-                          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                          <span className="text-[10px] text-muted-foreground">加载中...</span>
-                        </div>
-                      ) : scenes.length === 0 ? (
-                        <p className="text-[10px] text-muted-foreground/50 px-4 py-2 italic">暂无场次</p>
-                      ) : (
-                        <DndContext
-                          sensors={sensors}
-                          collisionDetection={closestCenter}
-                          onDragEnd={handleDragEnd(ep.id)}
-                        >
-                          <SortableContext
-                            items={scenes.map((s) => s.id)}
-                            strategy={verticalListSortingStrategy}
-                          >
-                            {scenes.map((scene) => (
-                              <SortableSceneItem
-                                key={scene.id}
-                                scene={scene}
-                                isSelected={selectedSceneId === scene.id}
-                                onSelect={() => onSelectScene(scene.id, ep.id)}
-                                onDelete={() => onDeleteScene(scene.id, ep.id)}
-                              />
-                            ))}
-                          </SortableContext>
-                        </DndContext>
-                      )}
-                      <button
-                        onClick={() => onAddScene(ep.id)}
-                        className={cn(
-                          "w-full flex items-center gap-1.5 pl-6 pr-3 py-1.5 text-[10px] rounded-md",
-                          "text-muted-foreground/50 hover:text-primary hover:bg-primary/5 transition-colors"
-                        )}
-                      >
-                        <Plus className="h-2.5 w-2.5" />
-                        添加场次
-                      </button>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-          );
-        })}
-      </div>
-      <div className="px-3 py-2 border-t border-primary/8">
-        <button
-          onClick={onAddEpisode}
-          className={cn(
-            "w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium",
-            "text-primary/60 bg-primary/5 transition-colors",
-            "border border-dashed border-primary/20 hover:text-primary hover:bg-primary/10 hover:border-primary/40"
-          )}
-        >
-          <Plus className="h-3 w-3" />
-          添加分集
-        </button>
-      </div>
-    </div>
+    </DirectoryTooltipScope>
   );
 }

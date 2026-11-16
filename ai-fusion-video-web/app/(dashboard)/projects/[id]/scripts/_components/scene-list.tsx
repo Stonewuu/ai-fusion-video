@@ -10,6 +10,8 @@ import {
 import { cn } from "@/lib/utils";
 import type { ScriptEpisode, SceneItem } from "@/lib/api/script";
 import { SceneCard } from "./scene-card";
+import { EpisodeSourcePanel } from "./episode-source-panel";
+import { Button } from "@/components/ui/button";
 import { EpisodeDetailsEditor } from "./episode-details-editor";
 
 /** 场次间插入按钮 – absolute 定位在卡片上方间隙居中 */
@@ -53,6 +55,8 @@ export function SceneList({
   onInsertScene,
   onDeleteScene,
   onEpisodeUpdated,
+  onParseEpisode,
+  duplicateTitle,
 }: {
   activeEpisode: ScriptEpisode | undefined;
   activeScenes: SceneItem[];
@@ -64,14 +68,17 @@ export function SceneList({
   onInsertScene: (episodeId: number, atIndex: number) => void;
   onDeleteScene: (sceneId: number, episodeId: number) => void;
   onEpisodeUpdated?: (updated: ScriptEpisode) => void;
+  onParseEpisode: (id: number) => void;
+  duplicateTitle: boolean;
 }) {
+  const [tab, setTab] = useState<"scenes" | "source">("scenes");
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
 
   if (!activeEpisode) {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center">
         <Layers className="h-12 w-12 text-muted-foreground/20 mb-4" />
-        <p className="text-muted-foreground text-sm">从左侧选择一个分集查看场次内容</p>
+        <p className="text-muted-foreground text-sm">暂无分集，导入原文或新建分集后开始创作</p>
       </div>
     );
   }
@@ -80,6 +87,12 @@ export function SceneList({
     <div className="max-w-4xl mx-auto px-6 py-5">
       {activeEpisode && <EpisodeDetailsEditor episode={activeEpisode} scenesCount={activeScenes.length} onSaved={onEpisodeUpdated} />}
 
+      {duplicateTitle && <p className="mb-4 text-sm text-muted-foreground">此标题与其他分集重名，可点击上方编辑按钮修改标题。</p>}
+      <div className="mb-4 flex items-center gap-2" role="tablist" aria-label="分集内容">
+        <Button role="tab" aria-selected={tab === "scenes"} variant={tab === "scenes" ? "secondary" : "ghost"} onClick={() => setTab("scenes")}>场次</Button>
+        <Button role="tab" aria-selected={tab === "source"} variant={tab === "source" ? "secondary" : "ghost"} onClick={() => setTab("source")}>原文</Button>
+      </div>
+      {tab === "source" ? <EpisodeSourcePanel key={activeEpisode.id} episode={activeEpisode} onSaved={onEpisodeUpdated} onParse={() => onParseEpisode(activeEpisode.id)} /> : <>
       {/* 场次卡片列表 */}
       {isLoading ? (
         <div className="flex items-center justify-center py-12">
@@ -89,16 +102,10 @@ export function SceneList({
         <div className="text-center py-16">
           <Clapperboard className="h-10 w-10 text-muted-foreground/20 mx-auto mb-3" />
           <p className="text-sm text-muted-foreground mb-3">本集暂无场次</p>
-          <button
-            onClick={() => onAddScene(activeEpisode.id)}
-            className={cn(
-              "inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium",
-              "bg-primary text-primary-foreground hover:opacity-90 transition-all"
-            )}
-          >
-            <Plus className="h-3 w-3" />
-            添加第一个场次
-          </button>
+          <div className="flex justify-center gap-2">
+            <Button variant="outline" onClick={() => onAddScene(activeEpisode.id)}><Plus />添加场次</Button>
+            {!!activeEpisode.rawContentLength && <Button variant="ai" onClick={() => onParseEpisode(activeEpisode.id)}>解析本集</Button>}
+          </div>
         </div>
       ) : (
         <div className="space-y-5">
@@ -152,6 +159,7 @@ export function SceneList({
           </button>
         </div>
       )}
+      </>}
     </div>
   );
 }

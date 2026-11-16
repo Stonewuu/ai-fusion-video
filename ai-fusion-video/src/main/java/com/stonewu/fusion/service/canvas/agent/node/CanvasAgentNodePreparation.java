@@ -12,6 +12,7 @@ import com.stonewu.fusion.service.ai.configuration.AgentKernelSkills;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.canvas.CanvasJson;
+import com.stonewu.fusion.service.script.ScriptContextProjection;
 import com.stonewu.fusion.service.canvas.agent.CanvasAgentContext;
 import com.stonewu.fusion.service.canvas.agent.CanvasAgentScope;
 import com.stonewu.fusion.service.canvas.run.CanvasRunData.NodeRun;
@@ -86,6 +87,7 @@ public class CanvasAgentNodePreparation {
         var input = json.object(Map.of("nodeTitle", node.plan().node().title(), "agentType", type,
                 "instruction", node.plan().node().config().path("instruction").asText(""), "inputs", node.inputs(),
                 "scope", scope));
+        ScriptContextProjection.omitSource(input);
         if (json.write(input).length() > 512 * 1024) {
             throw CanvasRunException.invalid("专业节点的输入超过 512 KiB，请按分集拆分");
         }

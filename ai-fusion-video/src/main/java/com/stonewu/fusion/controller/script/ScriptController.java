@@ -4,7 +4,10 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.script.vo.ScriptChildCreateReqVO;
 import com.stonewu.fusion.controller.script.vo.ScriptSourceReplaceReqVO;
+import com.stonewu.fusion.controller.script.vo.ScriptSourcePreviewReqVO;
+import com.stonewu.fusion.service.script.ScriptSourceSplitter;
 import com.stonewu.fusion.controller.script.vo.ScriptUpdateReqVO;
+import com.stonewu.fusion.controller.script.vo.ScriptVersionReqVO;
 import com.stonewu.fusion.service.canvas.CanvasActorResolver;
 import com.stonewu.fusion.service.canvas.model.CanvasValueType;
 import com.stonewu.fusion.service.resource.ResourceCommandService;
@@ -28,6 +31,7 @@ public class ScriptController {
     private final ResourceCommandService commands;
     private final ResourceQueryService queries;
     private final CanvasActorResolver actors;
+    private final ScriptSourceSplitter splitter;
 
     @GetMapping("/{id}")
     public CommonResult<ObjectNode> get(@PathVariable long id) {
@@ -44,12 +48,27 @@ public class ScriptController {
         return patch(SCRIPT, request);
     }
 
+    @PostMapping("/{id}/clearContent")
+    public CommonResult<ObjectNode> clearContent(@PathVariable long id,
+                                                @Valid @RequestBody ScriptVersionReqVO request) {
+        return CommonResult.success(commands.execute(
+                new ScriptClearCommand(request.requestId(), id, request.version()), context()).result());
+    }
+
     @PutMapping("/{id}/source")
     public CommonResult<ObjectNode> replaceSource(@PathVariable long id,
                                                   @Valid @RequestBody ScriptSourceReplaceReqVO request) {
         return CommonResult.success(commands.execute(
-                        new ScriptSourceCommand(request.requestId(), id, request.version(), request.rawContent()), context())
+                        new ScriptSourceCommand(request.requestId(), id, request.version(), request.rawContent(),
+                                request.mode(), request.segments()), context())
                 .result());
+    }
+
+    @PostMapping("/{id}/source/preview")
+    public CommonResult<ScriptSourceSplitter.Preview> previewSource(@PathVariable long id,
+                                           @Valid @RequestBody ScriptSourcePreviewReqVO request) {
+        queries.get(SCRIPT, id, actors.current());
+        return CommonResult.success(splitter.split(request.rawContent(), request.rule(), request.targetLength()));
     }
 
     @GetMapping("/{scriptId}/episodes")

@@ -22,7 +22,14 @@ public class StoryboardVersionView {
         }
         data.put("storyboardVersion",
                 resources.require(STORYBOARD, data.path("storyboardId").longValue(), false).version());
-        if (type == STORYBOARD_SCENE) {
+        if (type == STORYBOARD_EPISODE) {
+            String binding = "unbound";
+            if (data.hasNonNull("scriptEpisodeId")) {
+                var source = resources.find(SCRIPT_EPISODE, data.path("scriptEpisodeId").longValue(), false, false);
+                binding = source.isPresent() ? "linked" : "missing";
+            }
+            data.put("scriptBindingStatus", binding);
+        } else if (type == STORYBOARD_SCENE) {
             data.put("episodeVersion",
                     resources.require(STORYBOARD_EPISODE, data.path("episodeId").longValue(), false).version());
         } else if (type == SHOT) {

@@ -13,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
 import java.util.Map;
-import java.util.Set;
 
 @Component
 @RequiredArgsConstructor
@@ -23,9 +22,9 @@ public class ReadScriptContentToolExecutor implements ToolExecutor {
             {
               "type": "object",
               "properties": {
-                "resourceType": {"type": "string", "enum": ["script", "episode"], "description": "剧本或分集"},
+                "resourceType": {"type": "string", "enum": ["episode"], "description": "只读取一个剧本分集"},
                 "resourceId": {"type": "integer", "minimum": 1, "description": "查询结果中的业务对象 ID"},
-                "field": {"type": "string", "enum": ["rawContent", "content"], "description": "读取入口指定的正文字段"},
+                "field": {"type": "string", "enum": ["rawContent"], "description": "读取入口指定的本集原文"},
                 "offset": {"type": "integer", "minimum": 0, "description": "首次传 0，继续读取使用 nextOffset"},
                 "limit": {"type": "integer", "minimum": 1, "maximum": 64000, "description": "每段最多字符数；省略时按模型配置容量分配，实际返回量受该容量约束，最多 64000 字符"},
                 "contentVersion": {"type": "string", "description": "读取入口或上一段返回的内容版本，继续读取时必传"}
@@ -49,7 +48,7 @@ public class ReadScriptContentToolExecutor implements ToolExecutor {
 
     @Override
     public String getToolDescription() {
-        return "按查询结果的 contentReads 读取剧本或分集正文。每段返回 contentVersion、nextOffset 和 hasMore。"
+        return "按 get_script_episode 返回的 contentReads 读取一集原文，不读取总剧本全文。每段返回 contentVersion、nextOffset 和 hasMore。"
                 + "完整解析时按 nextOffset 连续读取至 hasMore=false，不能把一段当作全文。";
     }
 
@@ -73,14 +72,12 @@ public class ReadScriptContentToolExecutor implements ToolExecutor {
         try {
             ObjectNode params = json.read(input, ObjectNode.class);
             CanvasValueType type = switch (params.path("resourceType").asText()) {
-                case "script" -> CanvasValueType.SCRIPT;
                 case "episode" -> CanvasValueType.SCRIPT_EPISODE;
-                default -> throw ScriptFields.invalid("resourceType 必须为 script 或 episode");
+                default -> throw ScriptFields.invalid("原文按集读取，请用 get_script_episode 选择目标分集");
             };
             long id = ScriptFields.positiveId(params.get("resourceId"), "resourceId");
             String field = params.path("field").asText();
-            if (!Set.of("rawContent", "content").contains(field)
-                    || type == CanvasValueType.SCRIPT_EPISODE && field.equals("content")) {
+            if (!field.equals("rawContent")) {
                 throw ScriptFields.invalid("此对象不支持指定的正文字段");
             }
             var request = TextPages.Request.from(params, context.getModel().getContextWindow());

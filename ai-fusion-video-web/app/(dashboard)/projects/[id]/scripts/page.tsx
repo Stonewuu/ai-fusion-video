@@ -4,9 +4,9 @@ import { useResourceChangeStore } from "@/lib/store/resource-change-store";
 
 import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useParams } from "next/navigation";
-import { Loader2, Menu, Info } from "lucide-react";
-import { motion } from "framer-motion";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Loader2 } from "lucide-react";
+import { motion, useReducedMotion } from "framer-motion";
+import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
 import {
   scriptApi,
   type Script,
@@ -21,10 +21,19 @@ import {
 import { useScriptMutations } from "./_components/use-script-mutations";
 import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import { EpisodeTree } from "./_components/episode-tree";
+import { ScriptWorkspaceActions } from "./_components/script-workspace-actions";
 import { SceneList } from "./_components/scene-list";
 import { useSceneNavigation } from "./_components/use-scene-navigation";
 import { SceneDetail } from "./_components/scene-detail";
 import { ScriptOverview } from "./_components/script-overview";
+import {
+  ScriptWorkspacePanel,
+  ScriptPanelToggle,
+} from "./_components/script-workspace-panel";
+import {
+  ScriptDirectorySheet,
+  ScriptDetailsSheet,
+} from "./_components/script-panel-sheets";
 import { EpisodeParseDialog } from "@/components/dashboard/episode-parse-dialog";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -32,8 +41,10 @@ import { toastApiError } from "@/lib/api/toast-api-error";
 import { useProject } from "../project-context";
 
 const SCRIPT_SIDEBAR_COLLAPSED_STORAGE_KEY = "fusion-script-sidebar-collapsed";
+const SCRIPT_DETAILS_COLLAPSED_STORAGE_KEY = "fusion-script-details-collapsed";
 
 export default function ScriptTabPage() {
+  const reduceMotion = useReducedMotion();
   const params = useParams();
   const projectId = Number(params.id);
   const { project } = useProject();
@@ -48,10 +59,16 @@ export default function ScriptTabPage() {
   // 当前展示的分集
   const [activeEpisodeId, setActiveEpisodeId] = useState<number | null>(null);
   // 树结构：展开状态
-  const [expandedEpisodes, setExpandedEpisodes] = useState<Set<number>>(new Set());
+  const [expandedEpisodes, setExpandedEpisodes] = useState<Set<number>>(
+    new Set(),
+  );
   // 各分集的场次缓存
-  const [episodeScenes, setEpisodeScenes] = useState<Record<number, SceneItem[]>>({});
-  const [loadingEpisodes, setLoadingEpisodes] = useState<Set<number>>(new Set());
+  const [episodeScenes, setEpisodeScenes] = useState<
+    Record<number, SceneItem[]>
+  >({});
+  const [loadingEpisodes, setLoadingEpisodes] = useState<Set<number>>(
+    new Set(),
+  );
 
   const activeEpisodeIdRef = useRef(activeEpisodeId);
   useEffect(() => {
@@ -74,43 +91,73 @@ export default function ScriptTabPage() {
   // 移动端侧边栏状态
   const [leftSheetOpen, setLeftSheetOpen] = useState(false);
   const [rightSheetOpen, setRightSheetOpen] = useState(false);
-  const [isScriptSidebarCollapsed, setIsScriptSidebarCollapsed] = useState(() => {
-    if (typeof window === "undefined") return false;
-    return localStorage.getItem(SCRIPT_SIDEBAR_COLLAPSED_STORAGE_KEY) === "true";
+  const [isDetailsCollapsed, setIsDetailsCollapsed] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+    return (
+      localStorage.getItem(SCRIPT_DETAILS_COLLAPSED_STORAGE_KEY) === "true"
+    );
   });
+  const [isScriptSidebarCollapsed, setIsScriptSidebarCollapsed] = useState(
+    () => {
+      if (typeof window === "undefined") {
+        return false;
+      }
+      return (
+        localStorage.getItem(SCRIPT_SIDEBAR_COLLAPSED_STORAGE_KEY) === "true"
+      );
+    },
+  );
 
   // 分集解析弹窗
   const [showEpisodeParseDialog, setShowEpisodeParseDialog] = useState(false);
   const [episodeToParseId, setEpisodeToParseId] = useState<number | null>(null);
 
   // Pipeline store
-  const { addPipeline, setPanelExpanded, setExpandedTaskId } = usePipelineStore();
+  const { addPipeline, setPanelExpanded, setExpandedTaskId } =
+    usePipelineStore();
 
   const handleSetScriptSidebarCollapsed = useCallback((collapsed: boolean) => {
     setIsScriptSidebarCollapsed(collapsed);
     localStorage.setItem(
       SCRIPT_SIDEBAR_COLLAPSED_STORAGE_KEY,
-      collapsed ? "true" : "false"
+      collapsed ? "true" : "false",
     );
   }, []);
 
+  const toggleDetails = () => {
+    const next = !isDetailsCollapsed;
+    setIsDetailsCollapsed(next);
+    localStorage.setItem(SCRIPT_DETAILS_COLLAPSED_STORAGE_KEY, String(next));
+  };
+
   useEffect(() => {
-    const mediaQuery = window.matchMedia("(min-width: 1280px)");
-    const handleResize = (e: MediaQueryListEvent | MediaQueryList) => {
-      if (e.matches) {
+    const directoryMedia = window.matchMedia("(min-width: 1280px)");
+    const detailsMedia = window.matchMedia("(min-width: 1536px)");
+    const handleResize = () => {
+      if (directoryMedia.matches) {
         setLeftSheetOpen(false);
+      }
+      if (detailsMedia.matches) {
         setRightSheetOpen(false);
       }
     };
-    handleResize(mediaQuery);
-    mediaQuery.addEventListener("change", handleResize);
-    return () => mediaQuery.removeEventListener("change", handleResize);
+    handleResize();
+    directoryMedia.addEventListener("change", handleResize);
+    detailsMedia.addEventListener("change", handleResize);
+    return () => {
+      directoryMedia.removeEventListener("change", handleResize);
+      detailsMedia.removeEventListener("change", handleResize);
+    };
   }, []);
 
   // ========== 数据加载 ==========
 
   const loadEpisodeScenes = async (episodeId: number) => {
-    if (episodeScenes[episodeId]) return;
+    if (episodeScenes[episodeId]) {
+      return;
+    }
     setLoadingEpisodes((prev) => new Set(prev).add(episodeId));
     try {
       const scenes = await scriptApi.listScenes(episodeId);
@@ -127,17 +174,22 @@ export default function ScriptTabPage() {
     }
   };
 
-  const loadStoryboardForScript = useCallback(async (scriptId: number) => {
-    const currentStoryboard = await storyboardApi.getByProject(projectId);
-    if (!currentStoryboard || currentStoryboard.scriptId !== scriptId) {
-      setStoryboard(null);
-      return { storyboard: null, episodes: [] as StoryboardEpisode[] };
-    }
+  const loadStoryboardForScript = useCallback(
+    async (scriptId: number) => {
+      const currentStoryboard = await storyboardApi.getByProject(projectId);
+      if (!currentStoryboard || currentStoryboard.scriptId !== scriptId) {
+        setStoryboard(null);
+        return { storyboard: null, episodes: [] as StoryboardEpisode[] };
+      }
 
-    setStoryboard(currentStoryboard);
-    const currentEpisodes = await storyboardApi.listEpisodes(currentStoryboard.id);
-    return { storyboard: currentStoryboard, episodes: currentEpisodes };
-  }, [projectId]);
+      setStoryboard(currentStoryboard);
+      const currentEpisodes = await storyboardApi.listEpisodes(
+        currentStoryboard.id,
+      );
+      return { storyboard: currentStoryboard, episodes: currentEpisodes };
+    },
+    [projectId],
+  );
 
   const loadScript = useCallback(async () => {
     try {
@@ -150,9 +202,9 @@ export default function ScriptTabPage() {
         await loadStoryboardForScript(scr.id);
         if (eps.length > 0) {
           setActiveEpisodeId(eps[0].id);
-          // 默认展开所有分集，并并行加载场次
-          setExpandedEpisodes(new Set(eps.map((e) => e.id)));
-          await Promise.all(eps.map((e) => loadEpisodeScenes(e.id)));
+          // 首次只加载当前集，其他分集在选中时读取。
+          setExpandedEpisodes(new Set([eps[0].id]));
+          await loadEpisodeScenes(eps[0].id);
         }
       } else {
         setScript(null);
@@ -180,7 +232,7 @@ export default function ScriptTabPage() {
         const eps = await scriptApi.listEpisodes(scr.id);
         setEpisodes(eps);
         await loadStoryboardForScript(scr.id);
-        
+
         if (eps.length > 0) {
           const prevActiveId = activeEpisodeIdRef.current;
           const stillExists = eps.some((e) => e.id === prevActiveId);
@@ -189,12 +241,15 @@ export default function ScriptTabPage() {
 
           const currentExpanded = expandedEpisodesRef.current;
           const currentScenes = episodeScenesRef.current;
-          
+
           const newEpisodeScenes: Record<number, SceneItem[]> = {};
-          
+
           await Promise.all(
             eps.map(async (e) => {
-              const shouldLoad = currentExpanded.has(e.id) || !!currentScenes[e.id] || e.id === nextActiveId;
+              const shouldLoad =
+                currentExpanded.has(e.id) ||
+                !!currentScenes[e.id] ||
+                e.id === nextActiveId;
               if (shouldLoad) {
                 try {
                   const scenes = await scriptApi.listScenes(e.id);
@@ -204,9 +259,9 @@ export default function ScriptTabPage() {
                   toastApiError(err, `刷新分集 ${e.id} 场次失败`);
                 }
               }
-            })
+            }),
           );
-          
+
           setEpisodeScenes(newEpisodeScenes);
         } else {
           setActiveEpisodeId(null);
@@ -235,7 +290,9 @@ export default function ScriptTabPage() {
   }, [refreshScript]);
 
   // 所有已提交的业务资源变化触发刷新
-  const scriptsInvalidation = useResourceChangeStore((s) => s.revisions.scripts);
+  const scriptsInvalidation = useResourceChangeStore(
+    (s) => s.revisions.scripts,
+  );
   const scriptsInvRef = useRef(scriptsInvalidation);
   useEffect(() => {
     if (scriptsInvRef.current !== scriptsInvalidation) {
@@ -244,7 +301,9 @@ export default function ScriptTabPage() {
     }
   }, [scriptsInvalidation, refreshScript]);
 
-  const storyboardsInvalidation = useResourceChangeStore((s) => s.revisions.storyboards);
+  const storyboardsInvalidation = useResourceChangeStore(
+    (s) => s.revisions.storyboards,
+  );
   const storyboardsInvRef = useRef(storyboardsInvalidation);
   useEffect(() => {
     if (storyboardsInvRef.current !== storyboardsInvalidation && script) {
@@ -279,8 +338,15 @@ export default function ScriptTabPage() {
     await loadEpisodeScenes(episodeId);
   };
 
-  const { scrollContainerRef, isAutoScrollingRef, scrollToScene, cancelSceneScroll } = useSceneNavigation(
-    activeEpisodeId ? episodeScenes[activeEpisodeId] : undefined, setSelectedSceneId, !loading && !!script,
+  const {
+    scrollContainerRef,
+    isAutoScrollingRef,
+    scrollToScene,
+    cancelSceneScroll,
+  } = useSceneNavigation(
+    activeEpisodeId ? episodeScenes[activeEpisodeId] : undefined,
+    setSelectedSceneId,
+    !loading && !!script,
     activeEpisodeId ? loadingEpisodes.has(activeEpisodeId) : false,
   );
 
@@ -292,12 +358,26 @@ export default function ScriptTabPage() {
 
   // ========== 增删操作 ==========
 
-  const { handleAddEpisode, handleDeleteEpisode, handleAddScene, handleInsertScene, handleDeleteScene, handleSceneUpdated, handleReorderScenes } = useScriptMutations({
-    script, episodes, episodeScenes, setEpisodeScenes, setExpandedEpisodes, setActiveEpisodeId,
-    setSelectedSceneId, refreshScript, scrollToScene,
+  const {
+    handleAddEpisode,
+    handleDeleteEpisode,
+    handleAddScene,
+    handleInsertScene,
+    handleDeleteScene,
+    handleSceneUpdated,
+    handleReorderScenes,
+  } = useScriptMutations({
+    script,
+    episodes,
+    episodeScenes,
+    setEpisodeScenes,
+    setExpandedEpisodes,
+    setActiveEpisodeId,
+    setSelectedSceneId,
+    refreshScript,
+    scrollToScene,
   });
   const episodeParseRequest = useCommandRequestKey();
-  const storyboardRebuildRequest = useCommandRequestKey();
 
   // ========== 分集 AI 解析 ==========
 
@@ -306,15 +386,26 @@ export default function ScriptTabPage() {
     setShowEpisodeParseDialog(true);
   };
 
-  const handleEpisodeParse = async (rawContent: string) => {
-    if (!script || !episodeToParseId) return;
+  const handleEpisodeParse = async (
+    rawContent: string,
+    version: number,
+    replaceExisting: boolean,
+  ) => {
+    if (!script || !episodeToParseId) {
+      return;
+    }
     const ep = episodes.find((e) => e.id === episodeToParseId);
-    if (!ep) return;
+    if (!ep) {
+      return;
+    }
 
     try {
       // 1. 先保存原文到分集记录
-      const update = { id: episodeToParseId, version: ep.version, rawContent };
-      await scriptApi.updateEpisode(update, episodeParseRequest.forPayload(update));
+      const update = { id: episodeToParseId, version, rawContent };
+      await scriptApi.updateEpisode(
+        update,
+        episodeParseRequest.forPayload(update),
+      );
       episodeParseRequest.clear();
       await refreshScript();
 
@@ -329,6 +420,7 @@ export default function ScriptTabPage() {
           title: `AI 解析 · 第 ${ep.episodeNumber} 集`,
           projectId,
           context: { episodeId: episodeToParseId, scriptId: script.id },
+          message: `解析剧本分集 ID ${episodeToParseId} 的全部原文并保存梗概。${replaceExisting ? "本次已确认替换该集现有场次。" : "保留已有场次，只补齐缺失内容和资产关联，完成后更新本集梗概和解析状态。"}`,
         },
         onComplete: () => {
           // Pipeline 完成后重新加载该集场次
@@ -341,7 +433,7 @@ export default function ScriptTabPage() {
       setExpandedTaskId(pipelineId);
     } catch (err) {
       console.error("启动分集解析失败:", err);
-      toastApiError(err, "启动分集解析失败");
+      throw err;
     }
   };
 
@@ -362,34 +454,52 @@ export default function ScriptTabPage() {
   };
 
   const handleGenerateEpisodeStoryboard = async (episodeId: number) => {
-    if (!script) return;
+    if (!script) {
+      return;
+    }
     const ep = episodes.find((item) => item.id === episodeId);
-    if (!ep) return;
+    if (!ep) {
+      return;
+    }
 
     try {
       const targetStoryboard = await ensureStoryboardForScript();
-      const currentStoryboardEpisodes = await storyboardApi.listEpisodes(targetStoryboard.id);
+      const currentStoryboardEpisodes = await storyboardApi.listEpisodes(
+        targetStoryboard.id,
+      );
 
       const boundEpisode = currentStoryboardEpisodes.find(
-        (item) => item.scriptEpisodeId === episodeId
+        (item) => item.scriptEpisodeId === episodeId,
       );
       const legacyUnboundEpisode = currentStoryboardEpisodes.find(
-        (item) => item.scriptEpisodeId == null && item.episodeNumber === ep.episodeNumber
+        (item) =>
+          (item.scriptEpisodeId == null ||
+            !episodes.some((source) => source.id === item.scriptEpisodeId)) &&
+          item.episodeNumber === ep.episodeNumber,
       );
 
       if (!boundEpisode && legacyUnboundEpisode) {
-        await alert({ title: "未绑定分镜集", description: `分镜中存在未绑定的第 ${ep.episodeNumber} 集，请先到分镜页将旧分镜集绑定到当前剧本集后再重新生成。`, variant: "warning" });
+        await alert({
+          title: "未绑定分镜集",
+          description: `分镜中存在未绑定的第 ${ep.episodeNumber} 集，请先到分镜页将旧分镜集绑定到当前剧本集后再重新生成。`,
+          variant: "warning",
+        });
         return;
       }
 
       if (boundEpisode) {
-        const confirmed = await confirm({ title: "覆盖生成本集分镜", description: `将覆盖第 ${ep.episodeNumber} 集已有分镜内容，不影响其它集。确定继续？`, variant: "ai", confirmText: "确定覆盖生成" });
-        if (!confirmed) return;
-        await storyboardApi.clearEpisodeContent(boundEpisode.id, boundEpisode.version,
-          storyboardRebuildRequest.forPayload({ id: boundEpisode.id, version: boundEpisode.version }));
-        storyboardRebuildRequest.clear();
+        const confirmed = await confirm({
+          title: "覆盖生成本集分镜",
+          description: `将覆盖第 ${ep.episodeNumber} 集已有分镜内容，不影响其它集。确定继续？`,
+          variant: "ai",
+          confirmText: "确定覆盖生成",
+        });
+        if (!confirmed) {
+          return;
+        }
       }
 
+      await scriptApi.getEpisode(ep.id);
       const pipelineId = addPipeline({
         label: `AI 分镜 · 第 ${ep.episodeNumber} 集`,
         projectId,
@@ -398,7 +508,7 @@ export default function ScriptTabPage() {
           toolExecutionMode: "FULL_ACCESS",
           category: "pipeline",
           title: `AI 分镜 · 第 ${ep.episodeNumber} 集`,
-          message: `请为剧本分集（scriptEpisodeId: ${ep.id}）生成分镜，并保存到分镜脚本 ${targetStoryboard.id}。`,
+          message: `请为剧本分集（scriptEpisodeId: ${ep.id}）生成分镜，并保存到分镜脚本 ${targetStoryboard.id}。${boundEpisode ? `已确认覆盖分镜集 ${boundEpisode.id}，先读取剧本并设计第一场，再以 replaceEpisodeContent=true 保存第一场，后续逐场追加。` : ""}`,
           projectId,
           context: {
             scriptId: script.id,
@@ -446,9 +556,10 @@ export default function ScriptTabPage() {
     : null;
 
   const activeEpisode = episodes.find((ep) => ep.id === activeEpisodeId);
-  const activeScenes = useMemo(() => activeEpisodeId
-    ? episodeScenes[activeEpisodeId] || []
-    : [], [activeEpisodeId, episodeScenes]);
+  const activeScenes = useMemo(
+    () => (activeEpisodeId ? episodeScenes[activeEpisodeId] || [] : []),
+    [activeEpisodeId, episodeScenes],
+  );
   const isActiveLoading = activeEpisodeId
     ? loadingEpisodes.has(activeEpisodeId)
     : false;
@@ -469,21 +580,26 @@ export default function ScriptTabPage() {
         let topEntry: IntersectionObserverEntry | null = null;
         for (const entry of entries) {
           if (entry.isIntersecting) {
-            if (!topEntry || entry.boundingClientRect.top < topEntry.boundingClientRect.top) {
+            if (
+              !topEntry ||
+              entry.boundingClientRect.top < topEntry.boundingClientRect.top
+            ) {
               topEntry = entry;
             }
           }
         }
         if (topEntry) {
           const id = Number((topEntry.target as HTMLElement).dataset.sceneId);
-          if (id) setSelectedSceneId(id);
+          if (id) {
+            setSelectedSceneId(id);
+          }
         }
       },
       {
         root: container,
         rootMargin: "-10% 0px -70% 0px",
         threshold: 0,
-      }
+      },
     );
 
     const elements = container.querySelectorAll("[data-scene-id]");
@@ -508,98 +624,131 @@ export default function ScriptTabPage() {
     return (
       <div className="rounded-xl border border-destructive/30 bg-card p-6">
         <p className="font-medium">项目剧本工作区未初始化</p>
-        <p className="mt-1 text-sm text-muted-foreground">请检查项目创建流程后重试。</p>
+        <p className="mt-1 text-sm text-muted-foreground">
+          请检查项目创建流程后重试。
+        </p>
       </div>
     );
   }
 
+  const treeProps = {
+    onRefresh: handleManualRefreshScript,
+    isRefreshing: isRefreshingScript,
+    episodes,
+    expandedEpisodes,
+    activeEpisodeId,
+    selectedSceneId,
+    loadingEpisodes,
+    episodeScenes,
+    onToggleEpisode: toggleEpisode,
+    onSelectEpisode: selectEpisode,
+    onSelectScene: handleSelectScene,
+    onAddEpisode: handleAddEpisode,
+    onDeleteEpisode: handleDeleteEpisode,
+    onAddScene: handleAddScene,
+    onDeleteScene: handleDeleteScene,
+    onReorderScenes: handleReorderScenes,
+    onParseEpisode: handleOpenEpisodeParse,
+    onGenerateStoryboard: handleGenerateEpisodeStoryboard,
+  };
+  const details = selectedScene ? (
+    <SceneDetail
+      scene={selectedScene}
+      projectId={projectId}
+      showHeading={false}
+    />
+  ) : (
+    <ScriptOverview
+      script={script}
+      episodes={episodes}
+      projectName={project?.name}
+      showHeading={false}
+    />
+  );
+  const detailsTitle = selectedScene ? "场景详情" : "剧本信息";
+
   return (
     <motion.div
-      variants={{ hidden: { opacity: 0 }, visible: { opacity: 1, transition: { staggerChildren: 0.08, delayChildren: 0.1 } } }}
-      initial="hidden"
+      variants={{
+        hidden: { opacity: 0 },
+        visible: {
+          opacity: 1,
+          transition: { staggerChildren: 0.08, delayChildren: 0.1 },
+        },
+      }}
+      initial={reduceMotion ? false : "hidden"}
       animate="visible"
-      className="flex min-h-0 flex-1 rounded-xl border border-border/20 overflow-hidden bg-card/10"
+      className="flex min-h-0 grow basis-0 rounded-xl border border-border/20 overflow-hidden bg-card/10"
     >
-      {/* 左栏：树形导航 */}
-      <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="shrink-0 hidden xl:block">
-      <EpisodeTree
-        onRefresh={handleManualRefreshScript}
-        isRefreshing={isRefreshingScript}
-        episodes={episodes}
-        expandedEpisodes={expandedEpisodes}
-        activeEpisodeId={activeEpisodeId}
-        selectedSceneId={selectedSceneId}
-        loadingEpisodes={loadingEpisodes}
-        episodeScenes={episodeScenes}
+      <ScriptWorkspacePanel
+        side="left"
         collapsed={isScriptSidebarCollapsed}
-        onToggleEpisode={toggleEpisode}
-        onSelectEpisode={selectEpisode}
-        onSelectScene={handleSelectScene}
-        onCollapsedChange={handleSetScriptSidebarCollapsed}
-        onAddEpisode={handleAddEpisode}
-        onDeleteEpisode={handleDeleteEpisode}
-        onAddScene={handleAddScene}
-        onDeleteScene={handleDeleteScene}
-        onReorderScenes={handleReorderScenes}
-        onParseEpisode={handleOpenEpisodeParse}
-        onGenerateStoryboard={handleGenerateEpisodeStoryboard}
-      />
-      </motion.div>
+        onToggle={() =>
+          handleSetScriptSidebarCollapsed(!isScriptSidebarCollapsed)
+        }
+      >
+        <EpisodeTree
+          {...treeProps}
+          headerAction={<span className="size-9 shrink-0" aria-hidden />}
+        />
+      </ScriptWorkspacePanel>
 
       {/* 中栏：场次卡片列表 */}
-      <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="flex-1 flex flex-col min-w-0">
-        <div className="2xl:hidden px-4 py-3 border-b border-border/20 flex items-center justify-between shrink-0 bg-card/30 backdrop-blur-sm">
-          <Sheet open={leftSheetOpen} onOpenChange={setLeftSheetOpen}>
-            <SheetTrigger
-              render={
-                <button aria-label="打开剧本目录" className="xl:hidden p-1.5 -ml-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
-                  <Menu className="h-5 w-5" />
-                </button>
+      <motion.div
+        variants={{
+          hidden: { opacity: 0, y: 16 },
+          visible: {
+            opacity: 1,
+            y: 0,
+            transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] },
+          },
+        }}
+        className="flex-1 flex flex-col min-w-0 min-h-0"
+      >
+        <ScriptWorkspaceActions
+          script={script}
+          episodes={episodes}
+          onImported={refreshScript}
+          onAddEpisode={handleAddEpisode}
+          directoryControl={
+            <ScriptPanelToggle
+              side="left"
+              collapsed={isScriptSidebarCollapsed}
+              onToggle={() =>
+                handleSetScriptSidebarCollapsed(!isScriptSidebarCollapsed)
               }
+              sheetOpen={leftSheetOpen}
+              onOpenSheet={() => setLeftSheetOpen(true)}
             />
-            <SheetContent side="left" className="w-[300px] p-0 border-r-0 flex flex-col pt-12">
-              <EpisodeTree
-        onRefresh={handleManualRefreshScript}
-        isRefreshing={isRefreshingScript}
-        episodes={episodes}
-                expandedEpisodes={expandedEpisodes}
-                activeEpisodeId={activeEpisodeId}
-                selectedSceneId={selectedSceneId}
-                loadingEpisodes={loadingEpisodes}
-                episodeScenes={episodeScenes}
-                onToggleEpisode={toggleEpisode}
-                onSelectEpisode={selectEpisode}
-                onSelectScene={handleSelectScene}
-                onAddEpisode={handleAddEpisode}
-                onDeleteEpisode={handleDeleteEpisode}
-                onAddScene={handleAddScene}
-                onDeleteScene={handleDeleteScene}
-                onReorderScenes={handleReorderScenes}
-                onParseEpisode={handleOpenEpisodeParse}
-                onGenerateStoryboard={handleGenerateEpisodeStoryboard}
-              />
-            </SheetContent>
-          </Sheet>
-          <span className="text-sm font-semibold text-foreground/80">剧本内容</span>
-          <Sheet open={rightSheetOpen} onOpenChange={setRightSheetOpen}>
-            <SheetTrigger
-              render={
-                <button aria-label="打开场景详情" className="p-1.5 -mr-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
-                  <Info className="h-5 w-5" />
-                </button>
-              }
+          }
+          detailsControl={
+            <ScriptPanelToggle
+              side="right"
+              collapsed={isDetailsCollapsed}
+              onToggle={toggleDetails}
+              sheetOpen={rightSheetOpen}
+              onOpenSheet={() => setRightSheetOpen(true)}
             />
-            <SheetContent side="right" className="w-[300px] p-0 border-l-0 flex flex-col pt-12 overflow-y-auto">
-              {selectedScene ? (
-                <SceneDetail scene={selectedScene} projectId={projectId} />
-              ) : (
-                <ScriptOverview script={script} episodes={episodes} projectName={project?.name} />
-              )}
-            </SheetContent>
-          </Sheet>
-        </div>
+          }
+        />
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto">
           <SceneList
+            onParseEpisode={handleOpenEpisodeParse}
+            duplicateTitle={
+              !!activeEpisode &&
+              episodes.some(
+                (ep) =>
+                  ep.id !== activeEpisode.id &&
+                  ep.title
+                    ?.normalize("NFKC")
+                    .replace(/\s+/g, "")
+                    .toLowerCase() ===
+                    activeEpisode.title
+                      ?.normalize("NFKC")
+                      .replace(/\s+/g, "")
+                      .toLowerCase(),
+              )
+            }
             activeEpisode={activeEpisode}
             activeScenes={activeScenes}
             isLoading={isActiveLoading}
@@ -612,28 +761,46 @@ export default function ScriptTabPage() {
             onEpisodeUpdated={(updated) => {
               void refreshScript();
               setEpisodes((prev) =>
-                prev.map((ep) => (ep.id === updated.id ? updated : ep))
+                prev.map((ep) => (ep.id === updated.id ? updated : ep)),
               );
             }}
           />
         </div>
       </motion.div>
 
-      {/* 右栏：场景详情 / 剧本概览 */}
-      <motion.div variants={{ hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] } } }} className="w-72 border-l border-border/20 flex-col shrink-0 bg-card/20 overflow-y-auto hidden 2xl:flex">
-        {selectedScene ? (
-          <SceneDetail scene={selectedScene} projectId={projectId} />
-        ) : (
-          <ScriptOverview script={script} episodes={episodes} projectName={project?.name} />
-        )}
-      </motion.div>
+      <ScriptWorkspacePanel side="right" collapsed={isDetailsCollapsed}>
+        <h3 className="shrink-0 px-4 pt-4 text-sm font-semibold">
+          {detailsTitle}
+        </h3>
+        <OverlayScrollArea className="min-h-0 flex-1">
+          {details}
+        </OverlayScrollArea>
+      </ScriptWorkspacePanel>
+      <ScriptDirectorySheet
+        open={leftSheetOpen}
+        onOpenChange={setLeftSheetOpen}
+        treeProps={treeProps}
+      />
+      <ScriptDetailsSheet
+        open={rightSheetOpen}
+        onOpenChange={setRightSheetOpen}
+        title={detailsTitle}
+      >
+        {details}
+      </ScriptDetailsSheet>
 
       {/* 分集解析弹窗 */}
       <EpisodeParseDialog
         open={showEpisodeParseDialog}
         episode={episodes.find((e) => e.id === episodeToParseId) ?? null}
-        hasExistingScenes={(episodeToParseId && (episodeScenes[episodeToParseId]?.length ?? 0) > 0) || false}
-        existingSceneCount={episodeToParseId ? (episodeScenes[episodeToParseId]?.length ?? 0) : 0}
+        hasExistingScenes={
+          (episodeToParseId &&
+            (episodeScenes[episodeToParseId]?.length ?? 0) > 0) ||
+          false
+        }
+        existingSceneCount={
+          episodeToParseId ? (episodeScenes[episodeToParseId]?.length ?? 0) : 0
+        }
         onClose={() => setShowEpisodeParseDialog(false)}
         onStartParse={handleEpisodeParse}
       />

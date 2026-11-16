@@ -12,6 +12,7 @@ import com.stonewu.fusion.service.canvas.model.CanvasErrorCode;
 import com.stonewu.fusion.service.canvas.model.CanvasException;
 import com.stonewu.fusion.service.canvas.model.CanvasValueType;
 import com.stonewu.fusion.service.resource.model.ResourceSnapshot;
+import com.stonewu.fusion.service.resource.model.ResourceHeader;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -53,11 +54,7 @@ public class ResourceQueryService {
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, noRollbackFor = BusinessException.class)
     public ResourceSnapshot get(CanvasValueType type, long id, CanvasActor actor) {
-        if (id <= 0) {
-            throw new CanvasException(CanvasErrorCode.INVALID_RESOURCE_REFERENCE, "业务对象编号无效");
-        }
-        var header = resources.require(type, id, false);
-        resourceAccess.require(header, actor);
+        var header = authorizedHeader(type, id, actor);
         ObjectNode data = json.read(snapshots.data(header), ObjectNode.class);
         if (type == CanvasValueType.ASSET_ITEM) {
             data.put("assetVersion",
@@ -68,6 +65,16 @@ public class ResourceQueryService {
             storyboardVersions.attach(type, data);
         }
         return new ResourceSnapshot(header, data);
+    }
+
+    @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, noRollbackFor = BusinessException.class)
+    public ResourceHeader authorizedHeader(CanvasValueType type, long id, CanvasActor actor) {
+        if (id <= 0) {
+            throw new CanvasException(CanvasErrorCode.INVALID_RESOURCE_REFERENCE, "业务对象编号无效");
+        }
+        var header = resources.require(type, id, false);
+        resourceAccess.require(header, actor);
+        return header;
     }
 
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ, noRollbackFor = BusinessException.class)
@@ -95,8 +102,15 @@ public class ResourceQueryService {
     public ObjectNode script(long projectId, CanvasActor actor) {
         return reads.execute(ignored -> {
             access.requireProject(projectId, actor);
-            return resources.scriptForProject(projectId).map(id -> get(CanvasValueType.SCRIPT, id, actor).data())
+            return resources.scriptForProject(projectId).map(id -> scriptSummary(id, actor))
                     .orElse(null);
+        });
+    }
+
+    public ObjectNode scriptSummary(long id, CanvasActor actor) {
+        return reads.execute(ignored -> {
+            resourceAccess.require(resources.require(CanvasValueType.SCRIPT, id, false), actor);
+            return resources.scriptSummary(id);
         });
     }
 
@@ -107,14 +121,17 @@ public class ResourceQueryService {
             default -> throw new CanvasException(CanvasErrorCode.INVALID_RESOURCE_REFERENCE, "不是剧本子对象");
         };
         return Objects.requireNonNull(reads.execute(ignored -> {
-            get(parentType, parentId, actor);
+            resourceAccess.require(resources.require(parentType, parentId, false), actor);
+            if (type == CanvasValueType.SCRIPT_EPISODE) {
+                return resources.episodeSummaries(parentId);
+            }
             return resources.scriptChildren(type, parentId).stream().map(id -> get(type, id, actor).data()).toList();
         }));
     }
 
     public ObjectNode scriptTree(CanvasValueType type, long id, CanvasActor actor) {
         return Objects.requireNonNull(reads.execute(ignored -> {
-            ObjectNode root = get(type, id, actor).data();
+            ObjectNode root = type == CanvasValueType.SCRIPT ? scriptSummary(id, actor) : get(type, id, actor).data();
             String key;
             CanvasValueType child;
             if (type == CanvasValueType.SCRIPT) {

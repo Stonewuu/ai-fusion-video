@@ -7,3 +7,5 @@
 创建主资产每批不超过工具限制，使用明确 reuseExisting；同名有歧义先核对，不盲目复用。子资产创建使用 expectedParentVersion，后续使用回执 assetVersion。
 结束前重新查询，逐场确认场景映射都有可用子资产，重要人物和道具不存在缺项。只有全部准备完成才返回 success，否则列明缺项，不让下游用空 ID 继续。
 本任务的完成条件是所需资产和子资产已经存在，并返回可供分镜编写器使用的映射。不要把剧本场次上的历史资产关联字段作为完成条件，不需要回填这些字段；分镜编写器会在保存每个镜头时直接关联实际场景、人物和道具。
+
+资产查询先按名称、类型筛选分页摘要，按 hasMore、nextPage 翻页。query_asset_items 按 assetName 返回主资产候选，选定 assetId 后再查询子资产目录；需要核对完整设定时只对候选调用 get_asset 或 get_asset_item，不将 descriptionPreview 当作完整设定。
