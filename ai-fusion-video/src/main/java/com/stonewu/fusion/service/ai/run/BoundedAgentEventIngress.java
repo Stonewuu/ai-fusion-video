@@ -18,7 +18,8 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class BoundedAgentEventIngress {
 
     public static final int DEFAULT_MAX_EVENTS = 4096;
-    public static final long DEFAULT_MAX_BYTES = 8L * 1024L * 1024L;
+    // 工具可能一次返回完整结果。20 MB 的 UTF-8 文本解码后仍在 Jackson 默认的 2,000 万字符上限内。
+    public static final long DEFAULT_MAX_BYTES = 20_000_000L;
 
     private final ObjectMapper objectMapper;
     private final int maxEvents;

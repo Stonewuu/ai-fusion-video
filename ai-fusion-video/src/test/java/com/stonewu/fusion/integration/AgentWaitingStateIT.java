@@ -15,6 +15,8 @@ import com.stonewu.fusion.enums.ai.AgentRunStatus;
 import com.stonewu.fusion.mapper.ai.AgentEventMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.service.ai.AgentConversationService;
+import com.stonewu.fusion.service.ai.AgentMessageService;
+import com.stonewu.fusion.service.ai.run.AgentMessageProjectionService;
 import com.stonewu.fusion.service.ai.run.AgentRunCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentConfirmationExpiryCoordinator;
 import com.stonewu.fusion.service.ai.run.AgentRunRedisSignalService;
@@ -87,6 +89,7 @@ class AgentWaitingStateIT {
 
     @Container
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.6")
+            .withCommand("--max-allowed-packet=64M")
             .withDatabaseName("ai_fusion_video")
             .withUsername("afv")
             .withPassword("afv-test");
@@ -107,6 +110,12 @@ class AgentWaitingStateIT {
 
     @Autowired
     private AgentWaitingStatePort waiting;
+
+    @Autowired
+    private AgentMessageProjectionService projection;
+
+    @Autowired
+    private AgentMessageService messages;
 
     @Autowired
     private AgentRunCoordinator coordinator;
@@ -337,6 +346,34 @@ class AgentWaitingStateIT {
         assertThat(await(waiting.resumeExternal(resume)).runId()).isEqualTo(started.runId());
         assertConflict(() -> await(waiting.resumeExternal(resume)));
         assertThat(canvasWaits.dispatching("waiting-node-a")).contains(started.runId());
+    }
+
+    /** 外部工具一次交回完整结果，恢复运行后应能在会话历史中读到全部内容。 */
+    @Test
+    void projectsMillionTokenExternalToolResultIntoHistory() {
+        StartedAgentRun started = startRun(Duration.ofMinutes(2));
+        var pending = new PendingExternalExecution("generation-reply", "await_canvas_run", """
+                {"toolCalls":[{"id":"wait-call","name":"await_generation_task","input":{"submissionId":"accepted"}}]}
+                """, started.deadline());
+        await(waiting.enterWaitingExternal(started.runId(), started.ownerEpoch(),
+                checkpoint(run(started.runId())), pending));
+
+        // o200k_base 将这个带前导空格的英文单词编码为一个 token，重复后正文占 19,000,000 字节。
+        String resultJson = "{\"text\":\"" + " telecommunications".repeat(1_000_000) + "\"}";
+        String responseJson = "{\"results\":[{\"toolCallId\":\"wait-call\",\"toolName\":\"await_generation_task\","
+                + "\"result\":" + resultJson + "}]}";
+        Duration timeout = Duration.ofMinutes(1);
+        waiting.resumeExternal(new ResumeExternalCommand(started.runId(), USER_ID, "generation-waiter",
+                pending.toolCallId(), responseJson, "waiting-node-a", Duration.ofSeconds(30))).block(timeout);
+        projection.projectCommitted(started.runId()).block(timeout);
+
+        assertThat(messages.listByConversation(started.conversationId()))
+                .filteredOn(message -> "wait-call".equals(message.getToolCallId()))
+                .singleElement()
+                .satisfies(message -> {
+                    assertThat(message.getToolStatus()).isEqualTo("success");
+                    assertThat(message.getContent()).withFailMessage("会话历史中的工具结果与原文不同").isEqualTo(resultJson);
+                });
     }
 
     private void assertCommittedVisibleEvent(String runId, long sequence) {

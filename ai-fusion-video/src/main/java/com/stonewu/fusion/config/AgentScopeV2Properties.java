@@ -1,5 +1,6 @@
 package com.stonewu.fusion.config;
 
+import com.stonewu.fusion.service.ai.run.BoundedAgentEventIngress;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 import java.time.Duration;
@@ -133,8 +134,8 @@ public class AgentScopeV2Properties {
     }
 
     public static final class Ingress {
-        private int maxEvents = 4096;
-        private long maxBytes = 8L * 1024L * 1024L;
+        private int maxEvents = BoundedAgentEventIngress.DEFAULT_MAX_EVENTS;
+        private long maxBytes = BoundedAgentEventIngress.DEFAULT_MAX_BYTES;
         private Duration coalesceDelay = Duration.ofMillis(50);
         private int coalesceMaxChars = 1024;
 

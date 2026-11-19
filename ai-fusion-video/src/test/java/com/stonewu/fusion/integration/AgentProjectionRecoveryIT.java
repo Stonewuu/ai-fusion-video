@@ -57,6 +57,8 @@ class AgentProjectionRecoveryIT {
 
     @Container
     private static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.6")
+            // Testcontainers 将数据包上限设为 1 MiB，这里使用项目 MySQL 的 64 MiB 设置。
+            .withCommand("--max-allowed-packet=64M")
             .withDatabaseName("ai_fusion_video")
             .withUsername("afv")
             .withPassword("afv-test");
@@ -188,6 +190,42 @@ class AgentProjectionRecoveryIT {
         assertThat(persisted.getProjectionCompletedAt()).isNotNull();
         assertThat(conversationService.getByConversationId(run.conversationId()).getStatus())
                 .isEqualTo("completed");
+    }
+
+    /** 从已保存的事件恢复历史时，百万字符的推理、回复、工具参数和结果都应完整保留。 */
+    @Test
+    void recoversMillionCharacterAssistantAndToolMessages() {
+        StartedAgentRun run = startRoot("long-history");
+        String firstHalf = "分镜🎬。".repeat(125_000);
+        String secondHalf = "旁白🌙。".repeat(125_000);
+        String toolCallId = "write-script";
+        append(run, "THINKING_BLOCK_DELTA", "REASONING", null, objectPayload("delta", firstHalf));
+        append(run, "THINKING_BLOCK_DELTA", "REASONING", null, objectPayload("delta", secondHalf));
+        append(run, "TEXT_BLOCK_DELTA", "CONTENT", null, objectPayload("delta", secondHalf));
+        append(run, "TEXT_BLOCK_DELTA", "CONTENT", null, objectPayload("delta", firstHalf));
+        append(run, "TOOL_CALL_DELTA", null, toolCallId, objectPayload("delta", "{\"script\":\"" + firstHalf));
+        append(run, "TOOL_CALL_DELTA", null, toolCallId, objectPayload("delta", secondHalf + "\"}"));
+        append(run, "TOOL_CALL_END", "TOOL_CALL", toolCallId, objectPayload("toolName", "write_script"));
+        append(run, "TOOL_RESULT_TEXT_DELTA", null, toolCallId, objectPayload("delta", "已保存：" + secondHalf));
+        append(run, "TOOL_RESULT_TEXT_DELTA", null, toolCallId, objectPayload("delta", firstHalf));
+        append(run, "TOOL_RESULT_END", "TOOL_FINISHED", toolCallId,
+                objectPayload("toolName", "write_script").put("state", "SUCCESS"));
+        await(terminalCoordinator.terminateOwned(completedTerminal(run), run.ownerInstanceId(), run.ownerEpoch()));
+
+        await(projectionService.recoverTerminalBatch(100));
+        await(projectionService.recoverTerminalBatch(100));
+
+        List<AgentMessage> history = messageService.listByConversation(run.conversationId());
+        assertThat(history).extracting(AgentMessage::getRole, AgentMessage::getToolStatus, AgentMessage::getToolCallId)
+                .containsExactly(tuple("user", null, null), tuple("assistant", null, null),
+                        tuple("tool", "running", toolCallId), tuple("tool", "success", toolCallId));
+        String reasoning = firstHalf + secondHalf;
+        String reply = secondHalf + firstHalf;
+        assertThat(history.get(1).getReasoningContent()).withFailMessage("推理内容与原文不同").isEqualTo(reasoning);
+        assertThat(history.get(1).getContent()).withFailMessage("回复正文与原文不同").isEqualTo(reply);
+        assertThat(history.get(2).getContent()).withFailMessage("工具参数与原文不同").isEqualTo("{\"script\":\"" + reasoning + "\"}");
+        assertThat(history.get(3).getContent()).withFailMessage("工具结果与原文不同").isEqualTo("已保存：" + reply);
+        assertThat(requireRun(run.runId()).getProjectionCompletedAt()).isNotNull();
     }
 
     @Test

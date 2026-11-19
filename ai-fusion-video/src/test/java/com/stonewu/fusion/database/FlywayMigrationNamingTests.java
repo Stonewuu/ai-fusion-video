@@ -84,7 +84,10 @@ class FlywayMigrationNamingTests {
             Map.entry("V1.1.3.0.3__create_generation_and_media_jobs.sql", 393170419),
             Map.entry("V1.1.3.0.4__create_canvas_execution_and_delivery.sql", 1770912913),
             Map.entry("V1.1.3.0.5__extend_agent_and_provider_configuration.sql", -1432568841),
-            Map.entry("V1.1.3.0.6__create_media_reference_views.sql", -1175647704));
+            Map.entry("V1.1.3.0.6__create_media_reference_views.sql", -1175647704),
+            Map.entry("V1.1.3.1.0__add_media_deletion.sql", 1822981719),
+            Map.entry("V1.1.3.1.1__create_google_model_tasks.sql", -2092005375),
+            Map.entry("V1.1.3.1.2__restrict_generation_model_types.sql", -207139029));
 
     @Test
     void migrationsUseProductVersionAndContinuousSequence() throws Exception {
@@ -198,7 +201,6 @@ class FlywayMigrationNamingTests {
                 .path("version").asText();
         assertEquals(productVersion, webVersion, "frontend and backend must use the same product version");
 
-        // 已核对正式 v1.3.0 标签；此前迁移及基线继续保持不可变。
         MigrationVersion latestReleasedVersion = IMMUTABLE_MIGRATION_CHECKSUMS.keySet().stream()
                 .map(VERSIONED_NAME::matcher)
                 .filter(Matcher::matches)

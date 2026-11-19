@@ -92,7 +92,8 @@ fusion:
         table-name: "afv_agent_state"
       ingress:
         max-events: 4096
-        max-bytes: 8388608
+        # 每次运行的待写事件共用这部分容量。工具可能一次返回完整结果。
+        max-bytes: 20000000
         coalesce-delay: 50ms
         coalesce-max-chars: 1024
       execution:

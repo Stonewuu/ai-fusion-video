@@ -2,6 +2,7 @@ package com.stonewu.fusion.service.ai.run;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
 import org.junit.jupiter.api.Test;
 import reactor.test.StepVerifier;
@@ -13,6 +14,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 class BoundedAgentEventIngressTests {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
+
+    @Test
+    void admitsAMillionTokenTextEventWithTheDefaultQueueBudget() {
+        var settings = new AgentScopeV2Properties().getIngress();
+        var ingress = new BoundedAgentEventIngress(objectMapper, settings.getMaxEvents(), settings.getMaxBytes());
+        var largeEvent = event("long-output", " telecommunications".repeat(1_000_000));
+
+        assertThat(ingress.offer(largeEvent)).isTrue();
+        ingress.complete();
+        StepVerifier.create(ingress.events()).expectNext(largeEvent).verifyComplete();
+    }
 
     @Test
     void rejectsCountOverflowWithoutGrowingPastTheConfiguredBound() {

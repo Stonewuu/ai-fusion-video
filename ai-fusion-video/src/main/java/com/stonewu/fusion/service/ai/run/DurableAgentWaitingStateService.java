@@ -37,7 +37,7 @@ import java.util.function.Supplier;
 @Service
 public final class DurableAgentWaitingStateService implements AgentWaitingStatePort {
 
-    private static final int MAX_JSON_BYTES = 8 * 1024 * 1024;
+    private static final int MAX_JSON_BYTES = 20_000_000;
     private static final String CANDIDATE_SOURCE = "platform/waiting-candidate";
     private static final String WAITING_SOURCE = "platform/waiting";
 
@@ -763,6 +763,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
             JsonNode payload,
             LocalDateTime now) {
         boolean publishRequired = outputType != null;
+        String payloadJson = writeJson(payload);
+        // 等待恢复时读取的是整个事件，写入前要把嵌套 JSON 的转义和事件字段一起计入大小。
+        requireJsonSize(payloadJson);
         AgentEvent event = AgentEvent.builder()
                 .runId(run.getRunId())
                 .sequenceNo(sequence)
@@ -776,7 +779,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
                 .parentToolCallId(run.getParentToolCallId())
                 .agentName(run.getAgentName())
                 .outputType(outputType)
-                .payloadJson(writeJson(payload))
+                .payloadJson(payloadJson)
                 .eventCreatedAt(now)
                 .publishRequired(publishRequired)
                 .publishStatus(publishRequired ? "PENDING" : "NOT_REQUIRED")
@@ -875,7 +878,7 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
     }
 
     private JsonNode parseJson(String value, String field) {
-        requireJsonSize(value, field);
+        requireJsonSize(value);
         try {
             JsonNode parsed = objectMapper.readTree(value);
             if (parsed == null) {
@@ -903,9 +906,9 @@ public final class DurableAgentWaitingStateService implements AgentWaitingStateP
         return (ArrayNode) parsed;
     }
 
-    private void requireJsonSize(String value, String field) {
+    private void requireJsonSize(String value) {
         if (value.getBytes(StandardCharsets.UTF_8).length > MAX_JSON_BYTES) {
-            throw new IllegalArgumentException(field + " exceeds 8 MiB");
+            throw new IllegalArgumentException("工具调用数据超过 20 MB，请减少单次调用的参数或返回内容");
         }
     }
 
