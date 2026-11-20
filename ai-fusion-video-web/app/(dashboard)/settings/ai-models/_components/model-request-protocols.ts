@@ -1,5 +1,6 @@
 export const MODEL_PROTOCOL_LABELS: Record<string, string> = {
   openai_compatible: "OpenAI 兼容文本协议",
+  openai_responses: "OpenAI Responses 协议",
   openai: "OpenAI 官方协议",
   deepseek: "OpenAI 兼容文本协议",
   anthropic: "Anthropic 协议",
@@ -11,6 +12,7 @@ export const MODEL_PROTOCOL_LABELS: Record<string, string> = {
   metaso_video: "秘塔视频协议",
   infistar_video: "无限星河视频协议",
   youkou: "贰春异步协议",
+  apixo: "APIXO 异步协议",
   volcengine: "火山引擎协议",
   vertex_ai: "Vertex AI 协议",
   google_flow: "Flow 协议",
@@ -24,6 +26,7 @@ export const MODEL_PROTOCOL_LABELS: Record<string, string> = {
 
 export const TEXT_PROTOCOL_OPTIONS = [
   { value: "openai_compatible", label: "OpenAI 兼容文本协议" },
+  { value: "openai_responses", label: "OpenAI Responses 协议" },
   { value: "anthropic", label: "Anthropic 协议" },
   { value: "gemini", label: "Gemini 协议" },
   { value: "dashscope", label: "DashScope 协议" },
@@ -33,6 +36,7 @@ export const TEXT_PROTOCOL_OPTIONS = [
 ] as const;
 
 export const IMAGE_PROTOCOL_OPTIONS = [
+  { value: "apixo", label: "APIXO 异步协议", providerOnly: true },
   { value: "youkou", label: "贰春异步协议", providerOnly: true },
   { value: "gemini", label: "Gemini 协议" },
   { value: "openai", label: "OpenAI 官方协议" },
@@ -46,6 +50,7 @@ export const IMAGE_PROTOCOL_OPTIONS = [
 ] as const;
 
 export const VIDEO_PROTOCOL_OPTIONS = [
+  { value: "apixo", label: "APIXO 异步协议", providerOnly: true },
   { value: "youkou", label: "贰春异步协议", providerOnly: true },
   { value: "gemini", label: "Gemini 协议" },
   { value: "vertex_ai", label: "Vertex AI 协议" },

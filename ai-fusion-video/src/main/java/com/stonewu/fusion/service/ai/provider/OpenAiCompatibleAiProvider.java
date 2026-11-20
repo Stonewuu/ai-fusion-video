@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.provider;
 
 import cn.hutool.core.util.StrUtil;
+import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.controller.ai.vo.RemoteModelVO;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.proxy.AiProxySupport;
@@ -28,7 +29,7 @@ import java.util.Set;
 public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
     private static final Set<String> SUPPORTED_PLATFORMS = Set.of(
-            "openai_compatible", "openai", "deepseek", "zhipu", "moonshot", "volcengine", "siliconflow", "newapi");
+            "openai_compatible", "openai_responses", "openai", "deepseek", "zhipu", "moonshot", "volcengine", "siliconflow", "newapi");
 
     @Override
     public boolean supports(String platform) {
@@ -37,6 +38,9 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
 
     @Override
     public ChatModel createChatModel(AiProviderContext context) {
+        if ("openai_responses".equalsIgnoreCase(context.getPlatform())) {
+            throw new BusinessException("此模型请使用支持 OpenAI Responses 协议的对话接口");
+        }
         String platform = context.getPlatform();
         String apiKey = context.getApiKey();
         String baseUrl = resolveRootBaseUrl(platform, context.getBaseUrl());
@@ -183,6 +187,9 @@ public class OpenAiCompatibleAiProvider extends AbstractAiProvider {
     }
 
     private boolean shouldUseResponsesApi(AiProviderContext context) {
+        if ("openai_responses".equalsIgnoreCase(context.getPlatform())) {
+            return true;
+        }
         Boolean useResponsesApi = getConfigBoolean(context.getConfig(),
                 "useResponsesApi", "useResponses", "responseApi", "responsesApi");
         if (useResponsesApi != null) {

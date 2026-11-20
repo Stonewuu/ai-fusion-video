@@ -1,0 +1,1206 @@
+[
+  {
+    "code": "apixo:seedream-5-5",
+    "modelCode": "seedream-5-5",
+    "name": "Seedream 5.5",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 2,
+    "documentationUrl": "https://apixo.ai/docs/models/image/seedream-5-5",
+    "description": "APIXO 图片生成与编辑，支持按模型参数选择分辨率、比例及参考图片。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 10,
+      "maxCount": 1,
+      "supportCustomSize": true,
+      "supportedAspectRatios": [
+        "auto",
+        "1:1",
+        "4:3",
+        "3:4",
+        "16:9",
+        "9:16",
+        "3:2",
+        "2:3",
+        "21:9",
+        "1:2",
+        "2:1",
+        "1:3",
+        "3:1",
+        "4:5",
+        "5:4",
+        "9:21"
+      ],
+      "defaultAspectRatio": "1:1",
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "text-to-image",
+              "image-to-image",
+              "layer-decomposition"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1
+            }
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "minItems": 1,
+              "maxItems": 10
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "1k",
+              "1.5k",
+              "2k"
+            ]
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "auto",
+              "1:1",
+              "4:3",
+              "3:4",
+              "16:9",
+              "9:16",
+              "3:2",
+              "2:3",
+              "21:9",
+              "1:2",
+              "2:1",
+              "1:3",
+              "3:1",
+              "4:5",
+              "5:4",
+              "9:21"
+            ]
+          },
+          "size": {
+            "type": "string",
+            "required": false,
+            "constraints": {
+              "pattern": "^\\s*0*[1-9][0-9]*\\s*[xX*]\\s*0*[1-9][0-9]*\\s*$"
+            }
+          },
+          "background": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "auto",
+              "transparent",
+              "opaque"
+            ]
+          },
+          "output_format": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "png",
+              "jpeg"
+            ]
+          },
+          "watermark": {
+            "type": "boolean",
+            "required": false
+          },
+          "prompt_optimize_mode": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "standard"
+            ]
+          },
+          "max_images": {
+            "type": "integer",
+            "required": false,
+            "constraints": {
+              "integer": true,
+              "minimum": 2,
+              "maximum": 100
+            }
+          },
+          "text_recognition": {
+            "type": "boolean",
+            "required": false
+          },
+          "nsfw_checker": {
+            "type": "boolean",
+            "required": false
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-image",
+        "imageMode": "image-to-image"
+      },
+      "supportedResolutions": [
+        "1k",
+        "1.5k",
+        "2k"
+      ],
+      "defaultResolution": "1k",
+      "minPixels": 921600,
+      "maxPixels": 4624220,
+      "maxAspectRatio": 16
+    }
+  },
+  {
+    "code": "apixo:seedream-5-0-pro",
+    "modelCode": "seedream-5-0-pro",
+    "name": "Seedream 5.0 Pro",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 2,
+    "documentationUrl": "https://apixo.ai/docs/models/image/seedream-5-0-pro",
+    "description": "APIXO 图片生成与编辑，支持按模型参数选择分辨率、比例及参考图片。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 10,
+      "maxCount": 1,
+      "supportCustomSize": false,
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "4:3",
+        "3:4",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "defaultAspectRatio": "1:1",
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-image",
+              "image-to-image",
+              "layer-decomposition"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 5000
+            }
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 10,
+              "minItems": 1,
+              "maxBytes": 30000000,
+              "maxPixels": 36000000,
+              "aspectRatioRange": [
+                0.0625,
+                16
+              ]
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "1K",
+              "2K"
+            ]
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "4:3",
+              "3:4",
+              "9:16",
+              "16:9",
+              "21:9"
+            ]
+          },
+          "size": {
+            "type": "string",
+            "required": false
+          },
+          "output_format": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "jpeg",
+              "png"
+            ]
+          },
+          "nsfw_checker": {
+            "type": "boolean",
+            "required": false
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-image",
+        "imageMode": "image-to-image"
+      },
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "defaultResolution": "1K"
+    }
+  },
+  {
+    "code": "apixo:seedream-5-0",
+    "modelCode": "seedream-5-0",
+    "name": "Seedream 5.0",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 2,
+    "documentationUrl": "https://apixo.ai/docs/models/image/seedream-5-0",
+    "description": "APIXO 图片生成与编辑，支持按模型参数选择分辨率、比例及参考图片。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "maxCount": 1,
+      "supportCustomSize": false,
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "4:3",
+        "3:4",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "defaultAspectRatio": "1:1",
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-image",
+              "image-to-image"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 5000
+            }
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 14,
+              "minItems": 1,
+              "formats": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp",
+                "bmp",
+                "tiff",
+                "gif",
+                "heic",
+                "heif"
+              ],
+              "maxBytes": 30000000,
+              "minWidth": 15,
+              "minHeight": 15,
+              "minPixels": 196,
+              "maxPixels": 36000000,
+              "aspectRatioRange": [
+                0.0625,
+                16
+              ]
+            }
+          },
+          "max_images": {
+            "type": "integer",
+            "required": true,
+            "constraints": {
+              "integer": true,
+              "minimum": 1,
+              "maximum": 15
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "2K",
+              "3K"
+            ]
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "4:3",
+              "3:4",
+              "9:16",
+              "16:9",
+              "21:9"
+            ]
+          },
+          "size": {
+            "type": "string",
+            "required": false
+          },
+          "sequential_image_generation": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "disabled",
+              "auto"
+            ]
+          },
+          "prompt_optimize_mode": {
+            "type": "string",
+            "required": false
+          },
+          "web_search": {
+            "type": "boolean",
+            "required": false,
+            "enum": [
+              true
+            ]
+          },
+          "output_format": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "jpeg",
+              "png"
+            ]
+          },
+          "nsfw_checker": {
+            "type": "boolean",
+            "required": false
+          }
+        },
+        "defaults": {
+          "max_images": 1
+        },
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-image",
+        "imageMode": "image-to-image"
+      },
+      "supportedResolutions": [
+        "2K",
+        "3K"
+      ],
+      "defaultResolution": "2K"
+    }
+  },
+  {
+    "code": "apixo:seedream-4-5",
+    "modelCode": "seedream-4-5",
+    "name": "Seedream 4.5",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 2,
+    "documentationUrl": "https://apixo.ai/docs/models/image/seedream-4-5",
+    "description": "APIXO 图片生成与编辑，支持按模型参数选择分辨率、比例及参考图片。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "maxCount": 1,
+      "supportCustomSize": false,
+      "supportedAspectRatios": [
+        "1:1",
+        "2:3",
+        "3:2",
+        "4:3",
+        "3:4",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "defaultAspectRatio": "1:1",
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-image",
+              "image-to-image"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 5000
+            }
+          },
+          "max_images": {
+            "type": "integer",
+            "required": true,
+            "constraints": {
+              "integer": true,
+              "minimum": 1,
+              "maximum": 15
+            }
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 14,
+              "formats": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp",
+                "bmp",
+                "tiff",
+                "gif",
+                "heic",
+                "heif"
+              ],
+              "maxBytes": 30000000,
+              "minWidth": 15,
+              "minHeight": 15,
+              "minPixels": 196,
+              "maxPixels": 36000000,
+              "aspectRatioRange": [
+                0.0625,
+                16
+              ]
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "2K",
+              "4K"
+            ]
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "1:1",
+              "2:3",
+              "3:2",
+              "4:3",
+              "3:4",
+              "9:16",
+              "16:9",
+              "21:9"
+            ]
+          },
+          "size": {
+            "type": "string",
+            "required": false
+          },
+          "sequential_image_generation": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "disabled",
+              "auto"
+            ]
+          },
+          "prompt_optimize_mode": {
+            "type": "string",
+            "required": false
+          },
+          "nsfw_checker": {
+            "type": "boolean",
+            "required": false
+          }
+        },
+        "defaults": {
+          "max_images": 1
+        },
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-image",
+        "imageMode": "image-to-image"
+      },
+      "supportedResolutions": [
+        "2K",
+        "4K"
+      ],
+      "defaultResolution": "2K"
+    }
+  },
+  {
+    "code": "apixo:nano-banana-2",
+    "modelCode": "nano-banana-2",
+    "name": "Nano Banana 2",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 2,
+    "documentationUrl": "https://apixo.ai/docs/models/image/nano-banana-2",
+    "description": "APIXO 图片生成与编辑，支持按模型参数选择分辨率、比例及参考图片。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 14,
+      "maxCount": 1,
+      "supportCustomSize": false,
+      "supportedAspectRatios": [
+        "auto",
+        "1:1",
+        "1:4",
+        "4:1",
+        "1:8",
+        "3:2",
+        "2:3",
+        "3:4",
+        "4:3",
+        "4:5",
+        "5:4",
+        "8:1",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "defaultAspectRatio": "1:1",
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-image",
+              "image-to-image"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 20000
+            }
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "minItems": 1,
+              "maxItems": 14
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "auto",
+              "1:1",
+              "1:4",
+              "4:1",
+              "1:8",
+              "3:2",
+              "2:3",
+              "3:4",
+              "4:3",
+              "4:5",
+              "5:4",
+              "8:1",
+              "9:16",
+              "16:9",
+              "21:9"
+            ]
+          },
+          "resolution": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "1k",
+              "2k",
+              "4k"
+            ]
+          },
+          "output_format": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "png",
+              "jpeg",
+              "jpg"
+            ]
+          },
+          "google_search": {
+            "type": "boolean",
+            "required": false,
+            "enum": [
+              false
+            ]
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-image",
+        "imageMode": "image-to-image"
+      },
+      "supportedResolutions": [
+        "1k",
+        "2k",
+        "4k"
+      ],
+      "defaultResolution": "1k"
+    }
+  },
+  {
+    "code": "apixo:nano-banana-pro",
+    "modelCode": "nano-banana-pro",
+    "name": "Nano Banana Pro",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 2,
+    "documentationUrl": "https://apixo.ai/docs/models/image/nano-banana-pro",
+    "description": "APIXO 图片生成与编辑，支持按模型参数选择分辨率、比例及参考图片。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 10,
+      "maxCount": 1,
+      "supportCustomSize": false,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "3:2",
+        "2:3",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9",
+        "21:9"
+      ],
+      "defaultAspectRatio": "1:1",
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-image",
+              "image-to-image"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 5000
+            }
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 10,
+              "formats": [
+                "jpg",
+                "png",
+                "webp"
+              ]
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "3:2",
+              "2:3",
+              "4:5",
+              "5:4",
+              "9:16",
+              "16:9",
+              "21:9"
+            ]
+          },
+          "resolution": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "1K",
+              "2K",
+              "4K"
+            ]
+          },
+          "output_format": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "png",
+              "jpg"
+            ]
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-image",
+        "imageMode": "image-to-image"
+      },
+      "supportedResolutions": [
+        "1K",
+        "2K",
+        "4K"
+      ],
+      "defaultResolution": "1K"
+    }
+  },
+  {
+    "code": "apixo:nano-banana",
+    "modelCode": "nano-banana",
+    "name": "Nano Banana",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 2,
+    "documentationUrl": "https://apixo.ai/docs/models/image/nano-banana",
+    "description": "APIXO 图片生成与编辑，支持按模型参数选择分辨率、比例及参考图片。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 5,
+      "maxCount": 1,
+      "supportCustomSize": false,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "3:2",
+        "2:3",
+        "4:5",
+        "5:4",
+        "9:16",
+        "16:9",
+        "21:9",
+        "auto"
+      ],
+      "defaultAspectRatio": "1:1",
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-image",
+              "image-to-image"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 5000
+            }
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 5
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "3:2",
+              "2:3",
+              "4:5",
+              "5:4",
+              "9:16",
+              "16:9",
+              "21:9",
+              "auto"
+            ]
+          },
+          "output_format": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "png",
+              "jpeg"
+            ]
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-image",
+        "imageMode": "image-to-image"
+      }
+    }
+  },
+  {
+    "code": "apixo:gpt-image-2",
+    "modelCode": "gpt-image-2",
+    "name": "GPT Image 2",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 2,
+    "documentationUrl": "https://apixo.ai/docs/models/image/gpt-image-2",
+    "description": "APIXO 图片生成与编辑，支持按模型参数选择分辨率、比例及参考图片。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 16,
+      "maxCount": 1,
+      "supportCustomSize": false,
+      "supportedAspectRatios": [
+        "auto",
+        "1:1",
+        "1:2",
+        "2:1",
+        "2:3",
+        "3:2",
+        "4:3",
+        "3:4",
+        "4:5",
+        "5:4",
+        "16:9",
+        "9:16",
+        "21:9"
+      ],
+      "defaultAspectRatio": "1:1",
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-image",
+              "image-to-image"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 20000
+            }
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 16,
+              "formats": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp"
+              ],
+              "maxBytes": 10000000
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "auto",
+              "1:1",
+              "1:2",
+              "2:1",
+              "2:3",
+              "3:2",
+              "4:3",
+              "3:4",
+              "4:5",
+              "5:4",
+              "16:9",
+              "9:16",
+              "21:9"
+            ]
+          },
+          "size": {
+            "type": "string",
+            "required": false
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "1k",
+              "2k",
+              "4k"
+            ]
+          },
+          "quality": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "low",
+              "medium",
+              "high"
+            ]
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-image",
+        "imageMode": "image-to-image"
+      },
+      "supportedResolutions": [
+        "1k",
+        "2k",
+        "4k"
+      ],
+      "defaultResolution": "1k"
+    }
+  },
+  {
+    "code": "apixo:flux-2",
+    "modelCode": "flux-2",
+    "name": "Flux 2",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 2,
+    "documentationUrl": "https://apixo.ai/docs/models/image/flux-2",
+    "description": "APIXO 图片生成与编辑，支持按模型参数选择分辨率、比例及参考图片。",
+    "capabilities": [
+      "文生图",
+      "图生图",
+      "多图参考"
+    ],
+    "config": {
+      "supportReferenceImages": true,
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "minReferenceImages": 0,
+      "maxReferenceImages": 8,
+      "maxCount": 1,
+      "supportCustomSize": false,
+      "supportedAspectRatios": [
+        "1:1",
+        "4:3",
+        "3:4",
+        "3:2",
+        "2:3",
+        "16:9",
+        "9:16",
+        "auto"
+      ],
+      "defaultAspectRatio": "1:1",
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "pro-text-to-image",
+              "pro-image-to-image",
+              "flex-text-to-image",
+              "flex-image-to-image"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 3,
+              "maxLength": 5000
+            }
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "minItems": 1,
+              "maxItems": 8,
+              "formats": [
+                "jpg",
+                "png",
+                "webp"
+              ],
+              "maxBytes": 10000000
+            }
+          },
+          "size": {
+            "type": "string",
+            "required": false
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "1:1",
+              "4:3",
+              "3:4",
+              "3:2",
+              "2:3",
+              "16:9",
+              "9:16",
+              "auto"
+            ]
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "1K",
+              "2K"
+            ]
+          },
+          "prompt_upsampling": {
+            "type": "boolean",
+            "required": false
+          },
+          "use_preview": {
+            "type": "boolean",
+            "required": false
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "pro-text-to-image",
+        "imageMode": "pro-image-to-image"
+      },
+      "supportedResolutions": [
+        "1K",
+        "2K"
+      ],
+      "defaultResolution": "1K"
+    }
+  }
+]

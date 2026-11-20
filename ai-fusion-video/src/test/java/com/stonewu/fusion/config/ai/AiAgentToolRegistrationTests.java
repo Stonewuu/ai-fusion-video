@@ -56,10 +56,13 @@ class AiAgentToolRegistrationTests {
     private ObjectMapper objectMapper;
 
     @Test
-    void scriptReadersAreAvailableToBothTheParserAndEpisodeChildren() {
-        for (String type : List.of("script_full_parse", "episode_scene_writer", "script_assistant")) {
+    void fullParseReadsTheDirectoryAndEpisodeAgentsReadTheSource() {
+        assertThat(agentRegistry.getByType("script_full_parse").getToolNames())
+                .contains("get_project_script", "get_script_structure", "read_tool_result")
+                .doesNotContain("read_script_content");
+        for (String type : List.of("episode_scene_writer", "script_assistant")) {
             assertThat(agentRegistry.getByType(type).getToolNames())
-                    .contains("read_script_content", "read_tool_result");
+                    .contains("get_script_episode", "read_script_content", "read_tool_result");
         }
         assertThat(toolExecutors).extracting(ToolExecutor::getToolName)
                 .contains("read_script_content", "read_tool_result");

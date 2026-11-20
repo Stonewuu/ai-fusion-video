@@ -15,6 +15,7 @@ import com.stonewu.fusion.service.ai.ApiConfigService;
 import com.stonewu.fusion.service.ai.ChatModelFactory;
 import com.stonewu.fusion.service.ai.ModelPresetService;
 import com.stonewu.fusion.service.ai.catalog.MetasoModelDiscovery;
+import com.stonewu.fusion.service.ai.catalog.ApixoModelDiscovery;
 import com.stonewu.fusion.service.ai.catalog.ProviderCatalogService;
 import com.stonewu.fusion.service.ai.catalog.ProviderDiscoveryService;
 import com.stonewu.fusion.service.ai.catalog.ProviderModelCandidate;
@@ -121,7 +122,7 @@ class ProviderSetupFlowIT {
                 context.getBean(AiModelMetadataResolver.class), context.getBean(ModelPresetService.class)));
         MybatisTestSupport.register(context, source, ApiConfigMapper.class, AiModelMapper.class);
         context.register(ProviderCatalogService.class, ModelPresetService.class, ApiConfigService.class,
-                AiModelMetadataResolver.class, AiModelService.class, MetasoModelDiscovery.class,
+                AiModelMetadataResolver.class, AiModelService.class, MetasoModelDiscovery.class, ApixoModelDiscovery.class,
                 ProviderDiscoveryService.class, ProviderSetupWriter.class, ProviderSetupService.class,
                 ProviderCatalogController.class);
         context.refresh();
@@ -129,6 +130,14 @@ class ProviderSetupFlowIT {
         server.createContext("/api/minimax/v2/credits/balance", exchange -> {
             REQUESTS.incrementAndGet();
             byte[] body = "{\"balance\":20}".getBytes(StandardCharsets.UTF_8);
+            exchange.getResponseHeaders().set("Content-Type", "application/json");
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.createContext("/api/v1/apikeys/current-balance", exchange -> {
+            REQUESTS.incrementAndGet();
+            byte[] body = "{\"code\":200,\"data\":0}".getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().set("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);
@@ -281,6 +290,35 @@ class ProviderSetupFlowIT {
         assertThatThrownBy(() -> transaction.execute(status -> setup.apply(request)))
                 .isInstanceOf(IllegalTransactionStateException.class);
         assertThat(REQUESTS.get()).isZero();
+    }
+
+    /** 一次快速配置保存三类模型，Responses 协议及 APIXO 参数不能被同名官方预设覆盖。 */
+    @Test
+    void apixoSetupKeepsTextImageAndVideoProtocolsWithIdempotentReplay() {
+        var config = new ApiConfigSaveReqVO();
+        config.setName("APIXO 本地配置测试");
+        config.setProviderId("apixo");
+        config.setApiKey("local-apixo-key");
+        config.setApiUrl("http://127.0.0.1:" + server.getAddress().getPort());
+        var request = new ProviderSetupReqVO(config, UUID.randomUUID().toString(),
+                List.of("gpt-5.6-sol", "seedream-5-5", "seedance-2-5"));
+        var result = setup.apply(request);
+        assertThat(result.createdModels()).isEqualTo(3);
+        var saved = models.selectList(new LambdaQueryWrapper<AiModel>().eq(AiModel::getApiConfigId, result.apiConfigId()));
+        assertThat(saved).filteredOn(model -> model.getCode().equals("gpt-5.6-sol"))
+                .singleElement().satisfies(model -> assertThat(model.getModelProtocol()).isEqualTo("openai_responses"));
+        assertThat(saved).filteredOn(model -> model.getCode().equals("seedream-5-5"))
+                .singleElement().satisfies(model -> {
+                    assertThat(model.getCapabilityPresetCode()).isEqualTo("apixo:seedream-5-5");
+                    assertThat(model.getConfig()).contains("1.5k", "image-to-image");
+                });
+        assertThat(saved).filteredOn(model -> model.getCode().equals("seedance-2-5"))
+                .singleElement().satisfies(model -> assertThat(model.getConfig()).contains("omni_reference", "audio_urls"));
+        int requests = REQUESTS.get();
+        assertThat(setup.apply(request).apiConfigId()).isEqualTo(result.apiConfigId());
+        assertThat(REQUESTS.get()).isEqualTo(requests);
+        assertThat(models.selectCount(new LambdaQueryWrapper<AiModel>().eq(AiModel::getApiConfigId, result.apiConfigId())))
+                .isEqualTo(3);
     }
 
     private ProviderSetupReqVO request(List<String> ids) {

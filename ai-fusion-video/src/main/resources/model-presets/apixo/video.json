@@ -1,0 +1,1740 @@
+[
+  {
+    "code": "apixo:seedance-2-5",
+    "modelCode": "seedance-2-5",
+    "name": "Seedance 2.5",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 3,
+    "documentationUrl": "https://apixo.ai/docs/models/video/seedance-2-5",
+    "description": "APIXO 视频生成，按模型支持首尾帧或参考素材。",
+    "capabilities": [
+      "文生视频",
+      "首帧",
+      "首尾帧",
+      "参考素材"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": true,
+      "minImageInputs": 0,
+      "maxImageInputs": 30,
+      "maxReferenceImages": 30,
+      "maxReferenceVideos": 10,
+      "maxReferenceAudios": 10,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedAspectRatios": [
+        "adaptive",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16",
+        "21:9"
+      ],
+      "defaultAspectRatio": "16:9",
+      "minDuration": 4,
+      "maxDuration": 30,
+      "defaultDuration": 5,
+      "supportGenerateAudio": true,
+      "supportWatermark": true,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "draft": {
+            "type": "boolean",
+            "required": false
+          },
+          "draft_task_id": {
+            "type": "string",
+            "required": false
+          },
+          "mode": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "text-to-video",
+              "first_and_last_frames",
+              "omni_reference"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 10000
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "480p",
+              "720p",
+              "1080p",
+              "4k"
+            ]
+          },
+          "duration": {
+            "type": "integer|string",
+            "required": false,
+            "constraints": {
+              "integer": true,
+              "oneOf": [
+                {
+                  "const": -1
+                },
+                {
+                  "minimum": 4,
+                  "maximum": 30
+                }
+              ],
+              "minimum": 4,
+              "maximum": 30
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "auto",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16",
+              "21:9"
+            ]
+          },
+          "sound": {
+            "type": "boolean",
+            "required": false
+          },
+          "output_format": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "mp4",
+              "mov"
+            ]
+          },
+          "watermark": {
+            "type": "boolean",
+            "required": false
+          },
+          "nsfw_checker": {
+            "type": "boolean",
+            "required": false
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 30,
+              "formats": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp",
+                "bmp",
+                "tiff",
+                "gif",
+                "heic",
+                "heif"
+              ],
+              "maxBytes": 30000000,
+              "minWidth": 300,
+              "maxWidth": 6000,
+              "minHeight": 300,
+              "maxHeight": 6000,
+              "aspectRatioRange": [
+                0.4,
+                2.5
+              ]
+            }
+          },
+          "video_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 10,
+              "formats": [
+                "mp4",
+                "mov"
+              ],
+              "minWidth": 300,
+              "maxWidth": 6000,
+              "minHeight": 300,
+              "maxHeight": 6000,
+              "minPixels": 407696,
+              "maxPixels": 8295044,
+              "aspectRatioRange": [
+                0.4,
+                2.5
+              ],
+              "minDuration": 2,
+              "maxDuration": 30,
+              "fpsRange": [
+                24,
+                60
+              ]
+            }
+          },
+          "audio_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 10,
+              "formats": [
+                "wav",
+                "mp3"
+              ],
+              "maxBytes": 15000000,
+              "minDuration": 2,
+              "maxDuration": 30
+            }
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-video",
+        "frameMode": "first_and_last_frames",
+        "maxFrameImages": 2,
+        "referenceMode": "omni_reference"
+      },
+      "supportedResolutions": [
+        "480p",
+        "720p",
+        "1080p",
+        "4k"
+      ],
+      "defaultResolution": "720p",
+      "referenceAudioRequiresVisualInput": true,
+      "videoRules": {
+        "version": 1,
+        "profile": "apixo",
+        "promptRequired": true,
+        "promptMaxLength": 10000,
+        "defaultRatio": "16:9",
+        "lastFrameRequiresFirst": true,
+        "automaticDuration": true,
+        "defaultGenerateAudio": true,
+        "imageLimits": {
+          "maxBytes": 30000000,
+          "minDimension": 300,
+          "maxDimension": 6000,
+          "minAspect": 0.4,
+          "maxAspect": 2.5
+        },
+        "referenceVideoLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 30,
+          "minPixels": 407696,
+          "maxPixels": 8295044,
+          "maxTotalSeconds": 30,
+          "minDimension": 300,
+          "maxDimension": 6000,
+          "minAspect": 0.4,
+          "maxAspect": 2.5
+        },
+        "referenceAudioLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 30,
+          "maxBytes": 15000000,
+          "maxTotalSeconds": 30
+        },
+        "frameRatio": "adaptive",
+        "frameRatioMode": "required"
+      }
+    }
+  },
+  {
+    "code": "apixo:seedance-2-5-flash",
+    "modelCode": "seedance-2-5-flash",
+    "name": "Seedance 2.5 Flash",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 3,
+    "documentationUrl": "https://apixo.ai/docs/models/video/seedance-2-5-flash",
+    "description": "APIXO 视频生成，按模型支持首尾帧或参考素材。",
+    "capabilities": [
+      "文生视频",
+      "首帧",
+      "首尾帧",
+      "参考素材"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": true,
+      "minImageInputs": 0,
+      "maxImageInputs": 10,
+      "maxReferenceImages": 10,
+      "maxReferenceVideos": 5,
+      "maxReferenceAudios": 5,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedAspectRatios": [
+        "adaptive",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16",
+        "21:9"
+      ],
+      "defaultAspectRatio": "16:9",
+      "minDuration": 4,
+      "maxDuration": 30,
+      "defaultDuration": 5,
+      "supportGenerateAudio": true,
+      "supportWatermark": true,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-video",
+              "first_and_last_frames",
+              "omni_reference"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 10000
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "480p",
+              "720p"
+            ]
+          },
+          "duration": {
+            "type": "integer|string",
+            "required": false,
+            "constraints": {
+              "integer": true,
+              "oneOf": [
+                {
+                  "const": -1
+                },
+                {
+                  "minimum": 4,
+                  "maximum": 30
+                }
+              ],
+              "minimum": 4,
+              "maximum": 30
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "auto",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16",
+              "21:9"
+            ]
+          },
+          "sound": {
+            "type": "boolean",
+            "required": false
+          },
+          "watermark": {
+            "type": "boolean",
+            "required": false
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 10
+            }
+          },
+          "video_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 5
+            }
+          },
+          "audio_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 5
+            }
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-video",
+        "frameMode": "first_and_last_frames",
+        "maxFrameImages": 2,
+        "referenceMode": "omni_reference"
+      },
+      "supportedResolutions": [
+        "480p",
+        "720p"
+      ],
+      "defaultResolution": "720p",
+      "referenceAudioRequiresVisualInput": true,
+      "videoRules": {
+        "version": 1,
+        "profile": "apixo",
+        "promptRequired": true,
+        "promptMaxLength": 10000,
+        "defaultRatio": "16:9",
+        "lastFrameRequiresFirst": true,
+        "automaticDuration": true,
+        "defaultGenerateAudio": true,
+        "referenceVideoLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 30,
+          "maxTotalSeconds": 30
+        },
+        "referenceAudioLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 30,
+          "maxTotalSeconds": 30
+        },
+        "frameRatio": "adaptive",
+        "frameRatioMode": "required"
+      }
+    }
+  },
+  {
+    "code": "apixo:seedance-2-0",
+    "modelCode": "seedance-2-0",
+    "name": "Seedance 2.0",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 3,
+    "documentationUrl": "https://apixo.ai/docs/models/video/seedance-2-0",
+    "description": "APIXO 视频生成，按模型支持首尾帧或参考素材。",
+    "capabilities": [
+      "文生视频",
+      "首帧",
+      "首尾帧",
+      "参考素材"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": true,
+      "minImageInputs": 0,
+      "maxImageInputs": 9,
+      "maxReferenceImages": 9,
+      "maxReferenceVideos": 3,
+      "maxReferenceAudios": 3,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedAspectRatios": [
+        "adaptive",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16",
+        "21:9"
+      ],
+      "defaultAspectRatio": "16:9",
+      "minDuration": 4,
+      "maxDuration": 15,
+      "defaultDuration": 5,
+      "supportGenerateAudio": true,
+      "supportWatermark": false,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-video",
+              "first_and_last_frames",
+              "omni_reference"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 10000
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "480p",
+              "720p",
+              "1080p",
+              "4k"
+            ]
+          },
+          "duration": {
+            "type": "integer|string",
+            "required": false,
+            "constraints": {
+              "integer": true,
+              "minimum": 4,
+              "maximum": 15
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "auto",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16",
+              "21:9"
+            ]
+          },
+          "sound": {
+            "type": "boolean",
+            "required": false
+          },
+          "web_search": {
+            "type": "boolean",
+            "required": false
+          },
+          "nsfw_checker": {
+            "type": "boolean",
+            "required": false
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 9,
+              "formats": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp",
+                "bmp",
+                "tiff",
+                "gif",
+                "heic",
+                "heif"
+              ],
+              "maxBytes": 30000000,
+              "minWidth": 300,
+              "maxWidth": 6000,
+              "minHeight": 300,
+              "maxHeight": 6000,
+              "aspectRatioRange": [
+                0.4,
+                2.5
+              ]
+            }
+          },
+          "video_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 3,
+              "formats": [
+                "mp4",
+                "mov"
+              ],
+              "minWidth": 300,
+              "maxWidth": 6000,
+              "minHeight": 300,
+              "maxHeight": 6000,
+              "minPixels": 407696,
+              "maxPixels": 8295044,
+              "aspectRatioRange": [
+                0.4,
+                2.5
+              ],
+              "minDuration": 2,
+              "maxDuration": 15,
+              "fpsRange": [
+                24,
+                60
+              ]
+            }
+          },
+          "audio_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 3,
+              "formats": [
+                "wav",
+                "mp3"
+              ],
+              "maxBytes": 15000000,
+              "minDuration": 2,
+              "maxDuration": 15
+            }
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-video",
+        "frameMode": "first_and_last_frames",
+        "maxFrameImages": 2,
+        "referenceMode": "omni_reference"
+      },
+      "supportedResolutions": [
+        "480p",
+        "720p",
+        "1080p",
+        "4k"
+      ],
+      "defaultResolution": "720p",
+      "referenceAudioRequiresVisualInput": true,
+      "videoRules": {
+        "version": 1,
+        "profile": "apixo",
+        "promptRequired": true,
+        "promptMaxLength": 10000,
+        "defaultRatio": "16:9",
+        "lastFrameRequiresFirst": true,
+        "automaticDuration": false,
+        "defaultGenerateAudio": true,
+        "imageLimits": {
+          "maxBytes": 30000000,
+          "minDimension": 300,
+          "maxDimension": 6000,
+          "minAspect": 0.4,
+          "maxAspect": 2.5
+        },
+        "referenceVideoLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 15,
+          "minPixels": 407696,
+          "maxPixels": 8295044,
+          "maxTotalSeconds": 15,
+          "minDimension": 300,
+          "maxDimension": 6000,
+          "minAspect": 0.4,
+          "maxAspect": 2.5
+        },
+        "referenceAudioLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 15,
+          "maxBytes": 15000000,
+          "maxTotalSeconds": 15
+        }
+      }
+    }
+  },
+  {
+    "code": "apixo:seedance-2-0-fast",
+    "modelCode": "seedance-2-0-fast",
+    "name": "Seedance 2.0 Fast",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 3,
+    "documentationUrl": "https://apixo.ai/docs/models/video/seedance-2-0-fast",
+    "description": "APIXO 视频生成，按模型支持首尾帧或参考素材。",
+    "capabilities": [
+      "文生视频",
+      "首帧",
+      "首尾帧",
+      "参考素材"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": true,
+      "minImageInputs": 0,
+      "maxImageInputs": 9,
+      "maxReferenceImages": 9,
+      "maxReferenceVideos": 3,
+      "maxReferenceAudios": 3,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedAspectRatios": [
+        "adaptive",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16",
+        "21:9"
+      ],
+      "defaultAspectRatio": "16:9",
+      "minDuration": 4,
+      "maxDuration": 15,
+      "defaultDuration": 5,
+      "supportGenerateAudio": true,
+      "supportWatermark": false,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-video",
+              "first_and_last_frames",
+              "omni_reference"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "maxLength": 10000
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "480p",
+              "720p"
+            ]
+          },
+          "duration": {
+            "type": "integer",
+            "required": false,
+            "constraints": {
+              "integer": true,
+              "minimum": 4,
+              "maximum": 15
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "auto",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16",
+              "21:9"
+            ]
+          },
+          "sound": {
+            "type": "boolean",
+            "required": false
+          },
+          "web_search": {
+            "type": "boolean",
+            "required": false
+          },
+          "nsfw_checker": {
+            "type": "boolean",
+            "required": false
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 9,
+              "formats": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp",
+                "bmp",
+                "tiff",
+                "gif",
+                "heic",
+                "heif"
+              ],
+              "maxBytes": 30000000,
+              "minWidth": 300,
+              "maxWidth": 6000,
+              "minHeight": 300,
+              "maxHeight": 6000,
+              "aspectRatioRange": [
+                0.4,
+                2.5
+              ]
+            }
+          },
+          "video_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 3,
+              "formats": [
+                "mp4",
+                "mov"
+              ],
+              "minWidth": 300,
+              "maxWidth": 6000,
+              "minHeight": 300,
+              "maxHeight": 6000,
+              "minPixels": 407696,
+              "maxPixels": 8295044,
+              "aspectRatioRange": [
+                0.4,
+                2.5
+              ],
+              "minDuration": 2,
+              "maxDuration": 15,
+              "fpsRange": [
+                24,
+                60
+              ]
+            }
+          },
+          "audio_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 3,
+              "formats": [
+                "wav",
+                "mp3"
+              ],
+              "maxBytes": 15000000,
+              "minDuration": 2,
+              "maxDuration": 15
+            }
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-video",
+        "frameMode": "first_and_last_frames",
+        "maxFrameImages": 2,
+        "referenceMode": "omni_reference"
+      },
+      "supportedResolutions": [
+        "480p",
+        "720p"
+      ],
+      "defaultResolution": "720p",
+      "referenceAudioRequiresVisualInput": true,
+      "videoRules": {
+        "version": 1,
+        "profile": "apixo",
+        "promptRequired": true,
+        "promptMaxLength": 10000,
+        "defaultRatio": "16:9",
+        "lastFrameRequiresFirst": true,
+        "automaticDuration": false,
+        "defaultGenerateAudio": true,
+        "imageLimits": {
+          "maxBytes": 30000000,
+          "minDimension": 300,
+          "maxDimension": 6000,
+          "minAspect": 0.4,
+          "maxAspect": 2.5
+        },
+        "referenceVideoLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 15,
+          "minPixels": 407696,
+          "maxPixels": 8295044,
+          "maxTotalSeconds": 15,
+          "minDimension": 300,
+          "maxDimension": 6000,
+          "minAspect": 0.4,
+          "maxAspect": 2.5
+        },
+        "referenceAudioLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 15,
+          "maxBytes": 15000000,
+          "maxTotalSeconds": 15
+        }
+      }
+    }
+  },
+  {
+    "code": "apixo:seedance-2-0-mini",
+    "modelCode": "seedance-2-0-mini",
+    "name": "Seedance 2.0 Mini",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 3,
+    "documentationUrl": "https://apixo.ai/docs/models/video/seedance-2-0-mini",
+    "description": "APIXO 视频生成，按模型支持首尾帧或参考素材。",
+    "capabilities": [
+      "文生视频",
+      "首帧",
+      "首尾帧",
+      "参考素材"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": true,
+      "minImageInputs": 0,
+      "maxImageInputs": 9,
+      "maxReferenceImages": 9,
+      "maxReferenceVideos": 3,
+      "maxReferenceAudios": 3,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedAspectRatios": [
+        "adaptive",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16",
+        "21:9"
+      ],
+      "defaultAspectRatio": "16:9",
+      "minDuration": 4,
+      "maxDuration": 15,
+      "defaultDuration": 5,
+      "supportGenerateAudio": true,
+      "supportWatermark": false,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-video",
+              "first_and_last_frames",
+              "omni_reference"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 10000
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "480p",
+              "720p"
+            ]
+          },
+          "duration": {
+            "type": "integer|string",
+            "required": false,
+            "constraints": {
+              "integer": true,
+              "minimum": 4,
+              "maximum": 15
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "auto",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16",
+              "21:9"
+            ]
+          },
+          "sound": {
+            "type": "boolean",
+            "required": false
+          },
+          "web_search": {
+            "type": "boolean",
+            "required": false
+          },
+          "nsfw_checker": {
+            "type": "boolean",
+            "required": false
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 9,
+              "formats": [
+                "jpg",
+                "jpeg",
+                "png",
+                "webp",
+                "bmp",
+                "tiff",
+                "gif",
+                "heic",
+                "heif"
+              ],
+              "maxBytes": 30000000,
+              "minWidth": 300,
+              "maxWidth": 6000,
+              "minHeight": 300,
+              "maxHeight": 6000,
+              "aspectRatioRange": [
+                0.4,
+                2.5
+              ]
+            }
+          },
+          "video_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 3,
+              "formats": [
+                "mp4",
+                "mov"
+              ],
+              "minWidth": 300,
+              "maxWidth": 6000,
+              "minHeight": 300,
+              "maxHeight": 6000,
+              "minPixels": 407696,
+              "maxPixels": 8295044,
+              "aspectRatioRange": [
+                0.4,
+                2.5
+              ],
+              "minDuration": 2,
+              "maxDuration": 15,
+              "fpsRange": [
+                24,
+                60
+              ]
+            }
+          },
+          "audio_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 3,
+              "formats": [
+                "wav",
+                "mp3"
+              ],
+              "maxBytes": 15000000,
+              "minDuration": 2,
+              "maxDuration": 15
+            }
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-video",
+        "frameMode": "first_and_last_frames",
+        "maxFrameImages": 2,
+        "referenceMode": "omni_reference"
+      },
+      "supportedResolutions": [
+        "480p",
+        "720p"
+      ],
+      "defaultResolution": "720p",
+      "referenceAudioRequiresVisualInput": true,
+      "videoRules": {
+        "version": 1,
+        "profile": "apixo",
+        "promptRequired": true,
+        "promptMaxLength": 10000,
+        "defaultRatio": "16:9",
+        "lastFrameRequiresFirst": true,
+        "automaticDuration": false,
+        "defaultGenerateAudio": true,
+        "imageLimits": {
+          "maxBytes": 30000000,
+          "minDimension": 300,
+          "maxDimension": 6000,
+          "minAspect": 0.4,
+          "maxAspect": 2.5
+        },
+        "referenceVideoLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 15,
+          "minPixels": 407696,
+          "maxPixels": 8295044,
+          "maxTotalSeconds": 15,
+          "minDimension": 300,
+          "maxDimension": 6000,
+          "minAspect": 0.4,
+          "maxAspect": 2.5
+        },
+        "referenceAudioLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 15,
+          "maxBytes": 15000000,
+          "maxTotalSeconds": 15
+        }
+      }
+    }
+  },
+  {
+    "code": "apixo:minimax-h3",
+    "modelCode": "minimax-h3",
+    "name": "MiniMax H3",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 3,
+    "documentationUrl": "https://apixo.ai/docs/models/video/minimax-h3",
+    "description": "APIXO 视频生成，按模型支持首尾帧或参考素材。",
+    "capabilities": [
+      "文生视频",
+      "首帧",
+      "首尾帧",
+      "参考素材"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 4,
+      "maxReferenceImages": 4,
+      "maxReferenceVideos": 1,
+      "maxReferenceAudios": 0,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedAspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "defaultAspectRatio": "16:9",
+      "minDuration": 5,
+      "maxDuration": 15,
+      "defaultDuration": 5,
+      "supportGenerateAudio": false,
+      "supportWatermark": false,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-video",
+              "image-to-video",
+              "reference-to-video"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "768p",
+              "2k"
+            ]
+          },
+          "duration": {
+            "type": "integer|string",
+            "required": false,
+            "constraints": {
+              "integer": true,
+              "minimum": 5,
+              "maximum": 15
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ]
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 4
+            }
+          },
+          "video_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 1,
+              "minDuration": 2,
+              "maxDuration": 15
+            }
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-video",
+        "frameMode": "image-to-video",
+        "maxFrameImages": 2,
+        "referenceMode": "reference-to-video"
+      },
+      "supportedResolutions": [
+        "768p",
+        "2k"
+      ],
+      "defaultResolution": "2k",
+      "videoRules": {
+        "version": 1,
+        "profile": "apixo",
+        "promptRequired": true,
+        "promptMaxLength": 4000,
+        "defaultRatio": "16:9",
+        "lastFrameRequiresFirst": true,
+        "automaticDuration": false,
+        "referenceVideoLimits": {
+          "minSeconds": 2,
+          "maxSeconds": 15
+        }
+      }
+    }
+  },
+  {
+    "code": "apixo:minimax-h3-LoRA",
+    "modelCode": "minimax-h3-LoRA",
+    "name": "MiniMax H3 LoRA",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 3,
+    "documentationUrl": "https://apixo.ai/docs/models/video/minimax-h3-lora",
+    "description": "APIXO 视频生成，按模型支持首尾帧或参考素材。",
+    "capabilities": [
+      "文生视频",
+      "首帧",
+      "首尾帧",
+      "参考素材"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": true,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 4,
+      "maxReferenceImages": 4,
+      "maxReferenceVideos": 1,
+      "maxReferenceAudios": 0,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedAspectRatios": [
+        "21:9",
+        "16:9",
+        "4:3",
+        "1:1",
+        "3:4",
+        "9:16"
+      ],
+      "defaultAspectRatio": "16:9",
+      "minDuration": 5,
+      "maxDuration": 15,
+      "defaultDuration": 5,
+      "supportGenerateAudio": false,
+      "supportWatermark": false,
+      "supportSeed": true,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-video",
+              "image-to-video",
+              "reference-to-video"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "480p",
+              "768p"
+            ]
+          },
+          "duration": {
+            "type": "integer|string",
+            "required": false,
+            "constraints": {
+              "integer": true,
+              "minimum": 5,
+              "maximum": 15
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "21:9",
+              "16:9",
+              "4:3",
+              "1:1",
+              "3:4",
+              "9:16"
+            ]
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 4
+            }
+          },
+          "video_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 1,
+              "maxDuration": 15
+            }
+          },
+          "seed": {
+            "type": "integer|string",
+            "required": false,
+            "constraints": {
+              "integer": true
+            }
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "text-to-video",
+        "frameMode": "image-to-video",
+        "maxFrameImages": 2,
+        "referenceMode": "reference-to-video"
+      },
+      "supportedResolutions": [
+        "480p",
+        "768p"
+      ],
+      "defaultResolution": "480p",
+      "videoRules": {
+        "version": 1,
+        "profile": "apixo",
+        "promptRequired": true,
+        "promptMaxLength": 4000,
+        "defaultRatio": "16:9",
+        "lastFrameRequiresFirst": true,
+        "automaticDuration": false,
+        "referenceVideoLimits": {
+          "maxSeconds": 15
+        }
+      }
+    }
+  },
+  {
+    "code": "apixo:sora-2",
+    "modelCode": "sora-2",
+    "name": "Sora 2",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 3,
+    "documentationUrl": "https://apixo.ai/docs/models/video/sora-2",
+    "description": "APIXO 视频生成，按模型支持首尾帧或参考素材。",
+    "capabilities": [
+      "文生视频",
+      "首帧"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": false,
+      "supportReferenceImages": false,
+      "supportReferenceVideos": false,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 1,
+      "maxReferenceImages": 0,
+      "maxReferenceVideos": 0,
+      "maxReferenceAudios": 0,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedAspectRatios": [
+        "16:9",
+        "9:16"
+      ],
+      "defaultAspectRatio": "16:9",
+      "minDuration": 4,
+      "maxDuration": 12,
+      "defaultDuration": 4,
+      "supportGenerateAudio": false,
+      "supportWatermark": true,
+      "supportSeed": false,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "apixo": {
+        "modeField": "mode",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "text-to-video",
+              "image-to-video"
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 10000
+            }
+          },
+          "duration": {
+            "type": "integer",
+            "required": true,
+            "enum": [
+              "4",
+              "8",
+              "12"
+            ],
+            "constraints": {
+              "integer": true,
+              "oneOf": [
+                {
+                  "const": 4
+                },
+                {
+                  "const": 8
+                },
+                {
+                  "const": 12
+                }
+              ]
+            }
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "minItems": 1,
+              "maxItems": 1,
+              "exactItems": 1
+            }
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "landscape",
+              "portrait"
+            ]
+          },
+          "remove_watermark": {
+            "type": "boolean",
+            "required": false
+          }
+        },
+        "defaults": {},
+        "ratioValues": {
+          "16:9": "landscape",
+          "9:16": "portrait"
+        },
+        "textMode": "text-to-video",
+        "frameMode": "image-to-video",
+        "maxFrameImages": 1
+      },
+      "supportedResolutions": [],
+      "supportedDurations": [
+        4,
+        8,
+        12
+      ],
+      "videoRules": {
+        "version": 1,
+        "profile": "apixo",
+        "promptRequired": true,
+        "promptMaxLength": 10000,
+        "defaultRatio": "16:9",
+        "lastFrameRequiresFirst": true,
+        "automaticDuration": false
+      }
+    }
+  },
+  {
+    "code": "apixo:veo-3-1",
+    "modelCode": "veo-3-1",
+    "name": "Veo 3.1",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "apixo",
+    "modelType": 3,
+    "documentationUrl": "https://apixo.ai/docs/models/video/veo-3-1",
+    "description": "APIXO 视频生成，按模型支持首尾帧或参考素材。",
+    "capabilities": [
+      "文生视频",
+      "首帧",
+      "首尾帧",
+      "参考素材"
+    ],
+    "config": {
+      "referenceImageInputFormats": [
+        "url"
+      ],
+      "supportFirstFrame": true,
+      "supportLastFrame": true,
+      "supportReferenceImages": true,
+      "supportReferenceVideos": false,
+      "supportReferenceAudios": false,
+      "minImageInputs": 0,
+      "maxImageInputs": 3,
+      "maxReferenceImages": 3,
+      "maxReferenceVideos": 0,
+      "maxReferenceAudios": 0,
+      "exclusiveInputModes": true,
+      "framesWithReferenceVideos": false,
+      "supportedAspectRatios": [
+        "16:9",
+        "9:16",
+        "adaptive"
+      ],
+      "defaultAspectRatio": "16:9",
+      "minDuration": 4,
+      "maxDuration": 8,
+      "defaultDuration": 8,
+      "supportGenerateAudio": false,
+      "supportWatermark": false,
+      "supportSeed": true,
+      "supportCameraFixed": false,
+      "supportReturnLastFrame": false,
+      "apixo": {
+        "modeField": "generationType",
+        "fields": {
+          "mode": {
+            "type": "string",
+            "required": true,
+            "enum": [
+              "lite",
+              "fast",
+              "quality",
+              "extend-fast",
+              "extend-quality"
+            ]
+          },
+          "taskId": {
+            "type": "string",
+            "required": false
+          },
+          "prompt": {
+            "type": "string",
+            "required": true,
+            "constraints": {
+              "minLength": 1,
+              "maxLength": 10000
+            }
+          },
+          "generationType": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "TEXT_2_VIDEO",
+              "FIRST_AND_LAST_FRAMES_2_VIDEO",
+              "REFERENCE_2_VIDEO"
+            ]
+          },
+          "duration": {
+            "type": "integer",
+            "required": false,
+            "enum": [
+              "4",
+              "6",
+              "8"
+            ],
+            "constraints": {
+              "integer": true,
+              "oneOf": [
+                {
+                  "const": 4
+                },
+                {
+                  "const": 6
+                },
+                {
+                  "const": 8
+                }
+              ]
+            }
+          },
+          "resolution": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "720p",
+              "1080p",
+              "4k"
+            ]
+          },
+          "aspect_ratio": {
+            "type": "string",
+            "required": false,
+            "enum": [
+              "16:9",
+              "9:16",
+              "auto"
+            ]
+          },
+          "image_urls": {
+            "type": "string[]",
+            "required": false,
+            "constraints": {
+              "maxItems": 3
+            }
+          },
+          "watermark": {
+            "type": "string",
+            "required": false
+          },
+          "seed": {
+            "type": "integer",
+            "required": false
+          }
+        },
+        "defaults": {
+          "mode": "fast"
+        },
+        "ratioValues": {
+          "adaptive": "auto"
+        },
+        "textMode": "TEXT_2_VIDEO",
+        "frameMode": "FIRST_AND_LAST_FRAMES_2_VIDEO",
+        "maxFrameImages": 2,
+        "referenceMode": "REFERENCE_2_VIDEO",
+        "referenceDuration": 8
+      },
+      "supportedResolutions": [
+        "720p",
+        "1080p",
+        "4k"
+      ],
+      "defaultResolution": "720p",
+      "supportedDurations": [
+        4,
+        6,
+        8
+      ],
+      "videoRules": {
+        "version": 1,
+        "profile": "apixo",
+        "promptRequired": true,
+        "promptMaxLength": 10000,
+        "defaultRatio": "16:9",
+        "lastFrameRequiresFirst": true,
+        "automaticDuration": false
+      }
+    }
+  }
+]

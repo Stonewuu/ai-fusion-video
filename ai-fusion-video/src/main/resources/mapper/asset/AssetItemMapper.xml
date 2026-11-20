@@ -1,13 +1,43 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.stonewu.fusion.mapper.asset.AssetItemMapper">
+    <select id="detailsByAssetIds" resultType="java.util.LinkedHashMap">
+        SELECT i.*, a.version AS asset_version
+        FROM afv_asset_item i JOIN afv_asset a ON a.id = i.asset_id AND a.deleted = FALSE
+        WHERE i.deleted = FALSE AND i.asset_id IN
+        <foreach collection="assetIds" item="assetId" open="(" separator="," close=")">#{assetId}</foreach>
+        ORDER BY i.asset_id, i.sort_order, i.id
+    </select>
+    <sql id="summaryColumns">
+        i.id, i.version, i.asset_id, a.version AS asset_version, i.name, i.item_type,
+        CASE
+            WHEN JSON_TYPE(JSON_EXTRACT(i.properties, '$.appearanceDescription')) = 'STRING'
+                THEN LEFT(JSON_UNQUOTE(JSON_EXTRACT(i.properties, '$.appearanceDescription')), 200)
+            WHEN JSON_TYPE(JSON_EXTRACT(i.properties, '$.appearance')) = 'STRING'
+                THEN LEFT(JSON_UNQUOTE(JSON_EXTRACT(i.properties, '$.appearance')), 200)
+            WHEN JSON_TYPE(JSON_EXTRACT(i.properties, '$.description')) = 'STRING'
+                THEN LEFT(JSON_UNQUOTE(JSON_EXTRACT(i.properties, '$.description')), 200)
+        END AS description_preview,
+        (i.image_url IS NOT NULL AND i.image_url != '') AS has_image
+    </sql>
     <select id="summaries" resultType="java.util.LinkedHashMap">
-        SELECT i.id, i.version, i.asset_id, a.version AS asset_version, i.name, i.item_type,
-            CASE WHEN JSON_TYPE(JSON_EXTRACT(i.properties, '$.description')) = 'STRING'
-                THEN LEFT(JSON_UNQUOTE(JSON_EXTRACT(i.properties, '$.description')), 200) END AS description_preview,
-            (i.image_url IS NOT NULL AND i.image_url != '') AS has_image
+        SELECT <include refid="summaryColumns"/>
         FROM afv_asset_item i JOIN afv_asset a ON a.id = i.asset_id AND a.deleted = FALSE
         WHERE i.asset_id = #{assetId} AND i.deleted = FALSE ORDER BY i.sort_order, i.id
+    </select>
+    <select id="summariesByAssetIds" resultType="java.util.LinkedHashMap">
+        SELECT <include refid="summaryColumns"/>
+        FROM (
+            SELECT i.id, i.asset_id,
+                ROW_NUMBER() OVER (PARTITION BY i.asset_id ORDER BY i.sort_order, i.id) AS item_position
+            FROM afv_asset_item i
+            WHERE i.deleted = FALSE AND i.asset_id IN
+            <foreach collection="assetIds" item="assetId" open="(" separator="," close=")">#{assetId}</foreach>
+        ) ranked
+        JOIN afv_asset_item i ON i.id = ranked.id
+        JOIN afv_asset a ON a.id = ranked.asset_id AND a.deleted = FALSE
+        WHERE ranked.item_position &gt; #{offset} AND ranked.item_position &lt;= #{end}
+        ORDER BY ranked.asset_id, ranked.item_position
     </select>
     <select id="parentAssetId" resultType="long">
         SELECT asset_id FROM afv_asset_item WHERE id = #{id}

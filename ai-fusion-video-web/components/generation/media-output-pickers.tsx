@@ -4,14 +4,11 @@ import type { ReactNode } from "react";
 import { Grid2X2, Proportions, Scan } from "lucide-react";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
+import { ratioLabel } from "@/lib/image-output-sizes";
 
 function ratioValue(value: string) {
   const [width, height] = value.split(":").map(Number);
   return width / height;
-}
-
-function ratioLabel(value: string) {
-  return value === "auto" || value === "adaptive" ? "自适应" : value;
 }
 
 function RatioFrame({ value, compact = false }: { value: string; compact?: boolean }) {

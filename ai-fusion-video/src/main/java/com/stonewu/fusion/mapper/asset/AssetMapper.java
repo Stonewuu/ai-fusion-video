@@ -17,11 +17,13 @@ public interface AssetMapper extends BaseMapper<Asset> {
     record TypeCount(String type, long total) {
     }
 
-    List<Long> accessibleIds(IPage<?> page, @Param("filter") AccessFilter filter);
+    List<Map<String, Object>> accessibleDetails(IPage<?> page, @Param("filter") AccessFilter filter);
 
     List<Map<String, Object>> accessibleSummaries(IPage<?> page, @Param("filter") AccessFilter filter);
 
     Map<String, Object> summary(@Param("id") long id);
+
+    List<Map<String, Object>> summariesByIds(@Param("ids") List<Long> ids, @Param("filter") AccessFilter filter);
 
     long countAccessible(@Param("filter") AccessFilter filter);
 

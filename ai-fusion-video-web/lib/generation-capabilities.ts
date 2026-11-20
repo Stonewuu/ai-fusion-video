@@ -130,7 +130,8 @@ export function resolveGenerationCapabilities(
   const imageModel = model.modelType === 2;
   const advertised = strings(config, [], "supportedResolutions", "resolutions");
   const output = imageModel ? imageOutputCapabilities(config) : {
-    supportedResolutions: advertised.length ? advertised : ["720p", "1080p"],
+    supportedResolutions: Array.isArray(config.supportedResolutions) || Array.isArray(config.resolutions)
+      ? advertised : ["720p", "1080p"],
   };
   const ratios = strings(config, ["1:1", "4:3", "3:4", "16:9", "9:16"], "supportedAspectRatios");
   const videoRules = videoRulesOf(config);

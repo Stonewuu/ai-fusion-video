@@ -584,6 +584,7 @@ test("视频预设使用各自的默认时长，并保留模型的离散时长�
   const eightSecondPresets = new Set([
     "sora-2",
     "sora-2-pro",
+    "apixo:veo-3-1",
     "infistar:veo-3.1-fast-generate-preview",
     "google:veo-3.1-generate-001",
     "google:veo-3.1-fast-generate-001",
@@ -593,7 +594,7 @@ test("视频预设使用各自的默认时长，并保留模型的离散时长�
     const cap = resolveGenerationCapabilities({ modelType: 3, capabilityPresetCode: preset.code }, presets);
     const form = labels.generationFormForModel({ ...forms.EMPTY_GENERATION_FORM, duration: 2 }, cap);
     const request = requests.generationSubmitRequest("video", { ...form, prompt: "海浪" }, 42, cap);
-    const expected = eightSecondPresets.has(preset.code) ? 8 : 5;
+    const expected = preset.code === "apixo:sora-2" ? 4 : eightSecondPresets.has(preset.code) ? 8 : 5;
     assert.equal(request.duration, expected, preset.code);
   }
   for (const code of ["infistar:wan3.0-video", "infistar:wan3.0-video-prime"]) {

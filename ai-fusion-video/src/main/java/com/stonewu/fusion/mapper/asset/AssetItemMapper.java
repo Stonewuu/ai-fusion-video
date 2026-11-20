@@ -12,6 +12,11 @@ import com.baomidou.mybatisplus.core.metadata.IPage;
 @Mapper
 public interface AssetItemMapper extends BaseMapper<AssetItem> {
     List<Map<String, Object>> summaries(IPage<?> page, @Param("assetId") long assetId);
+
+    List<Map<String, Object>> detailsByAssetIds(@Param("assetIds") List<Long> assetIds);
+
+    List<Map<String, Object>> summariesByAssetIds(@Param("assetIds") List<Long> assetIds,
+                                                @Param("offset") long offset, @Param("end") long end);
     List<Long> lockNamed(@Param("assetId") long assetId, @Param("name") String name);
 
     List<Long> lockChildren(@Param("assetId") long assetId);

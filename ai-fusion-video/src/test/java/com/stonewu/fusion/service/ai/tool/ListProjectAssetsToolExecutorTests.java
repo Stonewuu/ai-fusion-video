@@ -13,6 +13,8 @@ import com.stonewu.fusion.service.resource.model.ResourceHeader;
 import com.stonewu.fusion.service.resource.model.ResourceSnapshot;
 import com.stonewu.fusion.service.system.SystemConfigService;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 import static com.stonewu.fusion.service.canvas.model.CanvasValueType.ASSET_ITEM;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.*;
@@ -61,6 +63,63 @@ class ListProjectAssetsToolExecutorTests {
         assertThat(result.path("assetItemId").intValue()).isEqualTo(21);
         assertThat(result.path("assetVersion").intValue()).isEqualTo(3);
         verifyNoInteractions(assets);
+    }
+
+    @Test
+    void readsBatchItemDirectoriesOnceAndKeepsEachAssetsPageAndVersion() throws Exception {
+        var first = mapper.createObjectNode().put("id", 19).put("version", 4).put("name", "青龙")
+                .put("itemCount", 3).put("page", 2).put("pageSize", 1).put("hasMore", true).put("nextPage", 3);
+        first.putArray("items").add(mapper.createObjectNode().put("id", 21).put("assetId", 19)
+                .put("version", 2).put("assetVersion", 4).put("name", "夜间变体")
+                .put("descriptionPreview", "深青色鳞片").put("hasImage", 1));
+        var second = mapper.createObjectNode().put("id", 23).put("version", 8).put("name", "山门")
+                .put("itemCount", 1).put("page", 2).put("pageSize", 1).put("hasMore", false);
+        second.putNull("nextPage");
+        second.putArray("items");
+        when(assets.itemSummaryPages(List.of(19L, 23L), 2, 1, actor)).thenReturn(List.of(first, second));
+
+        var result = mapper.readTree(tools.execute("query_asset_items",
+                "{\"assetIds\":[19,23],\"page\":2,\"pageSize\":1}", invocation));
+
+        assertThat(result.path("status").asText()).isEqualTo("success");
+        assertThat(result.path("total").asInt()).isEqualTo(2);
+        assertThat(result.path("detailsTool").asText()).isEqualTo("get_asset_item");
+        var rows = result.path("assets");
+        assertThat(rows.get(0).path("assetId").asLong()).isEqualTo(19);
+        assertThat(rows.get(0).path("nextPage").asInt()).isEqualTo(3);
+        var item = rows.get(0).path("items").get(0);
+        assertThat(item.path("assetItemId").asLong()).isEqualTo(21);
+        assertThat(item.path("assetId").asLong()).isEqualTo(19);
+        assertThat(item.path("version").asInt()).isEqualTo(2);
+        assertThat(item.path("assetVersion").asInt()).isEqualTo(4);
+        assertThat(item.path("hasImage").asBoolean()).isTrue();
+        assertThat(item.path("descriptionPreview").asText()).isEqualTo("深青色鳞片");
+        assertThat(rows.get(1).path("assetId").asLong()).isEqualTo(23);
+        assertThat(rows.get(1).path("items").isEmpty()).isTrue();
+        assertThat(rows.get(1).path("hasMore").asBoolean()).isFalse();
+        assertThat(rows.get(1).path("nextPage").isNull()).isTrue();
+        verify(assets).itemSummaryPages(List.of(19L, 23L), 2, 1, actor);
+        verifyNoMoreInteractions(assets);
+        verifyNoInteractions(resources, config);
+    }
+
+    @Test
+    void singleAssetDirectoryUsesTheSameSummaryBatchContract() throws Exception {
+        var row = mapper.createObjectNode().put("id", 19).put("version", 5).put("itemCount", 0)
+                .put("page", 1).put("pageSize", 20).put("hasMore", false);
+        row.putNull("nextPage");
+        row.putArray("items");
+        when(assets.itemSummaryPages(List.of(19L), 1, 20, actor)).thenReturn(List.of(row));
+
+        var result = mapper.readTree(tools.execute("query_asset_items", "{\"assetId\":19}", invocation));
+
+        assertThat(result.path("status").asText()).isEqualTo("success");
+        assertThat(result.path("assets").get(0).path("assetId").asLong()).isEqualTo(19);
+        assertThat(result.path("assets").get(0).path("items").isEmpty()).isTrue();
+        assertThat(result.path("assets").get(0).path("version").asInt()).isEqualTo(5);
+        verify(assets).itemSummaryPages(List.of(19L), 1, 20, actor);
+        verifyNoMoreInteractions(assets);
+        verifyNoInteractions(resources, config);
     }
 
     @Test

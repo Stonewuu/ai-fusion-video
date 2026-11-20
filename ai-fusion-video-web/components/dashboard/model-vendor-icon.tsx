@@ -61,6 +61,7 @@ const BRAND_ICONS = {
   agnes: { Icon: AgnesAI },
   ai360: { Icon: Ai360 },
   anthropic: { Icon: Anthropic },
+  apixo: { src: "/brands/apixo.svg" },
   baichuan: { Icon: Baichuan },
   bailian: { Icon: Bailian },
   claude: { Icon: Claude },
@@ -149,6 +150,7 @@ const MODEL_ICON_RULES: IconRule[] = [
 ];
 
 const PROVIDER_ICON_RULES: IconRule[] = [
+  [/apixo/, "apixo"],
   [/erchun|贰春/, "erchun"],
   [/metaso|秘塔/, "metaso"],
   [/infistar|无限星河/, "infistar"],

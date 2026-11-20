@@ -1,6 +1,7 @@
 "use client";
 
 import { useCommandRequestKey } from "@/hooks/use-command-request-key";
+import { useResourceInvalidation } from "@/hooks/use-resource-invalidation";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { usePipelineStore } from "@/lib/store/pipeline-store";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -59,6 +60,7 @@ export function useStoryboardWorkspace(projectId: number) {
   useEffect(() => {
     loadProjectAssets();
   }, [loadProjectAssets]);
+  useResourceInvalidation("assets", loadProjectAssets);
 
   // 视图状态
   const [viewMode, setViewMode] = useState<ViewMode>("table");
@@ -208,7 +210,6 @@ export function useStoryboardWorkspace(projectId: number) {
     const requestedSelection = sidebarSelectionRef.current;
 
     try {
-      void loadProjectAssets();
       void refreshCurrentEpisode();
 
       const loadedStoryboard = await storyboardApi.getByProject(projectId);
@@ -254,7 +255,7 @@ export function useStoryboardWorkspace(projectId: number) {
     } finally {
       if (request === sceneRequestRef.current) setLoadingScenes(false);
     }
-  }, [projectId, loadProjectAssets, refreshCurrentEpisode]);
+  }, [projectId, refreshCurrentEpisode]);
 
   // 加载分镜
   const loadStoryboard = useCallback(async () => {
@@ -291,11 +292,11 @@ export function useStoryboardWorkspace(projectId: number) {
   const handleManualRefreshStoryboard = useCallback(async () => {
     setIsRefreshingStoryboard(true);
     try {
-      await refreshStoryboardData();
+      await Promise.all([refreshStoryboardData(), loadProjectAssets()]);
     } finally {
       setIsRefreshingStoryboard(false);
     }
-  }, [refreshStoryboardData]);
+  }, [refreshStoryboardData, loadProjectAssets]);
 
   const handleBindScriptEpisode = useCallback(async (
     episode: StoryboardEpisode,

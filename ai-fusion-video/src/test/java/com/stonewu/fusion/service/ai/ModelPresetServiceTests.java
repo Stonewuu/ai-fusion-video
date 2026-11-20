@@ -10,6 +10,7 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class ModelPresetServiceTests {
@@ -190,9 +191,14 @@ class ModelPresetServiceTests {
             var reasoningEffortLevels = preset.getJSONArray("reasoningEffortLevels");
             assertNotNull(types, preset.getStr("code"));
             assertNotNull(transports, preset.getStr("code"));
-            assertNotNull(contextWindow, preset.getStr("code"));
             assertNotNull(reasoningEffortLevels, preset.getStr("code"));
-            assertTrue(contextWindow > 0, preset.getStr("code"));
+            if ("apixo".equals(preset.getStr("providerId"))) {
+                // APIXO 的对话目录未公布上下文长度，同名原厂模型的上限不能代填。
+                assertNull(contextWindow, preset.getStr("code"));
+            } else {
+                assertNotNull(contextWindow, preset.getStr("code"));
+                assertTrue(contextWindow > 0, preset.getStr("code"));
+            }
 
             Set<String> enabledTypes = Set.copyOf(JSONUtil.toList(types, String.class));
             assertEquals(enabledTypes, transports.keySet(), preset.getStr("code"));

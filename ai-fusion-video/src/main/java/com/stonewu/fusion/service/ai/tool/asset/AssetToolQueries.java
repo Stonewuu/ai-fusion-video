@@ -96,7 +96,7 @@ public class AssetToolQueries {
         } else {
             ids.add(AssetCommandSupport.id(params.get("assetId"), "assetId"));
         }
-        List<ObjectNode> rows = ids.stream().map(id -> assets.itemSummaryPage(id, page, size, actor)).toList();
+        List<ObjectNode> rows = assets.itemSummaryPages(ids, page, size, actor);
         rows.forEach(this::decorateSummary);
         ObjectNode result = json.object(Map.of("total", rows.size(), "assets", rows));
         result.put("view", "summary").put("detailsTool", "get_asset_item");

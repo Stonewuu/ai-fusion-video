@@ -1,33 +1,33 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  Check,
-  ImagePlus,
-  Images,
-  Loader2,
-  Plus,
-  Trash2,
-  Upload,
-  X,
-} from "lucide-react";
+import { Check, Loader2, Plus, RotateCcw } from "lucide-react";
 import type { AssetItem } from "@/lib/api/asset";
-import { resolveMediaUrl } from "@/lib/api/client";
 import { uploadFile } from "@/lib/api/storage";
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { SafeImage } from "@/components/media/managed-image";
-import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { DialogContent } from "@/components/shared/dialog-content";
+import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
 import { getAppearance, getAppearanceHints } from "./asset-types";
+import { AssetItemImage } from "./asset-item-image";
+import { AssetItemFields } from "./asset-item-fields";
+import { AssetItemMessage, AssetItemSaveStatus } from "./asset-item-feedback";
 
 interface AssetItemWorkspaceProps {
   mode: "create" | "edit";
+  initialSection: "details" | "image";
   item: AssetItem | null;
   assetType: string;
   parentVersion: number;
   saving: boolean;
+  onUploadingChange: (uploading: boolean) => void;
   onCreate: (
     parentVersion: number,
     name: string,
@@ -41,23 +41,24 @@ interface AssetItemWorkspaceProps {
     appearance: string,
     imageUrl: string,
   ) => Promise<AssetItem>;
-  onDelete: (item: AssetItem) => void;
-  onCancelCreate: () => void;
+  onClose: () => void;
   onGenerate: () => void;
 }
 
 export function AssetItemWorkspace({
   mode,
+  initialSection,
   item,
   assetType,
   parentVersion,
   saving,
+  onUploadingChange,
   onCreate,
   onSave,
-  onDelete,
-  onCancelCreate,
+  onClose,
   onGenerate,
 }: AssetItemWorkspaceProps) {
+  const [open, setOpen] = useState(true);
   const [base, setBase] = useState(item);
   const [creationVersion] = useState(parentVersion);
   const initialName = base?.name || "";
@@ -67,31 +68,34 @@ export function AssetItemWorkspace({
   const [appearance, setAppearance] = useState(initialAppearance);
   const [imageUrl, setImageUrl] = useState(initialImageUrl);
   const [uploading, setUploading] = useState(false);
-  const [dragging, setDragging] = useState(false);
   const [error, setError] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
+  const [uploadError, setUploadError] = useState("");
+  const [nameTouched, setNameTouched] = useState(false);
+  const nameRef = useRef<HTMLInputElement>(null);
+  const uploadButtonRef = useRef<HTMLButtonElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const appearanceHints = useMemo(
     () => getAppearanceHints(assetType),
     [assetType],
   );
-  const fallbackType =
-    assetType === "character"
-      ? "avatar"
-      : assetType === "scene"
-        ? "scene"
-        : assetType === "prop"
-          ? "prop"
-          : "image";
   const dirty =
     name !== initialName ||
     appearance !== initialAppearance ||
     imageUrl !== initialImageUrl;
-  const disabled = saving || uploading || !name.trim();
+  const disabled = saving || uploading || !open || !name.trim();
+  const invalidName = !name.trim() && (nameTouched || mode === "edit");
 
   useEffect(() => {
-    if (!item || !base || dirty || saving || uploading ||
-      (item.version <= base.version && item.assetVersion <= base.assetVersion)) return;
+    if (
+      !item ||
+      !base ||
+      dirty ||
+      saving ||
+      uploading ||
+      (item.version <= base.version && item.assetVersion <= base.assetVersion)
+    ) {
+      return;
+    }
     setBase(item);
     setName(item.name || "");
     setAppearance(getAppearance(item));
@@ -99,34 +103,42 @@ export function AssetItemWorkspace({
   }, [item, base, dirty, saving, uploading]);
 
   const upload = async (file: File) => {
-    if (saving || uploading) return;
+    if (saving || uploading) {
+      return;
+    }
     if (!file.type.startsWith("image/")) {
-      setError("请选择图片文件");
+      setUploadError("请选择图片文件");
       return;
     }
 
     setUploading(true);
-    setError("");
+    onUploadingChange(true);
+    setUploadError("");
     try {
       setImageUrl(await uploadFile(file, "assets"));
     } catch (cause) {
-      setError(getApiErrorMessage(cause));
+      setUploadError(getApiErrorMessage(cause));
     } finally {
       setUploading(false);
+      onUploadingChange(false);
     }
   };
 
   const appendHint = (hint: string) => {
     const token = `${hint}：`;
     setAppearance((current) => {
-      if (current.includes(token)) return current;
+      if (current.includes(token)) {
+        return current;
+      }
       return current.trim() ? `${current.trim()}\n${token}` : token;
     });
     requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
   const save = async () => {
-    if (!base || disabled) return;
+    if (!base || disabled) {
+      return;
+    }
     setError("");
     const updated = await onSave(base, name, appearance, imageUrl);
     setBase(updated);
@@ -136,256 +148,190 @@ export function AssetItemWorkspace({
   };
 
   const create = async (generateAfterCreate: boolean) => {
-    if (disabled) return;
-    await onCreate(creationVersion, name, appearance, imageUrl, generateAfterCreate);
+    if (disabled) {
+      return;
+    }
+    setError("");
+    await onCreate(
+      creationVersion,
+      name,
+      appearance,
+      imageUrl,
+      generateAfterCreate,
+    );
   };
 
   const generate = async () => {
     if (mode === "create") {
       await create(true);
+      setOpen(false);
       return;
     }
-    if (base && dirty) await save();
+    if (base && dirty) {
+      await save();
+    }
     onGenerate();
+    setOpen(false);
+  };
+
+  const reset = () => {
+    setName(initialName);
+    setAppearance(initialAppearance);
+    setImageUrl(initialImageUrl);
+    setError("");
+    setUploadError("");
+    setNameTouched(false);
+    nameRef.current?.focus({ preventScroll: true });
+  };
+
+  const submit = async () => {
+    if (disabled || (mode === "edit" && !dirty)) {
+      return;
+    }
+    try {
+      if (mode === "create") {
+        await create(false);
+      } else {
+        await save();
+      }
+      setOpen(false);
+    } catch (failure) {
+      setError(getApiErrorMessage(failure));
+    }
   };
 
   return (
-    <section className="grid min-h-[360px] min-w-0 bg-[radial-gradient(circle_at_18%_20%,color-mix(in_oklab,var(--primary)_5%,transparent),transparent_32%)] xl:grid-cols-[minmax(330px,0.9fr)_minmax(420px,1.1fr)]">
-      <div className="min-w-0 p-5">
-        <div className="mb-3 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold">资产图</h3>
-            <span
-              className={cn(
-                "rounded-md px-1.5 py-0.5 text-[10px] font-medium",
-                imageUrl
-                  ? "bg-emerald-500/10 text-emerald-600"
-                  : "bg-amber-500/10 text-amber-600",
-              )}
-            >
-              {imageUrl ? "已添加" : "待添加"}
-            </span>
-          </div>
-          {imageUrl && (
-            <Button
-              variant="ghost"
-              size="xs"
-              onClick={() => setImageUrl("")}
-            >
-              移除图片
-            </Button>
-          )}
-        </div>
-
-        <div
-          role="button"
-          tabIndex={0}
-          onClick={() => !imageUrl && inputRef.current?.click()}
-          onKeyDown={(event) => {
-            if (!imageUrl && (event.key === "Enter" || event.key === " ")) {
-              event.preventDefault();
-              inputRef.current?.click();
-            }
-          }}
-          onDragEnter={(event) => {
+    <Dialog
+      open={open}
+      onOpenChange={(nextOpen) => {
+        if (!saving && !uploading) {
+          setOpen(nextOpen);
+        }
+      }}
+      onOpenChangeComplete={(nextOpen) => {
+        if (!nextOpen) {
+          onClose();
+        }
+      }}
+    >
+      <DialogContent
+        initialFocus={initialSection === "image" ? uploadButtonRef : nameRef}
+        showCloseButton={!saving && !uploading}
+        style={{ backgroundColor: "var(--background)" }}
+        className="flex w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 duration-200 data-closed:duration-150 motion-reduce:animate-none sm:max-w-5xl"
+      >
+        <DialogHeader className="shrink-0 border-b border-border/20 p-5 pr-14">
+          <DialogTitle className="text-lg font-semibold">
+            {mode === "create" ? "新增子资产" : "编辑子资产"}
+          </DialogTitle>
+          <DialogDescription>
+            {mode === "create" ? "设置名称、外观与资产图片。" : initialName}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          className="flex min-h-0 min-w-0 flex-col"
+          noValidate
+          onSubmit={(event) => {
             event.preventDefault();
-            setDragging(true);
+            void submit();
           }}
-          onDragOver={(event) => event.preventDefault()}
-          onDragLeave={() => setDragging(false)}
-          onDrop={(event) => {
-            event.preventDefault();
-            setDragging(false);
-            const file = event.dataTransfer.files?.[0];
-            if (file) void upload(file);
-          }}
-          className={cn(
-            "group relative mx-auto aspect-[16/10] w-full max-w-[480px] overflow-hidden rounded-2xl border bg-muted/15 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring/50",
-            dragging
-              ? "border-primary bg-primary/5 ring-2 ring-primary/15"
-              : "border-border/50",
-            !imageUrl && "cursor-pointer border-dashed hover:border-primary/35 hover:bg-primary/[0.025]",
-          )}
         >
-          {imageUrl ? (
-            <SafeImage
-              src={resolveMediaUrl(imageUrl) || undefined}
-              alt={name || "子资产"}
-              className="h-full w-full object-contain p-3"
-              fallbackType={fallbackType}
-            />
-          ) : (
-            <div className="flex h-full flex-col items-center justify-center text-center text-muted-foreground">
-              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-primary/8 text-primary/65 transition-transform group-hover:scale-105">
-                {uploading ? (
-                  <Loader2 className="h-5 w-5 animate-spin" />
-                ) : (
-                  <Images className="h-5 w-5" />
+          <DialogScrollBody className="p-0">
+            <div className="grid min-w-0 md:grid-cols-2">
+              <AssetItemFields
+                name={name}
+                appearance={appearance}
+                disabled={saving || uploading}
+                invalidName={invalidName}
+                nameRef={nameRef}
+                textareaRef={textareaRef}
+                hints={appearanceHints}
+                onName={(value) => {
+                  setName(value);
+                  setNameTouched(true);
+                }}
+                onNameBlur={() => setNameTouched(true)}
+                onAppearance={setAppearance}
+                onHint={appendHint}
+              />
+              <div className="min-w-0 md:-order-1">
+                <AssetItemImage
+                  uploadButtonRef={uploadButtonRef}
+                  imageUrl={imageUrl}
+                  name={name}
+                  assetType={assetType}
+                  uploading={uploading}
+                  saving={saving}
+                  generationDisabled={disabled}
+                  generationLabel={
+                    mode === "create"
+                      ? "创建并生图"
+                      : dirty
+                        ? "保存并生图"
+                        : "生成图片"
+                  }
+                  error={uploadError}
+                  onUpload={(file) => void upload(file)}
+                  onRemove={() => {
+                    setImageUrl("");
+                    setUploadError("");
+                  }}
+                  onGenerate={() =>
+                    void generate().catch((failure) =>
+                      setError(getApiErrorMessage(failure)),
+                    )
+                  }
+                />
+              </div>
+            </div>
+          </DialogScrollBody>
+          <div className="shrink-0 border-t border-border/20 bg-muted/20 px-5 py-4">
+            <AssetItemMessage message={error} />
+            <DialogFooter className="flex-row flex-wrap items-center justify-between gap-3 sm:justify-between">
+              <AssetItemSaveStatus
+                creating={mode === "create"}
+                dirty={dirty}
+                saving={saving}
+              />
+              <div className="flex items-center gap-2">
+                {mode === "edit" && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={saving || uploading || !dirty}
+                    onClick={reset}
+                  >
+                    <RotateCcw />
+                    还原
+                  </Button>
                 )}
-              </span>
-              <p className="mt-3 text-sm font-medium text-foreground/75">
-                {dragging ? "松开即可上传" : "拖入图片或点击上传"}
-              </p>
-            </div>
-          )}
-        </div>
-
-        {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-
-        <div className="mx-auto mt-3 grid w-full max-w-[480px] grid-cols-2 gap-2">
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => inputRef.current?.click()}
-            disabled={saving || uploading}
-          >
-            {uploading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Upload className="h-3.5 w-3.5" />
-            )}
-            {imageUrl ? "替换图片" : "上传图片"}
-          </Button>
-          <Button
-            size="sm"
-            variant="image"
-            disabled={disabled}
-            onClick={() => void generate().catch(failure => setError(getApiErrorMessage(failure)))}
-          >
-            {saving ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <ImagePlus className="h-3.5 w-3.5" />
-            )}
-            {mode === "create"
-              ? "创建并生图"
-              : dirty
-                ? "保存并生图"
-                : "生成图片"}
-          </Button>
-        </div>
-        <input
-          ref={inputRef}
-          hidden
-          type="file"
-          accept="image/*"
-          onChange={(event) => {
-            const file = event.target.files?.[0];
-            if (file) void upload(file);
-            event.target.value = "";
-          }}
-        />
-      </div>
-
-      <div className="flex min-w-0 flex-col border-t border-border/40 bg-background/35 p-5 xl:border-l xl:border-t-0">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.15em] text-primary">
-                {mode === "create" ? "新增" : "子资产"}
-              </p>
-              <span className="rounded-md bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">
-                {mode === "create" ? "草稿" : imageUrl ? "有图片" : "待补图"}
-              </span>
-            </div>
-            <h2 className="mt-1 truncate text-xl font-semibold tracking-tight">
-              {mode === "create" ? "新建子资产" : name || "未命名"}
-            </h2>
-          </div>
-          <Button
-            variant={mode === "create" ? "ghost" : "destructive-ghost"}
-            size="icon-sm"
-            disabled={saving || uploading}
-            onClick={mode === "create" ? onCancelCreate : () => { if (base) onDelete(base); }}
-            title={mode === "create" ? "取消新建" : "删除子资产"}
-            aria-label={mode === "create" ? "取消新建" : "删除子资产"}
-          >
-            {mode === "create" ? (
-              <X className="h-4 w-4" />
-            ) : (
-              <Trash2 className="h-4 w-4" />
-            )}
-          </Button>
-        </div>
-
-        <div className="mt-4 space-y-3.5">
-          <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">名称</label>
-            <Input disabled={saving || uploading}
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-              placeholder="子资产名称"
-              className="h-9 rounded-lg bg-background/85"
-              autoFocus={mode === "create"}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-between gap-2">
-              <label className="text-xs font-medium text-muted-foreground">
-                外观描写
-              </label>
-              <span className="text-[10px] tabular-nums text-muted-foreground/70">
-                {appearance.length} 字
-              </span>
-            </div>
-            <Textarea disabled={saving || uploading}
-              ref={textareaRef}
-              value={appearance}
-              onChange={(event) => setAppearance(event.target.value)}
-              rows={6}
-              placeholder="描述材质、颜色、形态和细节"
-              className="min-h-32 rounded-lg bg-background/85 text-sm leading-5"
-            />
-          </div>
-
-          <div>
-            <p className="mb-2 text-[10px] font-medium text-muted-foreground">
-              描写要点
-            </p>
-            <div className="flex flex-wrap gap-1.5">
-              {appearanceHints.map((hint) => (
-                <button
-                  key={hint}
+                <Button
                   type="button"
+                  variant="outline"
                   disabled={saving || uploading}
-                  onClick={() => appendHint(hint)}
-                  className="h-6 rounded-md border border-border/50 bg-background/65 px-2 text-[10px] text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+                  onClick={() => setOpen(false)}
                 >
-                  + {hint}
-                </button>
-              ))}
-            </div>
+                  取消
+                </Button>
+                <Button
+                  type="submit"
+                  className="min-w-20"
+                  disabled={disabled || (mode === "edit" && !dirty)}
+                >
+                  {saving ? (
+                    <Loader2 className="animate-spin" />
+                  ) : mode === "create" ? (
+                    <Plus />
+                  ) : (
+                    <Check />
+                  )}
+                  {saving ? "正在保存" : mode === "create" ? "创建" : "保存"}
+                </Button>
+              </div>
+            </DialogFooter>
           </div>
-        </div>
-
-        <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/40 pt-4">
-          <span className="text-[10px] text-muted-foreground">
-            {mode === "create" ? "尚未创建" : dirty ? "有未保存修改" : "已保存"}
-          </span>
-          <div className="flex items-center gap-2">
-            {mode === "create" && (
-              <Button variant="outline" size="sm" onClick={onCancelCreate}>
-                取消
-              </Button>
-            )}
-            <Button
-              size="sm"
-              disabled={disabled || (mode === "edit" && !dirty)}
-              onClick={() => void (mode === "create" ? create(false) : save()).catch(failure => setError(getApiErrorMessage(failure)))}
-            >
-              {saving ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : mode === "create" ? (
-                <Plus className="h-3.5 w-3.5" />
-              ) : (
-                <Check className="h-3.5 w-3.5" />
-              )}
-              {mode === "create" ? "创建" : "保存"}
-            </Button>
-          </div>
-        </div>
-      </div>
-    </section>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,6 +1,7 @@
 import type { GenerationExecution, GenerationExecutionItem } from "@/lib/api/generation-execution";
 import { generationStateLabels } from "@/lib/generation-execution-view";
 import { formatGenerationDateTime } from "./generation-utils";
+import { ratioLabel } from "@/lib/image-output-sizes";
 
 export function executionStatus(data: GenerationExecution) {
   if (data.state === "FAILED" && data.items.some((item) => item.state === "UNKNOWN_SUBMISSION")) {
@@ -54,7 +55,7 @@ export function executionParameters(data: Pick<GenerationExecution, "kind" | "in
   const video = data.kind === "VIDEO";
   const parameters = [
     { label: "数量", value: `${p.count} ${video ? "段" : "张"}` },
-    { label: "画面比例", value: p.ratio ?? "—" },
+    { label: "画面比例", value: p.ratio == null ? "—" : ratioLabel(p.ratio) },
     { label: "分辨率", value: p.resolution ?? "—" },
   ];
   if (video) {

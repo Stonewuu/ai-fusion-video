@@ -6,7 +6,7 @@ import type {
 } from "./generation-types";
 import type { GenerationCapabilities } from "@/lib/generation-capabilities";
 import { automaticVideoDuration } from "@/lib/video-model-rules";
-import { imageOutputDefaults } from "@/lib/image-output-sizes";
+import { imageOutputDefaults, ratioLabel } from "@/lib/image-output-sizes";
 
 export function generationFormForModel(
   current: GenerationFormState,
@@ -167,7 +167,7 @@ export function getGenerationParameterItems(
   const resolution = normalizedParameter(task.resolution);
 
   if (ratio) {
-    parameters.push({ label: "比例", value: ratio });
+    parameters.push({ label: "比例", value: ratioLabel(ratio) });
   }
   if (resolution) {
     parameters.push({ label: "分辨率", value: resolution });
@@ -176,7 +176,7 @@ export function getGenerationParameterItems(
   if ("aspectRatio" in task) {
     const aspectRatio = normalizedParameter(task.aspectRatio);
     if (aspectRatio && aspectRatio !== ratio) {
-      parameters.push({ label: "宽高比", value: aspectRatio });
+      parameters.push({ label: "宽高比", value: ratioLabel(aspectRatio) });
     }
 
     const firstImage = items.find((item) => "imageUrl" in item);

@@ -139,6 +139,7 @@ import static org.mockito.Mockito.mock;
 
 @Testcontainers(disabledWithoutDocker = false)
 class ResourceCommandIT {
+    static final ReadQueryCounter READ_QUERIES = new ReadQueryCounter();
     @Container
     static final MySQLContainer<?> MYSQL = new MySQLContainer<>("mysql:8.4.6")
             .withDatabaseName("resource_commands_test").withUsername("afv").withPassword("afv-test")
@@ -178,6 +179,7 @@ class ResourceCommandIT {
         CanvasJson json = new CanvasJson(mapper);
         context = new AnnotationConfigApplicationContext();
         var session = MybatisTestSupport.register(context, source);
+        session.getSqlSessionFactory().getConfiguration().addInterceptor(READ_QUERIES);
         fence = spy(new ResourceAgentFence(session.getMapper(AgentRunMapper.class)));
         resources = spy(new ResourceReadRepository(session.getMapper(ResourceReadMapper.class), session.getMapper(ProjectMapper.class),
                 session.getMapper(ScriptMapper.class), session.getMapper(ScriptEpisodeMapper.class),
@@ -981,6 +983,117 @@ class ResourceCommandIT {
     }
 
     @Test
+    void assetBatchCollectionsKeepDetailShapeAndVersionsWithConstantQueryCount() throws Exception {
+        long project = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.PROJECT,
+                null, mapper.createObjectNode().put("name", "资产集合批量读取")), USER).result().path("id").longValue();
+        var service = context.getBean(AssetResourceQueryService.class);
+        var fields = mapper.createObjectNode().put("type", "prop").put("name", "完整资产")
+                .put("description", "完整设定".repeat(300));
+        fields.set("properties", mapper.createObjectNode().put("custom", "保留自定义字段"));
+        fields.set("tags", mapper.createArrayNode().add("保留标签"));
+        var first = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET,
+                project, fields), USER).result();
+        long assetId = first.path("id").longValue();
+        var initialRead = READ_QUERIES.measure(() -> service.list(project, null, null, true, ACTOR));
+        assertThat(initialRead.value()).hasSize(1);
+
+        for (int index = 0; index < 24; index++) {
+            var created = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET,
+                    project, mapper.createObjectNode().put("type", "prop").put("name", "批量资产" + index)), USER).result();
+            if (index == 0) {
+                commands.execute(new ResourceDeleteCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET_ITEM,
+                        created.path("items").get(0).path("id").longValue(), 0, 0), USER);
+            }
+            if (index == 1) {
+                commands.execute(new ResourceDeleteCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET,
+                        created.path("id").longValue(), 0), USER);
+            }
+        }
+        var late = mapper.createObjectNode().put("assetId", assetId).put("parentVersion", 0)
+                .put("name", "排序靠后").put("sortOrder", 7).put("imageUrl", "https://example.com/asset.png");
+        late.set("properties", mapper.createObjectNode().put("description", "子资产设定".repeat(250)));
+        commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET_ITEM,
+                null, late), USER);
+        var early = mapper.createObjectNode().put("assetId", assetId).put("parentVersion", 1)
+                .put("name", "排序靠前").put("sortOrder", 2);
+        commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET_ITEM,
+                null, early), USER);
+        commands.patch(new ResourcePatchCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET, assetId, 2,
+                mapper.createObjectNode().put("description", "更新后的完整设定")), USER);
+
+        var batch = READ_QUERIES.measure(() -> service.list(project, null, null, true, ACTOR));
+        assertThat(batch.value()).hasSize(24);
+        assertThat(batch.statements().size()).isEqualTo(initialRead.statements().size()).isLessThanOrEqualTo(6);
+        for (ObjectNode row : batch.value()) {
+            ObjectNode asset = row.deepCopy();
+            var children = asset.remove("items");
+            assertThat(mapper.readTree(asset.toString())).isEqualTo(mapper.readTree(
+                    queries.get(CanvasValueType.ASSET, row.path("id").longValue(), ACTOR).data().toString()));
+            for (var child : children) {
+                assertThat(mapper.readTree(child.toString())).isEqualTo(mapper.readTree(
+                        queries.get(CanvasValueType.ASSET_ITEM, child.path("id").longValue(), ACTOR).data().toString()));
+            }
+        }
+        var asset = batch.value().stream().filter(row -> row.path("id").longValue() == assetId).findFirst().orElseThrow();
+        assertThat(asset.path("items")).extracting(item -> item.path("name").textValue())
+                .containsExactly("完整资产", "排序靠前", "排序靠后");
+        assertThat(asset.path("items")).allSatisfy(item -> assertThat(item.path("assetVersion").intValue()).isEqualTo(3));
+        assertThat(batch.value()).anySatisfy(row -> {
+            assertThat(row.path("name").textValue()).isEqualTo("批量资产0");
+            assertThat(row.path("items").isEmpty()).isTrue();
+        });
+        assertThat(mapper.readTree(service.tree(assetId, ACTOR).toString())).isEqualTo(mapper.readTree(asset.toString()));
+        assertThat(service.items(assetId, ACTOR)).hasSize(3);
+    }
+
+    @Test
+    void assetBatchItemSummariesPageEachAssetIndependentlyAndRejectMixedAccess() {
+        var service = context.getBean(AssetResourceQueryService.class);
+        long first = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET,
+                null, mapper.createObjectNode().put("type", "prop").put("name", "目录主资产甲")), USER)
+                .result().path("id").longValue();
+        long second = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET,
+                null, mapper.createObjectNode().put("type", "scene").put("name", "目录主资产乙")), USER)
+                .result().path("id").longValue();
+        var fields = mapper.createObjectNode().put("assetId", first).put("parentVersion", 0)
+                .put("name", "晨间变体").put("sortOrder", 1).put("imageUrl", "https://example.com/day.png");
+        fields.set("properties", mapper.createObjectNode().put("appearanceDescription", "页面填写的外观".repeat(100))
+                .put("description", "另一段说明"));
+        long variant = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET_ITEM,
+                null, fields), USER).result().path("id").longValue();
+        commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET_ITEM,
+                null, mapper.createObjectNode().put("assetId", first).put("parentVersion", 1)
+                        .put("name", "夜间变体").put("sortOrder", 2)), USER);
+
+        var single = READ_QUERIES.measure(() -> service.itemSummaryPages(List.of(first), 2, 1, ACTOR));
+        var batch = READ_QUERIES.measure(() -> service.itemSummaryPages(List.of(second, first), 2, 1, ACTOR));
+        assertThat(batch.statements().size()).isEqualTo(single.statements().size()).isLessThanOrEqualTo(6);
+        assertThat(batch.value()).extracting(row -> row.path("id").longValue()).containsExactly(second, first);
+        var empty = batch.value().get(0);
+        assertThat(empty.path("items").isEmpty()).isTrue();
+        assertThat(empty.path("itemCount").longValue()).isEqualTo(1);
+        assertThat(empty.path("hasMore").booleanValue()).isFalse();
+        assertThat(empty.path("nextPage").isNull()).isTrue();
+        var directory = batch.value().get(1);
+        assertThat(directory.path("itemCount").longValue()).isEqualTo(3);
+        assertThat(directory.path("version").intValue()).isEqualTo(2);
+        assertThat(directory.path("hasMore").booleanValue()).isTrue();
+        assertThat(directory.path("nextPage").intValue()).isEqualTo(3);
+        assertThat(directory.path("items").size()).isEqualTo(1);
+        var item = directory.path("items").get(0);
+        assertThat(item.path("id").longValue()).isEqualTo(variant);
+        assertThat(item.path("assetVersion").intValue()).isEqualTo(2);
+        assertThat(item.path("descriptionPreview").textValue()).hasSize(200).startsWith("页面填写的外观");
+        assertThat(item.has("properties") || item.has("imageUrl") || item.has("aiPrompt")).isFalse();
+
+        long privateAsset = commands.execute(new ResourceCreateCommand(UUID.randomUUID().toString(), CanvasValueType.ASSET,
+                null, mapper.createObjectNode().put("type", "prop").put("name", "他人的目录资产")),
+                ResourceCommandContext.user(new CanvasActor(52, null), null)).result().path("id").longValue();
+        rejects(() -> service.itemSummaryPages(List.of(first, privateAsset), 1, 20, ACTOR), CanvasErrorCode.ACCESS_DENIED);
+        rejects(() -> service.itemSummaryPages(List.of(first, Long.MAX_VALUE), 1, 20, ACTOR), CanvasErrorCode.RESOURCE_DELETED);
+    }
+
+    @Test
     void assetToolsUseObservedVersionsAndReturnCommittedChildIdentity() {
         long project = project();
         String run = agentRun(project);
@@ -1093,8 +1206,13 @@ class ResourceCommandIT {
         assertThat(created.result().path("ownerId").longValue()).isEqualTo(9320);
         assertThat(created.result().path("userId").longValue()).isEqualTo(51);
         assertThat(queries.get(CanvasValueType.ASSET, id, new CanvasActor(52, 9320L)).data().path("name").textValue()).isEqualTo("团队共享资产");
+        var collections = context.getBean(AssetResourceQueryService.class);
+        assertThat(collections.list(null, null, "团队共享资产", true, new CanvasActor(52, 9320L)))
+                .singleElement().satisfies(asset -> assertThat(asset.path("id").longValue()).isEqualTo(id));
+        assertThat(collections.list(null, null, "团队共享资产", true, ACTOR)).isEmpty();
         rejects(() -> queries.get(CanvasValueType.ASSET, id, ACTOR), CanvasErrorCode.ACCESS_DENIED);
         jdbc.update("UPDATE afv_team_member SET status = 0 WHERE team_id = 9320 AND user_id = 51");
+        rejects(() -> collections.list(null, null, "团队共享资产", true, actor), CanvasErrorCode.ACCESS_DENIED);
         rejects(() -> commands.execute(command, scope), CanvasErrorCode.ACCESS_DENIED);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_asset WHERE owner_type = 2 AND owner_id = 9320", Integer.class)).isEqualTo(1);
     }

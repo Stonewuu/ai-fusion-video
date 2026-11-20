@@ -18,6 +18,7 @@ import java.util.Locale;
 /** 服务端统一维护提供商身份、赞助资料和快捷配置默认值。 */
 @Service
 public class ProviderCatalogService {
+    private static final List<String> SPONSOR_ORDER = List.of("infistar", "metaso", "erchun", "apixo");
     private final Map<String, ProviderDefinition> providers;
 
     public ProviderCatalogService(ObjectMapper objectMapper) throws IOException {
@@ -41,11 +42,15 @@ public class ProviderCatalogService {
         }
     }
 
-    @Cacheable(value = "providerCatalog", key = "'catalog-v6'")
+    @Cacheable(value = "providerCatalog", key = "'catalog-v7'")
     public List<ProviderDefinition> list() {
         return providers.values().stream()
                 .filter(provider -> !provider.hidden())
                 .sorted(Comparator.comparing(ProviderDefinition::sponsored).reversed()
+                        .thenComparingInt(provider -> {
+                            int index = SPONSOR_ORDER.indexOf(provider.id());
+                            return index < 0 ? SPONSOR_ORDER.size() : index;
+                        })
                         .thenComparing(ProviderDefinition::id))
                 .toList();
     }

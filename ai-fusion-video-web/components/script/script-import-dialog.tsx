@@ -1,25 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowLeft, ListTree, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { ArrowLeft, ArrowRight, ListTree, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogFooter } from "@/components/ui/dialog";
 import { DialogContent } from "@/components/shared/dialog-content";
 import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
-import {
-  Select,
-  SelectContent,
-  SelectGroup,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { useConfirm } from "@/components/ui/confirm-dialog";
 import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import {
@@ -31,6 +17,9 @@ import {
 } from "@/lib/api/script";
 import { SourceInput } from "./source-input";
 import { SourcePreview } from "./source-preview";
+import { ImportStepHeader } from "./import-step-header";
+import { ImportDestination } from "./import-destination";
+import { cn } from "@/lib/utils";
 import { MAX_EPISODE_LENGTH, deleteSegment } from "@/lib/scripts/source-import";
 
 type PreviewDraft = ScriptSourcePreview & { source: string };
@@ -48,10 +37,6 @@ interface Props {
   onClose: () => void;
   onImported: (script: Script) => void;
 }
-const modes = [
-  { value: "APPEND", label: "追加到现有分集" },
-  { value: "REPLACE", label: "替换全部分集" },
-];
 
 export function ScriptImportDialog(props: Props) {
   return props.open ? <ImportForm {...props} /> : null;
@@ -72,6 +57,12 @@ function ImportForm({
   const [rule, setRule] = useState<ScriptSplitRule>("AUTO");
   const [targetLength, setTargetLength] = useState(12000);
   const [preview, setPreview] = useState<PreviewDraft | null>(null);
+  const [step, setStep] = useState<"source" | "preview">("source");
+  const [previewInput, setPreviewInput] = useState<{
+    source: string;
+    rule: ScriptSplitRule;
+    targetLength: number;
+  } | null>(null);
   const [deletedPreview, setDeletedPreview] = useState<DeletedPreview | null>(
     null,
   );
@@ -84,6 +75,16 @@ function ImportForm({
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState(false);
   const [submitError, setSubmitError] = useState(false);
+  const hasSource = useMemo(() => source.trim().length > 0, [source]);
+  const isPreview = step === "preview" && preview !== null;
+  const canReusePreview =
+    previewInput?.source === source &&
+    previewInput.rule === rule &&
+    previewInput.targetLength === targetLength;
+  const existingTitles = useMemo(
+    () => (mode === "APPEND" ? episodes.map((episode) => episode.title) : []),
+    [episodes, mode],
+  );
 
   useEffect(() => {
     let active = true;
@@ -149,8 +150,17 @@ function ImportForm({
   };
 
   const analyze = async () => {
-    if (targetLength < 1000 || targetLength > MAX_EPISODE_LENGTH) {
+    if (
+      !Number.isInteger(targetLength) ||
+      targetLength < 1000 ||
+      targetLength > MAX_EPISODE_LENGTH
+    ) {
       setError("每集字数应在 1000 至 100000 之间");
+      return;
+    }
+    if (preview && canReusePreview) {
+      setStep("preview");
+      setError("");
       return;
     }
     setBusy(true);
@@ -163,6 +173,8 @@ function ImportForm({
         targetLength,
       );
       setPreview({ ...result, source });
+      setPreviewInput({ source, rule, targetLength });
+      setStep("preview");
       setDeletedPreview(null);
       setSelected(0);
     } catch (failure) {
@@ -225,33 +237,28 @@ function ImportForm({
     >
       <DialogContent
         showCloseButton={!busy}
-        className="flex max-h-[calc(100dvh-2rem)] flex-col overflow-hidden sm:max-w-4xl"
+        style={{ backgroundColor: "var(--background)" }}
+        className={cn(
+          "flex w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-6xl",
+          isPreview && "h-[min(48rem,calc(100dvh-2rem))]",
+        )}
       >
-        <DialogHeader className="shrink-0">
-          <DialogTitle>{preview ? "检查分集" : "导入原文"}</DialogTitle>
-          <DialogDescription>
-            {preview
-              ? "确认标题和分界后，导入剧本目录。"
-              : "上传或粘贴原文，按章节整理为分集。"}
-          </DialogDescription>
-        </DialogHeader>
+        <ImportStepHeader preview={isPreview} />
         <DialogScrollBody
-          className={
-            preview ? "flex h-[60dvh] flex-col gap-3" : "flex flex-col gap-4"
-          }
+          key={step}
+          className={cn(
+            "flex flex-1 flex-col motion-safe:animate-in motion-safe:fade-in-0 motion-safe:duration-200",
+            isPreview ? "p-0 md:overflow-hidden" : "p-4 sm:p-6",
+          )}
         >
-          {preview ? (
+          {isPreview ? (
             <SourcePreview
               source={preview.source}
               segments={preview.segments}
               selected={selected}
               onSelect={setSelected}
               disabled={busy}
-              existingTitles={
-                mode === "APPEND"
-                  ? episodes.map((episode) => episode.title)
-                  : []
-              }
+              existingTitles={existingTitles}
               onChange={(segments) => {
                 setPreview({ ...preview, segments });
                 setDeletedPreview(null);
@@ -312,88 +319,90 @@ function ImportForm({
             />
           )}
         </DialogScrollBody>
-        {preview && episodes.length > 0 && (
-          <div className="flex shrink-0 flex-wrap items-center gap-3 p-1">
-            <label htmlFor="source-import-mode" className="text-sm">
-              导入方式
-            </label>
-            <Select
-              items={modes}
-              value={mode}
+        <div className="flex shrink-0 flex-col gap-3 border-t border-border/20 bg-muted/20 px-4 py-4 sm:px-6">
+          {isPreview && episodes.length > 0 && (
+            <ImportDestination
+              count={episodes.length}
+              mode={mode}
               disabled={busy}
-              onValueChange={(value) => {
-                if (value === "APPEND" || value === "REPLACE") {
-                  setMode(value);
-                }
-              }}
-            >
-              <SelectTrigger id="source-import-mode" className="w-52">
-                <SelectValue placeholder="选择导入方式" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectGroup>
-                  {modes.map((item) => (
-                    <SelectItem key={item.value} value={item.value}>
-                      {item.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-            <span className="text-xs text-muted-foreground">
-              现有 {episodes.length} 集
-            </span>
-          </div>
-        )}
-        {error && (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <p role="alert" className="text-sm text-destructive">
-              {error}
+              onMode={setMode}
+            />
+          )}
+          {!isPreview && preview && !canReusePreview && (
+            <p className="text-xs text-muted-foreground">
+              原文或规则已修改，下一步将重新生成分集。
             </p>
-            {(loadError || submitError) && (
-              <Button variant="ghost" disabled={busy} onClick={refresh}>
-                刷新分集
+          )}
+          {error && (
+            <div className="flex shrink-0 flex-wrap items-center gap-2">
+              <p role="alert" className="text-sm text-destructive">
+                {error}
+              </p>
+              {(loadError || submitError) && (
+                <Button variant="ghost" disabled={busy} onClick={refresh}>
+                  刷新分集
+                </Button>
+              )}
+            </div>
+          )}
+          <DialogFooter className="flex-row flex-wrap items-center justify-end gap-2">
+            {isPreview && (
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => {
+                  setStep("source");
+                  setError("");
+                }}
+              >
+                <ArrowLeft />
+                上一步
               </Button>
             )}
-          </div>
-        )}
-        <DialogFooter className="shrink-0 gap-2">
-          {preview && (
             <Button
               variant="ghost"
               disabled={busy}
-              onClick={() => {
-                setPreview(null);
-                setDeletedPreview(null);
-                setError("");
-              }}
+              onClick={onClose}
+              className={isPreview ? "ml-auto" : undefined}
             >
-              <ArrowLeft />
-              返回原文
+              取消
             </Button>
-          )}
-          <Button variant="outline" disabled={busy} onClick={onClose}>
-            取消
-          </Button>
-          <Button
-            onClick={preview ? submit : analyze}
-            disabled={
-              busy ||
-              loadingExisting ||
-              loadError ||
-              !source.trim() ||
-              preview?.segments.length === 0 ||
-              !!preview?.segments.some((item) => !item.title.trim())
-            }
-          >
-            {busy ? <Loader2 className="animate-spin" /> : <ListTree />}
-            {busy
-              ? "处理中"
-              : preview
-                ? `导入 ${preview.segments.length} 集`
-                : "预览分集"}
-          </Button>
-        </DialogFooter>
+            <Button
+              className="max-sm:grow"
+              onClick={isPreview ? submit : analyze}
+              disabled={
+                busy ||
+                loadingExisting ||
+                loadError ||
+                !hasSource ||
+                (isPreview &&
+                  (preview.segments.length === 0 ||
+                    preview.segments.some((item) => !item.title.trim()))) ||
+                (!isPreview &&
+                  (!Number.isInteger(targetLength) ||
+                    targetLength < 1000 ||
+                    targetLength > MAX_EPISODE_LENGTH))
+              }
+            >
+              {busy ? (
+                <Loader2 className="animate-spin" />
+              ) : isPreview ? (
+                <ListTree />
+              ) : (
+                <ArrowRight />
+              )}
+              {busy
+                ? isPreview
+                  ? "正在导入"
+                  : "正在识别分集"
+                : isPreview
+                  ? `导入 ${preview.segments.length} 集`
+                  : preview && canReusePreview
+                    ? "继续检查分集"
+                    : "识别并检查分集"}
+            </Button>
+          </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );

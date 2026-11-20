@@ -1,24 +1,27 @@
 package com.stonewu.fusion.service.resource;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.stonewu.fusion.repository.resource.AssetReadRepository;
 import com.stonewu.fusion.service.canvas.CanvasAccessPolicy;
 import com.stonewu.fusion.service.canvas.CanvasJson;
 import com.stonewu.fusion.service.canvas.model.CanvasActor;
+import com.stonewu.fusion.service.canvas.model.CanvasErrorCode;
+import com.stonewu.fusion.service.canvas.model.CanvasException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 import static com.stonewu.fusion.service.canvas.model.CanvasValueType.ASSET;
-import static com.stonewu.fusion.service.canvas.model.CanvasValueType.ASSET_ITEM;
 
 /**
- * 集合查询与详情版本在同一快照读取，内容缓存由 ResourceQueryService 的版本化缓存承担。
+ * 集合及父子版本在同一快照中批量读取；单对象详情继续使用版本化缓存。
  */
 @Service
 public class AssetResourceQueryService {
@@ -43,15 +46,16 @@ public class AssetResourceQueryService {
     public ObjectNode tree(long assetId, CanvasActor actor) {
         return Objects.requireNonNull(reads.execute(ignored -> {
             ObjectNode asset = resources.get(ASSET, assetId, actor).data();
-            asset.set("items", json.object(Map.of("items", items(assetId, actor))).get("items"));
+            ArrayNode children = asset.putArray("items");
+            assets.itemDetails(List.of(assetId)).forEach(children::add);
             return asset;
         }));
     }
 
     public List<ObjectNode> items(long assetId, CanvasActor actor) {
         return Objects.requireNonNull(reads.execute(ignored -> {
-            resources.get(ASSET, assetId, actor);
-            return assets.items(assetId).stream().map(id -> resources.get(ASSET_ITEM, id, actor).data()).toList();
+            resources.authorizedHeader(ASSET, assetId, actor);
+            return assets.itemDetails(List.of(assetId));
         }));
     }
 
@@ -59,8 +63,17 @@ public class AssetResourceQueryService {
         validateFilters(type, keyword);
         return Objects.requireNonNull(reads.execute(ignored -> {
             List<Long> projects = authorize(projectId, actor);
-            return assets.ids(actor, projects, projectId, type, keyword, null, null).stream()
-                    .map(id -> withItems ? tree(id, actor) : resources.get(ASSET, id, actor).data()).toList();
+            List<ObjectNode> rows = assets.details(actor, projects, projectId, type, keyword, null, null);
+            if (withItems && !rows.isEmpty()) {
+                Map<Long, ArrayNode> children = new LinkedHashMap<>();
+                for (ObjectNode row : rows) {
+                    children.put(row.path("id").longValue(), row.putArray("items"));
+                }
+                for (ObjectNode item : assets.itemDetails(List.copyOf(children.keySet()))) {
+                    children.get(item.path("assetId").longValue()).add(item);
+                }
+            }
+            return rows;
         }));
     }
 
@@ -71,8 +84,7 @@ public class AssetResourceQueryService {
         validateFilters(type, keyword);
         return Objects.requireNonNull(reads.execute(ignored -> {
             var projects = authorize(projectId, actor);
-            var records = assets.ids(actor, projects, projectId, type, keyword, page, size).stream()
-                    .map(id -> resources.get(ASSET, id, actor).data()).toList();
+            var records = assets.details(actor, projects, projectId, type, keyword, page, size);
             return json.object(
                     Map.of("records", records, "total", assets.count(actor, projects, projectId, type, keyword),
                             "page", page, "size", size, "typeCounts",
@@ -107,6 +119,34 @@ public class AssetResourceQueryService {
         }));
     }
 
+    public List<ObjectNode> itemSummaryPages(List<Long> assetIds, int page, int size, CanvasActor actor) {
+        validatePage(page, size);
+        return Objects.requireNonNull(reads.execute(ignored -> {
+            List<Long> projects = authorize(null, actor);
+            Map<Long, ObjectNode> summaries = new LinkedHashMap<>();
+            for (ObjectNode row : assets.summariesByIds(assetIds, actor, projects)) {
+                summaries.put(row.path("id").longValue(), row);
+            }
+            List<Long> missing = assetIds.stream().filter(id -> !summaries.containsKey(id)).toList();
+            if (!missing.isEmpty()) {
+                long first = missing.get(0);
+                if (!assets.existingIds(missing).contains(first)) {
+                    throw new CanvasException(404, CanvasErrorCode.RESOURCE_DELETED, "业务对象已删除或不存在",
+                            Map.of("resourceType", ASSET.code(), "resourceId", first));
+                }
+                throw new CanvasException(403, CanvasErrorCode.ACCESS_DENIED, "无权访问此业务资源", Map.of());
+            }
+            for (ObjectNode summary : summaries.values()) {
+                summary.putArray("items");
+                pageMetadata(summary, page, size, summary.path("itemCount").longValue());
+            }
+            for (ObjectNode item : assets.itemSummariesByAssetIds(assetIds, page, size)) {
+                summaries.get(item.path("assetId").longValue()).withArray("items").add(item);
+            }
+            return assetIds.stream().map(summaries::get).toList();
+        }));
+    }
+
     private void validatePage(int page, int size) {
         if (page < 1 || size < 1 || size > 100) {
             throw AssetFields.invalid("页码须大于 0，每页数量为 1 至 100");
@@ -124,7 +164,6 @@ public class AssetResourceQueryService {
     }
 
     private List<Long> authorize(Long projectId, CanvasActor actor) {
-        access.requireActorScope(actor);
         if (projectId != null) {
             access.requireProject(projectId, actor);
             return List.of(projectId);

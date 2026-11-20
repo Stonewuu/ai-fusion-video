@@ -24,7 +24,7 @@ public final class AgentToolCategories {
                  "insert_storyboard_item",
                  "update_storyboard_scene", "update_storyboard_item", "delete_storyboard_child_resource",
                  "update_storyboard_item_frame", "update_storyboard_item_video" -> "分镜创作";
-            case "get_asset", "list_project_assets", "query_asset_items", "query_asset_metadata", "create_asset",
+            case "get_asset", "get_asset_item", "list_project_assets", "query_asset_items", "query_asset_metadata", "create_asset",
                  "update_asset",
                  "batch_create_assets", "batch_create_asset_items", "add_asset_item", "update_asset_item",
                  "delete_asset_resource",

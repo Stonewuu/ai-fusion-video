@@ -6,6 +6,7 @@ const PROVIDER_ORDER = [
   "infistar",
   "metaso",
   "erchun",
+  "apixo",
   "deepseek",
   "openai",
   "comfyui",

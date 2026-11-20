@@ -7,7 +7,7 @@ import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import { useEffect, useState } from "react";
 import { ImageIcon, Loader2, PackagePlus, Video } from "lucide-react";
 import { toast } from "sonner";
-import { assetApi, type AssetWithItems } from "@/lib/api/asset";
+import { assetApi, type Asset } from "@/lib/api/asset";
 import { resolveMediaUrl } from "@/lib/api/client";
 import { projectApi, type Project } from "@/lib/api/project";
 import { toastApiError } from "@/lib/api/toast-api-error";
@@ -57,7 +57,7 @@ export function GenerationAssetDialog({
   const [attachMode, setAttachMode] = useState<"existing" | "new">("existing");
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<number | null>(null);
-  const [assets, setAssets] = useState<AssetWithItems[]>([]);
+  const [assets, setAssets] = useState<Asset[]>([]);
   const [assetId, setAssetId] = useState<number | null>(null);
   const [assetType, setAssetType] = useState(
     target.mode === "video" ? "scene" : "character",
@@ -78,7 +78,7 @@ export function GenerationAssetDialog({
   const loadAssets = async (nextProjectId: number) => {
     setLoadingAssets(true);
     try {
-      const list = await assetApi.listWithItems(nextProjectId);
+      const list = await assetApi.list(nextProjectId);
       setAssets(list);
       setAssetId(list[0]?.id ?? null);
       if (list.length === 0) setAttachMode("new");

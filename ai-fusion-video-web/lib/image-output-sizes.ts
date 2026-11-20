@@ -50,7 +50,10 @@ export function resolutionChoices(options: ImageOutputOptions | null | undefined
     return [];
   }
   if (options.supportAutoSize && ratio === "auto") {
-    return options.supportedResolutions.includes("auto") ? ["auto"] : [];
+    if (options.supportedResolutions.includes("auto")) {
+      return ["auto"];
+    }
+    return Object.keys(options.imageSizes ?? {}).length ? [] : options.supportedResolutions;
   }
   const parts = /^(\d+):(\d+)$/.exec(ratio);
   return options.supportedResolutions.filter((value) => {
@@ -173,6 +176,10 @@ export function imageOutputIssue(options: ImageOutputCapabilities,
     return "图片宽高与画面比例不一致";
   }
   return null;
+}
+
+export function ratioLabel(value: string) {
+  return value === "auto" || value === "adaptive" ? "自适应" : value;
 }
 
 export function resolutionLabel(value: string) {

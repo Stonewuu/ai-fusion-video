@@ -127,8 +127,7 @@ public record VideoModelRules(
             throw new BusinessException("此模型的参考音频需要搭配图片或视频");
         }
 
-        String resolution = choice(config, "supportedResolutions",
-                StrUtil.blankToDefault(supplied.resolution(), config.getStr("defaultResolution")), "分辨率");
+        String resolution = resolution(config, supplied.resolution());
         String ratio = choice(config, "supportedAspectRatios",
                 StrUtil.blankToDefault(supplied.ratio(), defaultRatio), "画面比例");
         if (inputs.frames() && StrUtil.isNotBlank(frameRatio)) {
@@ -255,6 +254,18 @@ public record VideoModelRules(
             throw new BusinessException("请指定视频时长，以便计算运行范围");
         }
         return duration;
+    }
+
+    private static String resolution(JSONObject config, String supplied) {
+        var allowed = config.getJSONArray("supportedResolutions");
+        if (allowed != null && allowed.isEmpty()) {
+            if (StrUtil.isNotBlank(supplied)) {
+                throw new BusinessException("当前模型不支持设置分辨率，请清除分辨率选项");
+            }
+            return null;
+        }
+        return choice(config, "supportedResolutions",
+                StrUtil.blankToDefault(supplied, config.getStr("defaultResolution")), "分辨率");
     }
 
     private static String choice(JSONObject config, String key, String value, String label) {

@@ -28,20 +28,27 @@
         <if test="filter.type != null">AND a.type = #{filter.type}</if>
         <if test="filter.keyword != null">AND a.name LIKE #{filter.keyword} ESCAPE '!'</if>
     </sql>
-    <select id="accessibleIds" resultType="Long">
-        SELECT a.id FROM afv_asset a WHERE <include refid="accessScope"/> ORDER BY a.update_time DESC, a.id DESC
+    <select id="accessibleDetails" resultType="java.util.LinkedHashMap">
+        SELECT a.* FROM afv_asset a WHERE <include refid="accessScope"/> ORDER BY a.update_time DESC, a.id DESC
     </select>
-    <select id="accessibleSummaries" resultType="java.util.LinkedHashMap">
-        SELECT a.id, a.version, a.project_id, a.name, a.type, LEFT(a.description, 200) AS description_preview,
+    <sql id="summaryColumns">
+        a.id, a.version, a.project_id, a.name, a.type, LEFT(a.description, 200) AS description_preview,
             (SELECT COUNT(*) FROM afv_asset_item i WHERE i.asset_id = a.id AND i.deleted = FALSE) AS item_count,
             EXISTS(SELECT 1 FROM afv_asset_item i WHERE i.asset_id = a.id AND i.deleted = FALSE AND i.image_url IS NOT NULL AND i.image_url != '') AS has_image
+    </sql>
+    <select id="accessibleSummaries" resultType="java.util.LinkedHashMap">
+        SELECT <include refid="summaryColumns"/>
         FROM afv_asset a WHERE <include refid="accessScope"/> ORDER BY a.id
     </select>
     <select id="summary" resultType="java.util.LinkedHashMap">
-        SELECT a.id, a.version, a.project_id, a.name, a.type, LEFT(a.description, 200) AS description_preview,
-            (SELECT COUNT(*) FROM afv_asset_item i WHERE i.asset_id = a.id AND i.deleted = FALSE) AS item_count,
-            EXISTS(SELECT 1 FROM afv_asset_item i WHERE i.asset_id = a.id AND i.deleted = FALSE AND i.image_url IS NOT NULL AND i.image_url != '') AS has_image
+        SELECT <include refid="summaryColumns"/>
         FROM afv_asset a WHERE a.id = #{id} AND a.deleted = FALSE
+    </select>
+    <select id="summariesByIds" resultType="java.util.LinkedHashMap">
+        SELECT <include refid="summaryColumns"/>
+        FROM afv_asset a WHERE <include refid="accessScope"/> AND a.id IN
+        <foreach collection="ids" item="id" open="(" separator="," close=")">#{id}</foreach>
+        ORDER BY a.id
     </select>
     <select id="countAccessible" resultType="long">
         SELECT COUNT(*) FROM afv_asset a WHERE <include refid="accessScope"/>

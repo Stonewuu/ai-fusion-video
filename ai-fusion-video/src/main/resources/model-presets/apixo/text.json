@@ -1,0 +1,472 @@
+[
+  {
+    "code": "apixo:claude-opus-4-8",
+    "modelCode": "claude-opus-4-8",
+    "name": "Claude Opus 4.8",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:claude-opus-4-7",
+    "modelCode": "claude-opus-4-7",
+    "name": "Claude Opus 4.7",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:claude-opus-4-6",
+    "modelCode": "claude-opus-4-6",
+    "name": "Claude Opus 4.6",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:claude-opus-4-5-20251101",
+    "modelCode": "claude-opus-4-5-20251101",
+    "name": "Claude Opus 4.5 20251101",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:claude-sonnet-4-6",
+    "modelCode": "claude-sonnet-4-6",
+    "name": "Claude Sonnet 4.6",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:claude-sonnet-4-5",
+    "modelCode": "claude-sonnet-4-5",
+    "name": "Claude Sonnet 4.5",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:claude-sonnet-4-5-20250929",
+    "modelCode": "claude-sonnet-4-5-20250929",
+    "name": "Claude Sonnet 4.5 20250929",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:claude-haiku-4-5-20251001",
+    "modelCode": "claude-haiku-4-5-20251001",
+    "name": "Claude Haiku 4.5 20251001",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "anthropic",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:gpt-5.6-sol",
+    "modelCode": "gpt-5.6-sol",
+    "name": "GPT-5.6 Sol",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_responses",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096,
+      "useResponsesApi": true,
+      "sendIncludeReasoning": false
+    }
+  },
+  {
+    "code": "apixo:gpt-5.6-terra",
+    "modelCode": "gpt-5.6-terra",
+    "name": "GPT-5.6 Terra",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_responses",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096,
+      "useResponsesApi": true,
+      "sendIncludeReasoning": false
+    }
+  },
+  {
+    "code": "apixo:gpt-5.6-luna",
+    "modelCode": "gpt-5.6-luna",
+    "name": "GPT-5.6 Luna",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_responses",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096,
+      "useResponsesApi": true,
+      "sendIncludeReasoning": false
+    }
+  },
+  {
+    "code": "apixo:gpt-5.5",
+    "modelCode": "gpt-5.5",
+    "name": "GPT-5.5",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_responses",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096,
+      "useResponsesApi": true,
+      "sendIncludeReasoning": false
+    }
+  },
+  {
+    "code": "apixo:gpt-5.4",
+    "modelCode": "gpt-5.4",
+    "name": "GPT-5.4",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_responses",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096,
+      "useResponsesApi": true,
+      "sendIncludeReasoning": false
+    }
+  },
+  {
+    "code": "apixo:gpt-5.4-mini",
+    "modelCode": "gpt-5.4-mini",
+    "name": "GPT-5.4 Mini",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_responses",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096,
+      "useResponsesApi": true,
+      "sendIncludeReasoning": false
+    }
+  },
+  {
+    "code": "apixo:gpt-5.3-codex",
+    "modelCode": "gpt-5.3-codex",
+    "name": "GPT-5.3-Codex",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_responses",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096,
+      "useResponsesApi": true,
+      "sendIncludeReasoning": false
+    }
+  },
+  {
+    "code": "apixo:gpt-5.2",
+    "modelCode": "gpt-5.2",
+    "name": "GPT-5.2",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_responses",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096,
+      "useResponsesApi": true,
+      "sendIncludeReasoning": false
+    }
+  },
+  {
+    "code": "apixo:gpt-5.2-codex",
+    "modelCode": "gpt-5.2-codex",
+    "name": "GPT-5.2-Codex",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_responses",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096,
+      "useResponsesApi": true,
+      "sendIncludeReasoning": false
+    }
+  },
+  {
+    "code": "apixo:gpt-5-mini",
+    "modelCode": "gpt-5-mini",
+    "name": "GPT-5 Mini",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "openai_responses",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096,
+      "useResponsesApi": true,
+      "sendIncludeReasoning": false
+    }
+  },
+  {
+    "code": "apixo:gemini-3.5-flash",
+    "modelCode": "gemini-3.5-flash",
+    "name": "Gemini 3.5 Flash",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "gemini",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:gemini-3.1-pro-preview",
+    "modelCode": "gemini-3.1-pro-preview",
+    "name": "Gemini 3.1 Pro Preview",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "gemini",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:gemini-3.1-flash-lite-preview",
+    "modelCode": "gemini-3.1-flash-lite-preview",
+    "name": "Gemini 3.1 Flash-Lite Preview",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "gemini",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:gemini-3-flash-preview",
+    "modelCode": "gemini-3-flash-preview",
+    "name": "Gemini 3 Flash Preview",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "gemini",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:gemini-2.5-pro",
+    "modelCode": "gemini-2.5-pro",
+    "name": "Gemini 2.5 Pro",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "gemini",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:gemini-2.5-flash",
+    "modelCode": "gemini-2.5-flash",
+    "name": "Gemini 2.5 Flash",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "gemini",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  },
+  {
+    "code": "apixo:gemini-2.5-flash-lite",
+    "modelCode": "gemini-2.5-flash-lite",
+    "name": "Gemini 2.5 Flash-Lite",
+    "providerId": "apixo",
+    "platform": "openai_compatible",
+    "modelProtocol": "gemini",
+    "modelType": 1,
+    "description": "APIXO 对话模型。",
+    "multimodalInputTypes": [],
+    "multimodalInputTransports": {},
+    "contextWindow": null,
+    "supportReasoning": false,
+    "reasoningEffortLevels": [],
+    "config": {
+      "maxTokens": 4096
+    }
+  }
+]

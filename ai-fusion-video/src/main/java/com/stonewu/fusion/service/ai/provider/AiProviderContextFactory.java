@@ -6,6 +6,7 @@ import com.stonewu.fusion.common.BusinessException;
 import com.stonewu.fusion.entity.ai.AiModel;
 import com.stonewu.fusion.entity.ai.ApiConfig;
 import com.stonewu.fusion.service.ai.ApiConfigService;
+import com.stonewu.fusion.service.ai.apixo.ApixoEndpoints;
 import com.stonewu.fusion.service.ai.model.AiModelMetadata;
 import com.stonewu.fusion.service.ai.model.AiModelMetadataResolver;
 import lombok.RequiredArgsConstructor;
@@ -46,7 +47,8 @@ public class AiProviderContextFactory {
                 .config(config)
                 .platform(normalizePlatform(requestProtocol))
                 .apiKey(apiConfig.getApiKey())
-                .baseUrl(apiConfig.getApiUrl())
+                .baseUrl("apixo".equals(apiConfig.getProviderId())
+                        ? ApixoEndpoints.chatBase(apiConfig) : apiConfig.getApiUrl())
                 .modelName(resolveModelName(model, config))
                 .build();
     }
