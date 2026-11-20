@@ -21,8 +21,6 @@
   <img src="https://stonewuu.github.io/Stonewuu/star-history/Stonewuu/ai-fusion-video.svg" alt="GitHub Star History" width="920" />
 </p>
 
-<p align="center"><a href="https://stonewuu.github.io/ai-fusion-video/">View repository traffic trends</a></p>
-
 ## 🤝 Sponsors
 
 Thank you to the following sponsors for supporting AI Fusion Video!

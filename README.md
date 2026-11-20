@@ -21,8 +21,6 @@
   <img src="https://stonewuu.github.io/Stonewuu/star-history/Stonewuu/ai-fusion-video.svg" alt="GitHub Star History" width="920" />
 </p>
 
-<p align="center"><a href="https://stonewuu.github.io/ai-fusion-video/">查看仓库流量趋势</a></p>
-
 ## 🤝 赞助商
 
 感谢以下赞助商对融光的支持！
