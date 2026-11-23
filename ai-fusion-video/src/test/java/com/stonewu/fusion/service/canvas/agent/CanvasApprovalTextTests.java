@@ -36,7 +36,7 @@ class CanvasApprovalTextTests {
     }
 
     @Test void modelIdentityUsesTheSelectedModelNameAndPreservesGenerationSettings() {
-        when(models.require(91)).thenReturn(new CanvasModelCatalog.Option(91, "短片图像模型", "image", "image", Map.of(), Map.of(), List.of(), null));
+        when(models.require(91)).thenReturn(new CanvasModelCatalog.Option(91, "短片图像模型", null, null, null, "image", "image", Map.of(), Map.of(), List.of(), null));
         String result = display.describe(json.valueToTree(Map.of("modelId", 91, "count", 2, "ratio", "16:9", "prompt", "温暖的灯塔")), actor);
         assertThat(result).contains("模型：短片图像模型", "候选数量：2", "画面比例：16:9", "温暖的灯塔").doesNotContain("modelId", "91");
     }

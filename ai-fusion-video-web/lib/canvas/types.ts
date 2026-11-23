@@ -185,6 +185,9 @@ export interface CanvasModelVersion {
 export interface CanvasModelOption {
   id: number;
   name: string;
+  code?: string | null;
+  platform?: string | null;
+  capabilityPresetCode?: string | null;
   kind: string;
   resultType: string;
   inputs: Record<string, CanvasModelInput>;
@@ -320,5 +323,7 @@ export interface CanvasAddIntent {
   screen: { x: number; y: number };
   position: { x: number; y: number };
   source?: CanvasSourceIntent;
+  /** 从输入端口拖出连线到空白处时设置：创建前置节点并连入该输入端口。 */
+  target?: CanvasSourceIntent;
   automatic?: boolean;
 }

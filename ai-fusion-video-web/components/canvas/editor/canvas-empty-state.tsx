@@ -1,7 +1,7 @@
 "use client";
 
-import { Cable, FileText, Plus, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Plus } from "lucide-react";
+import { CanvasButton } from "../ui/canvas-button";
 
 export function CanvasEmptyState({
   editable,
@@ -19,20 +19,12 @@ export function CanvasEmptyState({
         {editable && (
           <>
             <p className="text-sm leading-relaxed text-muted-foreground">
-              先写下想法，或从左侧拖入剧本、分镜和素材。
+              添加文字或素材，开始生成图片和视频。
             </p>
-            <ol className="flex flex-wrap justify-center gap-4 text-xs" aria-label="创作流程">
-              <li className="flex items-center gap-1.5 text-sky-700 dark:text-sky-300"><FileText className="size-4" aria-hidden /><span><strong>1</strong> 添加内容</span></li>
-              <li className="flex items-center gap-1.5 text-violet-600 dark:text-violet-300"><Cable className="size-4" aria-hidden /><span><strong>2</strong> 连接创作步骤</span></li>
-              <li className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-300"><Sparkles className="size-4" aria-hidden /><span><strong>3</strong> 运行并挑选结果</span></li>
-            </ol>
-            <Button className="pointer-events-auto" onClick={onAdd}>
+            <CanvasButton variant="primary" className="pointer-events-auto" onClick={onAdd}>
               <Plus />
               添加第一个节点
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              右键空白处，也能随时添加。
-            </p>
+            </CanvasButton>
           </>
         )}
       </div>

@@ -11,5 +11,6 @@
   },
   "search.exclude": {
     "**/ai-fusion-video-web/.next": true
-  }
+  },
+  "java.project.explorer.showNonJavaResources": true
 }

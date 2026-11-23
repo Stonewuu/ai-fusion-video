@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Bot, History } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CanvasButton } from "../ui/canvas-button";
 import {
   canvasHistoryApi,
   type BusinessHistorySummary,
@@ -22,23 +22,33 @@ export function CanvasBusinessHistory() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [refresh, setRefresh] = useState(0);
+
   useEffect(() => {
     const controller = new AbortController();
     void canvasHistoryApi
       .list(canvasId, undefined, controller.signal)
       .then((result) => {
-        if (controller.signal.aborted) return;
+        if (controller.signal.aborted) {
+          return;
+        }
         setEntries(result.items);
         setNext(result.nextCursor);
         setError(null);
       })
       .catch((failure) => {
-        if (!controller.signal.aborted) setError(getApiErrorMessage(failure));
+        if (!controller.signal.aborted) {
+          setError(getApiErrorMessage(failure));
+        }
       });
-    return () => controller.abort();
+    return () => {
+      controller.abort();
+    };
   }, [canvasId, contentRevision, refresh]);
+
   const more = useCallback(async () => {
-    if (!next || loading) return;
+    if (!next || loading) {
+      return;
+    }
     setLoading(true);
     try {
       const result = await canvasHistoryApi.list(canvasId, next);
@@ -57,81 +67,97 @@ export function CanvasBusinessHistory() {
       setLoading(false);
     }
   }, [canvasId, next, loading]);
+
   return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <History className="size-4 text-primary" />
-        <h3 className="text-sm font-semibold">项目内容变更</h3>
+    <div className="flex flex-col gap-2.5">
+      <div className="flex flex-col gap-0.5">
+        <h3 className="text-[13px] font-medium">项目内容变更</h3>
+        <p className="text-xs text-muted-foreground">
+          查看你与助手对项目内容的修改记录。
+        </p>
       </div>
-      <p className="text-xs text-muted-foreground">
-        查看项目内容的修改记录，包括你和助手的编辑。
-      </p>
-      {entries.map((entry) => (
-        <article
-          key={entry.commandId}
-          className="space-y-2 border-b border-border/20 pb-3"
-        >
-          <p className="flex items-center gap-2 text-sm font-medium">
-            {entry.origin === "agent" && (
-              <Bot className="size-4 text-violet-500" />
-            )}
-            {businessOperationNames[entry.operation] ?? entry.operation}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {entry.actorName} · {canvasDate(entry.committedAt)}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            {[
-              ...new Set(
-                entry.resources.map(
-                  (item) => canvasTypeNames[item.resourceType],
-                ),
-              ),
-            ].join("、")}{" "}
-            ·{" "}
-            {
-              new Set(
-                entry.resources.map(
-                  (item) => `${item.resourceType}:${item.resourceId}`,
-                ),
-              ).size
-            }{" "}
-            项内容
-          </p>
-          <Button
-            size="xs"
-            variant="outline"
-            onClick={() => setSelected(entry.commandId)}
-          >
-            查看变更
-          </Button>
-        </article>
-      ))}
+      {entries.length > 0 && (
+        <div className="flex flex-col gap-1.5">
+          {entries.map((entry) => (
+            <article
+              key={entry.commandId}
+              className="flex flex-col gap-1.5 rounded-[12px] border border-foreground/[0.07] bg-background/70 p-2.5 dark:border-white/[0.08] dark:bg-white/[0.03]"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <p className="flex min-w-0 items-center gap-1.5 truncate text-[13px] font-medium">
+                  {entry.origin === "agent" && (
+                    <Bot className="size-3.5 shrink-0 text-violet-500" />
+                  )}
+                  <span className="truncate">
+                    {businessOperationNames[entry.operation] ?? entry.operation}
+                  </span>
+                </p>
+                <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                  {canvasDate(entry.committedAt)}
+                </span>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {entry.actorName} ·{" "}
+                {[
+                  ...new Set(
+                    entry.resources.map(
+                      (item) => canvasTypeNames[item.resourceType],
+                    ),
+                  ),
+                ].join("、")}{" "}
+                ·{" "}
+                {
+                  new Set(
+                    entry.resources.map(
+                      (item) => `${item.resourceType}:${item.resourceId}`,
+                    ),
+                  ).size
+                }{" "}
+                项
+              </p>
+              <div>
+                <CanvasButton
+                  size="sm"
+                  variant="secondary"
+                  onClick={() => setSelected(entry.commandId)}
+                >
+                  查看变更
+                </CanvasButton>
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
       {!entries.length && !error && (
-        <p className="text-sm text-muted-foreground">暂无可查看的内容变更。</p>
+        <div className="flex flex-col items-center gap-2 rounded-[12px] border border-dashed border-foreground/[0.1] bg-foreground/[0.02] px-4 py-6 text-center dark:border-white/[0.1] dark:bg-white/[0.02]">
+          <span className="grid size-8 place-items-center rounded-[10px] bg-foreground/[0.05] text-muted-foreground dark:bg-white/[0.07]">
+            <History className="size-4" aria-hidden />
+          </span>
+          <p className="text-xs text-muted-foreground">暂无可查看的内容变更</p>
+        </div>
       )}
       {next && (
-        <Button
-          variant="outline"
+        <CanvasButton
+          variant="secondary"
           size="sm"
           disabled={loading}
           onClick={() => void more()}
         >
           更早的变更
-        </Button>
+        </CanvasButton>
       )}
       {error && (
-        <div className="space-y-2">
-          <p role="alert" className="text-sm text-destructive">
+        <div className="flex flex-col items-start gap-2 rounded-[10px] border border-destructive/20 bg-destructive/5 p-2.5">
+          <p role="alert" className="text-xs text-destructive">
             {error}
           </p>
-          <Button
-            variant="outline"
+          <CanvasButton
+            variant="secondary"
             size="sm"
             onClick={() => setRefresh((value) => value + 1)}
           >
             重新读取
-          </Button>
+          </CanvasButton>
         </div>
       )}
       {selected && (

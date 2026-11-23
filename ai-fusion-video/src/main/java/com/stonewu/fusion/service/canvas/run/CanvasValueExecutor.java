@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.canvas.run;
 
 import com.stonewu.fusion.service.canvas.model.CanvasNodeKind;
+import com.stonewu.fusion.service.canvas.model.CanvasNode;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
@@ -30,27 +31,31 @@ public class CanvasValueExecutor implements Executor {
 
     @Override
     public Outcome step(Run run, NodeRun node, Claim claim) {
-        var kind = node.plan().node().kind();
+        return resolve(node.plan().node(), node.inputs(), node.plan().sourceOutputs());
+    }
+
+    public Outcome resolve(CanvasNode node, Ports inputs, Ports sourceOutputs) {
+        var kind = node.kind();
         if (kind == CanvasNodeKind.TEXT_COMBINE) {
-            String separator = node.plan().node().config().path("separator").asText("\n");
-            String result = node.inputs().at("texts").stream().map(Value::text).collect(Collectors.joining(separator));
+            String separator = node.config().path("separator").asText("\n");
+            String result = inputs.at("texts").stream().map(Value::text).collect(Collectors.joining(separator));
             if (result.length() > 128000) {
                 throw CanvasRunException.invalid("拼接后的文本超过 128000 字符，请缩小输入范围");
             }
             return Outcome.done(new Ports(Map.of("text", List.of(sources.text(result)))));
         }
         if (kind == CanvasNodeKind.COLLECTION) {
-            return Outcome.done(new Ports(Map.of("items", node.inputs().at("items"))));
+            return Outcome.done(new Ports(Map.of("items", inputs.at("items"))));
         }
         if (kind == CanvasNodeKind.SELECTION) {
-            String id = node.plan().node().config().path("selectedOutputId").asText("");
+            String id = node.config().path("selectedOutputId").asText("");
             if (id.isBlank()) {
                 return new Outcome(State.WAITING_SELECTION, Ports.empty(), null, null, null);
             }
-            var selected = node.inputs().at("candidates").stream().filter(value -> value.id().equals(id)).findFirst()
+            var selected = inputs.at("candidates").stream().filter(value -> value.id().equals(id)).findFirst()
                     .orElseThrow(() -> CanvasRunException.invalid("预选结果不在本次冻结的候选中，请清除预选后重新运行"));
             return Outcome.done(new Ports(Map.of("selected", List.of(selected))));
         }
-        return Outcome.done(node.plan().sourceOutputs());
+        return Outcome.done(sourceOutputs);
     }
 }

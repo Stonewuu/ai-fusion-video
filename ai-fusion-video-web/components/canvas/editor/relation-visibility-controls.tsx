@@ -2,7 +2,7 @@
 
 import { useId } from "react";
 import { Square, SquareCheck } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CanvasButton } from "../ui/canvas-button";
 import {
   toggleCanvasRelation,
   type CanvasRelationAvailability,
@@ -39,9 +39,8 @@ export function RelationVisibilityControls({ value, onChange, available }: {
         const descriptionId = `${descriptionPrefix}-${option.value}`;
         return (
           <div key={option.value} className="flex flex-col gap-1">
-            <Button
+            <CanvasButton
               variant={checked ? "secondary" : "ghost"}
-              size="default"
               role="checkbox"
               aria-label={`${option.label}连线`}
               aria-checked={checked}
@@ -49,9 +48,9 @@ export function RelationVisibilityControls({ value, onChange, available }: {
               className="w-full justify-start"
               onClick={() => onChange(toggleCanvasRelation(value, option.value))}
             >
-              <Icon aria-hidden />
+              <Icon aria-hidden className={checked ? "text-primary" : undefined} />
               {option.label}
-            </Button>
+            </CanvasButton>
             <p id={descriptionId} className="text-xs leading-relaxed text-muted-foreground">
               {option.description}
             </p>

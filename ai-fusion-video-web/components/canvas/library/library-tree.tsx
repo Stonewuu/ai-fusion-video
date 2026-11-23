@@ -1,4 +1,5 @@
 "use client";
+
 import { memo, useState } from "react";
 import {
   ChevronDown,
@@ -14,7 +15,7 @@ import {
   Video,
   Image as ImageIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CanvasIconButton } from "../ui/canvas-icon-button";
 import type { CanvasLibraryEntry } from "@/lib/canvas/resource-library";
 import { cn } from "@/lib/utils";
 
@@ -26,16 +27,49 @@ interface Actions {
   opening: string | null;
   activeKey: string | null;
 }
+
 const keyOf = (entry: CanvasLibraryEntry) =>
   `${entry.ref.type}:${entry.ref.id}`;
+
 const sections = [
-  { type: "script", label: "剧本", icon: BookOpen, color: "text-violet-600 dark:text-violet-300" },
-  { type: "storyboard", label: "分镜", icon: Clapperboard, color: "text-blue-600 dark:text-blue-300" },
-  { type: "asset", label: "资产", icon: Box, color: "text-amber-700 dark:text-amber-300" },
-  { type: "project", label: "项目设定", icon: Settings2, color: "text-muted-foreground" },
+  {
+    type: "script",
+    label: "剧本",
+    icon: BookOpen,
+    color: "text-violet-600 dark:text-violet-300",
+  },
+  {
+    type: "storyboard",
+    label: "分镜",
+    icon: Clapperboard,
+    color: "text-blue-600 dark:text-blue-300",
+  },
+  {
+    type: "asset",
+    label: "资产",
+    icon: Box,
+    color: "text-amber-700 dark:text-amber-300",
+  },
+  {
+    type: "project",
+    label: "项目设定",
+    icon: Settings2,
+    color: "text-muted-foreground",
+  },
 ] as const;
-const rowIcons = { project: Settings2, script: BookOpen, scriptEpisode: FileText, scriptScene: FileText,
-  storyboard: Clapperboard, storyboardEpisode: Film, storyboardScene: Film, shot: Video, asset: Box, assetItem: ImageIcon };
+
+const rowIcons = {
+  project: Settings2,
+  script: BookOpen,
+  scriptEpisode: FileText,
+  scriptScene: FileText,
+  storyboard: Clapperboard,
+  storyboardEpisode: Film,
+  storyboardScene: Film,
+  shot: Video,
+  asset: Box,
+  assetItem: ImageIcon,
+};
 
 export const CanvasLibraryTree = memo(function CanvasLibraryTree({
   entries,
@@ -44,11 +78,12 @@ export const CanvasLibraryTree = memo(function CanvasLibraryTree({
 }: Actions & { entries: CanvasLibraryEntry[]; search: string }) {
   const children = new Map<string, CanvasLibraryEntry[]>();
   entries.forEach((entry) => {
-    if (entry.parent)
+    if (entry.parent) {
       children.set(entry.parent, [
         ...(children.get(entry.parent) ?? []),
         entry,
       ]);
+    }
   });
   if (search.trim()) {
     const found = entries.filter((entry) =>
@@ -57,50 +92,86 @@ export const CanvasLibraryTree = memo(function CanvasLibraryTree({
         .includes(search.trim().toLowerCase()),
     );
     return (
-      <div className="space-y-1">
+      <div className="flex flex-col gap-0.5">
         {found.map((entry) => (
           <LibraryRow key={keyOf(entry)} entry={entry} showType {...actions} />
         ))}
         {!found.length && (
-          <p className="text-sm text-muted-foreground">没有匹配的内容。</p>
+          <p className="py-2 text-center text-xs text-muted-foreground">
+            没有匹配的内容
+          </p>
         )}
       </div>
     );
   }
   return (
-    <div className="space-y-3">
+    <div className="flex flex-col gap-2.5">
       {sections.map((section) => {
         const roots = entries.filter(
           (entry) => entry.ref.type === section.type,
         );
-        if (!roots.length) return null;
+        if (!roots.length) {
+          return null;
+        }
         return (
-          <LibrarySection key={section.type} section={section} roots={roots} childrenByParent={children} {...actions} />
+          <LibrarySection
+            key={section.type}
+            section={section}
+            roots={roots}
+            childrenByParent={children}
+            {...actions}
+          />
         );
       })}
     </div>
   );
 });
 
-function LibrarySection({ section, roots, childrenByParent, ...actions }: Actions & {
-  section: typeof sections[number]; roots: CanvasLibraryEntry[];
+function LibrarySection({
+  section,
+  roots,
+  childrenByParent,
+  ...actions
+}: Actions & {
+  section: (typeof sections)[number];
+  roots: CanvasLibraryEntry[];
   childrenByParent: Map<string, CanvasLibraryEntry[]>;
 }) {
   const [open, setOpen] = useState(section.type !== "project");
   return (
-    <section className="space-y-1">
+    <section className="flex flex-col gap-1">
       <h3>
-        <button type="button" className="flex h-8 w-full items-center gap-2 rounded-lg px-1 text-left text-sm font-semibold outline-none transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring"
-          aria-expanded={open} onClick={() => setOpen(!open)}>
-          <section.icon className={cn("size-4 shrink-0", section.color)} />
-          {section.label}
-          <span className="ml-auto text-xs font-normal text-muted-foreground">{roots.length}</span>
-          {open ? <ChevronDown className="size-3.5 text-muted-foreground" /> : <ChevronRight className="size-3.5 text-muted-foreground" />}
+        <button
+          type="button"
+          className="flex h-7 w-full items-center gap-1.5 rounded-[8px] px-1.5 text-left text-xs font-medium text-foreground/85 outline-none transition-colors hover:bg-foreground/[0.05] focus-visible:ring-[3px] focus-visible:ring-primary/30 motion-reduce:transition-none"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+        >
+          <section.icon className={cn("size-3.5 shrink-0", section.color)} />
+          <span>{section.label}</span>
+          <span className="ml-auto rounded-[6px] bg-foreground/[0.05] px-1.5 py-0.5 text-[11px] font-normal tabular-nums text-muted-foreground dark:bg-white/[0.07]">
+            {roots.length}
+          </span>
+          {open ? (
+            <ChevronDown className="size-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-3.5 text-muted-foreground" />
+          )}
         </button>
       </h3>
-      {open && <div className="space-y-1">
-        {roots.map((entry) => <LibraryBranch key={keyOf(entry)} entry={entry} childrenByParent={childrenByParent} depth={0} {...actions} />)}
-      </div>}
+      {open && (
+        <div className="flex flex-col gap-0.5">
+          {roots.map((entry) => (
+            <LibraryBranch
+              key={keyOf(entry)}
+              entry={entry}
+              childrenByParent={childrenByParent}
+              depth={0}
+              {...actions}
+            />
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -124,22 +195,21 @@ function LibraryBranch({
         {...actions}
         leading={
           children.length ? (
-            <Button
-              variant="ghost"
+            <CanvasIconButton
               size="icon-xs"
-              title={open ? "折叠下级内容" : "展开下级内容"}
+              label={open ? "折叠下级内容" : "展开下级内容"}
               aria-expanded={open}
               onClick={() => setOpen(!open)}
             >
               {open ? <ChevronDown /> : <ChevronRight />}
-            </Button>
+            </CanvasIconButton>
           ) : (
             <span className="w-6 shrink-0" />
           )
         }
       />
       {open && children.length > 0 && (
-        <div className="ml-3 border-l border-border/20 pl-1">
+        <div className="ml-3 border-l border-foreground/[0.08] pl-1 dark:border-white/[0.08]">
           {children.map((child) => (
             <LibraryBranch
               key={keyOf(child)}
@@ -165,13 +235,22 @@ function LibraryRow({
   activeKey,
   showType = false,
   leading,
-}: Actions & { entry: CanvasLibraryEntry; leading?: React.ReactNode; showType?: boolean }) {
+}: Actions & {
+  entry: CanvasLibraryEntry;
+  leading?: React.ReactNode;
+  showType?: boolean;
+}) {
   const Icon = rowIcons[entry.ref.type];
   const selected = activeKey === keyOf(entry);
   return (
     <div
       data-sidebar-row
-      className={cn("group flex items-center gap-1 rounded-lg", selected ? "bg-primary/10 text-primary ring-1 ring-primary/20" : "hover:bg-muted/40")}
+      className={cn(
+        "group flex items-center gap-1 rounded-[8px] pr-0.5 transition-colors duration-150 motion-reduce:transition-none",
+        selected
+          ? "bg-primary/10 text-primary ring-1 ring-primary/20"
+          : "hover:bg-foreground/[0.05]",
+      )}
       draggable={!disabled && !busy}
       onDragStart={(event) => {
         if (disabled || busy) {
@@ -192,28 +271,35 @@ function LibraryRow({
         title={`${entry.subtitle} · ${entry.title}`}
         aria-label={`查看${entry.title}，${entry.subtitle}`}
         aria-current={selected ? "true" : undefined}
-        className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg px-1 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="flex h-8 min-w-0 flex-1 items-center gap-1.5 rounded-[8px] px-1 text-left outline-none focus-visible:ring-[3px] focus-visible:ring-primary/30"
       >
         <Icon className="size-3.5 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 truncate text-sm">{entry.title}</span>
-        {showType && <span className="shrink-0 text-xs text-muted-foreground">{entry.subtitle}</span>}
+        <span className="min-w-0 flex-1 truncate text-[13px]">
+          {entry.title}
+        </span>
+        {showType && (
+          <span className="shrink-0 text-[11px] text-muted-foreground">
+            {entry.subtitle}
+          </span>
+        )}
       </button>
       {opening === keyOf(entry) ? (
-        <Loader2 className="mx-1 size-4 animate-spin text-muted-foreground motion-reduce:animate-none" />
+        <Loader2 className="mx-1 size-3.5 animate-spin text-muted-foreground motion-reduce:animate-none" />
       ) : (
         <span className="opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 [@media(pointer:coarse)]:opacity-100 motion-reduce:transition-none">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          title={`将${entry.title}放入画布`}
-          disabled={disabled}
-          aria-disabled={busy || undefined}
-          onClick={() => {
-            if (!busy) onAdd(entry);
-          }}
-        >
-          <Plus />
-        </Button>
+          <CanvasIconButton
+            size="icon-xs"
+            label={`将${entry.title}放入画布`}
+            disabled={disabled}
+            aria-disabled={busy || undefined}
+            onClick={() => {
+              if (!busy) {
+                onAdd(entry);
+              }
+            }}
+          >
+            <Plus />
+          </CanvasIconButton>
         </span>
       )}
     </div>

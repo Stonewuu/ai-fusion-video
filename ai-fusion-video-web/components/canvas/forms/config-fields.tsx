@@ -2,7 +2,7 @@
 
 import { Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import type { CanvasCapability, CanvasConfig } from "@/lib/canvas/types";
+import type { CanvasCapability, CanvasConfig, CanvasModelOption } from "@/lib/canvas/types";
 import {
   advancedConfigFields,
   configuredImageSize,
@@ -31,6 +31,8 @@ export function CanvasConfigFields({
   connectedPorts = [],
   inputCounts = {},
   disabled = false,
+  compact = false,
+  omit = noOmittedFields,
 }: {
   capability: CanvasCapability;
   config: CanvasConfig;
@@ -38,14 +40,16 @@ export function CanvasConfigFields({
   connectedPorts?: string[];
   inputCounts?: Record<string, number>;
   disabled?: boolean;
+  compact?: boolean;
+  /** 已由外层界面单独编辑的字段，不在此表单重复显示。 */
+  omit?: ReadonlySet<string>;
 }) {
   const catalog = useCanvas((state) => state.catalog!);
   const selectedModel = catalog.models.find((item) => item.id === config.modelId);
   const model = selectedModel ? modelForVersion(selectedModel, config.workflowVersionId) : undefined;
   const videoInputs = videoInputState(config, connectedPorts);
-  const version = model?.versions.find(
-    (item) => item.id === config.workflowVersionId,
-  );
+  // 图片输出区与尺寸提示都在编辑画面比例和分辨率，外层已提供这两项时一并省略。
+  const outputOmitted = omit.has("ratio") && omit.has("resolution");
   const update = (key: string, value: CanvasConfig[string] | undefined) => {
     const next = { ...config };
     if (value === undefined) {
@@ -87,62 +91,16 @@ export function CanvasConfigFields({
     );
   }
   const isAgent = canvasAgentKinds.includes(capability.kind);
-  const dimensions =
-    !!capability.configFields.width &&
-    !!capability.configFields.height &&
-    (!version ||
-      (version.fields.includes("width") && version.fields.includes("height")));
-  const fields = Object.entries(capability.configFields)
-    .filter(([key]) => capability.kind !== "imageGeneration" || !["ratio", "resolution", "width", "height"].includes(key))
-    .filter(([key]) => !isAgent || !agentFormFields.has(key))
-    .filter(
-      ([key]) =>
-        key !== "frameType" ||
-        capability.kind !== "agent" ||
-        String(config.agentType).startsWith("storyboard_frame"),
-    )
-    .filter(
-      ([key, field]) =>
-        ![
-          "resourceId",
-          "modelId",
-          "workflowVersionId",
-          "selectedOutputId",
-          "apiConfigId",
-        ].includes(key) &&
-        !(capability.kind === "comfyui" && key === "resultType") &&
-        !(field.enumValues.length === 1 && config[key] === field.enumValues[0]),
-    )
-    .filter(
-      ([key]) =>
-        !version || version.fields.includes(key) || config[key] !== undefined,
-    )
-    .filter(([key]) => {
-      const flag = {
-        seed: "supportSeed",
-        watermark: "supportWatermark",
-        cameraFixed: "supportCameraFixed",
-        generateAudio: "supportGenerateAudio",
-      }[key];
-      return (
-        !flag || model?.parameters[flag] !== false || config[key] !== undefined
-      );
-    })
-    .filter(([key]) => !dimensions || !["width", "height"].includes(key))
-    .filter(
-      ([key]) =>
-        capability.kind !== "imageTransform" ||
-        (config.operation === "crop"
-          ? key !== "fit"
-          : !["x", "y"].includes(key)),
-    )
-    .sort(
-      ([a], [b]) =>
-        (configFieldOrder.includes(a) ? configFieldOrder.indexOf(a) : 100) -
-        (configFieldOrder.includes(b) ? configFieldOrder.indexOf(b) : 100),
-    );
+  const { fields, dimensions } = canvasConfigFieldEntries(
+    capability,
+    config,
+    model,
+    { compact, omit },
+  );
   const primary = fields.filter(([key]) => !advancedConfigFields.has(key));
   const advanced = fields.filter(([key]) => advancedConfigFields.has(key));
+  // 外层已承担模型和常用参数时，本表单本身就是“更多参数”，不再折叠第二层。
+  const collapseAdvanced = primary.length > 0 || !omit.has("modelId");
   const advancedError = advanced.some(([key, field]) =>
     configFieldError(
       key,
@@ -170,7 +128,7 @@ export function CanvasConfigFields({
     ));
   return (
     <div className="flex min-w-0 flex-col gap-5">
-      {capability.configFields.modelId && (
+      {capability.configFields.modelId && !omit.has("modelId") && (
         <CanvasModelFields
           capability={capability}
           config={config}
@@ -221,8 +179,12 @@ export function CanvasConfigFields({
           )}
         </div>
       )}
-      {renderFields(primary)}
-      {capability.kind === "imageGeneration" && (
+      {compact ? (
+        <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2">
+          {renderFields(primary)}
+        </div>
+      ) : renderFields(primary)}
+      {capability.kind === "imageGeneration" && !outputOmitted && (
         <CanvasImageOutputFields capability={capability} config={config} model={model} onChange={onChange} disabled={disabled} />
       )}
       {videoRulesOf(model?.parameters)?.fixedGenerateAudio === true && (
@@ -238,7 +200,7 @@ export function CanvasConfigFields({
           disabled={disabled}
         />
       )}
-      {imageSize && capability.kind !== "imageGeneration" && (
+      {imageSize && capability.kind !== "imageGeneration" && !outputOmitted && (
         <p className="text-xs text-primary">
           预计画面尺寸：{imageSize.replace("x", " × ")} px
           {config.width || config.height ? "（已另设自定义尺寸）" : ""}
@@ -253,7 +215,8 @@ export function CanvasConfigFields({
           connectedPorts={connectedPorts}
         />
       )}
-      {!!advanced.length && (
+      {!collapseAdvanced && renderFields(advanced)}
+      {collapseAdvanced && !!advanced.length && (
         <details className="min-w-0 border-t border-border/20 pt-4">
           <summary className="cursor-pointer rounded-lg text-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
             <Settings2 className="mr-2 inline size-4 text-muted-foreground" />
@@ -277,4 +240,76 @@ export function CanvasConfigFields({
       )}
     </div>
   );
+}
+
+const noOmittedFields: ReadonlySet<string> = new Set();
+
+/** 计算节点表单中实际可编辑的配置字段，供表单渲染和外层判断是否还有剩余参数。 */
+export function canvasConfigFieldEntries(
+  capability: CanvasCapability,
+  config: CanvasConfig,
+  model: CanvasModelOption | undefined,
+  { compact = false, omit = noOmittedFields }: { compact?: boolean; omit?: ReadonlySet<string> } = {},
+) {
+  const isAgent = canvasAgentKinds.includes(capability.kind);
+  const version = model?.versions.find(
+    (item) => item.id === config.workflowVersionId,
+  );
+  const dimensions =
+    !!capability.configFields.width &&
+    !!capability.configFields.height &&
+    (!version ||
+      (version.fields.includes("width") && version.fields.includes("height")));
+  const fields = Object.entries(capability.configFields)
+    .filter(([key]) => !omit.has(key))
+    .filter(([key]) => !compact || !["prompt", "additionalPrompt"].includes(key))
+    .filter(([key]) => capability.kind !== "imageGeneration" || !["ratio", "resolution", "width", "height"].includes(key))
+    .filter(([key]) => !isAgent || !agentFormFields.has(key))
+    .filter(
+      ([key]) =>
+        key !== "frameType" ||
+        capability.kind !== "agent" ||
+        String(config.agentType).startsWith("storyboard_frame"),
+    )
+    .filter(
+      ([key, field]) =>
+        ![
+          "resourceId",
+          "modelId",
+          "workflowVersionId",
+          "selectedOutputId",
+          "apiConfigId",
+        ].includes(key) &&
+        !(capability.kind === "comfyui" && key === "resultType") &&
+        !(field.enumValues.length === 1 && config[key] === field.enumValues[0]),
+    )
+    .filter(
+      ([key]) =>
+        !version || version.fields.includes(key) || config[key] !== undefined,
+    )
+    .filter(([key]) => {
+      const flag = {
+        seed: "supportSeed",
+        watermark: "supportWatermark",
+        cameraFixed: "supportCameraFixed",
+        generateAudio: "supportGenerateAudio",
+      }[key];
+      return (
+        !flag || model?.parameters[flag] !== false || config[key] !== undefined
+      );
+    })
+    .filter(([key]) => !dimensions || !["width", "height"].includes(key))
+    .filter(
+      ([key]) =>
+        capability.kind !== "imageTransform" ||
+        (config.operation === "crop"
+          ? key !== "fit"
+          : !["x", "y"].includes(key)),
+    )
+    .sort(
+      ([a], [b]) =>
+        (configFieldOrder.includes(a) ? configFieldOrder.indexOf(a) : 100) -
+        (configFieldOrder.includes(b) ? configFieldOrder.indexOf(b) : 100),
+    );
+  return { fields, dimensions };
 }

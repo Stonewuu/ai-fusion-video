@@ -19,7 +19,6 @@ import { CanvasFlow } from "./editor/canvas-flow";
 import { CanvasContentPanel } from "./library/content-panel";
 import { CanvasMediaPicker } from "./library/media-picker";
 import { CanvasEdgeInspector } from "./inspector/edge-inspector";
-import { CanvasNodeInspector } from "./inspector/node-inspector";
 import { CanvasSelectionInspector } from "./inspector/selection-inspector";
 import { CanvasMediaPreviewDialog } from "./preview/media-preview";
 import { CanvasCreateResourceDialog } from "./forms/create-resource-dialog";
@@ -29,9 +28,13 @@ import { CanvasWorkspaceHeader } from "./workspace/canvas-header";
 import { CanvasWorkspacePanels } from "./workspace/canvas-panels";
 import { CanvasRunsProvider, useCanvasRuns } from "./runs/canvas-runs-provider";
 import { CanvasRunPanel } from "./runs/run-panel";
-import { CanvasMediaImportsProvider } from "./imports/media-imports-provider";
+import {
+  CanvasMediaImportsProvider,
+  useCanvasMediaImports,
+} from "./imports/media-imports-provider";
 import { CanvasImportDetail } from "./imports/import-detail";
 import { CanvasImportPanel } from "./imports/import-panel";
+import { runFinished } from "@/lib/canvas/run-state";
 import {
   CanvasRunPlanDialog,
   type CanvasRunDraft,
@@ -89,6 +92,7 @@ function WorkspaceContent({
   const router = useRouter();
   const store = useCanvasStoreApi();
   const runtime = useCanvasRuns();
+  const imports = useCanvasMediaImports();
   const runtimeRef = useRef(runtime);
   useEffect(() => { runtimeRef.current = runtime; }, [runtime]);
   const snapshot = useCanvas((state) => state.snapshot);
@@ -98,9 +102,10 @@ function WorkspaceContent({
   const pending = useCanvas((state) => state.pending);
   const selection = useCanvas((state) => state.selection);
   const edgeSelection = useCanvas((state) => state.edgeSelection);
-  const [left, setLeft] = useState<CanvasLeftPanel | null>("content");
+  const [left, setLeft] = useState<CanvasLeftPanel | null>(null);
   const [right, setRight] = useState<CanvasRightPanel | null>(null);
   const [mobile, setMobile] = useState<CanvasMobilePanel>(null);
+  const [panelNodeId, setPanelNodeId] = useState<string | null>(null);
   const [visited, setVisited] = useState<CanvasPanel[]>(["content"]);
   const [preview, setPreview] = useState<{
     media: CanvasMediaPreview;
@@ -120,12 +125,15 @@ function WorkspaceContent({
   const inspect = useCallback(
     (id: string) => {
       store.getState().select([id]);
-      openRight("properties");
+      setPanelNodeId(id);
+      setRight((current) => (current === "properties" ? null : current));
+      setMobile(null);
     },
-    [store, openRight],
+    [store],
   );
   const inspectEdge = useCallback(
     (id: string) => {
+      setPanelNodeId(null);
       store.getState().select([], [id]);
       openRight("properties");
     },
@@ -210,19 +218,37 @@ function WorkspaceContent({
     );
   const editable =
     snapshot.permissions.canEdit && !snapshot.document.archived && !pending;
+  const panelBadges: Partial<Record<CanvasPanel, "active" | "attention">> = {
+    ...(imports.pending
+      ? { media: "attention" }
+      : imports.active.length > 0
+        ? { media: "active" }
+        : {}),
+    ...(edgeSelection.length > 0 || selection.length > 1
+      ? { properties: "active" }
+      : {}),
+    ...(runtime.pending || runtime.corrupt
+      ? { runs: "attention" }
+      : runtime.busy || (runtime.run && !runFinished(runtime.run.status))
+        ? { runs: "active" }
+        : {}),
+  };
   const panels = {
     content: <CanvasContentPanel onCreate={openCreate} />,
     media: (
-      <div className="space-y-3 p-4">
-        <h2 className="text-sm font-semibold">媒体素材</h2>
-        <CanvasImportPanel />
-        <p className="text-xs text-muted-foreground">
-          拖到画布，或点击素材放入。支持图片、视频、音频和文档。
-        </p>
+      <div className="flex flex-col gap-3 p-3.5">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="text-[13px] font-medium">媒体素材</h2>
+          <span className="text-[11px] text-muted-foreground">
+            拖拽或点击放入画布
+          </span>
+        </div>
         <CanvasMediaPicker
+          surface="canvas"
           disabled={!editable}
           onSelect={(media) => void addMedia(media)}
         />
+        <CanvasImportPanel />
       </div>
     ),
     comments: <CanvasCommentsPanel />,
@@ -231,8 +257,6 @@ function WorkspaceContent({
     properties:
       edgeSelection.length === 1 && selection.length === 0 ? (
         <CanvasEdgeInspector edgeId={edgeSelection[0]} />
-      ) : selection.length === 1 && edgeSelection.length === 0 ? (
-        <CanvasNodeInspector nodeId={selection[0]} onPreview={showPreview} />
       ) : (
         <CanvasSelectionInspector
           onInspect={inspect}
@@ -263,6 +287,7 @@ function WorkspaceContent({
           right={right}
           mobile={mobile}
           visited={visited}
+          badges={panelBadges}
           content={panels}
           onLeft={(value) => {
             setLeft(value);
@@ -282,6 +307,8 @@ function WorkspaceContent({
           }}
         >
           <CanvasFlow
+            panelNodeId={panelNodeId}
+            onPanelNodeChange={setPanelNodeId}
             onInspect={inspect}
             onInspectEdge={inspectEdge}
             onPreview={showPreview}

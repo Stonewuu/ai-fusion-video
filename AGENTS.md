@@ -41,12 +41,21 @@
 
 ### 按钮
 
-- `@/components/ui/button` 是业务按钮的唯一视觉基线；页面只可调整布局宽度和对齐，不得用 `className` 重写高度、内边距、圆角、字号、颜色、阴影或交互态。
+- 除画布区域外，`@/components/ui/button` 是业务按钮的唯一视觉基线（画布区域见「画布组件」）；页面只可调整布局宽度和对齐，不得用 `className` 重写高度、内边距、圆角、字号、颜色、阴影或交互态。
 - 只使用已有尺寸：`xs`/`icon-xs`=24px，`icon-sm`=32px，`default`/`sm`/`icon`=36px，`lg`/`icon-lg`=40px；同组按钮统一 `gap-2`（8px）。默认文字 14px、图标 16px，紧凑尺寸由组件自动缩小。
-- 同一横向工具条中的文字按钮、图标按钮、分段选择器、开关操作项与输入控件必须同高、垂直居中；主要工具条统一使用 `default` / `icon` 的 36px 高度。响应式收起文字或折叠低频操作时保持高度不变，不混用紧凑尺寸造成高低错落；以浏览器实际渲染尺寸核对，保留焦点外圈的安全空间。
+- 同一横向工具条中的文字按钮、图标按钮、分段选择器、开关操作项与输入控件必须同高、垂直居中；主要工具条统一使用 `default` / `icon` 的 36px 高度（画布区域工具条为 32px，见「画布组件」）。响应式收起文字或折叠低频操作时保持高度不变，不混用紧凑尺寸造成高低错落；以浏览器实际渲染尺寸核对，保留焦点外圈的安全空间。
 - 只使用已有语义：`default`=区域唯一主操作，`outline`=普通次操作，`secondary`=低强调/成组操作，`ghost`=工具栏/导航/轻操作，`destructive`/`destructive-ghost`=危险操作，`ai`/`image`/`frame`/`video`=对应 AI 能力，`link`=文本链接。禁止在页面复制这些配色或渐变。
 - 文案使用简短动词；解释放 Tooltip 或 `title`。每个视觉区域仅一个主按钮；纯图标按钮必须有 `aria-label` 或 `title`；保留共享焦点环、按压、加载和禁用态。
 - 原生 `<button>` 仅用于标签页、分段选择器、列表行和非业务图标控件，仍须遵守共享按钮的尺寸、圆角、焦点和禁用规范。
+
+### 画布组件
+
+- 画布区域（节点、节点悬浮面板、悬浮停靠栏与抽屉、悬浮工具条、选中工具条、右键与添加菜单、底部状态栏、空状态）统一使用 `components/canvas/ui/` 的画布组件：`CanvasButton`、`CanvasIconButton`、`CanvasInput` / `CanvasTextarea`、`CanvasPicker`、`CanvasSegmented`、`CanvasFloatingBar` / `CanvasPanel`。Dialog、Sheet 及画布以外的页面继续使用 `components/ui/`；同一视觉区域不得混用两套组件。
+- 尺寸与精密圆角：默认 32px（`md` / `icon`，圆角 `10px`），节点内紧凑操作 28px（`sm` / `icon-sm`，圆角 `8px`），节点角标与翻页 24px（`icon-xs`，圆角 `8px`）；悬浮工具条高 40px（圆角 `14px`）、节点卡片与添加菜单圆角 `16px`、快捷面板圆角 `20px`。同一画布工具条内控件同高、间距 4px；节点外侧圆形按钮通过 `shape="round"` 启用 `rounded-full`。
+- 语义：`primary`=区域唯一主操作，`generate`=画布生成与运行主操作（克制的反色单色高质感），`secondary`=带细腻微边的实体次操作（参数芯片、素材标签与成组操作），`ghost`=工具条、菜单和轻操作（`aria-pressed` 表示开启），`danger`=危险操作，`overlay`=叠在图片、视频或画布背景上的浮起按钮。
+- 输入控件为清透微底配细微边框，聚焦时切至背景色、品牌色描边与柔和 3px 外圈；画布内焦点环统一使用品牌色。滚动区同样保留至少 4px 的焦点安全空间。模型选择（`CanvasPicker` / `CanvasSelect`）统一展示厂商图标与模型编码，选项较多时提供实时搜索。
+- 纯图标按钮使用 `CanvasIconButton`，`label` 同时作为无障碍名称与悬停提示，可附快捷键；Popover 触发器等需要 `render` 组合的场景使用 `CanvasButton` 并设置 `aria-label`。
+- 使用处只调整布局（宽度、对齐、`ml-auto` 等），不改写高度、圆角、颜色和交互态；需要新外观时在 `components/canvas/ui/` 中扩展变体，不修改 `components/ui/`。
 
 ### 表面与毛玻璃
 

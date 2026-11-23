@@ -33,6 +33,7 @@ public class ComposeVideoProcessor {
     private final MediaResourceQueries resources;
     private final MediaContentReader content;
     private final MediaProcessRunner processes;
+    private final ComposeClipNormalizer clips;
     @Value("${video.compose.ffmpeg-path:ffmpeg}")
     private String ffmpeg = "ffmpeg";
 
@@ -66,22 +67,22 @@ public class ComposeVideoProcessor {
         }
         int width = first.width() / 2 * 2;
         int height = first.height() / 2 * 2;
-        List<Path> normalized = new ArrayList<>();
+        List<ComposeClipNormalizer.Clip> normalized = new ArrayList<>();
         for (int index = 0; index < ids.size(); index++) {
             var media = resources.get(ids.get(index).asText(), job.context().actor());
             Path source = work.resolve("input-" + index + ".media");
             content.copy(media.id(), job.context().actor(), source, MediaIntakeService.MAX_RESULT_BYTES);
             Path target = work.resolve("clip-" + index + ".mp4");
             jobs.checkpoint(claim, checkpoint, "合成镜头 " + (index + 1) + "/" + ids.size());
-            processes.run(normalize(source, target, width, height, media.content().hasAudio()), work, target,
-                    () -> jobs.check(claim));
-            normalized.add(target);
+            normalized.add(clips.normalize(source, target, work, width, height, media.content().hasAudio(),
+                    () -> jobs.check(claim)));
             Files.delete(source);
         }
         Path list = work.resolve("concat.txt");
-        // 文件名由服务端生成；concat 文件相对于自身目录解析，不拼接用户路径。
+        // 文件名由服务端生成；下一镜头按画面时长开始，避免音频编码尾部影响镜头边界。
         Files.writeString(list,
-                String.join("\n", normalized.stream().map(path -> "file '" + path.getFileName() + "'").toList()),
+                String.join("\n", normalized.stream().map(clip -> "file '" + clip.path().getFileName()
+                        + "'\nduration " + clip.durationSeconds().toPlainString()).toList()),
                 StandardCharsets.UTF_8);
         Path result = work.resolve("base.mp4");
         processes.run(
@@ -94,18 +95,4 @@ public class ComposeVideoProcessor {
         return jobs.checkpoint(claim, checkpoint, "镜头合成完成");
     }
 
-    private List<String> normalize(Path input, Path output, int width, int height, boolean audio) {
-        List<String> command = new ArrayList<>(
-                List.of(ffmpeg, "-v", "error", "-nostdin", "-y", "-protocol_whitelist", "file,pipe", "-i",
-                        input.toString()));
-        if (!audio) {
-            command.addAll(List.of("-f", "lavfi", "-i", "anullsrc=channel_layout=stereo:sample_rate=48000"));
-        }
-        command.addAll(List.of("-map", "0:v:0", "-map", audio ? "0:a:0" : "1:a:0", "-vf",
-                "scale=" + width + ":" + height + ":force_original_aspect_ratio=decrease,pad=" + width + ":" + height + ":(ow-iw)/2:(oh-ih)/2,setsar=1,fps=30",
-                "-af", "apad", "-shortest", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt",
-                "yuv420p",
-                "-c:a", "aac", "-ar", "48000", "-ac", "2", "-video_track_timescale", "90000", output.toString()));
-        return command;
-    }
 }

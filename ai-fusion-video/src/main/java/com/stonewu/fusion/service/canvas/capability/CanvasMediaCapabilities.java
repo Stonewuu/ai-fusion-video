@@ -23,6 +23,7 @@ final class CanvasMediaCapabilities {
         result.add(media(CanvasNodeKind.DOCUMENT, "PDF 文档", CanvasValueType.DOCUMENT));
         result.add(capability(CanvasNodeKind.IMAGE_GENERATION, "生成图片", "generation", "image", false,
                 fields(field("modelId", integer(1, MAX_SAFE_ID, false)), field("prompt", text(32000)),
+                        field("additionalPrompt", text(32000)),
                         field("ratio", text(32)), field("resolution", text(64)), field("count", integer(1, 64, false)),
                         field("width", integer(1, 16384, false)), field("height", integer(1, 16384, false))),
                 List.of(port("prompt", CanvasValueType.TEXT, false, true), contextPort(),
@@ -86,6 +87,7 @@ final class CanvasMediaCapabilities {
 
     private static Map<String, CanvasConfigField> videoFields() {
         return fields(field("modelId", integer(1, MAX_SAFE_ID, false)), field("prompt", text(32000)),
+                field("additionalPrompt", text(32000)),
                 field("ratio", text(32)), field("resolution", text(64)), field("duration", integer(-1, 3600, false)),
                 field("count", integer(1, 64, false)), field("seed", integer(-1, MAX_SAFE_ID, false)),
                 field("watermark", flag()), field("generateAudio", flag()), field("cameraFixed", flag()));

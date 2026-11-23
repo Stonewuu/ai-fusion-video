@@ -4,6 +4,7 @@ import type { CanvasStore } from "@/lib/store/canvas-store";
 import { saveCanvasAssistantDrafts } from "./assistant-session";
 import { activePlanNode, canRunCanvasNode, canvasNodeDependencies, reusableNodeDependencies } from "./node-execution";
 import { defaultRunBudget } from "./run-state";
+import { hasCanvasGenerationComposer, missingGenerationSources } from "./generation";
 
 /** 节点入口沿用正式预检与草稿保存，不读取选区来扩大执行范围。 */
 export async function prepareCanvasNodeRun(store: CanvasStore, userId: number, scope: GenerationScope, nodeId: string) {
@@ -26,6 +27,12 @@ export async function prepareCanvasNodeRun(store: CanvasStore, userId: number, s
   const capability = current.catalog?.nodes.find((node) => node.kind === target?.kind);
   if (!target || !capability || !canRunCanvasNode(capability)) throw new Error("此节点不需要单独运行。");
   const latest = await canvasRunApi.nodeActivities(canvasId);
+  if (hasCanvasGenerationComposer(target)) {
+    const missing = missingGenerationSources(current.snapshot.graph, current.catalog!, nodeId, latest);
+    if (missing.length) {
+      throw new Error(`请先完成${missing.map((node) => `“${node.title}”`).join("、")}并选用结果。`);
+    }
+  }
   const reuse = reusableNodeDependencies(current.snapshot.graph, nodeId, latest);
   const plan = await canvasRunApi.plan(canvasId, {
     expectedRevision: current.snapshot.document.revision,

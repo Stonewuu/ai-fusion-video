@@ -105,7 +105,7 @@ class CanvasModelGraphPolicyTests {
 
     @Test void requiresPublishedVersionBelongingToTheSelectedWorkflow() {
         var version = new CanvasModelCatalog.Version(31,2,Map.of("prompt",input(1)),List.of("prompt"), Map.of(), null);
-        when(models.require(9)).thenReturn(new CanvasModelCatalog.Option(9,"测试工作流","comfyui","image",Map.of(),Map.of(),List.of(version),null));
+        when(models.require(9)).thenReturn(new CanvasModelCatalog.Option(9,"测试工作流",null,null,null,"comfyui","image",Map.of(),Map.of(),List.of(version),null));
         var invalid = node("c",CanvasNodeKind.COMFYUI,config().put("modelId",9).put("resultType","image").put("workflowVersionId",30));
         assertThatThrownBy(() -> policy.validateAll(graph(List.of(invalid),List.of()),Set.of())).isInstanceOf(CanvasException.class);
         var valid = node("c",CanvasNodeKind.COMFYUI,config().put("modelId",9).put("resultType","image").put("workflowVersionId",31));
@@ -171,7 +171,7 @@ class CanvasModelGraphPolicyTests {
 
     @Test void draftWorkflowBindingStillRequiresVersionAndOutputToBelongToSelectedModel() {
         var version = new CanvasModelCatalog.Version(31, 2, Map.of("prompt", input(1)), List.of("prompt"), Map.of(), null);
-        when(models.require(9)).thenReturn(new CanvasModelCatalog.Option(9, "工作流", "comfyui", "image",
+        when(models.require(9)).thenReturn(new CanvasModelCatalog.Option(9, "工作流", null, null, null, "comfyui", "image",
                 Map.of(), Map.of(), List.of(version), null));
         var incomplete = node("draft", CanvasNodeKind.COMFYUI, config().put("modelId", 9));
         assertThatCode(() -> policy.validateDraft(graph(List.of(incomplete), List.of()))).doesNotThrowAnyException();
@@ -182,7 +182,7 @@ class CanvasModelGraphPolicyTests {
     }
 
     private CanvasModelCatalog.Option option(String kind,Map<String,CanvasModelCatalog.Input> inputs,Map<String,Object> parameters,List<CanvasModelCatalog.Version> versions) {
-        return new CanvasModelCatalog.Option(9,"测试模型",kind,kind,inputs,parameters,versions,null);
+        return new CanvasModelCatalog.Option(9,"测试模型",null,null,null,kind,kind,inputs,parameters,versions,null);
     }
     private CanvasModelCatalog.Input input(int max) { return new CanvasModelCatalog.Input(max,0); }
     private ObjectNode config() { return json.createObjectNode(); }

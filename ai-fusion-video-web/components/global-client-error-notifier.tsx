@@ -6,6 +6,10 @@ import { notifyClientError } from "@/lib/client-error";
 export function GlobalClientErrorNotifier() {
   useEffect(() => {
     const handleError = (event: ErrorEvent) => {
+      // 浏览器把未完成的尺寸通知延后到下一帧；保留控制台诊断，不将其展示为操作失败。
+      if (!event.error && event.message === "ResizeObserver loop completed with undelivered notifications.") {
+        return;
+      }
       const message = notifyClientError(
         event.error ?? event.message,
         "页面运行异常"

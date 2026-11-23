@@ -20,6 +20,7 @@ import {
 import {
   CanvasBooleanField,
   CanvasChoiceField,
+  CanvasFieldHint,
   CanvasFieldReset,
   CanvasNumberField,
 } from "./field-controls";
@@ -64,13 +65,28 @@ export function CanvasConfigFieldEditor({
     onChange(name, next);
   const customChoice =
     name === "separator" || (kind === "videoCompose" && name === "resolution");
+  const hint =
+    !connected && !["prompt", "instruction", "negativePrompt"].includes(name)
+      ? fieldHints[name]
+      : undefined;
+  const countMin = bounds.min ?? 1;
+  // 候选数量范围较小时直接平铺可选值，比步进器少一次输入。
+  const countChoices =
+    name === "count" && bounds.max !== undefined && bounds.max - countMin <= 5
+      ? Array.from({ length: bounds.max - countMin + 1 }, (_, index) => countMin + index)
+      : null;
+  const countUnit =
+    kind === "imageGeneration" ? "张" : kind === "videoGeneration" ? "条" : "个";
   return (
     <div className="flex min-w-0 flex-col gap-2" data-canvas-field={name}>
       <div className="flex min-h-6 items-center justify-between gap-2">
-        <label id={id + "-label"} htmlFor={id} className="text-sm font-medium">
-          {label}
-          {field.required ? " *" : ""}
-        </label>
+        <div className="flex min-w-0 items-center gap-1">
+          <label id={id + "-label"} htmlFor={id} className="truncate text-sm font-medium">
+            {label}
+            {field.required && <span className="text-destructive"> *</span>}
+          </label>
+          {hint && <CanvasFieldHint label={label} text={hint} />}
+        </div>
         {!field.required &&
           value !== undefined &&
           !connected &&
@@ -181,6 +197,18 @@ export function CanvasConfigFieldEditor({
             />
           )}
         </div>
+      ) : countChoices ? (
+        <CanvasSegmentedControl
+          label={label}
+          value={String(number ?? countMin)}
+          className="w-full"
+          options={countChoices.map((item) => ({
+            value: String(item),
+            label: `${item}${countUnit}`,
+            disabled,
+          }))}
+          onChange={(next) => update(Number(next))}
+        />
       ) : field.type === "number" || field.type === "integer" ? (
         <CanvasNumberField
           id={id}
@@ -266,13 +294,6 @@ export function CanvasConfigFieldEditor({
           {error}
         </p>
       )}
-      {!connected &&
-        fieldHints[name] &&
-        !["prompt", "instruction", "negativePrompt"].includes(name) && (
-          <p className="text-xs leading-relaxed text-muted-foreground">
-            {fieldHints[name]}
-          </p>
-        )}
     </div>
   );
 }

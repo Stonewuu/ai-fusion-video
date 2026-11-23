@@ -21,6 +21,9 @@ export function userFacingError(message: string | null | undefined): string {
     }
   }
   if (text === "请求失败") return "暂时无法完成请求，请稍后重试。";
+  if (text === "业务对象已删除或不存在") {
+    return "找不到此内容，请更换来源。";
+  }
   if (/请求结果未确认|提交意图已保存|未取得(?:受理)?回执|调用状态待确认|UNKNOWN_SUBMISSION/.test(text)) {
     return "远端结果未知，可在运行与通知的任务详情中查看记录。";
   }

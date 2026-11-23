@@ -38,6 +38,7 @@ public class CanvasApprovalText {
             Map.entry("INT", "内景"),
             Map.entry("action", "操作"),
             Map.entry("add", "新增"),
+            Map.entry("additionalPrompt", "补充要求"),
             Map.entry("agentType", "智能体"),
             Map.entry("skillMode", "Skill 使用方式"),
             Map.entry("skillNames", "工作规范"),

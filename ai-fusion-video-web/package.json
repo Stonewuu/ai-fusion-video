@@ -1,6 +1,6 @@
 {
   "name": "ai-fusion-video-web",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "private": true,
   "description": "Web application for the AI-driven video creation platform",
   "license": "MIT",
@@ -18,7 +18,7 @@
     "lint": "eslint",
     "test:storyboard": "node --test scripts/storyboard-refresh.test.mjs",
     "clean": "rimraf .next",
-    "test:canvas": "node --test scripts/canvas-editor.test.mjs scripts/canvas-layout.test.mjs scripts/canvas-layout-worker.test.mjs",
+    "test:canvas": "node --test scripts/canvas-editor.test.mjs scripts/canvas-layout.test.mjs scripts/canvas-layout-worker.test.mjs scripts/canvas-generation.test.mjs",
     "test:generation": "node --test scripts/generation-execution.test.mjs"
   },
   "dependencies": {

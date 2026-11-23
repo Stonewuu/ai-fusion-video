@@ -6,10 +6,15 @@ import { CanvasNodeTypeIcon } from "../shared/canvas-node-icon";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Search, Plus, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { compatibleNodes, type CompatibleNode } from "@/lib/canvas/graph";
+import { CanvasButton } from "../ui/canvas-button";
+import { CanvasIconButton } from "../ui/canvas-icon-button";
+import { CanvasInput } from "../ui/canvas-field";
+import {
+  compatibleNodes,
+  compatibleSources,
+  type CompatibleNode,
+} from "@/lib/canvas/graph";
 import { canvasCategories, canvasPortLabels } from "@/lib/canvas/labels";
 import type { CanvasAddIntent, CanvasCapability } from "@/lib/canvas/types";
 import { cn } from "@/lib/utils";
@@ -40,9 +45,11 @@ export function CanvasNodeMenu({
 }) {
   const snapshot = useCanvas((state) => state.snapshot!);
   const catalog = useCanvas((state) => state.catalog!);
+  const linking = intent.source ?? intent.target;
+  const isPredecessor = !!intent.target;
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<string | null>(
-    intent.source ? null : "common",
+    linking ? null : "common",
   );
   const [active, setActive] = useState(0);
   const menu = useRef<HTMLDivElement>(null);
@@ -78,29 +85,46 @@ export function CanvasNodeMenu({
       window.removeEventListener("scroll", update, true);
     };
   }, [intent]);
-  const source = snapshot.graph.nodes.find(
-    (node) => node.id === intent.source?.nodeId,
+  const anchorNode = snapshot.graph.nodes.find(
+    (node) => node.id === linking?.nodeId,
   );
-  const output = catalog.nodes
-    .find((item) => item.kind === source?.kind)
-    ?.outputs.find((port) => port.id === intent.source?.portId);
-  const outputLabel = output ? canvasPortLabels[output.id] ?? output.label : null;
+  const anchorCapability = catalog.nodes.find(
+    (item) => item.kind === anchorNode?.kind,
+  );
+  const anchorPort = isPredecessor
+    ? anchorCapability?.inputs.find((port) => port.id === intent.target?.portId)
+    : anchorCapability?.outputs.find((port) => port.id === intent.source?.portId);
+  const anchorPortLabel = anchorPort
+    ? (canvasPortLabels[anchorPort.id] ?? anchorPort.label)
+    : null;
   const stale =
-    !!intent.source &&
-    (!source || source.configVersion !== intent.source.configVersion);
+    !!linking &&
+    (!anchorNode || anchorNode.configVersion !== linking.configVersion);
   const choices = useMemo<CanvasNodeChoice[]>(() => {
     if (intent.source) {
-      return source && output
+      return anchorNode && anchorPort
         ? compatibleNodes(
-            source,
-            output,
-            catalog.nodes,
-            snapshot.document.projectId,
-          )
-            .map((connection) => ({
-              capability: connection.capability,
-              connection,
-            }))
+          anchorNode,
+          anchorPort,
+          catalog.nodes,
+          snapshot.document.projectId,
+        ).map((connection) => ({
+          capability: connection.capability,
+          connection,
+        }))
+        : [];
+    }
+    if (intent.target) {
+      return anchorNode && anchorPort
+        ? compatibleSources(
+          anchorNode,
+          anchorPort,
+          catalog.nodes,
+          snapshot.document.projectId,
+        ).map((connection) => ({
+          capability: connection.capability,
+          connection,
+        }))
         : [];
     }
     return catalog.nodes
@@ -110,8 +134,9 @@ export function CanvasNodeMenu({
       .map((capability) => ({ capability }));
   }, [
     intent.source,
-    source,
-    output,
+    intent.target,
+    anchorNode,
+    anchorPort,
     catalog,
     snapshot.document.projectId,
   ]);
@@ -154,12 +179,12 @@ export function CanvasNodeMenu({
     <div
       ref={menu}
       className={cn(
-        "canvas-node-menu fixed z-70 flex max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-2xl border border-border/40 bg-popover/80 shadow-xl backdrop-blur-xl",
-        intent.source ? "w-88" : "w-80",
+        "canvas-node-menu fixed z-70 flex max-w-[calc(100vw-1rem)] flex-col overflow-hidden rounded-[16px] border border-foreground/[0.09] bg-popover/95 shadow-[0_4px_16px_rgba(0,0,0,0.08),0_20px_48px_-12px_rgba(0,0,0,0.16)] backdrop-blur-2xl dark:border-white/[0.12] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_20px_48px_rgba(0,0,0,0.58)]",
+        linking ? "w-88" : "w-80",
       )}
-      style={{ left: menuPosition.x, top: menuPosition.y, maxHeight: Math.min(intent.source ? 520 : 420, window.innerHeight - 16) }}
+      style={{ left: menuPosition.x, top: menuPosition.y, maxHeight: Math.min(linking ? 520 : 420, window.innerHeight - 16) }}
       role="dialog"
-      aria-label={intent.source ? "添加后续节点" : "添加节点"}
+      aria-label={intent.source ? "添加后续节点" : isPredecessor ? "添加前置节点" : "添加节点"}
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={(event) => {
         if (event.nativeEvent.isComposing) {
@@ -202,34 +227,35 @@ export function CanvasNodeMenu({
       <div className="flex shrink-0 flex-col gap-2 border-b border-border/20 p-3">
         <div className="flex items-center justify-between gap-2">
           <p className="text-sm font-medium">
-            {intent.source ? "添加后续节点" : "添加节点"}
+            {intent.source ? "添加后续节点" : isPredecessor ? "添加前置节点" : "添加节点"}
           </p>
-          <Button
-            variant="ghost"
+          <CanvasIconButton
             size="icon-xs"
-            title="关闭添加菜单"
-            aria-label="关闭添加菜单"
+            label="关闭"
+            shortcut="Esc"
             onClick={() => onClose(true)}
           >
             <X />
-          </Button>
+          </CanvasIconButton>
         </div>
-        {source && output && (
+        {anchorNode && anchorPort && (
           <p
             className="truncate text-xs text-muted-foreground"
-            title={`来自「${source.title}」的${outputLabel}输出`}
+            title={
+              isPredecessor
+                ? `连接到「${anchorNode.title}」的${anchorPortLabel}输入`
+                : `来自「${anchorNode.title}」的${anchorPortLabel}输出`
+            }
           >
-            来自「{source.title}」的{outputLabel}输出
-          </p>
-        )}
-        {!intent.source && (
-          <p className="text-xs text-muted-foreground">
-            选择类型直接添加，随后在右侧填写内容或配置模型。
+            {isPredecessor
+              ? `连接到「${anchorNode.title}」的${anchorPortLabel}输入`
+              : `来自「${anchorNode.title}」的${anchorPortLabel}输出`}
           </p>
         )}
         <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
-          <Input
+          <Search className="pointer-events-none absolute left-3 top-2 size-4 text-muted-foreground" />
+          <CanvasInput
+            name="canvas-node-search"
             className="pl-9"
             value={search}
             onChange={(event) => {
@@ -249,12 +275,12 @@ export function CanvasNodeMenu({
         <div
           className={cn(
             "gap-2",
-            intent.source ? "grid grid-cols-3" : "flex flex-wrap",
+            linking ? "grid grid-cols-3" : "flex flex-wrap",
           )}
           data-categories
           aria-label="节点分类"
         >
-          {[...(!intent.source ? ["common"] : []), null, ...categories].map(
+          {[...(!linking ? ["common"] : []), null, ...categories].map(
             (value) => {
               const label = value === "common"
                 ? "常用"
@@ -262,13 +288,10 @@ export function CanvasNodeMenu({
                   ? canvasCategories[value]
                   : "全部";
               return (
-                <Button
+                <CanvasButton
                   key={value ?? "all"}
-                  size="xs"
-                  className={intent.source ? "min-w-0 w-full" : undefined}
-                  variant={
-                    !search.trim() && category === value ? "secondary" : "ghost"
-                  }
+                  size="sm"
+                  className={linking ? "min-w-0 w-full" : undefined}
                   title={label}
                   aria-pressed={!search.trim() && category === value}
                   onClick={() => {
@@ -278,7 +301,7 @@ export function CanvasNodeMenu({
                   }}
                 >
                   <span className="truncate">{label}</span>
-                </Button>
+                </CanvasButton>
               );
             },
           )}
@@ -286,31 +309,34 @@ export function CanvasNodeMenu({
       </div>
       {stale ? (
         <p role="alert" className="p-3 text-sm text-destructive">
-          源节点已发生变化，请重新选择输出端口。
+          {isPredecessor
+            ? "目标节点已发生变化，请重新选择输入端口。"
+            : "源节点已发生变化，请重新选择输出端口。"}
         </p>
       ) : (
         <div
           id="canvas-node-options"
           role="listbox"
-          className="flex min-h-0 flex-col gap-2 overflow-y-auto p-2"
+          className="flex min-h-0 flex-col gap-0.5 overflow-y-auto p-1"
         >
           {filtered.map((choice, optionIndex) => {
-            const inputLabel = choice.connection
+            const portLabel = choice.connection
               ? canvasPortLabels[choice.connection.port.id] ?? choice.connection.port.label
               : null;
             return (
-              <Button
+              <CanvasButton
                 type="button"
                 key={`${choice.capability.kind}:${choice.connection?.port.id ?? ""}`}
                 id={`canvas-node-option-${optionIndex}`}
                 data-option-index={optionIndex}
                 variant={optionIndex === index ? "secondary" : "ghost"}
-                size={choice.connection ? "default" : "sm"}
                 className="w-full justify-start"
                 role="option"
                 tabIndex={-1}
                 title={choice.connection
-                  ? `添加「${choice.capability.label}」，连接到「${inputLabel}」输入\n${nodeGuidance[choice.capability.kind]}`
+                  ? (isPredecessor
+                    ? `添加「${choice.capability.label}」，从「${portLabel}」输出接入当前节点\n${nodeGuidance[choice.capability.kind]}`
+                    : `添加「${choice.capability.label}」，连接到「${portLabel}」输入\n${nodeGuidance[choice.capability.kind]}`)
                   : nodeGuidance[choice.capability.kind]}
                 aria-selected={optionIndex === index}
                 onPointerMove={() => setActive(optionIndex)}
@@ -326,7 +352,9 @@ export function CanvasNodeMenu({
                       variant="secondary"
                       className="min-w-0 max-w-40 font-normal text-muted-foreground"
                     >
-                      <span className="truncate">接入：{inputLabel}</span>
+                      <span className="truncate">
+                        {isPredecessor ? `输出：${portLabel}` : `接入：${portLabel}`}
+                      </span>
                     </Badge>
                   )}
                 </span>
@@ -337,12 +365,16 @@ export function CanvasNodeMenu({
                     {canvasCategories[choice.capability.category]}
                   </span>
                 )}
-              </Button>
+              </CanvasButton>
             );
           })}
           {!filtered.length && (
             <p className="p-3 text-sm text-muted-foreground">
-              {intent.source ? "没有找到匹配的后续步骤。请换一个关键词，或选择其他输出连接点。" : "没有找到匹配的节点。试试“图片”“分镜”或切换分类。"}
+              {intent.source
+                ? "没有找到匹配的后续步骤。请换一个关键词，或选择其他输出连接点。"
+                : isPredecessor
+                  ? "没有找到匹配的前置节点。请换一个关键词，或选择其他输入连接点。"
+                  : "没有找到匹配的节点。试试“图片”“分镜”或切换分类。"}
             </p>
           )}
         </div>

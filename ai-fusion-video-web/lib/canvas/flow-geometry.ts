@@ -1,5 +1,6 @@
 import { Position, type NodeHandle } from "@xyflow/react";
 import type { CanvasCapability, CanvasNode } from "./types";
+import { isCanvasGenerationNode } from "./generation";
 
 export { canvasGraphHierarchy } from "./hierarchy";
 
@@ -14,8 +15,9 @@ export function canvasNodeGeometry(
   collapsed: boolean,
   measured?: { width?: number; height?: number },
 ) {
-  const width = measured?.width ?? node.layout.width ?? 300;
+  const width = Math.max(measured?.width ?? node.layout.width ?? 300, isCanvasGenerationNode(node) ? 360 : 0);
   const ports = [...capability.inputs, ...capability.outputs];
+  const generation = isCanvasGenerationNode(node);
   const rich =
     !!node.resource ||
     ["image", "video", "audio", "document"].includes(node.kind);
@@ -24,7 +26,7 @@ export function canvasNodeGeometry(
       ? collapsed
         ? 64
         : (measured?.height ?? node.layout.height ?? 400)
-      : (measured?.height ?? (rich ? 320 : 160) + ports.length * 32);
+      : (measured?.height ?? (generation ? width * 9 / 16 + 24 : (rich ? 320 : 160) + ports.length * 32));
   const handle = (
     id: string,
     output: boolean,
@@ -48,7 +50,10 @@ export function canvasNodeGeometry(
         handle(
           port.id,
           index >= capability.inputs.length,
-          height - (ports.length - index) * 32 + 16,
+          generation
+            ? height * (0.25 + 0.7 * ((index >= capability.inputs.length ? index - capability.inputs.length : index) + 1)
+              / ((index >= capability.inputs.length ? capability.outputs.length : capability.inputs.length) + 1))
+            : height - (ports.length - index) * 32 + 16,
         ),
       ),
     );

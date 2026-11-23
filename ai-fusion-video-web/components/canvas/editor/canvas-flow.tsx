@@ -15,9 +15,7 @@ import { memo, useCallback, useMemo, useRef, useState } from "react";
 import {
   Background,
   BackgroundVariant,
-  ControlButton,
   ConnectionLineType,
-  Controls,
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
@@ -27,11 +25,11 @@ import {
   type ReactFlowProps,
 } from "@xyflow/react";
 import { useReducedMotion } from "framer-motion";
-import { Scan } from "lucide-react";
 import { useTheme } from "next-themes";
 import { toast } from "sonner";
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import { worldPosition } from "@/lib/canvas/graph";
+import { nearbyNodePosition } from "@/lib/canvas/placement";
 import { canvasNodeColor } from "@/lib/canvas/node-appearance";
 import { CANVAS_MAX_ZOOM, CANVAS_MIN_ZOOM } from "@/lib/canvas/viewport-limits";
 import { isEditableTarget } from "@/lib/canvas/layout-actions";
@@ -45,7 +43,7 @@ import { CanvasSearchDialog } from "./canvas-search-dialog";
 import { CanvasHelpDialog } from "./canvas-help-dialog";
 import { CanvasEmptyState } from "./canvas-empty-state";
 import { CanvasViewportStatus } from "./canvas-status";
-import { CanvasNodeMenu } from "./node-menu";
+import { CanvasNodeMenu, type CanvasNodeChoice } from "./node-menu";
 import { useCanvasCreateNode } from "./use-create-node";
 import { CanvasContextActions } from "./context-actions";
 import { CanvasFlowNotices } from "./flow-notices";
@@ -53,6 +51,12 @@ import { buildCanvasSelectionActions } from "./build-context-actions";
 import { CanvasSelectionActions } from "./toolbar-selection-actions";
 import { useCanvasViewport } from "./use-viewport";
 import { createCanvasGestureGate } from "./gesture-gate";
+import { canvasNodePanelKind, hasCanvasQuickPanel } from "@/lib/canvas/generation";
+import { CanvasNodePanel } from "../generation/node-panel";
+import { GenerationComposer } from "../generation/generation-composer";
+import { TextComposer } from "../generation/text-composer";
+import { MediaNodePanel } from "../generation/media-node-panel";
+import { NodeFloatingPanel } from "../generation/node-floating-panel";
 import { CanvasAssistantBridge } from "../agent/canvas-assistant-bridge";
 import {
   EMPTY_AGENT_NODES,
@@ -65,6 +69,8 @@ const nodeTypes = { canvas: CanvasNodeRenderer };
 const edgeTypes = { canvas: CanvasEdgeRenderer };
 
 interface Props {
+  panelNodeId: string | null;
+  onPanelNodeChange: (id: string | null) => void;
   onInspect: (id: string) => void;
   onInspectEdge: (id: string) => void;
   onPreview: (media: CanvasMediaPreview, returnFocus?: HTMLElement) => void;
@@ -82,6 +88,8 @@ export const CanvasFlow = memo(function CanvasFlow(props: Props) {
 });
 
 function CanvasFlowEditor({
+  panelNodeId,
+  onPanelNodeChange,
   onInspect,
   onInspectEdge,
   onPreview,
@@ -99,6 +107,15 @@ function CanvasFlowEditor({
   const catalog = useCanvas((state) => state.catalog!);
   const selection = useCanvas((state) => state.selection);
   const edgeSelection = useCanvas((state) => state.edgeSelection);
+  // 悬浮面板只由点击、“查看节点”或新建节点打开；拖动会选中节点，但不应弹出面板。
+  const panelNode =
+    selection.length === 1 &&
+    edgeSelection.length === 0 &&
+    selection[0] === panelNodeId
+      ? snapshot.graph.nodes.find(
+          (node) => node.id === panelNodeId && hasCanvasQuickPanel(node),
+        )
+      : undefined;
   const pending = useCanvas((state) => state.pending);
   const focusRequest = useCanvas((state) => state.focusRequest);
   const editable =
@@ -114,7 +131,14 @@ function CanvasFlowEditor({
   const region = useRef<HTMLDivElement>(null);
   const canvasArea = useRef<HTMLDivElement>(null);
   const [intent, setIntent] = useState<CanvasAddIntent | null>(null);
-  const createNode = useCanvasCreateNode(onInspect);
+  const inspect = useCallback(
+    (id: string) => {
+      onPanelNodeChange(id);
+      onInspect(id);
+    },
+    [onInspect, onPanelNodeChange],
+  );
+  const createNode = useCanvasCreateNode(inspect);
   const [context, setContext] = useState<{
     position: { x: number; y: number };
     nodeId?: string;
@@ -214,6 +238,35 @@ function CanvasFlowEditor({
     },
     [store],
   );
+  const closePanel = useCallback(() => {
+    onPanelNodeChange(null);
+    store.getState().select([]);
+    region.current?.focus({ preventScroll: true });
+  }, [onPanelNodeChange, store]);
+  // 快捷面板里的“下一步”：在右侧就近的空位创建已连好线的下游节点，并直接打开它的面板。
+  const createNext = useCallback(
+    (id: string, portId: string, choice: CanvasNodeChoice) => {
+      const current = store.getState().snapshot!.graph;
+      const node = current.nodes.find((item) => item.id === id)!;
+      const origin = worldPosition(node, current.nodes);
+      const ports = Math.max(choice.capability.inputs.length, choice.capability.outputs.length);
+      const position = nearbyNodePosition(
+        current.nodes,
+        { x: origin.x + (node.layout.width ?? 300) + 80, y: origin.y },
+        { width: 300, height: Math.max(320, 128 + 32 * ports) },
+        Object.fromEntries(flow.getNodes().map((item) => [item.id, item.measured])),
+      );
+      void createNode(
+        {
+          screen: { x: 0, y: 0 },
+          position,
+          source: { nodeId: id, portId, configVersion: node.configVersion },
+        },
+        choice,
+      );
+    },
+    [store, createNode, flow],
+  );
   const { nodes, edges, hidden } = useCanvasFlowProjection({
     snapshot,
     catalog,
@@ -263,7 +316,7 @@ function CanvasFlowEditor({
       region,
       perform,
       onAdd: addAtCenter,
-      onInspect,
+      onInspect: inspect,
       onMode: setPointerMode,
       onSearch: () => setSearching(true),
       onFit: fit,
@@ -341,9 +394,9 @@ function CanvasFlowEditor({
           event.target.closest("button,a,.react-flow__handle")
         )
       )
-        onInspect(node.id);
+        inspect(node.id);
     },
-    [onInspect, pointerMode],
+    [inspect, pointerMode],
   );
   const onEdgeClick = useCallback<
     NonNullable<ReactFlowProps<CanvasFlowNode>["onEdgeClick"]>
@@ -401,6 +454,9 @@ function CanvasFlowEditor({
       onCopy={transfer.onCopy}
       onPaste={transfer.onPaste}
       onKeyDownCapture={(event) => {
+        if (event.target instanceof Element && event.target.closest("[data-canvas-generation-composer]")) {
+          return;
+        }
         if (!gestureGate.keyDown(event)) onKeyDown(event);
       }}
     >
@@ -464,7 +520,10 @@ function CanvasFlowEditor({
             )
           }
           isValidConnection={isValidConnection}
-          onNodeDragStart={onNodeDragStart}
+          onNodeDragStart={(event, node, nodes) => {
+            onPanelNodeChange(null);
+            onNodeDragStart(event, node, nodes);
+          }}
           onNodeDragStop={onNodeDragStop}
           onNodeClick={onNodeClick}
           onEdgeClick={onEdgeClick}
@@ -478,6 +537,7 @@ function CanvasFlowEditor({
           onNodeContextMenu={onNodeContextMenu}
           onEdgeContextMenu={onEdgeContextMenu}
           onPaneClick={() => {
+            onPanelNodeChange(null);
             setIntent(null);
             setContext(null);
           }}
@@ -506,19 +566,7 @@ function CanvasFlowEditor({
           edgesReconnectable={!!canEdit}
           onlyRenderVisibleElements
         >
-          <Background variant={BackgroundVariant.Dots} gap={24} size={1} />
-          <div role="group" aria-label="缩放控制">
-            <Controls aria-label="" showInteractive={false} showFitView={false}>
-              <ControlButton
-                onClick={() => fit()}
-                aria-label="适应画布"
-                title="适应画布"
-                disabled={!flow.viewportInitialized}
-              >
-                <Scan />
-              </ControlButton>
-            </Controls>
-          </div>
+          <Background variant={BackgroundVariant.Dots} gap={20} size={1.2} />
           {minimap && (
             <MiniMap<CanvasFlowNode>
               pannable
@@ -549,6 +597,62 @@ function CanvasFlowEditor({
               actions={selectionActions}
             />
           )}
+          {panelNode && (
+            <CanvasNodePanel node={panelNode} area={canvasArea} onClose={closePanel}>
+              {(maxHeight) => {
+                const panelKind = canvasNodePanelKind(panelNode);
+                if (panelKind === "generation") {
+                  return (
+                    <GenerationComposer
+                      key={panelNode.id}
+                      node={panelNode}
+                      maxHeight={maxHeight}
+                      onClose={closePanel}
+                      onPreview={onPreview}
+                      onRun={onRunNode}
+                    />
+                  );
+                }
+                if (panelKind === "text") {
+                  return (
+                    <TextComposer
+                      key={panelNode.id}
+                      node={panelNode}
+                      maxHeight={maxHeight}
+                      onClose={closePanel}
+                      onCreateNext={(portId, choice) =>
+                        createNext(panelNode.id, portId, choice)
+                      }
+                    />
+                  );
+                }
+                if (panelKind === "media") {
+                  return (
+                    <MediaNodePanel
+                      key={panelNode.id}
+                      node={panelNode}
+                      maxHeight={maxHeight}
+                      onClose={closePanel}
+                      onPreview={onPreview}
+                      onCreateNext={(portId, choice) =>
+                        createNext(panelNode.id, portId, choice)
+                      }
+                    />
+                  );
+                }
+                return (
+                  <NodeFloatingPanel
+                    key={panelNode.id}
+                    node={panelNode}
+                    maxHeight={maxHeight}
+                    onClose={closePanel}
+                    onPreview={onPreview}
+                    onRun={onRunNode}
+                  />
+                );
+              }}
+            </CanvasNodePanel>
+          )}
         </ReactFlow>
         {!snapshot.graph.nodes.length && (
           <CanvasEmptyState editable={!!editable} onAdd={addAtCenter} />
@@ -559,7 +663,7 @@ function CanvasFlowEditor({
       {searching && (
         <CanvasSearchDialog
           onClose={() => setSearching(false)}
-          onInspect={onInspect}
+          onInspect={inspect}
         />
       )}
       {help && <CanvasHelpDialog onClose={() => setHelp(false)} />}

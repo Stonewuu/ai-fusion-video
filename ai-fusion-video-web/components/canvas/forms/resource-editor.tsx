@@ -158,7 +158,7 @@ export function CanvasResourceEditor({
       )}
       {form.pending && !form.saving && (
         <p role="status" className="text-sm text-muted-foreground">
-          还未确认上次保存是否完成。点击“再次确认”可查看结果，不会重复保存。
+          上次保存结果待确认，请点击“再次确认”。
         </p>
       )}
       {mode === "edit" ? (

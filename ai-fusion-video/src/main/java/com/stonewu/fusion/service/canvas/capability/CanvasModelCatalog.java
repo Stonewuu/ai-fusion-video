@@ -34,7 +34,8 @@ public class CanvasModelCatalog {
                           Map<String, Object> parameters, String unavailable) {
     }
 
-    public record Option(long id, String name, String kind, String resultType,
+    public record Option(long id, String name, String code, String platform, String capabilityPresetCode,
+                         String kind, String resultType,
                          Map<String, Input> inputs, Map<String, Object> parameters,
                          List<Version> versions, String unavailable) {
     }
@@ -95,12 +96,15 @@ public class CanvasModelCatalog {
         boolean comfy = "comfyui".equals(model.getModelProtocol()) || (api != null && "comfyui".equals(
                 api.getPlatform()));
         String kind = comfy ? "comfyui" : result;
+        String platform = api == null ? null : api.getPlatform();
         if (api == null || !Integer.valueOf(1).equals(api.getStatus())) {
-            return new Option(model.getId(), model.getName(), kind, result, Map.of(), Map.of(), List.of(),
+            return new Option(model.getId(), model.getName(), model.getCode(), platform,
+                    model.getCapabilityPresetCode(), kind, result, Map.of(), Map.of(), List.of(),
                     "模型的供应商配置已停用或不存在");
         }
         if ("unsupported".equals(result)) {
-            return new Option(model.getId(), model.getName(), kind, result, Map.of(), Map.of(), List.of(),
+            return new Option(model.getId(), model.getName(), model.getCode(), platform,
+                    model.getCapabilityPresetCode(), kind, result, Map.of(), Map.of(), List.of(),
                     "此模型类型不支持画布生成");
         }
         Map<String, Input> inputs = new LinkedHashMap<>();
@@ -190,13 +194,15 @@ public class CanvasModelCatalog {
                 }
             }
         } catch (BusinessException | IllegalArgumentException error) {
-            return new Option(model.getId(), model.getName(), kind, result, Map.of(), Map.of(), List.of(),
+            return new Option(model.getId(), model.getName(), model.getCode(), platform,
+                    model.getCapabilityPresetCode(), kind, result, Map.of(), Map.of(), List.of(),
                     "模型或工作流能力配置无效，请在系统设置中检查");
         }
         if (inputs.containsKey("prompt")) {
             inputs.put("context", new Input(1000, 0));
         }
-        return new Option(model.getId(), model.getName(), kind, result, Map.copyOf(inputs), Map.copyOf(parameters),
+        return new Option(model.getId(), model.getName(), model.getCode(), platform,
+                model.getCapabilityPresetCode(), kind, result, Map.copyOf(inputs), Map.copyOf(parameters),
                 List.copyOf(versions), null);
     }
 
@@ -222,7 +228,8 @@ public class CanvasModelCatalog {
         if (version.unavailable() != null) {
             throw new BusinessException(400, version.unavailable());
         }
-        return new Option(model.id(), model.name(), model.kind(), model.resultType(), version.inputs(),
+        return new Option(model.id(), model.name(), model.code(), model.platform(), model.capabilityPresetCode(),
+                model.kind(), model.resultType(), version.inputs(),
                 version.parameters(), model.versions(), null);
     }
 }

@@ -1,25 +1,30 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { X, PanelLeftClose, PanelRightClose } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { AnimatedCanvasPanelBody } from "./animated-panel-body";
+import { CanvasIconButton } from "../ui/canvas-icon-button";
+import { CanvasSegmented } from "../ui/canvas-segmented";
+import { CanvasPanelPages } from "./panel-pages";
 import {
-  CanvasPanelNavigation,
   canvasLeftTabs,
   canvasRightTabs,
   type CanvasLeftPanel,
   type CanvasRightPanel,
   type CanvasMobilePanel,
   type CanvasPanel,
+  type CanvasPanelTab,
 } from "./panel-navigation";
+
+const EASE = [0.25, 0.46, 0.45, 0.94] as const;
 
 export function CanvasWorkspacePanels({
   left,
   right,
   mobile,
   visited,
+  badges = {},
   onLeft,
   onRight,
   onCloseLeft,
@@ -31,6 +36,8 @@ export function CanvasWorkspacePanels({
   right: CanvasRightPanel | null;
   mobile: CanvasMobilePanel;
   visited: CanvasPanel[];
+  /** 停靠栏角标提示（如运行中、待确认导入或已选连线）。 */
+  badges?: Partial<Record<CanvasPanel, "active" | "attention">>;
   onLeft: (value: CanvasLeftPanel) => void;
   onRight: (value: CanvasRightPanel) => void;
   onCloseLeft: () => void;
@@ -38,25 +45,20 @@ export function CanvasWorkspacePanels({
   content: Record<CanvasPanel, ReactNode>;
   children: ReactNode;
 }) {
+  const reduced = useReducedMotion();
+  const root = useRef<HTMLDivElement>(null);
   const editor = useRef<HTMLElement>(null);
   const leftAside = useRef<HTMLElement>(null);
   const rightAside = useRef<HTMLElement>(null);
-  const navigation = useRef<HTMLDivElement>(null);
   const mobileReturn = useRef<HTMLElement | null>(null);
+
   useEffect(() => {
-    const narrowLeft = window.matchMedia("(max-width: 767px)");
-    const narrowRight = window.matchMedia("(max-width: 1279px)");
+    const narrow = window.matchMedia("(max-width: 767px)");
     const sync = () => {
-      const overlayLeft = mobile === "left" && !!left && narrowLeft.matches;
-      const overlayRight = mobile === "right" && !!right && narrowRight.matches;
+      const overlayLeft = mobile === "left" && !!left && narrow.matches;
+      const overlayRight = mobile === "right" && !!right && narrow.matches;
       if (editor.current) {
         editor.current.inert = overlayLeft || overlayRight;
-      }
-      if (leftAside.current) {
-        leftAside.current.inert = (narrowLeft.matches && !overlayLeft) || overlayRight;
-      }
-      if (rightAside.current) {
-        rightAside.current.inert = (narrowRight.matches && !overlayRight) || overlayLeft;
       }
       const overlay = overlayLeft
         ? leftAside.current
@@ -67,15 +69,15 @@ export function CanvasWorkspacePanels({
         if (document.activeElement instanceof HTMLElement) {
           mobileReturn.current = document.activeElement;
         }
-        overlay.querySelector<HTMLButtonElement>("[data-panel-close]")?.focus({ preventScroll: true });
+        overlay
+          .querySelector<HTMLButtonElement>("[data-panel-close]")
+          ?.focus({ preventScroll: true });
       }
     };
     sync();
-    narrowLeft.addEventListener("change", sync);
-    narrowRight.addEventListener("change", sync);
+    narrow.addEventListener("change", sync);
     return () => {
-      narrowLeft.removeEventListener("change", sync);
-      narrowRight.removeEventListener("change", sync);
+      narrow.removeEventListener("change", sync);
     };
   }, [left, right, mobile]);
 
@@ -92,13 +94,10 @@ export function CanvasWorkspacePanels({
       return;
     }
     requestAnimationFrame(() => {
-      const triggers = navigation.current?.querySelectorAll<HTMLButtonElement>(
+      const trigger = root.current?.querySelector<HTMLButtonElement>(
         `button[data-canvas-panel="${panel}"]`,
       );
-      const trigger = [...(triggers ?? [])].find(
-        (button) => button.getClientRects().length > 0,
-      );
-      if (trigger) {
+      if (trigger && trigger.getClientRects().length > 0) {
         trigger.focus({ preventScroll: true });
       } else if (
         mobileReturn.current?.isConnected &&
@@ -111,160 +110,267 @@ export function CanvasWorkspacePanels({
       mobileReturn.current = null;
     });
   };
+
+  const openLeft = (value: CanvasLeftPanel) => {
+    if (window.innerWidth < 768 && right) {
+      onCloseRight();
+    }
+    onLeft(value);
+  };
+  const openRight = (value: CanvasRightPanel) => {
+    if (window.innerWidth < 768 && left) {
+      onCloseLeft();
+    }
+    onRight(value);
+  };
+
   return (
-    <div ref={navigation} className="flex min-h-0 grow basis-0 flex-col">
-      <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border/20 p-2 xl:hidden">
-        <CanvasPanelNavigation
-          tabs={canvasLeftTabs}
-          active={mobile === "left" ? left : null}
-          onSelect={onLeft}
-          onClose={() => close("left")}
-          className="md:hidden"
-          label="项目与素材"
-        />
-        <CanvasPanelNavigation
-          tabs={canvasRightTabs}
-          icons={false}
-          active={mobile === "right" ? right : null}
-          onSelect={onRight}
-          onClose={() => close("right")}
-          className="ml-auto"
-          label="编辑与评审"
-        />
-      </div>
-      <div className="relative flex min-h-0 grow basis-0">
-        <aside
-          ref={leftAside}
-          data-sidebar-navigation="canvas-left"
-          aria-label="项目与素材面板"
-          onKeyDown={(event) => {
-            if (
-              event.key === "Escape" &&
-              !event.defaultPrevented &&
-              event.currentTarget.contains(event.target as Node)
-            ) {
-              event.preventDefault();
-              close("left");
-            }
-          }}
-          className={cn(
-            "absolute inset-y-0 left-0 z-40 flex w-full max-w-sm min-h-0 flex-col overflow-hidden border-r border-border/20 bg-card transition-[width,translate,opacity] motion-reduce:transition-none md:static md:z-auto md:max-w-none md:shrink-0",
-            left && mobile === "left" ? "translate-x-0 opacity-100" : "pointer-events-none -translate-x-full opacity-0 md:pointer-events-auto md:translate-x-0 md:opacity-100",
-            left ? "duration-200 ease-out md:w-64" : "duration-150 ease-in md:w-20",
-          )}
-        >
-          <div
-            className={cn(
-              "flex shrink-0 items-center gap-2 p-2",
-              left && "border-b border-border/20",
-            )}
-          >
-            <span className="text-sm font-medium md:hidden">
-              {left === "media" ? "媒体素材" : "项目内容"}
-            </span>
-            <CanvasPanelNavigation
-              tabs={canvasLeftTabs}
-              active={left}
-              collapsed={!left}
-              onSelect={onLeft}
-              onClose={() => close("left")}
-              className={cn("hidden md:flex", !left && "w-full")}
-              label="切换左侧内容"
-            />
-            {left && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="ml-auto"
-                data-panel-close
-                aria-label="收起项目与素材面板"
-                title="收起左侧面板"
-                onClick={() => close("left")}
-              >
-                <PanelLeftClose className="hidden md:block" />
-                <X className="md:hidden" />
-              </Button>
-            )}
-          </div>
-          <AnimatedCanvasPanelBody
-            side="left"
-            tabs={canvasLeftTabs}
-            active={left}
-            visited={visited}
-            content={content}
+    <div ref={root} className="relative flex min-h-0 grow basis-0">
+      <section
+        ref={editor}
+        tabIndex={-1}
+        className="flex min-h-0 min-w-0 grow basis-0 flex-col outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        aria-label="画布编辑区"
+      >
+        {children}
+      </section>
+
+      {/* 窄屏遮罩：点击空白处收起当前抽屉，桌面端保持画布可同时拖拽交互。 */}
+      <AnimatePresence>
+        {(left || right) && (
+          <motion.div
+            key="mobile-backdrop"
+            aria-hidden
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: reduced ? 0 : 0.16, ease: EASE }}
+            className="absolute inset-0 z-30 bg-background/30 backdrop-blur-[1px] md:hidden"
+            onClick={() => {
+              if (left) {
+                close("left");
+              }
+              if (right) {
+                close("right");
+              }
+            }}
           />
-        </aside>
-        <section
-          ref={editor}
-          tabIndex={-1}
-          className="flex min-h-0 min-w-0 grow basis-0 flex-col outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          aria-label="画布编辑区"
-        >
-          {children}
-        </section>
-        <aside
-          ref={rightAside}
-          data-sidebar-navigation="canvas-right"
-          aria-label="编辑与评审面板"
-          onKeyDown={(event) => {
-            if (
-              event.key === "Escape" &&
-              !event.defaultPrevented &&
-              event.currentTarget.contains(event.target as Node)
-            ) {
-              event.preventDefault();
-              close("right");
-            }
-          }}
-          className={cn(
-            "absolute inset-y-0 right-0 z-50 flex w-full max-w-sm min-h-0 flex-col overflow-hidden border-l border-border/20 bg-card transition-[width,translate,opacity] motion-reduce:transition-none xl:static xl:z-auto xl:max-w-none xl:shrink-0",
-            right && mobile === "right" ? "translate-x-0 opacity-100" : "pointer-events-none translate-x-full opacity-0 xl:pointer-events-auto xl:translate-x-0 xl:opacity-100",
-            right ? "duration-200 ease-out xl:w-88" : "duration-150 ease-in xl:w-20",
-          )}
-        >
-          <div
-            className={cn(
-              "flex shrink-0 items-center gap-2 p-2",
-              right && "border-b border-border/20",
-            )}
-          >
-            <span className="text-sm font-medium xl:hidden">
-              {canvasRightTabs.find((tab) => tab.key === right)?.title}
-            </span>
-            <CanvasPanelNavigation
-              tabs={canvasRightTabs}
-              icons={false}
-              active={right}
-              collapsed={!right}
-              onSelect={onRight}
-              onClose={() => close("right")}
-              className={cn("hidden xl:flex", !right && "w-full")}
-              label="切换右侧内容"
-            />
-            {right && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="ml-auto"
-                data-panel-close
-                aria-label="收起编辑与评审面板"
-                title="收起右侧面板"
-                onClick={() => close("right")}
-              >
-                <PanelRightClose className="hidden xl:block" />
-                <X className="xl:hidden" />
-              </Button>
-            )}
-          </div>
-          <AnimatedCanvasPanelBody
-            side="right"
-            tabs={canvasRightTabs}
-            active={right}
-            visited={visited}
-            content={content}
-          />
-        </aside>
-      </div>
+        )}
+      </AnimatePresence>
+
+      <FloatingEdgeDock
+        side="left"
+        visible={!left}
+        tabs={canvasLeftTabs}
+        badges={badges}
+        reduced={!!reduced}
+        label="项目与素材入口"
+        onSelect={openLeft}
+      />
+
+      <FloatingEdgeDrawer
+        side="left"
+        active={left}
+        asideRef={leftAside}
+        tabs={canvasLeftTabs}
+        visited={visited}
+        content={content}
+        reduced={!!reduced}
+        label="项目与素材面板"
+        navLabel="切换左侧内容"
+        showTabIcons
+        onSelect={openLeft}
+        onClose={() => close("left")}
+      />
+
+      <FloatingEdgeDock
+        side="right"
+        visible={!right}
+        tabs={canvasRightTabs}
+        badges={badges}
+        reduced={!!reduced}
+        label="运行、评论与历史入口"
+        onSelect={openRight}
+      />
+
+      <FloatingEdgeDrawer
+        side="right"
+        active={right}
+        asideRef={rightAside}
+        tabs={canvasRightTabs}
+        visited={visited}
+        content={content}
+        reduced={!!reduced}
+        label="选区、运行与评审面板"
+        navLabel="切换右侧内容"
+        showTabIcons={false}
+        onSelect={openRight}
+        onClose={() => close("right")}
+      />
     </div>
+  );
+}
+
+/** 贴近画布左右边缘居中的轻量悬浮停靠胶囊：收起时不占任何画布宽度，悬停提示各入口。 */
+function FloatingEdgeDock<T extends CanvasPanel>({
+  side,
+  visible,
+  tabs,
+  badges,
+  reduced,
+  label,
+  onSelect,
+}: {
+  side: "left" | "right";
+  visible: boolean;
+  tabs: readonly CanvasPanelTab<T>[];
+  badges: Partial<Record<CanvasPanel, "active" | "attention">>;
+  reduced: boolean;
+  label: string;
+  onSelect: (key: T) => void;
+}) {
+  const offset = side === "left" ? -10 : 10;
+  return (
+    <AnimatePresence>
+      {visible && (
+        <motion.nav
+          key={`dock-${side}`}
+          data-sidebar-navigation={`canvas-${side}-dock`}
+          aria-label={label}
+          initial={reduced ? false : { opacity: 0, x: offset, scale: 0.94 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={reduced ? undefined : { opacity: 0, x: offset, scale: 0.94 }}
+          transition={{ duration: reduced ? 0 : 0.18, ease: EASE }}
+          className={cn(
+            "pointer-events-auto absolute top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-1 rounded-[14px] border border-foreground/[0.08] bg-popover/92 p-1 shadow-[0_1px_2px_rgba(0,0,0,0.04),0_8px_24px_-6px_rgba(0,0,0,0.1)] backdrop-blur-xl dark:border-white/[0.1] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_10px_28px_-6px_rgba(0,0,0,0.48)]",
+            side === "left" ? "left-3" : "right-3",
+          )}
+        >
+          {tabs.map((tab) => {
+            const badge = badges[tab.key];
+            return (
+              <div key={tab.key} className="relative">
+                <CanvasIconButton
+                  data-canvas-panel={tab.key}
+                  label={tab.title}
+                  side={side === "left" ? "right" : "left"}
+                  sideOffset={10}
+                  onClick={() => onSelect(tab.key)}
+                >
+                  <tab.icon />
+                </CanvasIconButton>
+                {badge && (
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "pointer-events-none absolute right-1 top-1 size-1.5 rounded-full ring-2 ring-popover",
+                      badge === "attention" ? "bg-amber-500" : "bg-primary",
+                    )}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </motion.nav>
+      )}
+    </AnimatePresence>
+  );
+}
+
+/** 浮于画布之上的毛玻璃抽屉：避开顶部工具栏与底部状态栏，不挤压或重排画布视口。 */
+function FloatingEdgeDrawer<T extends CanvasPanel>({
+  side,
+  active,
+  asideRef,
+  tabs,
+  visited,
+  content,
+  reduced,
+  label,
+  navLabel,
+  showTabIcons,
+  onSelect,
+  onClose,
+}: {
+  side: "left" | "right";
+  active: T | null;
+  asideRef: React.RefObject<HTMLElement | null>;
+  tabs: readonly CanvasPanelTab<T>[];
+  visited: CanvasPanel[];
+  content: Record<CanvasPanel, ReactNode>;
+  reduced: boolean;
+  label: string;
+  navLabel: string;
+  showTabIcons: boolean;
+  onSelect: (key: T) => void;
+  onClose: () => void;
+}) {
+  const offset = side === "left" ? -16 : 16;
+  const segmentedOptions = tabs.map((tab) => ({
+    value: tab.key,
+    label: tab.label,
+    hint: tab.title,
+    icon: showTabIcons ? tab.icon : undefined,
+  }));
+  return (
+    <AnimatePresence>
+      {active && (
+        <motion.aside
+          key={`drawer-${side}`}
+          ref={asideRef}
+          data-sidebar-navigation={`canvas-${side}`}
+          aria-label={label}
+          initial={reduced ? false : { opacity: 0, x: offset, scale: 0.985 }}
+          animate={{ opacity: 1, x: 0, scale: 1 }}
+          exit={reduced ? undefined : { opacity: 0, x: offset, scale: 0.985 }}
+          transition={{ duration: reduced ? 0 : 0.22, ease: EASE }}
+          onKeyDown={(event) => {
+            if (
+              event.key === "Escape" &&
+              !event.defaultPrevented &&
+              !event.nativeEvent.isComposing &&
+              event.target instanceof Node &&
+              event.currentTarget.contains(event.target)
+            ) {
+              event.preventDefault();
+              onClose();
+            }
+          }}
+          className={cn(
+            "canvas-tone-scope pointer-events-auto absolute top-[64px] bottom-[64px] z-40 flex min-h-0 flex-col overflow-hidden rounded-[20px] border border-foreground/[0.09] bg-popover/94 text-popover-foreground shadow-[0_2px_8px_rgba(0,0,0,0.05),0_20px_48px_-12px_rgba(0,0,0,0.16)] backdrop-blur-2xl dark:border-white/[0.11] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.09),0_24px_56px_-12px_rgba(0,0,0,0.62)]",
+            side === "left"
+              ? "left-3 w-[min(316px,calc(100%-24px))]"
+              : "right-3 w-[min(368px,calc(100%-24px))]",
+          )}
+        >
+          <div className="flex shrink-0 items-center gap-2 border-b border-foreground/[0.07] px-3 py-2.5 dark:border-white/[0.08]">
+            <CanvasSegmented
+              label={navLabel}
+              value={active}
+              options={segmentedOptions}
+              className="flex-1"
+              onChange={onSelect}
+            />
+            <CanvasIconButton
+              data-panel-close
+              label={`收起${label}`}
+              shortcut="Esc"
+              side="bottom"
+              onClick={onClose}
+            >
+              <X />
+            </CanvasIconButton>
+          </div>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <CanvasPanelPages
+              tabs={tabs}
+              active={active}
+              visited={visited}
+              content={content}
+            />
+          </div>
+        </motion.aside>
+      )}
+    </AnimatePresence>
   );
 }

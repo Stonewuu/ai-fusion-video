@@ -4,6 +4,7 @@ import com.stonewu.fusion.common.CommonResult;
 import com.stonewu.fusion.controller.generation.vo.GenerationScopeReqVO;
 import com.stonewu.fusion.service.canvas.CanvasActorResolver;
 import com.stonewu.fusion.service.canvas.run.CanvasRunService;
+import com.stonewu.fusion.service.canvas.run.CanvasGenerationInputPreview;
 import com.stonewu.fusion.service.resource.model.ResourceCommandContext;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -18,6 +19,13 @@ import static com.stonewu.fusion.service.canvas.run.CanvasRunData.*;
 public class CanvasRunController {
     private final CanvasRunService runs;
     private final CanvasActorResolver actors;
+    private final CanvasGenerationInputPreview generationInputs;
+
+    @GetMapping("/api/canvases/{canvasId}/nodes/{nodeId}/generation-inputs")
+    public CommonResult<CanvasGenerationInputPreview.View> generationInputs(
+            @PathVariable String canvasId, @PathVariable String nodeId, @RequestParam long expectedRevision) {
+        return CommonResult.success(generationInputs.read(canvasId, nodeId, expectedRevision, actors.current()));
+    }
 
     @PostMapping("/api/canvases/{canvasId}/run-plans")
     public CommonResult<PlanView> plan(@PathVariable String canvasId, @Valid @RequestBody PlanRequest request) {

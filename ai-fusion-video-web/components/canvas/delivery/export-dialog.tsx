@@ -284,9 +284,6 @@ export function CanvasExportDialog({ onClose }: { onClose: () => void }) {
                   ))}
                 </div>
               )}
-              <p className="text-xs leading-relaxed text-muted-foreground">
-                导出会保留当前版本，之后的编辑不会影响这份文件。导出前可检查内容和素材是否齐全。
-              </p>
             </div>
           )}
         </div>

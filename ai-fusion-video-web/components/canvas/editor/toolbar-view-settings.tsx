@@ -2,14 +2,14 @@
 
 import { useRef, useState } from "react";
 import {
-  Map,
   Scan,
   Search,
   SlidersHorizontal,
+  Square,
+  SquareCheck,
   Wand2,
   type LucideIcon,
 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -17,52 +17,41 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import type { CanvasRelationAvailability, CanvasRelationScope } from "@/lib/canvas/relations";
+import { CanvasButton } from "../ui/canvas-button";
+import { CanvasIconButton } from "../ui/canvas-icon-button";
+import { CanvasFloatingBar } from "../ui/canvas-surface";
 import { RelationVisibilityControls } from "./relation-visibility-controls";
 
 export function CanvasToolbarAction({
   icon: Icon,
   label,
-  title,
+  hint,
+  shortcut,
   onClick,
   disabled,
   primary = false,
 }: {
   icon: LucideIcon;
   label: string;
-  title?: string;
+  hint?: string;
+  shortcut?: string;
   onClick: () => void;
   disabled?: boolean;
   primary?: boolean;
 }) {
   return (
-    <>
-      <span className="@3xl:hidden">
-        <Button
-          size="icon"
-          variant={primary ? "default" : "ghost"}
-          aria-label={label}
-          data-canvas-add={primary || undefined}
-          title={title ?? label}
-          onClick={onClick}
-          disabled={disabled}
-        >
-          <Icon />
-        </Button>
-      </span>
-      <span className="hidden @3xl:inline-flex">
-        <Button
-          size="default"
-          variant={primary ? "default" : "ghost"}
-          data-canvas-add={primary || undefined}
-          title={title ?? label}
-          onClick={onClick}
-          disabled={disabled}
-        >
-          <Icon />
-          {label}
-        </Button>
-      </span>
-    </>
+    <CanvasIconButton
+      variant={primary ? "primary" : "ghost"}
+      label={label}
+      hint={hint}
+      shortcut={shortcut}
+      side="bottom"
+      data-canvas-add={primary || undefined}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <Icon />
+    </CanvasIconButton>
   );
 }
 
@@ -85,45 +74,27 @@ export function CanvasViewActions({
         <CanvasToolbarAction
           icon={Search}
           label="查找"
-          title="查找并定位节点（/）"
+          hint="查找并定位节点"
+          shortcut="/"
           onClick={onSearch}
         />
       </span>
       <CanvasToolbarAction
         icon={Scan}
         label="查看全部"
-        title="查看全部节点（F）"
+        shortcut="F"
         onClick={onFit}
       />
       <span className="hidden @md:inline-flex">
         <CanvasToolbarAction
           icon={Wand2}
           label="自动整理"
-          title={arrangeTitle}
+          hint={arrangeTitle}
           onClick={onArrange}
           disabled={!editable}
         />
       </span>
     </>
-  );
-}
-
-function MinimapToggle({ checked, onToggle, fullWidth = false }: {
-  checked: boolean;
-  onToggle: () => void;
-  fullWidth?: boolean;
-}) {
-  return (
-    <Button
-      variant="secondary"
-      size="default"
-      aria-pressed={checked}
-      className={fullWidth ? "w-full justify-start" : undefined}
-      onClick={onToggle}
-    >
-      <Map aria-hidden />
-      {checked ? "隐藏小地图" : "显示小地图"}
-    </Button>
   );
 }
 
@@ -157,10 +128,7 @@ export function CanvasViewSettings({
   const [open, setOpen] = useState(false);
   const handoffFocus = useRef(false);
   return (
-    <div className="pointer-events-auto flex shrink-0 items-center gap-2 rounded-2xl border border-border/40 bg-popover/90 p-1 shadow-sm backdrop-blur-xl">
-      <div className="hidden @5xl:block">
-        <MinimapToggle checked={minimap} onToggle={onMinimap} />
-      </div>
+    <CanvasFloatingBar className="shrink-0">
       <Popover
         open={open}
         onOpenChange={(next) => {
@@ -172,8 +140,7 @@ export function CanvasViewSettings({
       >
         <PopoverTrigger
           render={
-            <Button
-              variant="ghost"
+            <CanvasButton
               size="icon"
               aria-label="显示与工具"
               title="显示与工具"
@@ -188,14 +155,23 @@ export function CanvasViewSettings({
           className="max-h-[calc(100vh-2rem)] w-80 max-w-[calc(100vw-2rem)] overflow-y-auto border border-border/40"
         >
           <PopoverTitle>显示与工具</PopoverTitle>
-          <MinimapToggle checked={minimap} onToggle={onMinimap} fullWidth />
+          <CanvasButton
+            variant={minimap ? "secondary" : "ghost"}
+            role="checkbox"
+            aria-checked={minimap}
+            className="w-full justify-start"
+            onClick={onMinimap}
+          >
+            {minimap ? <SquareCheck aria-hidden className="text-primary" /> : <Square aria-hidden />}
+            小地图
+          </CanvasButton>
           {relationLoading && (
             <p role="status" className="text-xs text-muted-foreground">正在读取项目关系…</p>
           )}
           {relationError && (
             <div className="flex flex-col gap-2">
               <p role="alert" className="text-xs text-destructive">{relationError}</p>
-              <Button variant="outline" onClick={onReloadRelations}>重新读取项目关系</Button>
+              <CanvasButton variant="secondary" onClick={onReloadRelations}>重新读取项目关系</CanvasButton>
             </div>
           )}
           <RelationVisibilityControls
@@ -204,8 +180,9 @@ export function CanvasViewSettings({
             available={relationAvailability}
           />
           <div className="grid grid-cols-2 gap-2 border-t border-border/20 pt-4">
-            <Button
-              variant="outline"
+            <CanvasButton
+              variant="secondary"
+              className="justify-start"
               onClick={() => {
                 handoffFocus.current = true;
                 setOpen(false);
@@ -214,9 +191,10 @@ export function CanvasViewSettings({
             >
               <Search />
               查找
-            </Button>
-            <Button
-              variant="outline"
+            </CanvasButton>
+            <CanvasButton
+              variant="secondary"
+              className="justify-start"
               onClick={() => {
                 setOpen(false);
                 onArrange();
@@ -226,10 +204,10 @@ export function CanvasViewSettings({
             >
               <Wand2 />
               自动整理
-            </Button>
+            </CanvasButton>
           </div>
         </PopoverContent>
       </Popover>
-    </div>
+    </CanvasFloatingBar>
   );
 }

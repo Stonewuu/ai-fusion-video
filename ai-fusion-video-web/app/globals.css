@@ -121,14 +121,15 @@
 }
 
 /* Product-wide field surfaces and resting borders. Keep upstream Shadcn
-   sources intact; focus, validation and disabled states stay with each control. */
+   sources intact; focus, validation and disabled states stay with each control.
+   画布组件（data-slot="canvas-*"）使用独立的填充式外观，不套用这里的底色与描边。 */
 :where(
   [data-slot="input"],
   [data-slot="textarea"],
   [data-slot="select-trigger"],
   [data-slot="input-group"],
-  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
-  textarea,
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]):not([data-slot^="canvas-"]),
+  textarea:not([data-slot^="canvas-"]),
   select
 ) {
   background-color: var(--field-background);
@@ -137,8 +138,8 @@
   [data-slot="input"],
   [data-slot="textarea"],
   [data-slot="select-trigger"],
-  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
-  textarea,
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]):not([data-slot^="canvas-"]),
+  textarea:not([data-slot^="canvas-"]),
   select
 ):not(:focus-visible):not([aria-invalid="true"]):not([data-invalid]):not(:disabled) {
   border-color: var(--input);

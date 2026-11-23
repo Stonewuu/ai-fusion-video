@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { CircleAlert, CircleCheck, Loader2, Play, RotateCcw, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CanvasButton } from "../ui/canvas-button";
+import { CanvasIconButton } from "../ui/canvas-icon-button";
 import { cn } from "@/lib/utils";
 import { userFacingError } from "@/lib/user-facing-error";
 import type { CanvasNodeActivity, CanvasNodeRun } from "@/lib/api/canvas-runs";
@@ -24,15 +25,14 @@ export function CanvasNodeRunButton({ node, capability, activity, starting, onRu
   const waiting = activity && ["WAITING_SELECTION", "WAITING_CONFIRMATION", "UNKNOWN_SUBMISSION", "NEEDS_REVIEW"].includes(activity.node.status);
   const failed = activity && ["FAILED", "PARTIAL_FAILED", "BLOCKED", "CANCELLED"].includes(activity.node.status);
   const label = starting ? "提交中" : running ? runLabels[activity.node.status] : failed ? "重试" : "运行";
-  const variant = capability.executor === "image" ? "image" : capability.executor === "video" ? "video" : "ai";
-  return <Button variant={variant} size="sm" className="nodrag nopan shrink-0" aria-label={`${label}${node.title}`}
+  return <CanvasButton variant="generate" size="sm" className="nodrag nopan shrink-0" aria-label={`${label}${node.title}`}
     title={!allowed ? "没有运行权限" : syncing ? "等待画布保存与同步" : running ? "此节点正在运行" : !ready ? "正在准备运行服务或处理上次提交" : "运行此节点及所需前置步骤，复用未变化的结果"}
     disabled={!allowed || syncing || !ready || starting || !!running} onPointerDown={(event) => event.stopPropagation()}
     onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}
     onClick={(event) => { event.stopPropagation(); onRun(); }}>
-    {waiting ? <CircleAlert /> : starting || running ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : failed ? <RotateCcw /> : <Play />}
+    {waiting ? <CircleAlert /> : starting || running ? <Loader2 className="animate-spin motion-reduce:animate-none" /> : failed ? <RotateCcw /> : <Play className="size-3 fill-current" />}
     {starting || running ? null : label}
-  </Button>;
+  </CanvasButton>;
 }
 
 export function CanvasNodeRunStatus({ activity, childrenRuns, starting, startError, onShow, onDismiss }: {
@@ -61,8 +61,8 @@ export function CanvasNodeRunStatus({ activity, childrenRuns, starting, startErr
         {label}
       </span>
       <div className="nodrag nopan flex shrink-0 gap-2" onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
-        {activity && <Button variant="ghost" size="xs" onClick={onShow}>{waiting ? "查看并处理" : "详情"}</Button>}
-        {startError && <Button variant="ghost" size="icon-xs" aria-label="关闭本次启动提示" onClick={onDismiss}><X /></Button>}
+        {activity && <CanvasButton size="sm" onClick={onShow}>{waiting ? "查看并处理" : "详情"}</CanvasButton>}
+        {startError && <CanvasIconButton size="icon-xs" label="关闭本次启动提示" onClick={onDismiss}><X /></CanvasIconButton>}
       </div>
     </div>
     {!starting && active && !waiting && generation?.value && <p>{generation.value.label}</p>}
@@ -76,8 +76,8 @@ export function CanvasNodeRunStatus({ activity, childrenRuns, starting, startErr
     {generation?.unavailable && active && <p className="text-muted-foreground">进度暂未更新，正在重新连接…</p>}
     {message && <>
       <p role="alert" className={cn("whitespace-pre-wrap break-words leading-relaxed", !expanded && "line-clamp-3")}>{message}</p>
-      {message.length > 70 && <Button variant="ghost" size="xs" className="nodrag nopan self-start"
-        onClick={(event) => { event.stopPropagation(); setExpanded(!expanded); }}>{expanded ? "收起原因" : "展开原因"}</Button>}
+      {message.length > 70 && <CanvasButton size="sm" className="nodrag nopan self-start"
+        onClick={(event) => { event.stopPropagation(); setExpanded(!expanded); }}>{expanded ? "收起原因" : "展开原因"}</CanvasButton>}
     </>}
     {node && node.derivedState !== "CURRENT" && !starting && <p className="text-muted-foreground">{node.derivedState === "SOURCE_UNAVAILABLE" ? "部分内容不可访问" : "输入已变化，显示上次运行结果"}</p>}
   </section>;

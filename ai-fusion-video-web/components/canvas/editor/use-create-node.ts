@@ -15,35 +15,125 @@ export function useCanvasCreateNode(onInspect: (id: string) => void) {
   const flow = useReactFlow();
   const creating = useRef(false);
   return useCallback(async (intent: CanvasAddIntent, choice: CanvasNodeChoice) => {
-    if (creating.current) return;
+    if (creating.current) {
+      return;
+    }
     const state = store.getState();
-    if (!state.snapshot?.permissions.canEdit || state.snapshot.document.archived || state.pending) return;
+    if (
+      !state.snapshot?.permissions.canEdit ||
+      state.snapshot.document.archived ||
+      state.pending
+    ) {
+      return;
+    }
     creating.current = true;
     try {
       const capability = choice.capability;
       const width = capability.kind === "group" ? 640 : 300;
-      const position = intent.automatic
-        ? freeNodePosition(state.snapshot.graph.nodes, intent.position,
-            { width, height: Math.max(320, 128 + 32 * Math.max(capability.inputs.length, capability.outputs.length)) },
-            Object.fromEntries(flow.getNodes().map((node) => [node.id, node.measured])))
+      // 反向拖线添加前置节点时，让新节点落在松手点左侧，使输出端口紧贴连线终点。
+      const preferred = intent.target
+        ? {
+          x: Math.round(intent.position.x - width),
+          y: Math.round(intent.position.y - 80),
+        }
         : intent.position;
+      const position = intent.automatic
+        ? freeNodePosition(
+          state.snapshot.graph.nodes,
+          preferred,
+          {
+            width,
+            height: Math.max(
+              320,
+              128 +
+              32 *
+              Math.max(capability.inputs.length, capability.outputs.length),
+            ),
+          },
+          Object.fromEntries(
+            flow.getNodes().map((item) => [item.id, item.measured]),
+          ),
+        )
+        : preferred;
       const node: CanvasNode = {
-        id: crypto.randomUUID(), kind: capability.kind, schemaVersion: capability.schemaVersion,
-        title: capability.label, config: choice.connection?.config ?? initialConfig(capability),
-        resource: null, configVersion: 0, layoutVersion: 0,
-        layout: { ...position, width, height: capability.kind === "group" ? 400 : null,
-          parentId: null, locked: false, collapsed: false },
+        id: crypto.randomUUID(),
+        kind: capability.kind,
+        schemaVersion: capability.schemaVersion,
+        title: capability.label,
+        config: choice.connection?.config ?? initialConfig(capability),
+        resource: null,
+        configVersion: 0,
+        layoutVersion: 0,
+        layout: {
+          ...position,
+          width,
+          height: capability.kind === "group" ? 400 : null,
+          parentId: null,
+          locked: false,
+          collapsed: false,
+        },
       };
       const operations: CanvasOperation[] = [];
-      if (intent.source) operations.push({ type: "canvas.node.assert", nodeId: intent.source.nodeId,
-        expectedConfigVersion: intent.source.configVersion });
+      const anchor = intent.source ?? intent.target;
+      if (anchor) {
+        operations.push({
+          type: "canvas.node.assert",
+          nodeId: anchor.nodeId,
+          expectedConfigVersion: anchor.configVersion,
+        });
+      }
       operations.push({ type: "canvas.node.create", node });
-      if (intent.source && choice.connection) operations.push({ type: "canvas.edge.create", edge: {
-        id: crypto.randomUUID(), kind: "execution", sourceNodeId: intent.source.nodeId,
-        sourcePort: intent.source.portId, targetNodeId: node.id, targetPort: choice.connection.port.id,
-        inputIndex: 0, output: null, version: 0,
-      } });
-      await state.edit(intent.source ? "添加并连接节点" : "添加节点", operations);
+      if (intent.source && choice.connection) {
+        operations.push({
+          type: "canvas.edge.create",
+          edge: {
+            id: crypto.randomUUID(),
+            kind: "execution",
+            sourceNodeId: intent.source.nodeId,
+            sourcePort: intent.source.portId,
+            targetNodeId: node.id,
+            targetPort: choice.connection.port.id,
+            inputIndex: 0,
+            output: null,
+            version: 0,
+          },
+        });
+      } else if (intent.target && choice.connection) {
+        const used = new Set(
+          state.snapshot.graph.edges
+            .filter(
+              (edge) =>
+                edge.kind === "execution" &&
+                edge.targetNodeId === intent.target!.nodeId &&
+                edge.targetPort === intent.target!.portId,
+            )
+            .map((edge) => edge.inputIndex),
+        );
+        let inputIndex = 0;
+        while (used.has(inputIndex)) {
+          inputIndex++;
+        }
+        operations.push({
+          type: "canvas.edge.create",
+          edge: {
+            id: crypto.randomUUID(),
+            kind: "execution",
+            sourceNodeId: node.id,
+            sourcePort: choice.connection.port.id,
+            targetNodeId: intent.target.nodeId,
+            targetPort: intent.target.portId,
+            inputIndex,
+            output: null,
+            version: 0,
+          },
+        });
+      }
+      const label = intent.target
+        ? "添加并连接前置节点"
+        : intent.source
+          ? "添加并连接节点"
+          : "添加节点";
+      await state.edit(label, operations);
       store.getState().select([node.id]);
       store.getState().focus([node.id]);
       onInspect(node.id);

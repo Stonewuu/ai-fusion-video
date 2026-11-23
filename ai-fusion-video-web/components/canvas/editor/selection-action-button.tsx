@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { ChevronRight } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CanvasButton } from "../ui/canvas-button";
 import {
   Popover,
   PopoverContent,
@@ -42,9 +42,7 @@ export function CanvasSelectionActionButton({
             }
           }}
           render={
-            <Button
-              variant="ghost"
-              size="default"
+            <CanvasButton
               disabled={action.disabled}
               role={menu ? "menuitem" : undefined}
               className={menu ? "w-full justify-start" : undefined}
@@ -60,7 +58,7 @@ export function CanvasSelectionActionButton({
           align={menu ? "start" : "center"}
           side={menu ? "right" : "bottom"}
           role="menu"
-          className="w-52 max-w-[calc(100vw-2rem)] gap-0 border border-border/40 bg-popover/80 p-2 shadow-xl backdrop-blur-xl"
+          className="w-52 max-w-[calc(100vw-2rem)] gap-0.5 rounded-[14px] border border-foreground/[0.09] bg-popover/95 p-1 shadow-[0_4px_14px_rgba(0,0,0,0.08),0_18px_40px_-10px_rgba(0,0,0,0.16)] backdrop-blur-2xl dark:border-white/[0.12]"
           data-canvas-menu-owner={owner}
           onKeyDown={(event) => {
             if (["ArrowLeft", "Escape"].includes(event.key)) {
@@ -94,11 +92,9 @@ export function CanvasSelectionActionButton({
         >
           <PopoverTitle className="sr-only">{action.label}</PopoverTitle>
           {action.children.map((child) => (
-            <Button
+            <CanvasButton
               key={child.id}
               role="menuitem"
-              variant="ghost"
-              size="default"
               className="w-full justify-start"
               disabled={action.disabled || child.disabled}
               onClick={(event) => {
@@ -110,16 +106,15 @@ export function CanvasSelectionActionButton({
             >
               <child.icon />
               {child.label}
-            </Button>
+            </CanvasButton>
           ))}
         </PopoverContent>
       </Popover>
     );
   return (
-    <Button
+    <CanvasButton
       role={menu ? "menuitem" : undefined}
-      variant={action.destructive ? "destructive" : "ghost"}
-      size="default"
+      variant={action.destructive ? "danger" : "ghost"}
       className={menu ? "w-full justify-start" : undefined}
       disabled={action.disabled}
       title={
@@ -136,6 +131,6 @@ export function CanvasSelectionActionButton({
     >
       <Icon />
       {action.label}
-    </Button>
+    </CanvasButton>
   );
 }

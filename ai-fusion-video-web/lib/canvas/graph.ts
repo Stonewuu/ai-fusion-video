@@ -137,6 +137,49 @@ export function compatibleNodes(
   });
 }
 
+/** 根据目标节点的输入端口，筛出可作为前置来源的新节点及对应输出端口。 */
+export function compatibleSources(
+  target: CanvasNode,
+  input: CanvasPort,
+  catalog: CanvasCapability[],
+  projectId: number | null,
+): CompatibleNode[] {
+  const accepted = portTypes(input, target.config);
+  if (!accepted.length) {
+    return [];
+  }
+  return catalog.flatMap((capability) => {
+    if (capability.requiresProject && projectId === null) {
+      return [];
+    }
+    return capability.outputs.flatMap((port) => {
+      if (port.collection && !input.collection) {
+        return [];
+      }
+      if (port.valueType) {
+        if (!accepted.includes(port.valueType)) {
+          return [];
+        }
+        return [{ capability, port, config: initialConfig(capability) }];
+      }
+      if (port.valueTypeField) {
+        const allowed = capability.configFields[port.valueTypeField]?.enumValues;
+        const matched = (allowed?.length ? allowed : accepted).filter((item) =>
+          accepted.includes(item as CanvasValueType),
+        );
+        // 动态输出类型只有在能唯一确定具体类型时才自动预填并连线。
+        if (matched.length !== 1) {
+          return [];
+        }
+        const config = initialConfig(capability);
+        config[port.valueTypeField] = matched[0];
+        return [{ capability, port, config }];
+      }
+      return [];
+    });
+  });
+}
+
 export function initialConfig(capability: CanvasCapability): CanvasConfig {
   if (capability.kind === "foreach") return { maxItems: 10 };
   return Object.fromEntries(

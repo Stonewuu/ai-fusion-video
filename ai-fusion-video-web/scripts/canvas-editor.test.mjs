@@ -436,6 +436,55 @@ test("automatic successors keep the next column and avoid measured tall nodes an
   assert.equal(second.layout.y, 650);
 });
 
+// 快捷面板的“下一步”遇到右侧整列占满时应就近换到更右一列，避免新节点掉到底部。
+test("nearbyNodePosition picks the closer right column when the immediate lane is stacked", () => {
+  const source = node("source");
+  const preferred = { x: 380, y: 0 };
+  const size = { width: 300, height: 320 };
+  const stacked = [
+    { ...node("a"), layout: { ...source.layout, x: 380, y: 0, height: 280 } },
+    { ...node("b"), layout: { ...source.layout, x: 380, y: 340, height: 280 } },
+    { ...node("c"), layout: { ...source.layout, x: 380, y: 680, height: 280 } },
+  ];
+  assert.deepEqual(placements.nearbyNodePosition([source, ...stacked], preferred, size), { x: 760, y: 0 });
+  assert.deepEqual(placements.nearbyNodePosition([source], preferred, size), preferred);
+});
+
+// 从输入端口反向拖出连线时，必须按类型、集合约束和项目作用域筛出合法的前置节点。
+test("compatibleSources matches predecessor outputs, respects collection rules and pre-fills dynamic output type", () => {
+  const imageNode = capability("image", [], [port("media", "image")]);
+  const imageGen = capability("imageGeneration", [], [port("images", "image", true)]);
+  const textNode = capability("text", [], [port("text", "text")]);
+  const projectShot = { ...capability("shot", [], [port("image", "image")]), requiresProject: true };
+  const selection = capability("selection", [], [{ ...port("selected", null), valueTypeField: "valueType" }], {
+    valueType: { required: true, enumValues: ["text", "image", "video"] },
+  });
+  const video = node("video", "videoGeneration");
+  const firstFrame = port("firstFrame", "image", false);
+  const refImages = port("referenceImages", "image", true);
+  const catalog = [imageNode, imageGen, textNode, projectShot, selection];
+
+  // 单项输入不接受集合输出（imageGeneration.images），且无项目画布排除项目节点。
+  const forFirstFrame = graphTools.compatibleSources(video, firstFrame, catalog, null);
+  assert.deepEqual(forFirstFrame.map((item) => item.capability.kind), ["image", "selection"]);
+  assert.equal(forFirstFrame.find((item) => item.capability.kind === "selection").config.valueType, "image");
+
+  // 集合输入接受集合输出，且有项目画布包含项目节点。
+  const forRefs = graphTools.compatibleSources(video, refImages, catalog, 1);
+  assert.deepEqual(forRefs.map((item) => item.capability.kind), ["image", "imageGeneration", "shot", "selection"]);
+
+  // 动态输出与目标端口的交集唯一时自动预填；多于一种类型无法唯一确定时不自动预填。
+  const context = { ...port("context", null, true), acceptedTypes: ["text", "asset"] };
+  const forContext = graphTools.compatibleSources(video, context, catalog, 1);
+  assert.deepEqual(forContext.map((item) => item.capability.kind), ["text", "selection"]);
+  assert.equal(forContext.find((item) => item.capability.kind === "selection").config.valueType, "text");
+  const multi = { ...port("any", null, true), acceptedTypes: ["text", "image"] };
+  assert.deepEqual(
+    graphTools.compatibleSources(video, multi, catalog, 1).map((item) => item.capability.kind),
+    ["image", "imageGeneration", "text", "shot"],
+  );
+});
+
 test("writeback successors distinguish the result input from its business target", () => {
   const configured = (id, field) => ({ ...port(id, null), valueTypeField: field });
   const writeback = capability("writeback", [configured("value", "valueType"), configured("target", "targetType")], [], {
@@ -581,24 +630,6 @@ test("grouping respects world coordinates and alignment leaves locked nodes unch
   assert.equal(group.layout.y + aLayout.y, 80);
   assert.ok(layouts.arrangeCanvasNodes(graph, [], "left").every(operation => operation.nodeId !== "locked"));
   assert.throws(() => layouts.groupCanvasNodes(graph, ["a", "locked"]));
-});
-
-test("selection toolbar follows the selection and stays inside the canvas near every edge", () => {
-  const { selectionToolbarPosition } = load("lib/canvas/selection-toolbar.ts");
-  const size = { width: 300, height: 44 };
-  const initial = { left: 400, right: 700, top: 220, bottom: 420, width: 1200, height: 800 };
-  const first = selectionToolbarPosition(initial, size);
-  const moved = selectionToolbarPosition({ ...initial, left: 480, right: 780, top: 300, bottom: 500 }, size);
-  assert.equal(moved.left - first.left, 80);
-  assert.equal(moved.top - first.top, 80);
-  assert.ok(first.top + size.height < initial.top);
-  const nearTop = selectionToolbarPosition({ ...initial, top: 4, bottom: 180 }, size);
-  assert.ok(nearTop.top > 180);
-  for (const bounds of [{ ...initial, left: -180, right: 0 }, { ...initial, left: 1190, right: 1490 }, { ...initial, top: -500, bottom: 1200 }]) {
-    const position = selectionToolbarPosition(bounds, size);
-    assert.ok(position.left >= 8 && position.left + size.width <= bounds.width - 8);
-    assert.ok(position.top >= 8 && position.top + size.height <= bounds.height - 8);
-  }
 });
 
 test("business save acknowledgements preserve typing and reverts made while a request was pending", () => {

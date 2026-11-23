@@ -8,6 +8,7 @@ import type { Transient, Measurements } from "./use-flow-motion";
 import { canvasNodeColor } from "@/lib/canvas/node-appearance";
 import { canvasNodeConfigurationIssue } from "@/lib/canvas/node-readiness";
 import { canvasConnectionIssue } from "@/lib/canvas/connection-readiness";
+import { isCanvasGenerationNode } from "@/lib/canvas/generation";
 import {
   canvasGraphHierarchy,
   canvasNodeGeometry,
@@ -111,7 +112,7 @@ export function useCanvasFlowProjection({
       dragHandle: ".canvas-node-drag",
       ariaLabel: `${node.title}，${capabilities.get(node.kind)!.label}`,
       style: {
-        width: transient[node.id]?.width ?? node.layout.width ?? 300,
+        width: Math.max(transient[node.id]?.width ?? node.layout.width ?? 300, isCanvasGenerationNode(node) ? 360 : 0),
         height:
           node.kind === "group"
             ? node.layout.collapsed && !focusedGroups.has(node.id)

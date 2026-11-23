@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.nio.ByteBuffer;
 import java.nio.charset.CharacterCodingException;
 import java.nio.charset.CodingErrorAction;
@@ -101,6 +102,27 @@ public class MediaProbe {
         }
         String mime = MediaContainerMime.resolve(format, kind, prefix);
         return new MediaFacts(kind, mime, size, hash, width, height, duration, audio);
+    }
+
+    /**
+     * 读取视频流的时长（秒）。合成时读取已转为固定帧率的 MP4，不用容器或音轨时长代替画面时长。
+     */
+    public BigDecimal videoDurationSeconds(Path file) throws IOException {
+        for (JsonNode stream : probe(file).path("streams")) {
+            if ("video".equals(stream.path("codec_type").asText())
+                    && stream.path("disposition").path("attached_pic").asInt() == 0) {
+                try {
+                    BigDecimal duration = new BigDecimal(stream.path("duration").asText());
+                    if (duration.signum() > 0) {
+                        return duration;
+                    }
+                } catch (NumberFormatException invalid) {
+                    throw MediaException.invalid("无法读取视频画面时长，请重新生成或更换视频");
+                }
+                break;
+            }
+        }
+        throw MediaException.invalid("无法读取视频画面时长，请重新生成或更换视频");
     }
 
     private MediaFacts text(Path file, String mime, long size, String hash) throws IOException {

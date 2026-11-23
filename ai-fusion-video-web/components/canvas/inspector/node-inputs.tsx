@@ -15,11 +15,13 @@ export function CanvasNodeInputs({
   capability,
   disabled,
   unsaved,
+  expanded = false,
 }: {
   node: CanvasNode;
   capability: CanvasCapability;
   disabled: boolean;
   unsaved: boolean;
+  expanded?: boolean;
 }) {
   const store = useCanvasStoreApi();
   const graph = useCanvas((state) => state.snapshot!.graph);
@@ -32,14 +34,11 @@ export function CanvasNodeInputs({
       className="flex flex-col gap-3 border-t border-border/20 pt-4"
       aria-label="节点输入与来源"
     >
-      <details className="min-w-0" open={capability.inputs.some((port) => port.required && !Object.hasOwn(node.config, port.id) && !graph.edges.some((edge) => edge.targetNodeId === node.id && edge.targetPort === port.id)) || undefined}>
+      <details className="min-w-0" open={expanded || capability.inputs.some((port) => port.required && !Object.hasOwn(node.config, port.id) && !graph.edges.some((edge) => edge.targetNodeId === node.id && edge.targetPort === port.id)) || undefined}>
       <summary className="cursor-pointer rounded-lg text-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">
         输入与来源 <span className="ml-2 text-xs font-normal text-muted-foreground">{graph.edges.filter((edge) => edge.kind === "execution" && edge.targetNodeId === node.id).length} 条连接</span>
       </summary>
       <div className="flex flex-col gap-1 pt-3">
-        <p className="text-xs text-muted-foreground">
-          按创作需要组合素材，每种输入的用途分别保存。
-        </p>
         {unsaved && (
           <p className="text-xs text-muted-foreground">
             保存当前配置后可调整输入连接。

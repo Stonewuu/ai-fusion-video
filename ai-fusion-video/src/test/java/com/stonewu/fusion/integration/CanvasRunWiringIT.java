@@ -874,6 +874,44 @@ class CanvasRunWiringIT {
         assertThat(done.path("nodes")).allMatch(node -> !node.path("kind").asText().startsWith("storyboard"));
     }
 
+    // 通过应用接口核对连线预览、补充要求和最终发送给本地图片服务的内容。
+    @Test
+    void generationInputPreviewAndAdditionalPromptReachTheSubmittedImage() {
+        var f = fixture();
+        model(f);
+        String text = id();
+        String image = id();
+        String video = id();
+        String reference = id();
+        String media = upload(f, PNG, "参考图.png", "image/png");
+        String prompt = "canvas-quick-" + f.id;
+        create(f, List.of(node(text, "text", Map.of("content", prompt)),
+                        node(reference, "image", Map.of("resourceId", media)),
+                        node(image, "imageGeneration", Map.of("modelId", f.id, "additionalPrompt", "暖色灯光", "count", 1)),
+                        node(video, "videoGeneration", Map.of())),
+                List.of(edge(text, "text", image, "prompt", 0), edge(text, "text", video, "prompt", 0),
+                        edge(reference, "media", video, "firstFrame", 0)));
+        long revision = snapshot(f).at("/document/revision").asLong();
+        String base = "/api/canvases/" + f.canvas + "/nodes/";
+        var imageInputs = ok(get(f, base + image + "/generation-inputs?expectedRevision=" + revision));
+        var videoInputs = ok(get(f, base + video + "/generation-inputs?expectedRevision=" + revision));
+        assertThat(imageInputs.path("prompt").asText()).isEqualTo(prompt);
+        assertThat(imageInputs.path("issues")).isEmpty();
+        assertThat(videoInputs.path("issues")).isEmpty();
+        assertThat(videoInputs.at("/inputs/0/port").asText()).isEqualTo("firstFrame");
+        assertThat(videoInputs.at("/inputs/0/values/0/mediaId").asText()).isEqualTo(media);
+        var other = fixture();
+        assertThat(get(other, base + image + "/generation-inputs?expectedRevision=" + revision).getStatusCode())
+                .isEqualTo(HttpStatus.FORBIDDEN);
+
+        String run = start(f, plan(f, "DEPENDENCIES", List.of(image), Map.of()));
+        var result = nodeResult(awaitState(f, run, "SUCCEEDED"), image);
+        String submitted = prompt + "\n\n补充要求：\n暖色灯光";
+        assertThat(result.at("/inputs/values/prompt/0/text").asText()).isEqualTo(submitted);
+        assertThat(result.at("/outputs/values/images/0/mediaId").asText()).isNotBlank();
+        assertThat(POSTS.get(submitted)).hasValue(1);
+    }
+
     @Test void generationUsesOneAtomicSubmissionAndRegisteredMediaAndExplicitReuseNeverPostsAgain() {
         var f = fixture();
         model(f);

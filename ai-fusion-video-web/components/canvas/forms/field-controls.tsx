@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useState } from "react";
-import { Minus, Plus, RotateCcw } from "lucide-react";
+import { CircleHelp, Minus, Plus, RotateCcw } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { CanvasSegmentedControl } from "../workspace/segmented-control";
@@ -63,16 +64,15 @@ export function CanvasNumberField({ id, label, value, onChange, min, max, step =
     onChange(Math.min(max ?? Infinity, Math.max(min ?? -Infinity, next)));
   };
   return <div className="flex min-w-0 flex-col gap-2">
-    <div className="flex min-w-0 items-center gap-2">
-      <Button variant="outline" size="icon" disabled={disabled || min !== undefined && current <= min} aria-label={`减少${label}`} onClick={() => changeBy(-1)}><Minus /></Button>
-      <div className="relative min-w-0 flex-1">
-        <Input id={id ?? generatedId} type="number" aria-label={label} aria-invalid={invalid || undefined}
-          value={value ?? ""} min={min} max={max} step={step} disabled={disabled} placeholder={placeholder}
-          className={unit ? "pr-10" : undefined}
-          onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.valueAsNumber)} />
-        {unit && <span className="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-muted-foreground">{unit}</span>}
-      </div>
-      <Button variant="outline" size="icon" disabled={disabled || max !== undefined && current >= max} aria-label={`增加${label}`} onClick={() => changeBy(1)}><Plus /></Button>
+    <div data-slot="input-group" data-invalid={invalid || undefined} data-disabled={disabled || undefined}
+      className="flex h-9 min-w-0 items-center gap-1 rounded-4xl border border-input p-0.5 transition-[color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 data-disabled:opacity-50 data-invalid:border-destructive data-invalid:ring-[3px] data-invalid:ring-destructive/20 motion-reduce:transition-none">
+      <Button variant="ghost" size="icon-sm" disabled={disabled || min !== undefined && current <= min} aria-label={`减少${label}`} onClick={() => changeBy(-1)}><Minus /></Button>
+      <input id={id ?? generatedId} type="number" aria-label={label} aria-invalid={invalid || undefined}
+        value={value ?? ""} min={min} max={max} step={step} disabled={disabled} placeholder={placeholder}
+        className="h-full min-w-0 flex-1 bg-transparent text-center text-sm tabular-nums outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        onChange={(event) => onChange(event.target.value === "" ? undefined : event.target.valueAsNumber)} />
+      {unit && value !== undefined && <span aria-hidden className="shrink-0 text-xs text-muted-foreground">{unit}</span>}
+      <Button variant="ghost" size="icon-sm" disabled={disabled || max !== undefined && current >= max} aria-label={`增加${label}`} onClick={() => changeBy(1)}><Plus /></Button>
     </div>
     {range && min !== undefined && max !== undefined && max > min && value !== undefined && (
       <input type="range" aria-label={`${label}滑块`} aria-valuetext={`${value}${unit ?? ""}`} min={min} max={max} step={step}
@@ -89,4 +89,23 @@ export function CanvasNumberField({ id, label, value, onChange, min, max, step =
 
 export function CanvasFieldReset({ label, disabled, onReset }: { label: string; disabled?: boolean; onReset: () => void }) {
   return <Button variant="ghost" size="icon-xs" aria-label={`重置${label}`} title="恢复默认设置" disabled={disabled} onClick={onReset}><RotateCcw /></Button>;
+}
+
+export function CanvasFieldHint({ label, text }: { label: string; text: string }) {
+  return (
+    <Tooltip>
+      <TooltipTrigger
+        render={
+          <button
+            type="button"
+            aria-label={`${label}说明`}
+            className="inline-flex size-5 shrink-0 items-center justify-center rounded-full text-muted-foreground/70 outline-none transition-colors duration-150 hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none"
+          />
+        }
+      >
+        <CircleHelp className="size-3.5" />
+      </TooltipTrigger>
+      <TooltipContent className="max-w-64 leading-relaxed">{text}</TooltipContent>
+    </Tooltip>
+  );
 }

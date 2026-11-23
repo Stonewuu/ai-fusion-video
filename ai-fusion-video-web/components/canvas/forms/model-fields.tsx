@@ -2,8 +2,10 @@
 import { CanvasGuidance } from "../shared/canvas-guidance";
 
 import { useState } from "react";
-import { RefreshCw } from "lucide-react";
+import { Cpu, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
+import { getModelDisplayParts } from "@/lib/model-display";
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import {
   modelFitsInputs,
@@ -22,6 +24,7 @@ import type {
 } from "@/lib/canvas/types";
 import { useCanvas, useCanvasStoreApi } from "../canvas-provider";
 import { CanvasSelect } from "./canvas-select";
+import { CanvasPicker } from "../ui/canvas-picker";
 import { canvasImageDefaults } from "@/lib/canvas/image-output";
 
 export function CanvasModelFields({
@@ -31,6 +34,7 @@ export function CanvasModelFields({
   connectedPorts,
   inputCounts,
   disabled,
+  compact = false,
 }: {
   capability: CanvasCapability;
   config: CanvasConfig;
@@ -38,6 +42,7 @@ export function CanvasModelFields({
   connectedPorts: string[];
   inputCounts: Record<string, number>;
   disabled: boolean;
+  compact?: boolean;
 }) {
   const store = useCanvasStoreApi();
   const catalog = useCanvas((state) => state.catalog!);
@@ -67,6 +72,33 @@ export function CanvasModelFields({
   const model = selectedModel ? modelForVersion(selectedModel, config.workflowVersionId) : undefined;
   const modelLabel = canvasAgentKinds.includes(capability.kind) ? "思考模型" : "模型";
   const inputs = model ? modelInputs(model, config) : undefined;
+  const pickerItems = options.map((item) => {
+    const parts = getModelDisplayParts(item);
+    return {
+      value: String(item.id),
+      label: parts.name,
+      description: parts.code,
+      icon: <ModelVendorIcon source={item} className="size-4" />,
+      badge: matchesInputs(item) ? undefined : "输入需调整",
+      keywords: [item.name, item.code, item.platform].filter(Boolean).join(" "),
+    };
+  });
+  const selectedValue = options.some((item) => item.id === config.modelId)
+    ? String(config.modelId)
+    : null;
+  const handleModelChange = (value: string) => {
+    const chosen = options.find((item) => item.id === Number(value))!;
+    const next: CanvasConfig = { ...config, modelId: Number(value) };
+    delete next.workflowVersionId;
+    if (capability.kind === "comfyui") {
+      next.resultType = chosen.resultType;
+    }
+    onChange(
+      capability.kind === "imageGeneration"
+        ? canvasImageDefaults(next, chosen)
+        : next,
+    );
+  };
   const refresh = async () => {
     setRefreshing(true);
     try {
@@ -80,7 +112,7 @@ export function CanvasModelFields({
   };
   return (
     <section className="flex flex-col gap-2">
-      <div className="flex items-center justify-between gap-2">
+      {!compact && <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">
           {modelLabel}{modelKind(capability.kind) || canvasAgentKinds.includes(capability.kind) ? " *" : ""}
         </span>
@@ -93,37 +125,33 @@ export function CanvasModelFields({
         >
           <RefreshCw />
         </Button>
-      </div>
-      <CanvasSelect
-        label={modelLabel}
-        value={
-          options.some((item) => item.id === config.modelId)
-            ? String(config.modelId)
-            : null
-        }
-        items={options.map((item) => ({
-          value: String(item.id),
-          label: `${item.name}${matchesInputs(item) ? "" : " · 输入需调整"}`,
-        }))}
-        disabled={disabled || refreshing}
-        placeholder={options.length ? "选择模型" : "暂无可用模型"}
-        onChange={(value) => {
-          const next: CanvasConfig = { ...config, modelId: Number(value) };
-          delete next.workflowVersionId;
-          if (capability.kind === "comfyui")
-            next.resultType = options.find(
-              (item) => item.id === Number(value),
-            )!.resultType;
-          onChange(capability.kind === "imageGeneration"
-            ? canvasImageDefaults(next, options.find((item) => item.id === Number(value))!) : next);
-        }}
-      />
-      {model && !matchesInputs(model) && (
+      </div>}
+      {compact ? (
+        <CanvasPicker
+          label={modelLabel}
+          value={selectedValue}
+          items={pickerItems}
+          emptyIcon={<Cpu className="size-4 text-muted-foreground/75" />}
+          disabled={disabled || refreshing}
+          placeholder={options.length ? "选择模型" : "暂无可用模型"}
+          onChange={handleModelChange}
+        />
+      ) : (
+        <CanvasSelect
+          label={modelLabel}
+          value={selectedValue}
+          items={pickerItems}
+          disabled={disabled || refreshing}
+          placeholder={options.length ? "选择模型" : "暂无可用模型"}
+          onChange={handleModelChange}
+        />
+      )}
+      {!compact && model && !matchesInputs(model) && (
         <p role="alert" className="text-xs text-destructive">
-          当前模型不支持这些输入。可以继续编辑，运行前请调整连接或更换模型。
+          当前模型不支持这些输入，请调整连接或更换模型。
         </p>
       )}
-      {!options.length && (
+      {!compact && !options.length && (
         <CanvasGuidance title="先添加一个可用模型" tone="warning">
           在系统设置中添加并启用对应模型，然后刷新列表。没有配置权限时，请联系项目管理员。
           <Button variant="outline" size="sm" disabled={refreshing} onClick={() => void refresh()}><RefreshCw />刷新模型</Button>
@@ -155,7 +183,7 @@ export function CanvasModelFields({
           </p>
         </div>
       )}
-      {inputs && (
+      {inputs && !compact && (
         <details className="text-xs text-muted-foreground">
           <summary className="cursor-pointer rounded-lg outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50">模型支持的输入</summary>
           <div className="flex flex-col gap-2 pt-2">
@@ -178,7 +206,7 @@ export function CanvasModelFields({
           </div>
         </details>
       )}
-      {(error || model?.unavailable) && (
+      {!compact && (error || model?.unavailable) && (
         <p role="alert" className="text-xs text-destructive">
           {error ?? model?.unavailable}
         </p>

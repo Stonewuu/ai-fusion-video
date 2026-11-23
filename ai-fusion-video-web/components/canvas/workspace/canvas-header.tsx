@@ -81,7 +81,7 @@ export function CanvasWorkspaceHeader({
   };
   return (
     <>
-      <header className="flex shrink-0 items-center gap-2 border-b border-border/20 px-4 py-3">
+      <header className="flex shrink-0 items-center gap-2 border-b border-border/20 px-3 py-2">
         <Button
           variant="ghost"
           size="icon"
@@ -105,7 +105,7 @@ export function CanvasWorkspaceHeader({
                 : pending && saveError
                   ? "正在恢复保存…"
                   : sync === "connected"
-                    ? "已保存并同步"
+                    ? "已保存"
                     : sync === "retrying"
                       ? "正在恢复同步"
                       : "正在连接"}
@@ -143,7 +143,7 @@ export function CanvasWorkspaceHeader({
           <span className="hidden sm:inline">助手</span>
         </Button>
         <Button
-          variant="ai"
+          variant="outline"
           aria-label={runtime.pending ? "处理待确认运行" : selection.length ? "运行所选" : "运行画布"}
           disabled={
             !snapshot.permissions.canExecute ||

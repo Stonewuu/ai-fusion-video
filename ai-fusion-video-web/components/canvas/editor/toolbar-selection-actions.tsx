@@ -1,12 +1,16 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { useStore as useFlowStore } from "@xyflow/react";
+import { Fragment } from "react";
+import { useStore as useFlowStore, ViewportPortal } from "@xyflow/react";
 import { shallow } from "zustand/shallow";
 import type { CanvasSelectionAction } from "./build-context-actions";
 import { CanvasSelectionActionButton } from "./selection-action-button";
-import { selectionToolbarPosition } from "@/lib/canvas/selection-toolbar";
+import { CanvasBarDivider } from "../ui/canvas-surface";
 
+/**
+ * 选中工具条渲染在画布视口层内，吸附在选区正上方并水平居中：平移时与节点同步移动，
+ * 按缩放倍数反向缩放保持原始尺寸；超出画布的部分由画布容器裁切。
+ */
 export function CanvasSelectionActions({
   nodeIds,
   count,
@@ -18,14 +22,13 @@ export function CanvasSelectionActions({
   edgeCount: number;
   actions: CanvasSelectionAction[];
 }) {
-  const root = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 0, height: 0 });
   const bounds = useFlowStore((state) => {
     const nodes = nodeIds
       .map((id) => state.nodeLookup.get(id))
       .filter((node) => node && !node.hidden);
-    if (!nodes.length) return null;
-    const [x, y, zoom] = state.transform;
+    if (!nodes.length) {
+      return null;
+    }
     const left = Math.min(
       ...nodes.map((node) => node!.internals.positionAbsolute.x),
     );
@@ -38,61 +41,46 @@ export function CanvasSelectionActions({
           node!.internals.positionAbsolute.x + (node!.measured.width ?? 0),
       ),
     );
-    const bottom = Math.max(
-      ...nodes.map(
-        (node) =>
-          node!.internals.positionAbsolute.y + (node!.measured.height ?? 0),
-      ),
-    );
     return {
-      left: left * zoom + x,
-      top: top * zoom + y,
-      right: right * zoom + x,
-      bottom: bottom * zoom + y,
+      center: (left + right) / 2,
+      top,
+      zoom: state.transform[2],
       width: state.width,
-      height: state.height,
     };
   }, shallow);
-  const shown = !!bounds && actions.length > 0;
-  useEffect(() => {
-    if (!shown || !root.current) return;
-    const observer = new ResizeObserver(() => {
-      const element = root.current;
-      if (!element) return;
-      const next = { width: element.offsetWidth, height: element.offsetHeight };
-      setSize((current) =>
-        current.width === next.width && current.height === next.height
-          ? current
-          : next,
-      );
-    });
-    observer.observe(root.current);
-    return () => observer.disconnect();
-  }, [shown]);
-  if (!shown || !bounds) return null;
-  const position = selectionToolbarPosition(bounds, size);
+  if (!bounds || !actions.length) {
+    return null;
+  }
   return (
-    <div
-      ref={root}
-      role="toolbar"
-      aria-label="所选节点操作"
-      data-canvas-selection-toolbar
-      className="nodrag nopan nowheel absolute z-30 flex w-max items-center gap-2 overflow-x-auto rounded-xl border border-border/30 bg-card p-1 shadow-md"
-      style={{
-        ...position,
-        maxWidth: Math.max(0, bounds.width - 16),
-        visibility: size.width ? "visible" : "hidden",
-      }}
-      onPointerDown={(event) => event.stopPropagation()}
-    >
-      <span className="shrink-0 px-2 text-xs text-muted-foreground">
-        {count ? "已选 " + count + " 个节点" : ""}
-        {count && edgeCount ? " · " : ""}
-        {edgeCount ? edgeCount + " 条连线" : ""}
-      </span>
-      {actions.map((action) => (
-        <CanvasSelectionActionButton key={action.id} action={action} />
-      ))}
-    </div>
+    <ViewportPortal>
+      <div
+        role="toolbar"
+        aria-label="所选节点操作"
+        data-canvas-selection-toolbar
+        className="nodrag nopan nowheel pointer-events-auto absolute flex w-max origin-bottom items-center gap-1 overflow-x-auto rounded-[14px] border border-foreground/[0.08] bg-popover/95 p-1 shadow-[0_2px_6px_rgba(0,0,0,0.05),0_12px_28px_-6px_rgba(0,0,0,0.12)] backdrop-blur-xl dark:border-white/[0.11] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_12px_30px_-6px_rgba(0,0,0,0.52)]"
+        style={{
+          left: bounds.center,
+          top: bounds.top,
+          maxWidth: Math.max(0, bounds.width - 16),
+          // 选中节点会被提升到 z-index 1000，工具条需位于其上。
+          zIndex: 2000,
+          transform: `translate(-50%, calc(-100% - ${12 / bounds.zoom}px)) scale(${1 / bounds.zoom})`,
+        }}
+        onPointerDown={(event) => event.stopPropagation()}
+      >
+        <span className="inline-flex h-8 shrink-0 items-center rounded-[10px] bg-foreground/[0.055] px-2.5 text-xs font-medium text-foreground/70 dark:bg-white/[0.07]">
+          {count ? "已选 " + count + " 项" : ""}
+          {count && edgeCount ? " · " : ""}
+          {edgeCount ? edgeCount + " 条连线" : ""}
+        </span>
+        <CanvasBarDivider />
+        {actions.map((action, index) => (
+          <Fragment key={action.id}>
+            {action.destructive && index > 0 && <CanvasBarDivider />}
+            <CanvasSelectionActionButton action={action} />
+          </Fragment>
+        ))}
+      </div>
+    </ViewportPortal>
   );
 }

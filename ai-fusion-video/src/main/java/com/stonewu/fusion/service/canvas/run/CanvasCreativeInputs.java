@@ -26,7 +26,8 @@ public final class CanvasCreativeInputs {
 
     public static void compose(CanvasNode node, Map<String, List<Value>> inputs, CanvasRunSources sources) {
         List<Value> context = inputs.getOrDefault("context", List.of());
-        if (context.isEmpty()) {
+        String additional = node.config().path("additionalPrompt").asText("").trim();
+        if (context.isEmpty() && additional.isEmpty()) {
             return;
         }
         List<Value> prompts = inputs.getOrDefault("prompt", List.of());
@@ -35,7 +36,7 @@ public final class CanvasCreativeInputs {
         }
         List<String> sections = new ArrayList<>();
         if (!prompts.isEmpty() && prompts.getFirst().text() != null && !prompts.getFirst().text().isBlank()) {
-            sections.add("创作要求：\n" + prompts.getFirst().text());
+            sections.add((context.isEmpty() ? "" : "创作要求：\n") + prompts.getFirst().text());
         }
         for (int index = 0; index < context.size(); index++) {
             Value value = context.get(index);
@@ -52,6 +53,9 @@ public final class CanvasCreativeInputs {
                         "第 " + (index + 1) + " 份内容设定没有可用文本，请补充内容或选择媒体输入");
             }
             sections.add("内容设定 " + (index + 1) + "：\n" + content);
+        }
+        if (!additional.isEmpty()) {
+            sections.add("补充要求：\n" + additional);
         }
         String prompt = String.join("\n\n", sections);
         int limit = node.kind() == CanvasNodeKind.TEXT_GENERATION ? 64000 : 32000;

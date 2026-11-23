@@ -31,7 +31,9 @@ export function useCanvasConnections({
   perform: (label: string, operations: CanvasOperation[]) => void;
   setIntent: Dispatch<SetStateAction<CanvasAddIntent | null>>;
 }) {
-  const connectionStart = useRef<CanvasSourceIntent | null>(null);
+  const connectionStart = useRef<
+    (CanvasSourceIntent & { handleType: "source" | "target" }) | null
+  >(null);
   const startVersions = useRef(new Map<string, number>());
   const reconnecting = useRef<CanvasEdge | null>(null);
   const captureVersions = () => {
@@ -52,9 +54,9 @@ export function useCanvasConnections({
       }
       const checked = previous
         ? {
-            ...graph,
-            edges: graph.edges.filter((edge) => edge.id !== previous.id),
-          }
+          ...graph,
+          edges: graph.edges.filter((edge) => edge.id !== previous.id),
+        }
         : graph;
       const error =
         validateConnection(
@@ -118,13 +120,13 @@ export function useCanvasConnections({
         },
         previous
           ? {
-              type: "canvas.edge.replace",
-              edge,
-              expectedVersion:
-                reconnecting.current?.id === previous.id
-                  ? reconnecting.current.version
-                  : previous.version,
-            }
+            type: "canvas.edge.replace",
+            edge,
+            expectedVersion:
+              reconnecting.current?.id === previous.id
+                ? reconnecting.current.version
+                : previous.version,
+          }
           : { type: "canvas.edge.create", edge },
       ]);
     },
@@ -132,50 +134,96 @@ export function useCanvasConnections({
   );
   const onConnectEnd: OnConnectEnd = useCallback(
     (event, state) => {
+      const handleType = state.fromHandle?.type;
       if (
         state.isValid ||
-        state.fromHandle?.type !== "source" ||
+        (handleType !== "source" && handleType !== "target") ||
         !state.fromNode ||
-        !state.fromHandle.id ||
+        !state.fromHandle?.id ||
         !editable
-      )
+      ) {
         return;
+      }
       if (
         !(event.target instanceof Element) ||
         !event.target.closest(".react-flow__pane")
-      )
+      ) {
         return;
+      }
       const pointer =
         "changedTouches" in event ? event.changedTouches[0] : event;
       const screen = { x: pointer.clientX, y: pointer.clientY };
       const origin = connectionStart.current;
       if (
         !origin ||
+        origin.handleType !== handleType ||
         origin.nodeId !== state.fromNode.id ||
         origin.portId !== state.fromHandle.id
-      )
+      ) {
         return;
+      }
+      const portIntent: CanvasSourceIntent = {
+        nodeId: origin.nodeId,
+        portId: origin.portId,
+        configVersion: origin.configVersion,
+      };
+      if (handleType === "target") {
+        const snapshot = store.getState().snapshot;
+        const catalog = store.getState().catalog;
+        const targetNode = snapshot?.graph.nodes.find(
+          (node) => node.id === origin.nodeId,
+        );
+        const inputPort = catalog?.nodes
+          .find((item) => item.kind === targetNode?.kind)
+          ?.inputs.find((port) => port.id === origin.portId);
+        if (!targetNode || !inputPort) {
+          return;
+        }
+        if (Object.hasOwn(targetNode.config, inputPort.id)) {
+          toast.error("该输入已有手填值，请先移除手填值后再连接前置节点");
+          return;
+        }
+        const existing = snapshot!.graph.edges.filter(
+          (edge) =>
+            edge.kind === "execution" &&
+            edge.targetNodeId === targetNode.id &&
+            edge.targetPort === inputPort.id,
+        ).length;
+        if (existing >= inputPort.maxConnections) {
+          toast.error("该输入已达到连接数量上限");
+          return;
+        }
+        setIntent({
+          screen,
+          position: flow.screenToFlowPosition(screen),
+          target: portIntent,
+        });
+        return;
+      }
       setIntent({
         screen,
         position: flow.screenToFlowPosition(screen),
-        source: origin,
+        source: portIntent,
       });
     },
-    [editable, flow, setIntent],
+    [editable, flow, setIntent, store],
   );
   const onConnectStart: OnConnectStart = (_event, params) => {
     captureVersions();
     reconnecting.current = null;
-    const source = store
+    const node = store
       .getState()
-      .snapshot!.graph.nodes.find((node) => node.id === params.nodeId);
+      .snapshot!.graph.nodes.find((item) => item.id === params.nodeId);
     connectionStart.current =
-      source && params.handleId && params.handleType === "source"
+      node &&
+        params.handleId &&
+        (params.handleType === "source" || params.handleType === "target")
         ? {
-            nodeId: source.id,
-            portId: params.handleId,
-            configVersion: source.configVersion,
-          }
+          nodeId: node.id,
+          portId: params.handleId,
+          configVersion: node.configVersion,
+          handleType: params.handleType,
+        }
         : null;
   };
   const onReconnectStart: NonNullable<ReactFlowProps["onReconnectStart"]> = (

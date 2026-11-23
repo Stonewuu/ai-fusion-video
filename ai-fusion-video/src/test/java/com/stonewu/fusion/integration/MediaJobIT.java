@@ -14,6 +14,9 @@ import com.stonewu.fusion.service.canvas.model.CanvasValueType;
 import com.stonewu.fusion.service.generation.job.GenerationClientScope;
 import com.stonewu.fusion.service.generation.job.GenerationOutbox;
 import com.stonewu.fusion.service.media.MediaReference;
+import com.stonewu.fusion.service.media.MediaContentReader;
+import com.stonewu.fusion.service.media.MediaFileTestSupport;
+import com.stonewu.fusion.service.media.MediaIntakeService;
 import com.stonewu.fusion.service.media.ProviderMediaFetcher;
 import com.stonewu.fusion.service.media.job.*;
 import com.stonewu.fusion.service.media.model.MediaException;
@@ -26,6 +29,8 @@ import com.stonewu.fusion.service.storyboard.VideoComposeService;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.cache.CacheManager;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -70,7 +75,8 @@ class MediaJobIT extends MediaResourceTestContext {
         context.getBeanFactory().registerSingleton("providerMediaFetcher", fetcher);
         context.register(EpisodeBgmProperties.class, EpisodeBgmService.class, VideoComposeService.class,
                 MediaJobOutputs.class, MediaJobQueries.class, MediaJobCompletion.class,
-                ComposeVideoProcessor.class, ComposeBgmProcessor.class, EpisodeAudioJobs.class, MediaJobWorker.class,
+                ComposeClipNormalizer.class, ComposeVideoProcessor.class, ComposeBgmProcessor.class,
+                EpisodeAudioJobs.class, MediaJobWorker.class,
                 EpisodeAudioReviewService.class, EpisodeComposeGuard.class);
         jobs = context.getBean(MediaJobRepository.class);
         compose = context.getBean(VideoComposeService.class);
@@ -148,6 +154,41 @@ class MediaJobIT extends MediaResourceTestContext {
         assertThat(jobs.get(id).epoch()).isEqualTo(2);
         assertThatThrownBy(() -> completion.complete(claim)).isInstanceOf(MediaException.class);
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM afv_media_resource WHERE request_id = ?", Integer.class, "job:" + id + ":base")).isEqualTo(1);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"4,30,120,4", "2.041666,24,61,2.033333"})
+    void longAudioCannotDelayTheNextShotInTheStoredComposition(String sourceDuration, int sourceRate,
+                                                               int firstFrameCount, double firstDuration)
+            throws Exception {
+        var mediaTools = new MediaFileTestSupport(directory);
+        Path source = directory.resolve("long-audio.mp4");
+        mediaTools.ffmpeg("-f", "lavfi", "-i", "testsrc2=size=96x64:rate=" + sourceRate + ":duration=" + sourceDuration,
+                "-f", "lavfi", "-i", "sine=sample_rate=48000:duration=25",
+                "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", source.toString());
+        var input = intake.result(source, "long-audio.mp4", "video/mp4", id(), 71L, USER);
+        var fixture = episode(true, input.id());
+        String id = compose.submitCompose(fixture.episode(), 0, id(), USER, false);
+
+        assertThat(worker.runOne()).isTrue();
+
+        var job = jobs.get(id);
+        assertThat(job.status()).as(job.error()).isEqualTo("SUCCEEDED");
+        String reference = job.checkpoint().path("video").asText();
+        Path result = directory.resolve("long-audio-composed.mp4");
+        context.getBean(MediaContentReader.class).copy(MediaReference.id(reference), OWNER, result,
+                MediaIntakeService.MAX_RESULT_BYTES);
+        var frames = mediaTools.probe(result, "-select_streams", "v:0", "-show_frames", "-show_entries",
+                "frame=best_effort_timestamp_time").path("frames");
+        assertThat(frames.size()).isEqualTo(firstFrameCount + 30);
+        double first = frames.get(0).path("best_effort_timestamp_time").asDouble();
+        double second = frames.get(firstFrameCount).path("best_effort_timestamp_time").asDouble();
+        assertThat(second - first).as("第二镜头必须在第一镜头画面结束时开始")
+                .isCloseTo(firstDuration, within(0.002));
+        assertThat(queries.get(MediaReference.id(reference), OWNER).content().durationMs() / 1000.0)
+                .isCloseTo(firstDuration + 1, within(0.05));
+        assertThat(mediaTools.audioPeak(result, 0.2)).isGreaterThan(200);
+        assertThat(mediaTools.audioPeak(result, firstDuration + 0.5)).isGreaterThan(200);
     }
 
     @Test void editingShotDuringComposePreservesNewContentAndKeepsConflictingOutput() throws Exception {
@@ -422,12 +463,16 @@ class MediaJobIT extends MediaResourceTestContext {
     }
     private void expire(String id) { jdbc.update("UPDATE afv_media_job SET lease_until = TIMESTAMPADD(SECOND, -1, UTC_TIMESTAMP(6)) WHERE id = ?", id); }
     private Fixture episode(boolean second) {
+        return episode(second, silentMedia);
+    }
+
+    private Fixture episode(boolean second, String firstMedia) {
         long board = IDS.incrementAndGet(), episode = IDS.incrementAndGet(), scene = IDS.incrementAndGet(), shot = IDS.incrementAndGet();
         jdbc.update("INSERT INTO afv_storyboard(id, project_id) VALUES (?, 71)", board);
         jdbc.update("INSERT INTO afv_storyboard_episode(id, storyboard_id, episode_number, title) VALUES (?, ?, 1, '合成验证')", episode, board);
         jdbc.update("INSERT INTO afv_storyboard_scene(id, storyboard_id, episode_id) VALUES (?, ?, ?)", scene, board, episode);
         jdbc.update("INSERT INTO afv_storyboard_item(id, storyboard_id, storyboard_episode_id, storyboard_scene_id, video_url, sort_order) VALUES (?, ?, ?, ?, ?, 0)",
-                shot, board, episode, scene, MediaReference.of(silentMedia));
+                shot, board, episode, scene, MediaReference.of(firstMedia));
         if (second) jdbc.update("INSERT INTO afv_storyboard_item(id, storyboard_id, storyboard_episode_id, storyboard_scene_id, video_url, sort_order) VALUES (?, ?, ?, ?, ?, 1)",
                 IDS.incrementAndGet(), board, episode, scene, MediaReference.of(audioMedia));
         return new Fixture(episode, shot);

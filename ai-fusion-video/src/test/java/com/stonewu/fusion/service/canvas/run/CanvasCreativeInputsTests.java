@@ -118,8 +118,32 @@ class CanvasCreativeInputsTests {
 
     private Map<String, List<Value>> prepare(Map<String, List<Value>> values) {
         when(node.kind()).thenReturn(CanvasNodeKind.VIDEO_GENERATION);
+        when(node.config()).thenReturn(json.createObjectNode());
         when(sources.text(anyString())).thenAnswer(call -> text(call.getArgument(0)));
         return new LinkedHashMap<>(values);
+    }
+
+    // 连线仍提供上游文字；编辑本次要求不能替换上游内容或丢失参考图。
+    @ParameterizedTest
+    @EnumSource(value = CanvasNodeKind.class, names = {"IMAGE_GENERATION", "VIDEO_GENERATION"})
+    void additionalInstructionsPreserveConnectedPromptAndReferenceImages(CanvasNodeKind kind) {
+        var image = new Value("reference", CanvasValueType.IMAGE, null, "portrait", 1, null, null, null);
+        var inputs = prepare(Map.of("prompt", List.of(text("雨中的街道")), "referenceImages", List.of(image)));
+        when(node.kind()).thenReturn(kind);
+        when(node.config()).thenReturn(json.createObjectNode().put("additionalPrompt", "镜头靠近人物，暖色灯光"));
+
+        CanvasCreativeInputs.compose(node, inputs, sources);
+
+        assertThat(inputs.get("prompt").getFirst().text())
+                .isEqualTo("雨中的街道\n\n补充要求：\n镜头靠近人物，暖色灯光");
+        assertThat(inputs.get("referenceImages")).containsExactly(image);
+    }
+
+    @Test
+    void additionalInstructionsCountTowardsTheCombinedPromptLimit() {
+        var inputs = prepare(Map.of("prompt", List.of(text("雨".repeat(31999)))));
+        when(node.config()).thenReturn(json.createObjectNode().put("additionalPrompt", "暖色灯光"));
+        assertThatThrownBy(() -> CanvasCreativeInputs.compose(node, inputs, sources)).hasMessageContaining("超过");
     }
 
     private Value text(String content) {

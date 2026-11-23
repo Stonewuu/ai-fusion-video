@@ -44,6 +44,10 @@ ai-fusion-video/data/
 # Local verification artifacts are kept in the workspace but never committed.
 /.local/
 
+# 本机智能体运行索引与临时预览启动配置。
+/.agentscope/
+/.claude/launch.json
+
 # Development docs contain prose only.
 /dev-docs/**/*
 !/dev-docs/**/

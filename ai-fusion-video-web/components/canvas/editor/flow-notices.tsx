@@ -1,5 +1,5 @@
 "use client";
-import { Button } from "@/components/ui/button";
+import { CanvasButton } from "../ui/canvas-button";
 import type { useCanvasTransfer } from "./use-canvas-transfer";
 
 export function CanvasFlowNotices({
@@ -19,13 +19,13 @@ export function CanvasFlowNotices({
               `正在导入 ${transfer.batch!.items.filter((item) => item.media).length} / ${transfer.batch!.items.length} 个素材`}
           </p>
           {transfer.batch && !transfer.busy && (
-            <Button variant="outline" size="sm" onClick={transfer.retry}>
+            <CanvasButton variant="secondary" onClick={transfer.retry}>
               重试导入
-            </Button>
+            </CanvasButton>
           )}
-          <Button variant="ghost" size="sm" onClick={transfer.cancel}>
+          <CanvasButton onClick={transfer.cancel}>
             {transfer.busy ? "停止导入" : "关闭"}
-          </Button>
+          </CanvasButton>
         </div>
       )}
     </>

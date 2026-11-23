@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef } from "react";
+import { Fragment, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 import { CanvasSelectionActionButton } from "./selection-action-button";
 import type { CanvasSelectionAction } from "./build-context-actions";
@@ -45,12 +45,12 @@ export function CanvasContextActions({
       ref={root}
       role="menu"
       aria-label={label}
-      className="fixed z-70 w-52 overflow-y-auto rounded-2xl border border-border/40 bg-popover/80 p-2 shadow-xl backdrop-blur-xl"
+      className="fixed z-70 flex w-52 flex-col gap-0.5 overflow-y-auto rounded-[14px] border border-foreground/[0.09] bg-popover/95 p-1 shadow-[0_4px_14px_rgba(0,0,0,0.08),0_18px_40px_-10px_rgba(0,0,0,0.16)] backdrop-blur-2xl dark:border-white/[0.12] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.08),0_18px_44px_rgba(0,0,0,0.58)]"
       style={{
         left: Math.max(8, Math.min(position.x, window.innerWidth - 216)),
         top: Math.max(
           8,
-          Math.min(position.y, window.innerHeight - actions.length * 36 - 24),
+          Math.min(position.y, window.innerHeight - actions.length * 34 - 16),
         ),
         maxHeight: window.innerHeight - 16,
       }}
@@ -87,14 +87,19 @@ export function CanvasContextActions({
         }
       }}
     >
-      {actions.map((action) => (
-        <CanvasSelectionActionButton
-          key={action.id}
-          action={action}
-          menu
-          owner={owner}
-          onAction={onClose}
-        />
+      {actions.map((action, index) => (
+        <Fragment key={action.id}>
+          {/* 危险操作与普通操作之间加分隔，降低误触。 */}
+          {action.destructive && index > 0 && (
+            <div role="separator" className="mx-2 my-0.5 h-px bg-border/40" />
+          )}
+          <CanvasSelectionActionButton
+            action={action}
+            menu
+            owner={owner}
+            onAction={onClose}
+          />
+        </Fragment>
       ))}
     </div>,
     document.body,

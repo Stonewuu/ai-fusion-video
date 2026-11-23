@@ -101,7 +101,7 @@ export function CanvasList({ projectId }: { projectId?: number }) {
       </div>
       {error ? (
         <CanvasGuidance title="暂时无法读取画布" tone="error" actions={<Button variant="outline" size="sm" onClick={refresh}><RefreshCw />重新加载</Button>}>
-          {error} 加载失败不代表画布已被删除。
+          {error}
         </CanvasGuidance>
       ) : loading ? (
         <p role="status" className="py-12 text-center text-muted-foreground">

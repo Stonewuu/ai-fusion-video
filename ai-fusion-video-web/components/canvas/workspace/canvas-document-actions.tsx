@@ -82,23 +82,7 @@ export function CanvasDocumentActions({
   ];
   return (
     <>
-      <div className="hidden items-center gap-2 lg:flex">
-        {actions.map((action) => (
-          <Button
-            key={action.label}
-            variant="ghost"
-            size="default"
-            title={action.title}
-            aria-label={action.title}
-            disabled={action.disabled}
-            onClick={action.run}
-          >
-            <action.icon />
-            {action.label}
-          </Button>
-        ))}
-      </div>
-      <div className="lg:hidden">
+      <div>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger
             render={

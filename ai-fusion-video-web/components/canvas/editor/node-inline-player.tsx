@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { AudioLines, Pause, Play, Volume2, VolumeX } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { CanvasButton } from "../ui/canvas-button";
 import { ManagedVideo } from "@/components/media/managed-video";
 import { ManagedAudio } from "@/components/media/managed-audio";
 import type { CanvasMediaPreview } from "@/lib/canvas/presentation";
@@ -48,13 +48,13 @@ export function CanvasNodeInlinePlayer({ media }: { media: CanvasMediaPreview })
     <div className="nodrag nopan nowheel flex shrink-0 flex-col gap-1 border-t border-border/20 bg-card p-1"
       onClick={(event) => event.stopPropagation()} onDoubleClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
       <div className="flex min-w-0 items-center gap-2">
-        <Button variant="ghost" size="icon-sm" aria-label={`${playing ? "暂停" : "播放"}${media.title}`} onClick={() => void toggle()}>{playing ? <Pause /> : <Play />}</Button>
+        <CanvasButton size="icon-sm" aria-label={`${playing ? "暂停" : "播放"}${media.title}`} onClick={() => void toggle()}>{playing ? <Pause /> : <Play />}</CanvasButton>
         <input type="range" min={0} max={duration || 1} step={0.1} value={Math.min(time, duration || 0)} disabled={!duration}
           aria-label={`${media.title}播放进度`} aria-valuetext={`${timeLabel(time)} / ${timeLabel(duration)}`}
-          className="h-8 min-w-0 flex-1 rounded-lg accent-primary outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+          className="h-7 min-w-0 flex-1 rounded-sm accent-primary outline-none focus-visible:ring-2 focus-visible:ring-primary/40"
           onChange={(event) => { const player = element(); if (player) { player.currentTime = Number(event.target.value); setTime(player.currentTime); } }} />
         <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{timeLabel(time)} / {timeLabel(duration)}</span>
-        <Button variant="ghost" size="icon-sm" aria-label={muted ? "开启声音" : "静音"} onClick={() => setMuted(!muted)}>{muted ? <VolumeX /> : <Volume2 />}</Button>
+        <CanvasButton size="icon-sm" aria-label={muted ? "开启声音" : "静音"} onClick={() => setMuted(!muted)}>{muted ? <VolumeX /> : <Volume2 />}</CanvasButton>
       </div>
       {error && <p role="status" className="px-2 text-xs text-destructive">{error}</p>}
     </div>

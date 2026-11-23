@@ -24,6 +24,35 @@ export function freeNodePosition(
   return { x: preferred.x, y };
 }
 
+/**
+ * 快捷面板的“下一步”：优先放在来源右侧。当前列需要下移很远时，依次尝试更右侧的列，
+ * 取离首选位置最近的空位，避免新节点掉到画布底部、连线过长。
+ */
+export function nearbyNodePosition(
+  nodes: CanvasNode[],
+  preferred: { x: number; y: number },
+  size: { width: number; height: number },
+  measured: Record<string, { width?: number; height?: number } | undefined> = {},
+  columns = 3,
+): { x: number; y: number } {
+  let best = freeNodePosition(nodes, preferred, size, measured);
+  let bestDistance = best.y - preferred.y;
+  for (let index = 1; index < columns; index++) {
+    const candidate = freeNodePosition(
+      nodes,
+      { x: preferred.x + index * (size.width + 80), y: preferred.y },
+      size,
+      measured,
+    );
+    const distance = Math.hypot(candidate.x - preferred.x, candidate.y - preferred.y);
+    if (distance < bestDistance) {
+      best = candidate;
+      bestDistance = distance;
+    }
+  }
+  return best;
+}
+
 // Match the import job's three-column grid and leave room for the whole batch.
 // Keep the source's horizontal chain while moving past occupied world bounds.
 export function freeMediaPosition(

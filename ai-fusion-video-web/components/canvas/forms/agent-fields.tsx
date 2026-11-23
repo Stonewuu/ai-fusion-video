@@ -2,6 +2,8 @@
 
 import { useId } from "react";
 import { ImagePlus, Clapperboard } from "lucide-react";
+import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
+import { getModelDisplayParts } from "@/lib/model-display";
 import { CanvasNumberField } from "./field-controls";
 import { canvasTypeNames } from "@/lib/canvas/labels";
 import type { CanvasCapability, CanvasConfig, CanvasValueType } from "@/lib/canvas/types";
@@ -95,7 +97,15 @@ export function CanvasAgentFields({ capability, config, onChange, disabled, conn
                   <span className="text-sm font-medium">{label}模型</span>
                   <CanvasSelect label={`${label}模型`} value={typeof config[model] === "number" ? String(config[model]) : null}
                     placeholder={options.length ? "选择本次使用的模型" : "尚未配置可用模型"} disabled={disabled}
-                    items={options.map((item) => ({ value: String(item.id), label: item.name }))}
+                    items={options.map((item) => {
+                      const parts = getModelDisplayParts(item);
+                      return {
+                        value: String(item.id),
+                        label: parts.name,
+                        description: parts.code,
+                        icon: <ModelVendorIcon source={item} className="size-4" />,
+                      };
+                    })}
                     onChange={(value) => update(model, Number(value))} />
                 </div>
                 <div className="flex flex-col gap-2">

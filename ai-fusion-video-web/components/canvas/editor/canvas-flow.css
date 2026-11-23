@@ -1,22 +1,28 @@
 .fusion-canvas,
-.canvas-node-menu {
+.canvas-node-menu,
+.canvas-tone-scope {
   --canvas-text: oklch(0.5 0.19 290);
-  --canvas-image: oklch(0.46 0.1 210);
-  --canvas-video: oklch(0.5 0.19 330);
-  --canvas-audio: oklch(0.5 0.14 55);
+  --canvas-image: oklch(0.46 0.12 220);
+  --canvas-video: oklch(0.52 0.2 315);
+  --canvas-audio: oklch(0.52 0.14 55);
   --canvas-business: oklch(0.5 0.16 250);
-  --canvas-flow: oklch(0.46 0.12 155);
-  --canvas-note: oklch(0.5 0.12 85);
+  --canvas-flow: oklch(0.48 0.14 155);
+  --canvas-note: oklch(0.52 0.12 85);
   --canvas-neutral: var(--muted-foreground);
   color-scheme: inherit;
-  --xy-background-color: var(--background);
+  /* 浅色模式采用极淡冷灰画布底色，使纯白节点卡片与浮层自然浮出，拉开前景与背景层次。 */
+  --xy-background-color: color-mix(
+    in oklch,
+    var(--foreground) 2.5%,
+    var(--background)
+  );
   --xy-background-pattern-dots-color: color-mix(
-    in srgb,
-    var(--muted-foreground) 30%,
+    in oklch,
+    var(--foreground) 15%,
     transparent
   );
   --xy-edge-stroke: var(--primary);
-  --xy-edge-stroke-width: 1.5;
+  --xy-edge-stroke-width: 1.75;
   --xy-edge-stroke-selected: var(--primary);
   --xy-connectionline-stroke: var(--primary);
   --xy-edge-label-background-color: var(--card);
@@ -27,7 +33,7 @@
     transparent
   );
   --xy-selection-border: 1px dashed var(--primary);
-  --xy-handle-background-color: var(--background);
+  --xy-handle-background-color: var(--card);
   --xy-handle-border-color: var(--primary);
   --xy-controls-button-background-color: var(--card);
   --xy-controls-button-background-color-hover: var(--muted);
@@ -41,70 +47,129 @@
     var(--background) 55%,
     transparent
   );
-  --xy-attribution-background-color: var(--card);
+  --xy-attribution-background-color: transparent;
 }
 
 .fusion-canvas .react-flow__node.canvas-agent-changed {
   outline: 2px solid var(--primary);
   outline-offset: 4px;
-  border-radius: var(--radius-2xl);
+  border-radius: 16px;
 }
 .fusion-canvas.dark,
-.dark .canvas-node-menu {
-  --canvas-text: oklch(0.78 0.13 290);
-  --canvas-image: oklch(0.8 0.12 210);
-  --canvas-video: oklch(0.79 0.14 330);
+.dark .canvas-node-menu,
+.dark .canvas-tone-scope {
+  --canvas-text: oklch(0.78 0.14 290);
+  --canvas-image: oklch(0.8 0.13 220);
+  --canvas-video: oklch(0.79 0.15 315);
   --canvas-audio: oklch(0.81 0.13 55);
   --canvas-business: oklch(0.78 0.12 250);
-  --canvas-flow: oklch(0.8 0.14 155);
+  --canvas-flow: oklch(0.78 0.15 155);
   --canvas-note: oklch(0.84 0.13 85);
+  --xy-background-color: color-mix(in oklch, black 30%, var(--background));
+  --xy-background-pattern-dots-color: color-mix(
+    in oklch,
+    var(--foreground) 14%,
+    transparent
+  );
+}
+/* 节点卡片：常规节点与生成节点共用精密微边与多层柔影。 */
+.fusion-canvas .canvas-node-surface,
+.fusion-canvas .canvas-generation-frame {
+  border-radius: 16px;
+  border-color: color-mix(in oklch, var(--foreground) 9%, transparent);
+  box-shadow:
+    0 1px 2px color-mix(in srgb, black 5%, transparent),
+    0 4px 12px -2px color-mix(in srgb, black 4%, transparent);
+  transition:
+    border-color 150ms ease-out,
+    box-shadow 150ms ease-out;
+}
+.fusion-canvas.dark .canvas-node-surface,
+.fusion-canvas.dark .canvas-generation-frame {
+  border-color: color-mix(in srgb, white 11%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 6%, transparent),
+    0 2px 10px -2px color-mix(in srgb, black 42%, transparent);
 }
 .fusion-canvas .canvas-node-surface {
-  border-color: color-mix(in srgb, var(--canvas-tone) 30%, var(--border));
   --xy-handle-border-color: var(--canvas-tone);
   --xy-handle-background-color: var(--card);
 }
-.fusion-canvas .canvas-node-surface[data-selected] {
-  border-color: var(--canvas-tone);
-  outline: 2px solid color-mix(in srgb, var(--canvas-tone) 20%, transparent);
+.fusion-canvas .react-flow__node-canvas:hover .canvas-node-surface,
+.fusion-canvas .react-flow__node-canvas:hover .canvas-generation-frame {
+  border-color: color-mix(in oklch, var(--foreground) 18%, transparent);
+  box-shadow:
+    0 2px 4px color-mix(in srgb, black 5%, transparent),
+    0 10px 24px -6px color-mix(in srgb, black 9%, transparent);
 }
-.fusion-canvas .canvas-node-heading {
-  background: color-mix(in srgb, var(--canvas-tone) 9%, var(--card));
+.fusion-canvas.dark .react-flow__node-canvas:hover .canvas-node-surface,
+.fusion-canvas.dark .react-flow__node-canvas:hover .canvas-generation-frame {
+  border-color: color-mix(in srgb, white 20%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 8%, transparent),
+    0 12px 28px -6px color-mix(in srgb, black 55%, transparent);
 }
+.fusion-canvas .canvas-node-surface[data-selected],
+.fusion-canvas .canvas-generation-node[data-selected] .canvas-generation-frame {
+  border-color: var(--primary);
+  box-shadow:
+    0 0 0 3px color-mix(in srgb, var(--primary) 16%, transparent),
+    0 10px 24px -6px color-mix(in srgb, black 10%, transparent);
+}
+.fusion-canvas .canvas-node-surface[data-invalid],
+.fusion-canvas .canvas-generation-node[data-invalid] .canvas-generation-frame {
+  border-color: var(--destructive);
+}
+.fusion-canvas .canvas-node-surface[data-invalid][data-selected],
+.fusion-canvas
+  .canvas-generation-node[data-invalid][data-selected]
+  .canvas-generation-frame {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--destructive) 20%, transparent);
+}
+.fusion-canvas .canvas-node-icon,
+.canvas-tone-scope .canvas-node-icon {
+  color: var(--canvas-tone);
+  background: color-mix(in srgb, var(--canvas-tone) 12%, transparent);
+}
+.fusion-canvas .canvas-generation-icon {
+  color: var(--canvas-tone);
+}
+.fusion-canvas .canvas-node-badge-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 6px;
+  color: var(--canvas-tone);
+  background: color-mix(in srgb, var(--canvas-tone) 12%, transparent);
+}
+.fusion-canvas .canvas-node-kind {
+  color: var(--muted-foreground);
+}
+
+/* 链路高亮：只弱化无关内容，不给上下游节点追加主色边框，避免整条链都像被选中。 */
 .fusion-canvas .react-flow__node-canvas,
 .fusion-canvas .react-flow__edge {
   transition: opacity 150ms ease-out;
 }
 .fusion-canvas.canvas-chain-active
   .react-flow__node-canvas:not(.canvas-chain-node):not(:focus-within) {
-  opacity: 0.4;
+  opacity: 0.52;
 }
 .fusion-canvas.canvas-chain-active
   .react-flow__edge:not(.canvas-chain-edge):not(.selected):not(:focus-visible) {
-  opacity: 0.18;
+  opacity: 0.22;
 }
-.fusion-canvas .canvas-chain-node .canvas-node-surface:not([data-invalid]) {
-  border-color: var(--canvas-tone);
+.fusion-canvas.canvas-chain-active
+  .react-flow__edge.canvas-chain-edge
+  .react-flow__edge-path {
+  stroke-width: 2.25;
 }
-.fusion-canvas .canvas-chain-node .canvas-node-heading {
-  background: color-mix(in srgb, var(--canvas-tone) 15%, var(--card));
-}
-.fusion-canvas .canvas-node-surface[data-invalid] {
-  border-color: var(--destructive);
-}
-.fusion-canvas .canvas-node-surface[data-invalid][data-selected] {
-  outline-color: color-mix(in srgb, var(--destructive) 25%, transparent);
-}
-.fusion-canvas .canvas-node-icon {
-  color: var(--canvas-tone);
-  background: color-mix(in srgb, var(--canvas-tone) 14%, var(--card));
-}
-.fusion-canvas .canvas-node-kind {
-  color: var(--canvas-tone);
-}
+
 .fusion-canvas .canvas-node-run[data-run-state="SUCCEEDED"] {
   color: var(--canvas-flow);
-  background: color-mix(in srgb, var(--canvas-flow) 6%, var(--card));
+  background: color-mix(in srgb, var(--canvas-flow) 7%, var(--card));
 }
 .fusion-canvas
   .canvas-node-run:is(
@@ -113,7 +178,7 @@
     [data-run-state="QUEUED"]
   ) {
   color: var(--canvas-business);
-  background: color-mix(in srgb, var(--canvas-business) 6%, var(--card));
+  background: color-mix(in srgb, var(--canvas-business) 7%, var(--card));
 }
 .fusion-canvas
   .canvas-node-run:is(
@@ -122,22 +187,40 @@
     [data-run-state="CANCEL_REQUESTED"]
   ) {
   color: var(--canvas-audio);
-  background: color-mix(in srgb, var(--canvas-audio) 6%, var(--card));
+  background: color-mix(in srgb, var(--canvas-audio) 7%, var(--card));
 }
 .fusion-canvas .react-flow__node-canvas {
-  border-radius: var(--radius-xl);
+  border-radius: 16px;
 }
 .fusion-canvas .react-flow__node-canvas:focus-visible {
-  outline: 2px solid var(--ring);
+  outline: 2px solid var(--primary);
   outline-offset: 4px;
 }
+
+/* 连接点：精密双圈小圆点，悬停或连接时放大填充并泛出柔和类型色光晕。 */
 .fusion-canvas .react-flow__handle {
   width: 10px;
   height: 10px;
-  border-width: 1px;
+  border-width: 2px;
+  box-shadow: 0 1px 3px color-mix(in srgb, black 16%, transparent);
+  transition:
+    transform 150ms ease-out,
+    background-color 150ms ease-out,
+    box-shadow 150ms ease-out;
 }
+.fusion-canvas .react-flow__handle.connectionindicator:hover,
 .fusion-canvas .react-flow__handle.connectingto {
-  background: var(--primary);
+  background: var(--xy-handle-border-color);
+  box-shadow: 0 0 0 3px
+    color-mix(in srgb, var(--xy-handle-border-color) 24%, transparent);
+}
+.fusion-canvas .react-flow__handle-left.connectionindicator:hover,
+.fusion-canvas .react-flow__handle-left.connectingto {
+  transform: translate(-50%, -50%) scale(1.35);
+}
+.fusion-canvas .react-flow__handle-right.connectionindicator:hover,
+.fusion-canvas .react-flow__handle-right.connectingto {
+  transform: translate(50%, -50%) scale(1.35);
 }
 .fusion-canvas .react-flow__edge.selected .react-flow__edge-path {
   stroke-width: 3;
@@ -155,39 +238,30 @@
 }
 .fusion-canvas .react-flow__connection-path {
   stroke: var(--primary);
-}
-.fusion-canvas .react-flow__controls {
-  bottom: 56px;
-  left: 12px;
-  margin: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  box-shadow: none;
-}
-.fusion-canvas .react-flow__controls-button {
-  width: 32px;
-  height: 32px;
-}
-.fusion-canvas .react-flow__controls-button:focus-visible {
-  outline: 2px solid var(--ring);
-  outline-offset: -2px;
+  stroke-width: 2;
 }
 .fusion-canvas .react-flow__minimap {
-  bottom: 56px;
+  bottom: 62px;
   right: 12px;
   margin: 0;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
+  border: 1px solid color-mix(in oklch, var(--foreground) 10%, transparent);
+  border-radius: 14px;
   overflow: hidden;
+  box-shadow:
+    0 1px 2px color-mix(in srgb, black 5%, transparent),
+    0 8px 24px -6px color-mix(in srgb, black 10%, transparent);
 }
 .fusion-canvas .react-flow__attribution {
-  bottom: 2px;
-  right: 12px;
+  bottom: 3px;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
   padding: 0;
   font-size: 10px;
   line-height: 10px;
   color: var(--muted-foreground);
+  background: transparent;
+  opacity: 0.32;
 }
 .fusion-canvas .react-flow__attribution a {
   color: inherit;
@@ -203,4 +277,38 @@
     width: 16px;
     height: 16px;
   }
+}
+
+/* 统一节点的连接点与端口名称：静止时只显示已连接与首个输出，悬停或选中时显示其余端口。 */
+.fusion-canvas .canvas-port-idle {
+  opacity: 0;
+  pointer-events: none;
+}
+.fusion-canvas .react-flow__node:is(:hover, :focus-within, .selected) .canvas-port-idle {
+  opacity: 1;
+  pointer-events: all;
+}
+.fusion-canvas .canvas-port-label {
+  opacity: 0;
+  transform: translateY(-50%);
+  transition: opacity 150ms ease-out;
+}
+.fusion-canvas .canvas-port-label[data-side="left"] {
+  right: calc(100% + 12px);
+}
+.fusion-canvas .canvas-port-label[data-side="right"] {
+  left: calc(100% + 12px);
+}
+.fusion-canvas .react-flow__node:is(:hover, .selected) .canvas-port-label,
+.fusion-canvas .canvas-port-label[data-visible] {
+  opacity: 1;
+}
+
+/* 纯媒体节点：画面铺满内容框，多项时的翻页行保留内边距。 */
+.fusion-canvas .canvas-node-fill .canvas-node-media-frame {
+  border: 0;
+  border-radius: 0;
+}
+.fusion-canvas .canvas-node-fill section > :not(.canvas-node-media-frame) {
+  padding: 8px 12px 0;
 }

@@ -94,14 +94,14 @@ export function CanvasSegmentedControl<T extends string>({
             onClick={() => onChange(option.value)}
             className={cn(
               "relative flex h-9 min-w-9 items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none",
-              compact ? "px-2 @2xl:px-3" : "px-3",
+              compact ? "px-2" : "px-3",
               value === option.value
                 ? "font-medium text-foreground"
                 : "text-muted-foreground hover:text-foreground",
             )}
           >
             {option.icon && <option.icon className="size-4 shrink-0" />}
-            <span className={compact ? "hidden @2xl:inline" : undefined}>
+            <span className={compact ? "sr-only" : undefined}>
               {option.label}
             </span>
           </button>

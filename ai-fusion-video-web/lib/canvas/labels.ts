@@ -29,6 +29,7 @@ export const canvasTypeNames: Record<CanvasValueType, string> = {
   assetItem: "子资产",
 };
 export const canvasFieldLabels: Record<string, string> = {
+  additionalPrompt: "补充要求",
   binding: "写入字段",
   targetType: "目标类型",
   content: "正文",

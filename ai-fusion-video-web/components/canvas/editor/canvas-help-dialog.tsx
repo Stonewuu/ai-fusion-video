@@ -33,7 +33,7 @@ const steps = [
     detail:
       "按住空格拖动，或切换“移动”工具；滚轮缩放。点击顶部“查看全部”可找回画布中的内容。",
   },
-  { icon: Play, title: "运行与选择结果", detail: "点击右上角运行，先检查范围与生成数量。完成后到“运行”面板预览结果，挑选合适的内容放入画布。" },
+  { icon: Play, title: "生成图片和视频", detail: "选中生成节点，在下方查看已连接的文字与素材、调整参数并生成。结果显示在节点内；批量处理可使用右上角的运行入口。" },
   { icon: Sparkles, title: "让助手帮你创作", detail: "先选中要处理的节点，再打开“助手”描述目标。点击输入框上方的画布引用，可查看范围并设置是否自动定位到助手结果。" },
 ];
 const shortcuts = [
@@ -60,7 +60,7 @@ export function CanvasHelpDialog({ onClose }: { onClose: () => void }) {
         <DialogHeader className="shrink-0">
           <DialogTitle>画布使用指南</DialogTitle>
           <DialogDescription>
-            左侧找内容，中间组织创作步骤，右侧编辑与预览。
+            在画布中连接素材、生成内容并查看结果。
           </DialogDescription>
         </DialogHeader>
         <div className="min-h-0 space-y-6 overflow-y-auto">
@@ -92,9 +92,6 @@ export function CanvasHelpDialog({ onClose }: { onClose: () => void }) {
                 </div>
               ))}
             </dl>
-            <p className="text-xs text-muted-foreground">
-              输入文字时不会触发画布快捷键。切换侧栏会保留当前输入。
-            </p>
           </section>
         </div>
       </DialogContent>
