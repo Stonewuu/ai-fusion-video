@@ -26,6 +26,9 @@ public class AgentRun {
     private LocalDateTime externalResumeAt;
     private Long projectId;
     private String agentType;
+    @Builder.Default
+    private Integer streamProtocolVersion = 1;
+    private String streamRunId;
     private String parentRunId;
     private String parentToolCallId;
     private String agentName;

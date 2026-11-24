@@ -52,6 +52,7 @@ export interface AiChatReq {
 }
 
 export type OutputType =
+  | "HISTORY"
   | "REASONING"
   | "CONTENT"
   | "TOOL_CALL_STARTED"
@@ -83,11 +84,17 @@ export interface AiChatStreamEvent {
   /** Durable fields are present on AgentScope v2 Pipeline events. */
   schemaVersion?: number;
   runId?: string;
+  sourceRunId?: string;
+  controlRunId?: string;
   sequence?: number;
   messageId?: string;
   conversationId?: string;
   outputType: OutputType;
+  historyMessages?: AgentMessage[];
+  pendingEvents?: AiChatStreamEvent[];
+  runStatus?: import("./ai-pipeline").PipelineRunStatus;
   content?: string;
+  contentMode?: "replace";
   reasoningContent?: string;
   reasoningStartTime?: number | null;
   reasoningDurationMs?: number | null;
@@ -194,6 +201,7 @@ export interface AgentMessage {
   toolCallId?: string;
   /** 父级工具调用 ID（子 Agent 事件归属） */
   parentToolCallId?: string;
+  childRunStatus?: import("./ai-pipeline").PipelineRunStatus;
   reasoningContent?: string;
   reasoningDurationMs?: number | null;
   messageOrder: number;

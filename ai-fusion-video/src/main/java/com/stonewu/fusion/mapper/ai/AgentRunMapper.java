@@ -23,6 +23,8 @@ public interface AgentRunMapper extends BaseMapper<AgentRun> {
 
     AgentRun selectByRunId(@Param("runId") String runId);
 
+    List<AgentRun> selectStreamMembers(@Param("streamRunId") String streamRunId);
+
     List<AgentRun> selectProjectionRecoveryCandidates(@Param("limit") int limit);
 
     AgentRun selectAuthorizedByRunId(

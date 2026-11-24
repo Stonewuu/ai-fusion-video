@@ -5,6 +5,8 @@ import com.stonewu.fusion.controller.ai.vo.*;
 import com.stonewu.fusion.service.ai.agentscope.AgentScopePipelineRunService;
 import com.stonewu.fusion.service.ai.run.*;
 import com.stonewu.fusion.service.ai.run.model.RunCursor;
+import com.stonewu.fusion.service.ai.run.stream.AgentStreamReader;
+import org.springframework.beans.factory.annotation.Autowired;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -34,6 +36,8 @@ public class AiPipelineController {
     private final CancellationCoordinator cancellations;
     private final AgentConfirmationService confirmations;
     private final AgentConfirmationExpiryCoordinator confirmationExpiry;
+    @Autowired
+    private AgentStreamReader streamReader;
 
     @Operation(summary = "启动 Pipeline（SSE 流式）")
     @PostMapping(value = "/run", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -103,6 +107,9 @@ public class AiPipelineController {
                 .flatMapMany(run -> {
                     RunCursor cursor = cursorParser.parse(
                             run.getRunId(), afterSequence, lastEventId);
+                    if (run.getStreamProtocolVersion() == 2) {
+                        return streamReader.read(run, cursor.afterSequence()).map(this::toSse);
+                    }
                     return replayService.replayThenLive(
                                     cursor.runId(), cursor.afterSequence())
                             .concatMap(event -> runQueries.project(run, event))
@@ -132,6 +139,9 @@ public class AiPipelineController {
             AiChatStreamRespVO event) {
         ServerSentEvent.Builder<AiChatStreamRespVO> builder = ServerSentEvent.<AiChatStreamRespVO>builder(event)
                 .event("pipeline-event");
+        if ("HISTORY".equals(event.getOutputType())) {
+            return builder.build();
+        }
         if (event.getRunId() == null && event.getSequence() == null) {
             return builder.build();
         }

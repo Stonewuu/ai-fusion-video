@@ -152,7 +152,10 @@ public final class AgentExecutionRuntimeContextRequests {
                         ownerEpoch,
                         deadline,
                         persisted.getParentToolCallId(),
-                        persisted.getAgentName()),
+                        persisted.getAgentName(),
+                        persisted.getStreamProtocolVersion(),
+                        persisted.getStreamProtocolVersion() == 1
+                                ? persisted.getRunId() : persisted.getStreamRunId()),
                 parentRun,
                 project,
                 new PipelineRequestContext(

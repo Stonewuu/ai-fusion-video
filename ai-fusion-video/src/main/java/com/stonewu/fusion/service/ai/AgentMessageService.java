@@ -1,7 +1,6 @@
 package com.stonewu.fusion.service.ai;
 
 import cn.hutool.core.util.StrUtil;
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.mapper.ai.AgentMessageMapper;
 import com.stonewu.fusion.service.ai.run.AgentMessageAllocator;
@@ -23,10 +22,9 @@ public class AgentMessageService {
     private final AgentMessageMapper messageMapper;
     private final AgentMessageAllocator messageAllocator;
 
+    /** 界面不展示派发给子任务的内部输入，子任务回复和工具结果仍按原顺序返回。 */
     public List<AgentMessage> listByConversation(String conversationId) {
-        return messageMapper.selectList(new LambdaQueryWrapper<AgentMessage>()
-                .eq(AgentMessage::getConversationId, conversationId)
-                .orderByAsc(AgentMessage::getMessageOrder));
+        return messageMapper.selectConversationHistory(conversationId);
     }
 
     /**

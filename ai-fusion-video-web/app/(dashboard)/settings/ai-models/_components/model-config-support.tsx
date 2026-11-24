@@ -1,9 +1,11 @@
 "use client";
 
+import { useId } from "react";
 import { cn } from "@/lib/utils";
 import type { AiModel, ApiConfig, ModelPreset } from "@/lib/api/ai-model";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 
 // ============================================================
 // 模型配置可视化表单
@@ -334,9 +336,9 @@ export function getCapabilityChipClassName(
 ): string {
   switch (tone) {
     case "positive":
-      return "bg-emerald-500/10 text-emerald-500 border-emerald-500/20";
+      return "bg-emerald-500/10 text-emerald-700 border-emerald-500/25 dark:text-emerald-400";
     case "info":
-      return "bg-sky-500/10 text-sky-500 border-sky-500/20";
+      return "bg-sky-500/10 text-sky-700 border-sky-500/25 dark:text-sky-400";
     default:
       return "bg-muted/60 text-muted-foreground border-border/40";
   }
@@ -381,9 +383,7 @@ export function buildImageCapabilityView(
 
   return {
     chips,
-    summary: supportsReferenceImages
-      ? `支持参考图输入${maxReferenceImages && maxReferenceImages > 0 ? `，最多 ${maxReferenceImages} 张` : ""}${asyncMode ? "；已开启异步任务模式" : ""}`
-      : `不支持参考图输入，当前模型只适合文生图。${asyncMode ? "已开启异步任务模式。" : ""}`,
+    summary: "",
   };
 }
 
@@ -406,26 +406,52 @@ export function buildVideoCapabilityView(
   const maxReferenceVideos = getOptionalConfigNumber(config.maxReferenceVideos);
   const maxReferenceAudios = getOptionalConfigNumber(config.maxReferenceAudios);
 
-  const summaryParts = [
-    supportsFirstFrame ? "首帧" : null,
-    supportsLastFrame ? "尾帧" : null,
-    supportsReferenceImages
-      ? `参考图${maxReferenceImages && maxReferenceImages > 0 ? `（最多 ${maxReferenceImages} 张）` : ""}`
-      : null,
-    supportsReferenceVideos
-      ? `参考视频${maxReferenceVideos && maxReferenceVideos > 0 ? `（最多 ${maxReferenceVideos} 个）` : ""}`
-      : null,
-    supportsReferenceAudios
-      ? `参考音频${maxReferenceAudios && maxReferenceAudios > 0 ? `（最多 ${maxReferenceAudios} 个）` : ""}`
-      : null,
-  ].filter((part) => part !== null);
-  const imageLimit = maxImageInputs && maxImageInputs > 0
-    ? `；图片输入最多 ${maxImageInputs} 张`
-    : "";
+  const chips: CapabilityChipDef[] = [];
+  if (supportsFirstFrame && supportsLastFrame) {
+    chips.push({ label: "首尾帧", tone: "positive" });
+  } else if (supportsFirstFrame) {
+    chips.push({ label: "首帧", tone: "positive" });
+  } else if (supportsLastFrame) {
+    chips.push({ label: "尾帧", tone: "positive" });
+  }
+
+  if (supportsReferenceImages) {
+    chips.push({
+      label:
+        maxReferenceImages && maxReferenceImages > 0
+          ? `参考图 ≤${maxReferenceImages}`
+          : "参考图",
+      tone: "positive",
+    });
+  }
+  if (supportsReferenceVideos) {
+    chips.push({
+      label:
+        maxReferenceVideos && maxReferenceVideos > 0
+          ? `参考视频 ≤${maxReferenceVideos}`
+          : "参考视频",
+      tone: "info",
+    });
+  }
+  if (supportsReferenceAudios) {
+    chips.push({
+      label:
+        maxReferenceAudios && maxReferenceAudios > 0
+          ? `参考音频 ≤${maxReferenceAudios}`
+          : "参考音频",
+      tone: "info",
+    });
+  }
+  if (maxImageInputs && maxImageInputs > 0) {
+    chips.push({ label: `图片输入 ≤${maxImageInputs}`, tone: "muted" });
+  }
+  if (chips.length === 0) {
+    chips.push({ label: "仅文生视频", tone: "muted" });
+  }
 
   return {
-    chips: [],
-    summary: `该渠道模型能力仅支持${summaryParts.length ? summaryParts.join("、") : "文生视频"}${imageLimit}。`,
+    chips,
+    summary: "",
   };
 }
 
@@ -628,48 +654,40 @@ export function ToggleSettingCard({
   onToggle: () => void;
   disabled?: boolean;
 }) {
+  const switchId = useId();
   return (
     <div
       className={cn(
-        "rounded-lg border border-border/30 bg-background/70 px-3 py-2.5",
-        disabled && "opacity-50",
+        "rounded-lg border border-border/20 bg-background/70 px-3 py-2.5",
+        disabled && "opacity-55",
       )}
     >
-      <div className="flex items-start gap-3">
-        <button
-          type="button"
-          onClick={onToggle}
-          disabled={disabled}
-          className={cn(
-            "relative mt-0.5 h-5 w-9 shrink-0 rounded-full transition-colors duration-200",
-            checked ? "bg-primary" : "bg-muted-foreground/30",
-          )}
-        >
-          <span
-            className={cn(
-              "absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform duration-200",
-              checked && "translate-x-4",
-            )}
-          />
-        </button>
-        <div className="min-w-0">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 flex-col gap-1">
           <Label
+            htmlFor={switchId}
             className={cn(
-              "text-xs text-muted-foreground",
+              "text-xs font-medium text-foreground",
               !disabled && "cursor-pointer",
             )}
-            onClick={() => {
-              if (!disabled) {
-                onToggle();
-              }
-            }}
           >
             {title}
           </Label>
-          <p className="mt-1 text-[10px] leading-5 text-muted-foreground/70">
+          <p className="text-xs leading-relaxed text-muted-foreground">
             {description}
           </p>
         </div>
+        <Switch
+          id={switchId}
+          checked={checked}
+          disabled={disabled}
+          onCheckedChange={() => {
+            if (!disabled) {
+              onToggle();
+            }
+          }}
+          className="mt-0.5 shrink-0"
+        />
       </div>
     </div>
   );
@@ -696,10 +714,14 @@ export function CapabilityNumberField({
   step?: number;
   disabled?: boolean;
 }) {
+  const inputId = useId();
   return (
-    <div className={cn("space-y-1.5", disabled && "opacity-55")}>
-      <Label className="text-[11px] text-muted-foreground">{label}</Label>
+    <div className={cn("flex min-w-0 flex-col gap-2", disabled && "opacity-55")}>
+      <Label htmlFor={inputId} className="text-xs text-muted-foreground">
+        {label}
+      </Label>
       <Input
+        id={inputId}
         type="number"
         min={min}
         max={max}
@@ -708,9 +730,9 @@ export function CapabilityNumberField({
         placeholder={placeholder}
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="text-xs font-mono h-8"
+        className="font-mono text-xs"
       />
-      {hint && <p className="text-[10px] text-muted-foreground/70">{hint}</p>}
+      {hint && <p className="text-xs leading-relaxed text-muted-foreground">{hint}</p>}
     </div>
   );
 }

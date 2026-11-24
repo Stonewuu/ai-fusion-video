@@ -3,6 +3,7 @@ package com.stonewu.fusion.entity.ai;
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.TableField;
 import com.stonewu.fusion.common.BaseEntity;
 import lombok.*;
 
@@ -76,6 +77,10 @@ public class AgentMessage extends BaseEntity {
      * 父级工具调用 ID（子 Agent 事件归属到父工具调用）
      */
     private String parentToolCallId;
+
+    /** 派发工具对应的子运行状态；历史查询时读取，避免父任务取消覆盖已完成的子任务。 */
+    @TableField(exist = false)
+    private String childRunStatus;
 
     /**
      * AI推理过程内容（思维链）

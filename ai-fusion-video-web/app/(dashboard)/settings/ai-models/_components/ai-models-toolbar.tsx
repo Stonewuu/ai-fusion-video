@@ -1,0 +1,260 @@
+"use client";
+
+import type { RefObject } from "react";
+import {
+  ChevronsDownUp,
+  ChevronsUpDown,
+  Download,
+  LayoutGrid,
+  List,
+  Plus,
+  Search,
+  Upload,
+  X,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
+import { MODEL_TYPE_OPTIONS } from "@/lib/api/ai-model";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { settingsTypography } from "../../_shared";
+import type { AiModelStatusFilter } from "./ai-models-filter";
+
+export type AiModelViewMode = "list" | "card";
+
+const STATUS_FILTER_OPTIONS: Array<{ value: AiModelStatusFilter; label: string }> = [
+  { value: "all", label: "全部状态" },
+  { value: "enabled", label: "仅已启用" },
+  { value: "disabled", label: "仅已停用" },
+];
+
+interface AiModelsToolbarProps {
+  query: string;
+  onQueryChange: (value: string) => void;
+  modelTypeFilter: number;
+  onModelTypeFilterChange: (value: number) => void;
+  statusFilter: AiModelStatusFilter;
+  onStatusFilterChange: (value: AiModelStatusFilter) => void;
+  viewMode: AiModelViewMode;
+  onViewModeChange: (mode: AiModelViewMode) => void;
+  hasConfigs: boolean;
+  allCollapsed: boolean;
+  onToggleCollapseAll: () => void;
+  importInputRef: RefObject<HTMLInputElement | null>;
+  onImportFile: (file: File) => void;
+  onOpenExport: () => void;
+  onOpenCreateConfig: () => void;
+  totalConfigCount: number;
+  visibleConfigCount: number;
+  hasActiveFilters: boolean;
+  onResetFilters: () => void;
+}
+
+export function AiModelsToolbar({
+  query,
+  onQueryChange,
+  modelTypeFilter,
+  onModelTypeFilterChange,
+  statusFilter,
+  onStatusFilterChange,
+  viewMode,
+  onViewModeChange,
+  hasConfigs,
+  allCollapsed,
+  onToggleCollapseAll,
+  importInputRef,
+  onImportFile,
+  onOpenExport,
+  onOpenCreateConfig,
+  totalConfigCount,
+  visibleConfigCount,
+  hasActiveFilters,
+  onResetFilters,
+}: AiModelsToolbarProps) {
+  return (
+    <div className="mb-4 flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <h3 className={settingsTypography.sectionTitle}>API 配置与模型</h3>
+          {totalConfigCount > 0 && (
+            <span className="text-xs text-muted-foreground tabular-nums">
+              {hasActiveFilters
+                ? `${visibleConfigCount} / ${totalConfigCount} 项服务`
+                : `${totalConfigCount} 项服务`}
+            </span>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) {
+                onImportFile(file);
+              }
+            }}
+          />
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => importInputRef.current?.click()}
+          >
+            <Upload />
+            导入
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={!hasConfigs}
+            onClick={onOpenExport}
+          >
+            <Download />
+            导出
+          </Button>
+
+          <div
+            className="inline-flex h-9 shrink-0 items-center rounded-4xl bg-muted p-[3px] ring-1 ring-inset ring-border/35"
+            role="group"
+            aria-label="展示方式"
+          >
+            <button
+              type="button"
+              onClick={() => onViewModeChange("list")}
+              aria-pressed={viewMode === "list"}
+              aria-label="列表视图"
+              title="列表视图"
+              className={cn(
+                "flex h-full w-9 items-center justify-center rounded-4xl outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
+                viewMode === "list"
+                  ? "bg-background text-foreground shadow-xs ring-1 ring-border/25 dark:bg-card"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <List className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={() => onViewModeChange("card")}
+              aria-pressed={viewMode === "card"}
+              aria-label="卡片视图"
+              title="卡片视图"
+              className={cn(
+                "flex h-full w-9 items-center justify-center rounded-4xl outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
+                viewMode === "card"
+                  ? "bg-background text-foreground shadow-xs ring-1 ring-border/25 dark:bg-card"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <LayoutGrid className="size-4" />
+            </button>
+          </div>
+
+          <Button type="button" onClick={onOpenCreateConfig}>
+            <Plus />
+            添加 API 配置
+          </Button>
+        </div>
+      </div>
+
+      {hasConfigs && (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[220px] flex-1 sm:max-w-sm">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              aria-label="搜索服务或模型"
+              placeholder="搜索服务名、平台、模型名或 ID"
+              value={query}
+              onChange={(event) => onQueryChange(event.target.value)}
+              className={cn("pl-9", query && "pr-9")}
+            />
+            {query && (
+              <button
+                type="button"
+                aria-label="清空搜索"
+                title="清空搜索"
+                onClick={() => onQueryChange("")}
+                className="absolute right-2.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+
+          <div
+            className="inline-flex h-9 items-center rounded-4xl bg-muted p-[3px] ring-1 ring-inset ring-border/35"
+            role="group"
+            aria-label="按模型类型筛选"
+          >
+            {[{ value: 0, label: "全部" }, ...MODEL_TYPE_OPTIONS].map((option) => {
+              const active = modelTypeFilter === option.value;
+              const shortLabel = option.value === 0 ? "全部" : option.label.replace("生成", "");
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => onModelTypeFilterChange(option.value)}
+                  className={cn(
+                    "flex h-full items-center rounded-4xl px-3 text-xs font-medium outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
+                    active
+                      ? "bg-background text-foreground shadow-xs ring-1 ring-border/25 dark:bg-card"
+                      : "text-muted-foreground hover:text-foreground",
+                  )}
+                >
+                  {shortLabel}
+                </button>
+              );
+            })}
+          </div>
+
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => onStatusFilterChange(value as AiModelStatusFilter)}
+            items={STATUS_FILTER_OPTIONS}
+          >
+            <SelectTrigger aria-label="按状态筛选" className="w-28 text-xs">
+              <SelectValue placeholder="全部状态" />
+            </SelectTrigger>
+            <SelectContent className="text-xs">
+              <SelectGroup>
+                {STATUS_FILTER_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value} className="text-xs">
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
+            </SelectContent>
+          </Select>
+
+          <div className="ml-auto flex items-center gap-2 text-muted-foreground">
+            {hasActiveFilters && (
+              <Button type="button" variant="ghost" onClick={onResetFilters}>
+                重置筛选
+              </Button>
+            )}
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={onToggleCollapseAll}
+              disabled={visibleConfigCount === 0}
+            >
+              {allCollapsed ? <ChevronsUpDown /> : <ChevronsDownUp />}
+              {allCollapsed ? "全部展开" : "全部折叠"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

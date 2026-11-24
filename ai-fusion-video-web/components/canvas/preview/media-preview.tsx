@@ -43,7 +43,13 @@ export function CanvasMediaPreviewDialog({
         <DialogHeader className="shrink-0">
           <DialogTitle>{media.title}</DialogTitle>
         </DialogHeader>
-        <div className="min-h-0 overflow-y-auto rounded-lg bg-muted/30">
+        <div
+          className={
+            media.kind === "image"
+              ? "min-h-0 overflow-y-auto rounded-lg border border-border/20 bg-background"
+              : "min-h-0 overflow-y-auto rounded-lg bg-muted/30"
+          }
+        >
           {media.kind === "image" ? (
             <SafeImage
               src={media.source}

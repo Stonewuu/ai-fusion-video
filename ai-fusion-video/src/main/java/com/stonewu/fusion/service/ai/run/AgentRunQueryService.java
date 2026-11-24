@@ -18,6 +18,9 @@ import com.stonewu.fusion.repository.ai.AgentEventRepository;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.run.model.CommittedAgentEvent;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.stonewu.fusion.service.ai.run.stream.AgentStreamReader;
+import com.stonewu.fusion.service.ai.run.stream.AgentRedisStreamStore;
 import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
@@ -43,6 +46,10 @@ public final class AgentRunQueryService {
     private final ObjectMapper objectMapper;
     private final AgentRuntimeSchedulers schedulers;
     private final AgentConfirmationExpiryCoordinator confirmationExpiry;
+    @Autowired
+    private AgentStreamReader streamReader;
+    @Autowired
+    private AgentRedisStreamStore redisStreams;
 
     public AgentRunQueryService(
             AgentRunMapper runMapper,
@@ -140,7 +147,7 @@ public final class AgentRunQueryService {
                         .flatMap(expired -> expired
                                 ? requireAuthorizedRun(run.getRunId(), currentUserId)
                                 : Mono.just(run)))
-                .flatMap(run -> terminalEvent(run)
+                .flatMap(run -> run.getStreamProtocolVersion() == 2 ? streamReader.status(run) : terminalEvent(run)
                         .map(terminal -> status(run, terminal))
                         .defaultIfEmpty(status(run, null)));
     }
@@ -426,6 +433,9 @@ public final class AgentRunQueryService {
     }
 
     private long lastSequence(AgentRun run) {
+        if (run.getStreamProtocolVersion() == 2) {
+            return redisStreams.lastSequence(run.getStreamRunId());
+        }
         Long nextSequence = run.getNextSequence();
         if (nextSequence == null || nextSequence < 1) {
             throw new IllegalStateException(

@@ -193,7 +193,7 @@ export function CanvasCommentsPanel() {
           {items.map((comment) => {
             const nodeTitle = comment.nodeId
               ? (snapshot.graph.nodes.find((node) => node.id === comment.nodeId)
-                  ?.title ?? "节点已移除")
+                ?.title ?? "节点已移除")
               : null;
             return (
               <article
@@ -250,34 +250,34 @@ export function CanvasCommentsPanel() {
                       )}
                       {(comment.createdBy === userId ||
                         snapshot.permissions.canManage) && (
-                        <>
-                          <CanvasIconButton
-                            size="icon-xs"
-                            label="编辑评论"
-                            disabled={busy}
-                            onClick={() => {
-                              setEditing(comment);
-                              setText(comment.content);
-                              setReply(null);
-                            }}
-                          >
-                            <Pencil />
-                          </CanvasIconButton>
-                          <CanvasIconButton
-                            variant="danger"
-                            size="icon-xs"
-                            label="删除评论"
-                            disabled={busy}
-                            onClick={() =>
-                              void patch(comment, { deleted: true }).catch(
-                                () => undefined,
-                              )
-                            }
-                          >
-                            <Trash2 />
-                          </CanvasIconButton>
-                        </>
-                      )}
+                          <>
+                            <CanvasIconButton
+                              size="icon-xs"
+                              label="编辑评论"
+                              disabled={busy}
+                              onClick={() => {
+                                setEditing(comment);
+                                setText(comment.content);
+                                setReply(null);
+                              }}
+                            >
+                              <Pencil />
+                            </CanvasIconButton>
+                            <CanvasIconButton
+                              variant="danger"
+                              size="icon-xs"
+                              label="删除评论"
+                              disabled={busy}
+                              onClick={() =>
+                                void patch(comment, { deleted: true }).catch(
+                                  () => undefined,
+                                )
+                              }
+                            >
+                              <Trash2 />
+                            </CanvasIconButton>
+                          </>
+                        )}
                     </div>
                   )}
                 </div>

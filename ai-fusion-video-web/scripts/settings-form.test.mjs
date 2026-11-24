@@ -10,7 +10,7 @@ const compiled = ts.transpileModule(fs.readFileSync(file, "utf8"), {
 }).outputText;
 const loaded = { exports: {} };
 vm.runInThisContext(`(function(module,exports){${compiled}\n})`)(loaded, loaded.exports);
-const { apiConfigIssue, skillFormIssue, mcpFormIssue, parseMcpLines, httpAddressIssue } = loaded.exports;
+const { apiConfigIssue, aiModelIssue, skillFormIssue, mcpFormIssue, parseMcpLines, httpAddressIssue } = loaded.exports;
 const cloudFields = [{ key: "apiKey", label: "API 密钥", required: true }];
 
 test("API config requires a key unless an explicit keyless local endpoint is supplied", () => {
@@ -39,6 +39,43 @@ test("API proxy validates port and credentials only when enabled", () => {
   assert.equal(apiConfigIssue({ ...config, proxyPort: 7890, proxyPassword: "secret" }, [], false)?.field, "api-proxy-user");
   assert.equal(apiConfigIssue({ ...config, proxyPort: 7890 }, [], false), null);
   assert.equal(apiConfigIssue({ ...config, proxyType: "none" }, [], false), null);
+});
+
+test("AI model validation reports missing fields, protocol gaps, ComfyUI conflicts, and invalid dirty JSON", () => {
+  const valid = {
+    name: "Claude Sonnet",
+    code: "claude-sonnet-4-5",
+    apiConfigId: 1,
+    protocolConfigured: true,
+    requiresComfyUiWorkflow: false,
+    comfyUiCapabilityValid: true,
+    modelTypeLabel: "文字生成",
+  };
+  assert.equal(aiModelIssue(valid), null);
+  assert.equal(aiModelIssue({ ...valid, name: "  " })?.field, "model-name");
+  assert.equal(aiModelIssue({ ...valid, code: "" })?.field, "model-code");
+  assert.equal(aiModelIssue({ ...valid, apiConfigId: undefined })?.field, "model-api");
+  assert.equal(aiModelIssue({ ...valid, protocolConfigured: false })?.field, "model-protocol");
+  assert.equal(
+    aiModelIssue({ ...valid, requiresComfyUiWorkflow: true, comfyuiWorkflowId: undefined })?.field,
+    "comfyui-workflow",
+  );
+  assert.equal(
+    aiModelIssue({ ...valid, requiresComfyUiWorkflow: true, comfyuiWorkflowId: 7, comfyUiCapabilityValid: false })?.field,
+    "comfyui-workflow",
+  );
+  assert.equal(
+    aiModelIssue({ ...valid, rawJsonDirty: true, rawJsonDraft: "{bad" })?.field,
+    "model-raw-json",
+  );
+  assert.equal(
+    aiModelIssue({ ...valid, rawJsonDirty: true, rawJsonDraft: "[1,2]" })?.field,
+    "model-raw-json",
+  );
+  assert.equal(
+    aiModelIssue({ ...valid, rawJsonDirty: true, rawJsonDraft: '{"temperature":0.6}' }),
+    null,
+  );
 });
 
 test("Skill names and code point limits agree with the server including existing legacy names", () => {

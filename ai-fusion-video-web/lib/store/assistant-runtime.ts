@@ -50,9 +50,7 @@ export function makeRuntime(
 ): AssistantConversationRuntime {
   const conversationId = conversation.conversationId;
   const knownRunId = runIds[conversationId];
-  // The event cursor is meaningful only together with the in-memory timeline.
-  // After a page refresh the timeline is empty, so replay from the journal
-  // origin to recover reasoning text and its original start timestamp.
+  // 新页面先重建历史和草稿，不继承上一页面只有序号、没有对应正文的读取位置。
   const lastSequence = 0;
   return {
     conversation,
@@ -94,6 +92,9 @@ export function timelineForMessages(messages: AgentMessage[]): TimelineItem[] {
 }
 
 export function hasTerminal(event: AiChatStreamEvent) {
+  if (event.outputType === "HISTORY") {
+    return event.finished === true;
+  }
   return !event.parentToolCallId
     && !event.agentName
     && (event.outputType === "DONE" || event.outputType === "ERROR" || event.outputType === "CANCELLED");
@@ -105,6 +106,9 @@ export function hasLiveTranscript(runtime: AssistantConversationRuntime) {
 }
 
 export function terminalStatusForEvent(event: AiChatStreamEvent) {
+  if (event.outputType === "HISTORY") {
+    return statusFromPipeline(event.runStatus!);
+  }
   if (event.outputType === "DONE") return "completed";
   if (event.outputType === "ERROR") return "failed";
   return "cancelled";

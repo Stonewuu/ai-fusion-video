@@ -414,7 +414,24 @@ export function messagesToTimeline(messages: AgentMessage[]): TimelineItem[] {
     }
   }
 
-  return timeline;
+  // 子任务可能已完成，而父任务尚未收齐整批工具结果就被取消；保留子任务自身的终态。
+  const childStatuses = new Map<string, NonNullable<AgentMessage["childRunStatus"]>>();
+  for (const message of messages) {
+    if (message.role === "tool" && !message.parentToolCallId && message.toolCallId && message.childRunStatus) {
+      childStatuses.set(message.toolCallId, message.childRunStatus);
+    }
+  }
+  return timeline.map((item) => {
+    if (item.type !== "tool") {
+      return item;
+    }
+    const status = childStatuses.get(item.id);
+    if (status === "COMPLETED" || status === "CANCELLED" || status === "FAILED") {
+      return { ...item, status: status === "COMPLETED" ? "done" : status === "CANCELLED" ? "cancelled" : "error",
+        awaitingChildResult: !("result" in item) };
+    }
+    return item;
+  });
 }
 
 export function resolveHistoryErrorMessage(

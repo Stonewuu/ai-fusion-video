@@ -1,399 +1,447 @@
 "use client";
 
-import { ChevronRight, CloudDownload, Edit2, Loader2, Plus, Search, Star, Trash2, Workflow } from "lucide-react";
+import {
+  ChevronRight,
+  CloudDownload,
+  Edit2,
+  KeyRound,
+  Plus,
+  Trash2,
+  Workflow,
+} from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { toastApiError } from "@/lib/api/toast-api-error";
-import { getModelDisplayParts } from "@/lib/model-display";
-import { generationCapabilityError, resolvedGenerationConfig } from "@/lib/generation-capabilities";
-import { aiModelApi, PLATFORM_LABELS, MODEL_TYPE_LABELS, type AiModel, type ApiConfig, type ModelPreset } from "@/lib/api/ai-model";
-import { Button } from "@/components/ui/button";
-import { ModelVendorIcon, ProviderVendorIcon } from "@/components/dashboard/model-vendor-icon";
-import { maskSecret } from "../../_shared";
+import {
+  MODEL_TYPE_LABELS,
+  PLATFORM_LABELS,
+  type AiModel,
+  type ApiConfig,
+  type ModelPreset,
+} from "@/lib/api/ai-model";
 import type { ProviderDefinition } from "@/lib/api/provider-catalog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { ProviderVendorIcon } from "@/components/dashboard/model-vendor-icon";
+import { maskSecret } from "../../_shared";
 import { SponsorNotice } from "./sponsor-notice";
-import { buildGenerationCapabilityView, findCapabilityPreset, formatSemanticLabel, getApiConfigDefaultProtocol, getCapabilityChipClassName, MODEL_PROTOCOL_LABELS } from "./model-config-support";
+import { formatSemanticLabel, MODEL_PROTOCOL_LABELS } from "./model-config-support";
+import {
+  AiModelRow,
+  type ModelConnectivityTestState,
+} from "./ai-model-row";
 
 interface ApiConfigCardProps {
   config: ApiConfig;
   provider?: ProviderDefinition;
-  models: AiModel[];
+  allModels: AiModel[];
+  visibleModels: AiModel[];
+  hiddenModelCount: number;
+  showingAllInFilter: boolean;
+  onToggleShowAllInFilter: () => void;
   modelPresets: ModelPreset[];
   collapsed: boolean;
+  highlighted: boolean;
   testingModelIds: Set<number>;
+  testResults: Record<number, ModelConnectivityTestState>;
+  settingDefaultModelId: number | null;
+  togglingConfigStatus: boolean;
+  togglingModelIds: Set<number>;
   onToggle: () => void;
+  onToggleConfigStatus: () => void;
   onFetch: () => void;
   onWorkflow: () => void;
   onEditConfig: () => void;
   onDeleteConfig: () => void;
   onEditModel: (model: AiModel) => void;
-  onDeleteModel: (id: number) => void;
-  onAddModel: () => void;
+  onDeleteModel: (model: AiModel) => void;
+  onAddModelManual: () => void;
+  onSetDefaultModel: (model: AiModel) => void;
+  onToggleModelStatus: (model: AiModel) => void;
   onTestModel: (model: AiModel) => void;
-  onModelsChanged: () => Promise<void>;
 }
 
-export function ApiConfigCard({ config, provider, models, modelPresets, collapsed, testingModelIds, onToggle, onFetch, onWorkflow, onEditConfig, onDeleteConfig, onEditModel, onDeleteModel, onAddModel, onTestModel, onModelsChanged }: ApiConfigCardProps) {
+export function ApiConfigCard({
+  config,
+  provider,
+  allModels,
+  visibleModels,
+  hiddenModelCount,
+  showingAllInFilter,
+  onToggleShowAllInFilter,
+  modelPresets,
+  collapsed,
+  highlighted,
+  testingModelIds,
+  testResults,
+  settingDefaultModelId,
+  togglingConfigStatus,
+  togglingModelIds,
+  onToggle,
+  onToggleConfigStatus,
+  onFetch,
+  onWorkflow,
+  onEditConfig,
+  onDeleteConfig,
+  onEditModel,
+  onDeleteModel,
+  onAddModelManual,
+  onSetDefaultModel,
+  onToggleModelStatus,
+  onTestModel,
+}: ApiConfigCardProps) {
   const shouldReduceMotion = useReducedMotion();
-    const configModels = models.filter(m => m.apiConfigId === config.id);
+  const displayModels = showingAllInFilter ? allModels : visibleModels;
+  const isDisabled = config.status === 0;
+  const awaitingKey = Boolean(provider?.quickSetup && isDisabled && !config.apiKey?.trim());
+  const supportsRemoteList = config.platform !== "comfyui" && config.platform !== "sonilo";
 
-    // 按类型分组
-    const modelTypeGroups = [1, 2, 3, 4].map(type => ({
-      type, label: MODEL_TYPE_LABELS[type],
-      models: configModels.filter(m => m.modelType === type),
-    })).filter(g => g.models.length > 0);
+  const modelTypeGroups = [1, 2, 3, 4]
+    .map((type) => ({
+      type,
+      label: MODEL_TYPE_LABELS[type],
+      models: displayModels.filter((model) => model.modelType === type),
+    }))
+    .filter((group) => group.models.length > 0);
 
-    return (
+  const defaultProtocols = (
+    [
+      { label: "文", protocol: config.textProtocol },
+      { label: "图", protocol: config.imageProtocol },
+      { label: "视", protocol: config.videoProtocol },
+    ] as const
+  ).filter((item) => Boolean(item.protocol));
+
+  return (
+    <section
+      id={`api-config-card-${config.id}`}
+      data-api-config-card
+      className={cn(
+        "rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm transition-shadow",
+        highlighted && "border-primary/50 ring-2 ring-primary/35",
+      )}
+    >
+      {/* API 配置头部 */}
       <div
-        key={config.id}
-        data-api-config-card
         className={cn(
-          "rounded-xl border overflow-hidden",
-          "bg-card/50 backdrop-blur-sm border-border/50"
+          "flex flex-col gap-3 rounded-t-xl bg-muted/50 px-4 py-3 sm:flex-row sm:items-start",
+          collapsed && "rounded-b-xl",
+          isDisabled && "bg-muted/30",
         )}
       >
-        {/* ── API 配置头部 ── */}
-        <div className={cn(
-          "flex items-start gap-3 px-4 py-3 group bg-muted/30"
-        )}>
+        <div className="flex min-w-0 flex-1 items-start gap-3">
           <button
             type="button"
-            onClick={() => onToggle()}
+            onClick={onToggle}
             aria-expanded={!collapsed}
-            title={collapsed ? "展开 API 配置" : "折叠 API 配置"}
-            className={cn(
-              "mt-1 h-7 w-7 rounded-md flex items-center justify-center shrink-0",
-              "text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
-            )}
+            aria-label={collapsed ? `展开 ${config.name}` : `折叠 ${config.name}`}
+            title={collapsed ? "展开配置" : "折叠配置"}
+            className="mt-1 flex size-7 shrink-0 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <ChevronRight className={cn(
-              "h-3.5 w-3.5 transition-transform duration-200 motion-reduce:transition-none",
-              !collapsed && "rotate-90"
-            )} />
+            <ChevronRight
+              className={cn(
+                "size-4 transition-transform duration-200 motion-reduce:transition-none",
+                !collapsed && "rotate-90",
+              )}
+            />
           </button>
-          <div className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-muted/60">
+
+          <div className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted/60">
             <ProviderVendorIcon
               provider={provider?.vendor ?? config.providerId ?? config.platform}
               className="size-5"
             />
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <p className="text-sm font-medium break-words">{config.name}</p>
-              {provider?.sponsored && <span className="rounded-full bg-primary/10 px-2 py-1 text-xs text-primary">赞助合作伙伴</span>}
+
+          <div className="min-w-0 flex-1 space-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h4
+                className={cn(
+                  "text-sm font-semibold break-words",
+                  isDisabled ? "text-muted-foreground" : "text-foreground",
+                )}
+              >
+                {config.name}
+              </h4>
+              {provider?.sponsored && (
+                <Badge
+                  variant="secondary"
+                  className="bg-primary/10 text-primary"
+                >
+                  赞助合作伙伴
+                </Badge>
+              )}
               {config.platform && (
-                <span className="px-1.5 py-0.5 rounded bg-muted/50 text-[10px] text-muted-foreground">
+                <Badge variant="secondary">
                   {PLATFORM_LABELS[config.platform] || config.platform}
-                </span>
+                </Badge>
               )}
-              <div className={cn(
-                "w-1.5 h-1.5 rounded-full shrink-0",
-                config.status === 1 ? "bg-green-400" : "bg-muted-foreground/30"
-              )} />
-              {config.status === 0 && <span className="text-xs text-muted-foreground">已停用</span>}
+              {isDisabled && (
+                <Badge variant="outline" className="text-muted-foreground">
+                  已停用
+                </Badge>
+              )}
             </div>
+
             {provider?.sponsored && <SponsorNotice provider={provider} />}
-            <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
               {config.apiKey && (
-                <span className="font-mono text-[10px]">{maskSecret(config.apiKey)}</span>
-              )}
-              {config.proxyType && config.proxyType !== "none" && config.proxyHost && config.proxyPort && (
-                <span className="font-mono text-[10px] px-1 py-0.5 rounded bg-sky-500/10 text-sky-500 break-all">
-                  {config.proxyType}://{config.proxyHost}:{config.proxyPort}{config.proxyUsername ? " auth" : ""}
+                <span className="font-mono" title="已保存的密钥（脱敏展示）">
+                  {maskSecret(config.apiKey)}
                 </span>
               )}
-              <span>{configModels.length} 个模型</span>
-              {([
-                { label: "文", protocol: config.textProtocol },
-                { label: "图", protocol: config.imageProtocol },
-                { label: "视", protocol: config.videoProtocol },
-              ] as const).map(item => item.protocol ? (
+              {config.proxyType
+                && config.proxyType !== "none"
+                && config.proxyHost
+                && config.proxyPort && (
+                  <span className="rounded-md bg-sky-500/10 px-1.5 py-0.5 font-mono text-sky-700 break-all dark:text-sky-400">
+                    {config.proxyType}://{config.proxyHost}:{config.proxyPort}
+                    {config.proxyUsername ? " auth" : ""}
+                  </span>
+                )}
+              <span className="tabular-nums">{allModels.length} 个模型</span>
+              {defaultProtocols.map((item) => (
                 <span
                   key={item.label}
-                  className="rounded bg-violet-500/10 px-1 py-0.5 text-[10px] text-violet-600"
-                  title={`${item.label}类默认：${formatSemanticLabel(item.protocol, MODEL_PROTOCOL_LABELS)}`}
+                  className="rounded-md bg-violet-500/10 px-1.5 py-0.5 text-violet-700 dark:text-violet-400"
+                  title={`${item.label}类默认协议：${formatSemanticLabel(item.protocol, MODEL_PROTOCOL_LABELS)}`}
                 >
                   {item.label} · {formatSemanticLabel(item.protocol, MODEL_PROTOCOL_LABELS)}
                 </span>
-              ) : null)}
+              ))}
             </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0 mt-0.5">
-            {config.platform !== "comfyui" && config.platform !== "sonilo" && (
-              <Button variant="ghost" size="icon-sm"
-                type="button"
-                onClick={() => { onFetch() }}
-                title="获取可用模型列表"
-              >
-                <CloudDownload className="h-3.5 w-3.5" />
-              </Button>
-            )}
-            {config.platform === "comfyui" && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                                onClick={() => onWorkflow()}
-                title="管理 ComfyUI 工作流"
-                aria-label={`管理 ${config.name} 的 ComfyUI 工作流`}
-              >
-                <span className="inline-flex items-center gap-1.5 text-primary">
-                  <Workflow />
-                  管理工作流
+
+            {awaitingKey && (
+              <div className="flex flex-wrap items-center gap-2 pt-1 text-xs text-amber-700 dark:text-amber-400">
+                <span className="inline-flex items-center gap-1">
+                  <KeyRound className="size-3.5" />
+                  导入时未包含密钥，请补充密钥后启用服务。
                 </span>
-              </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="xs"
+                  onClick={onEditConfig}
+                >
+                  补充密钥
+                </Button>
+              </div>
             )}
-            <Button variant="ghost" size="icon-sm"
-              type="button"
-              onClick={() => { onEditConfig() }}
-              title="编辑 API 配置"
-            >
-              <Edit2 className="h-3.5 w-3.5" />
-            </Button>
-            <Button variant="destructive-ghost" size="icon-sm"
-              type="button"
-              onClick={() => onDeleteConfig()}
-              title="删除 API 配置"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </Button>
           </div>
         </div>
 
-        <AnimatePresence initial={false}>
-          {!collapsed && (
-            <motion.div
-              key="config-models"
-              initial={shouldReduceMotion ? false : { height: 0, opacity: 0 }}
-              animate={{ height: "auto", opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              transition={shouldReduceMotion
-                ? { duration: 0 }
-                : { duration: 0.24, ease: [0.25, 0.46, 0.45, 0.94] }}
-              className="overflow-hidden border-t border-border/40"
+        {/* 右侧操作区：全部 32px 对齐 */}
+        <div className="flex flex-wrap items-center gap-1.5 sm:shrink-0 sm:pt-0.5">
+          <div className="flex h-8 items-center px-1">
+            <Switch
+              checked={!isDisabled}
+              disabled={togglingConfigStatus}
+              aria-label={isDisabled ? `启用服务 ${config.name}` : `停用服务 ${config.name}`}
+              title={
+                awaitingKey
+                  ? "填写密钥后可启用服务"
+                  : isDisabled
+                    ? "启用服务"
+                    : "停用服务"
+              }
+              onCheckedChange={() => {
+                if (awaitingKey) {
+                  onEditConfig();
+                  return;
+                }
+                onToggleConfigStatus();
+              }}
+            />
+          </div>
+
+          {config.platform === "comfyui" && (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onWorkflow}
+              aria-label={`管理 ${config.name} 的 ComfyUI 工作流`}
+              title="管理 ComfyUI 工作流"
             >
-              <div className="px-4 py-2 pr-3">
-            {modelTypeGroups.length === 0 ? (
-              <p className="text-xs text-muted-foreground/50 text-center py-3">
-                暂无模型
-              </p>
-            ) : (
-              modelTypeGroups.map((group, gi) => {
-                const defaultModel = group.models.find(m => m.defaultModel);
+              <Workflow />
+              管理工作流
+            </Button>
+          )}
 
-                return (
-                  <div key={group.type} className={cn(gi > 0 && "mt-2 pt-2 border-t border-border/30")}>
-                    {/* 类型分组标题 */}
-                    <div className="flex items-center gap-2 px-1 py-1">
-                      <span className="text-[11px] font-medium text-muted-foreground shrink-0">
-                        {group.label}
-                      </span>
-                      <div className="flex-1 h-px bg-border/15" />
-                      {defaultModel ? (
-                        <span
-                          className="inline-flex min-w-0 max-w-[55%] items-center gap-1 text-[10px] text-amber-500/80 font-medium shrink-0"
-                          title={`默认: ${defaultModel.name}`}
-                        >
-                          <Star className="h-2.5 w-2.5" />
-                          <span className="truncate">默认: {defaultModel.name}</span>
-                        </span>
-                      ) : (
-                        <span className="text-[10px] text-muted-foreground/30 shrink-0">未设默认</span>
-                      )}
-                    </div>
-
-                    {/* 模型行 */}
-                    {group.models.map((model) => {
-                      const modelDisplay = getModelDisplayParts(model);
-                      const matchedPreset = findCapabilityPreset(model, modelPresets);
-                      const effectiveModelConfig = resolvedGenerationConfig(model, modelPresets);
-                      const capabilityError = generationCapabilityError(model);
-                      const capabilityPresetLabel = model.comfyuiWorkflowId
-                        ? effectiveModelConfig.comfyuiWorkflowVersionNo ? `工作流 v${effectiveModelConfig.comfyuiWorkflowVersionNo}` : "已发布工作流"
-                        : matchedPreset?.name
-                        || model.capabilityPresetCode
-                        || "自定义";
-                      const providerDefaultProtocol = getApiConfigDefaultProtocol(config, model.modelType);
-                      const effectiveModelProtocol = model.modelProtocol || providerDefaultProtocol;
-                      const protocolSource = model.modelProtocol
-                        ? "模型覆盖"
-                        : providerDefaultProtocol
-                          ? "API 配置默认"
-                          : "未配置";
-                      const capabilityView = capabilityError ? { chips: [], summary: capabilityError }
-                        : buildGenerationCapabilityView(model, effectiveModelConfig);
-
-                      return (
-                        <div
-                          key={model.id}
-                          className="flex items-start gap-3 px-3 py-2.5 rounded-lg group/model hover:bg-muted/30 transition-colors"
-                        >
-                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted/60">
-                            <ModelVendorIcon source={model} className="size-4" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <p className="text-sm font-medium break-words">{modelDisplay.name}</p>
-                              {model.defaultModel && (
-                                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-amber-500/10 text-[10px] text-amber-500 font-medium">
-                                  <Star className="h-2.5 w-2.5" />
-                                  默认
-                                </span>
-                              )}
-                              <div className={cn(
-                                "w-1.5 h-1.5 rounded-full shrink-0",
-                                model.status === 1 ? "bg-green-400" : "bg-muted-foreground/30"
-                              )} />
-                            </div>
-                            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground mt-0.5 flex-wrap">
-                              {modelDisplay.code && (
-                                <span className="font-mono px-1 py-0.5 rounded bg-muted/40 break-all">
-                                  {modelDisplay.code}
-                                </span>
-                              )}
-                              <span
-                                className={cn(
-                                  "px-1 py-0.5 rounded",
-                                  model.capabilityPresetCode
-                                    ? "bg-amber-500/10 text-amber-600"
-                                    : "bg-muted/50 text-muted-foreground"
-                                )}
-                                title={model.capabilityPresetCode
-                                  ? `模型能力预设：${model.capabilityPresetCode}`
-                                  : "模型能力由自定义高级设置提供"}
-                              >
-                                能力：{capabilityPresetLabel}
-                              </span>
-                              <span
-                                className={cn(
-                                  "px-1 py-0.5 rounded",
-                                  effectiveModelProtocol
-                                    ? "bg-violet-500/10 text-violet-600"
-                                    : "bg-destructive/10 text-destructive"
-                                )}
-                                title={protocolSource}
-                              >
-                                {effectiveModelProtocol
-                                  ? `${formatSemanticLabel(effectiveModelProtocol, MODEL_PROTOCOL_LABELS)} · ${protocolSource}`
-                                  : "请求协议未配置"}
-                              </span>
-                              {model.supportReasoning && (
-                                <span className="px-1 py-0.5 rounded bg-sky-500/10 text-sky-500">思考</span>
-                              )}
-                              {model.multimodalInputTypes.map((inputType) => {
-                                const transportLabel = (model.multimodalInputTransports[inputType] ?? [])
-                                  .map((item) => item === "url" ? "URL" : "Base64")
-                                  .join("/");
-                                return (
-                                  <span
-                                    key={`${model.id}-${inputType}`}
-                                    className="px-1 py-0.5 rounded bg-emerald-500/10 text-emerald-500"
-                                    title={`${transportLabel} 输入`}
-                                  >
-                                    {{ image: "图片", video: "视频", audio: "音频", file: "文件" }[inputType]}
-                                    {transportLabel ? ` · ${transportLabel}` : ""}
-                                  </span>
-                                );
-                              })}
-                              {model.contextWindow && model.contextWindow > 0 && (
-                                <span className="px-1 py-0.5 rounded bg-muted/50 text-muted-foreground">
-                                  上下文：{model.contextWindow.toLocaleString()}
-                                </span>
-                              )}
-                            </div>
-                            {capabilityView && (
-                              <div className="mt-1.5 space-y-1.5">
-                                {capabilityView.chips.length > 0 && (
-                                  <div className="flex flex-wrap gap-1">
-                                    {capabilityView.chips.map(chip => (
-                                      <span
-                                        key={`${model.id}-${chip.label}`}
-                                        className={cn(
-                                          "inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] leading-none",
-                                          getCapabilityChipClassName(chip.tone)
-                                        )}
-                                      >
-                                        {chip.label}
-                                      </span>
-                                    ))}
-                                  </div>
-                                )}
-                                <p className="text-[10px] text-muted-foreground/75 leading-4">
-                                  {capabilityView.summary}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* 操作按钮 */}
-                          <div className="flex items-center gap-2 shrink-0 mt-0.5">
-                            {(model.modelType === 1 || model.modelType === 4 && ["gemini", "vertex_ai", "vertex_ai_api_key"].includes(config.platform || "")) && (
-                              <Button variant="outline" size="xs"
-                                onClick={() => onTestModel(model)}
-                                disabled={testingModelIds.has(model.id)}
-                              >
-                                {testingModelIds.has(model.id) ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  <Search className="h-3 w-3" />
-                                )}
-                                {model.modelType === 4 ? "试听" : testingModelIds.has(model.id) ? "检测中" : "检测"}
-                              </Button>
-                            )}
-                            {!model.defaultModel && (
-                              <Button variant="outline" size="xs"
-                                onClick={async () => {
-                                  try {
-                                    const sameTypeModels = models.filter(m => m.modelType === model.modelType && m.defaultModel);
-                                    for (const dm of sameTypeModels) {
-                                      await aiModelApi.update({ id: dm.id, defaultModel: false });
-                                    }
-                                    await aiModelApi.update({ id: model.id, defaultModel: true });
-                                    await onModelsChanged();
-                                  } catch (err) {
-                                    console.error("设置默认模型失败:", err);
-                                    toastApiError(err, "设置默认模型失败");
-                                  }
-                                }}
-                              >
-                                <Star className="h-3 w-3" />
-                                设为默认
-                              </Button>
-                            )}
-                            <Button variant="ghost" size="icon-sm"
-                              onClick={() => { onEditModel(model) }}
-                              title="编辑模型"
-                            >
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                            <Button variant="destructive-ghost" size="icon-sm"
-                              onClick={() => onDeleteModel(model.id)}
-                              title="删除模型"
-                            >
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })
+          <div className="flex items-center gap-1 text-muted-foreground">
+            {supportsRemoteList && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                onClick={onFetch}
+                aria-label={
+                  provider?.quickSetup
+                    ? `从 ${config.name} 快速勾选模型`
+                    : `获取 ${config.name} 的可用模型列表`
+                }
+                title={provider?.quickSetup ? "快速勾选平台模型" : "获取可用模型列表"}
+              >
+                <CloudDownload />
+              </Button>
             )}
 
-            {/* 添加模型按钮 */}
-            <Button variant="outline" size="sm" className="w-full justify-start"
-              onClick={() => {
-                onAddModel();
-              }}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              onClick={onEditConfig}
+              aria-label={`编辑 API 配置 ${config.name}`}
+              title="编辑 API 配置"
             >
-              <Plus className="h-3.5 w-3.5" />
-              添加模型
+              <Edit2 />
             </Button>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+
+            <Button
+              type="button"
+              variant="destructive-ghost"
+              size="icon-sm"
+              onClick={onDeleteConfig}
+              aria-label={`删除 API 配置 ${config.name}`}
+              title="删除 API 配置"
+            >
+              <Trash2 />
+            </Button>
+          </div>
+        </div>
       </div>
-    );
-  }
+
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            key="config-models"
+            initial={shouldReduceMotion ? false : { height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={
+              shouldReduceMotion
+                ? { duration: 0 }
+                : { duration: 0.22, ease: [0.25, 0.46, 0.45, 0.94] }
+            }
+            className="overflow-hidden border-t border-border/20"
+          >
+            <div className="flex flex-col gap-2 px-3 py-3">
+              {modelTypeGroups.length === 0 ? (
+                <p className="py-4 text-center text-xs text-muted-foreground">
+                  {allModels.length === 0 ? "尚未添加模型" : "当前筛选条件下暂无匹配模型"}
+                </p>
+              ) : (
+                modelTypeGroups.map((group, groupIndex) => (
+                  <div
+                    key={group.type}
+                    className={cn(
+                      groupIndex > 0 && "mt-1 border-t border-border/20 pt-2",
+                    )}
+                  >
+                    <div className="flex items-center gap-2 px-3 py-1">
+                      <span className="shrink-0 text-xs font-medium text-muted-foreground">
+                        {group.label}
+                      </span>
+                      <span className="text-xs text-muted-foreground/70 tabular-nums">
+                        {group.models.length}
+                      </span>
+                      <div className="h-px flex-1 bg-border/20" />
+                    </div>
+
+                    <div className="flex flex-col gap-0.5">
+                      {group.models.map((model) => (
+                        <AiModelRow
+                          key={model.id}
+                          model={model}
+                          config={config}
+                          modelPresets={modelPresets}
+                          testing={testingModelIds.has(model.id)}
+                          testResult={testResults[model.id]}
+                          settingDefault={settingDefaultModelId === model.id}
+                          togglingStatus={togglingModelIds.has(model.id)}
+                          onTestModel={onTestModel}
+                          onSetDefault={onSetDefaultModel}
+                          onToggleStatus={onToggleModelStatus}
+                          onEditModel={onEditModel}
+                          onDeleteModel={onDeleteModel}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                ))
+              )}
+
+              {hiddenModelCount > 0 && (
+                <div className="flex items-center justify-between gap-2 rounded-lg border border-border/20 bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+                  <span>
+                    {showingAllInFilter
+                      ? `已展示该服务下全部 ${allModels.length} 个模型`
+                      : `已隐藏该服务下其余 ${hiddenModelCount} 个未匹配模型`}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={onToggleShowAllInFilter}
+                  >
+                    {showingAllInFilter ? "仅看匹配项" : "显示全部"}
+                  </Button>
+                </div>
+              )}
+
+              {/* 底部模型添加区：区分平台勾选与手动添加 */}
+              <div className="flex flex-wrap items-center gap-2 border-t border-border/20 pt-2.5">
+                {provider?.quickSetup ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onFetch}
+                    >
+                      <CloudDownload />
+                      从平台勾选模型
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={onAddModelManual}
+                    >
+                      <Plus />
+                      手动添加模型
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={onAddModelManual}
+                    >
+                      <Plus />
+                      添加模型
+                    </Button>
+                    {supportsRemoteList && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={onFetch}
+                      >
+                        <CloudDownload />
+                        从远程拉取
+                      </Button>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </section>
+  );
+}

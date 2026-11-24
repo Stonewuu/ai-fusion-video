@@ -1,18 +1,25 @@
 "use client";
 
-import type { Dispatch, Ref, SetStateAction } from "react";
-import { Eye, EyeOff } from "lucide-react";
+import type { Dispatch, SetStateAction } from "react";
+import { ChevronRight, Eye, EyeOff } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { ApiConfigSaveReq } from "@/lib/api/ai-model";
 import type { ConfigIssue } from "@/lib/settings/form-validation";
+import { Badge } from "@/components/ui/badge";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 
 const PROXY_TYPE_OPTIONS = [
@@ -28,7 +35,8 @@ const PROXY_TYPE_OPTIONS = [
 interface ApiProxySettingsProps {
   form: ApiConfigSaveReq;
   issue: ConfigIssue | null;
-  detailsRef: Ref<HTMLDetailsElement>;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   updateField: <K extends keyof ApiConfigSaveReq>(
     key: K,
     value: ApiConfigSaveReq[K],
@@ -40,174 +48,172 @@ interface ApiProxySettingsProps {
 export function ApiProxySettings({
   form,
   issue,
-  detailsRef,
+  open,
+  onOpenChange,
   updateField,
   showSecrets,
   setShowSecrets,
 }: ApiProxySettingsProps) {
+  const proxyEnabled = Boolean(form.proxyType && form.proxyType !== "none");
+  const proxyLabel = proxyEnabled
+    ? PROXY_TYPE_OPTIONS.find((item) => item.value === form.proxyType)?.label ?? form.proxyType
+    : "未启用";
+
   return (
-    <details
-      ref={detailsRef}
-      className="rounded-lg border border-border/20 bg-background/70 p-3"
+    <Collapsible
+      open={open}
+      onOpenChange={onOpenChange}
+      className="rounded-xl border border-border/30 bg-background/70"
     >
-      <summary className="cursor-pointer rounded-lg text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">
-        出站代理 ·{" "}
-        {form.proxyType && form.proxyType !== "none" ? "已启用" : "不使用"}
-      </summary>
-      <div className="mt-3 space-y-3">
-        <div className="flex min-w-0 flex-col gap-2">
-          <Label className="text-xs text-muted-foreground">出站代理</Label>
-          <Select
-            value={form.proxyType || "none"}
-            onValueChange={(v) => {
-              updateField("proxyType", v as string);
-              if (v === "none") {
-                updateField("proxyHost", "");
-                updateField("proxyPort", undefined);
-                updateField("proxyUsername", "");
-                updateField("proxyPassword", "");
-              }
-            }}
-            items={PROXY_TYPE_OPTIONS.map((o) => ({
-              value: o.value,
-              label: o.label,
-            }))}
-          >
-            <SelectTrigger aria-label="出站代理" className="w-full text-sm">
-              <SelectValue placeholder="选择代理类型" />
-            </SelectTrigger>
-            <SelectContent className="text-sm">
-              <SelectGroup>
-                {PROXY_TYPE_OPTIONS.map((opt) => (
-                  <SelectItem
-                    key={opt.value}
-                    value={opt.value}
-                    className="text-sm"
-                  >
-                    <div>
-                      <div>{opt.label}</div>
-                      <div className="text-[10px] text-muted-foreground">
-                        {opt.description}
+      <CollapsibleTrigger className="flex w-full items-center justify-between gap-3 rounded-xl px-3.5 py-2.5 text-left outline-none transition-colors hover:bg-muted/35 focus-visible:ring-2 focus-visible:ring-ring">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className="text-sm font-medium text-foreground">出站代理</span>
+          <Badge variant={proxyEnabled ? "secondary" : "outline"} className="text-xs">
+            {proxyLabel}
+          </Badge>
+        </span>
+        <ChevronRight
+          className={cn(
+            "size-4 shrink-0 text-muted-foreground transition-transform duration-200 motion-reduce:transition-none",
+            open && "rotate-90",
+          )}
+        />
+      </CollapsibleTrigger>
+
+      <CollapsibleContent>
+        <div className="space-y-3 border-t border-border/20 p-3.5">
+          <div className="flex min-w-0 flex-col gap-2">
+            <Label className="text-xs text-muted-foreground">代理类型</Label>
+            <Select
+              value={form.proxyType || "none"}
+              onValueChange={(value) => {
+                updateField("proxyType", value as string);
+                if (value === "none") {
+                  updateField("proxyHost", "");
+                  updateField("proxyPort", undefined);
+                  updateField("proxyUsername", "");
+                  updateField("proxyPassword", "");
+                }
+              }}
+              items={PROXY_TYPE_OPTIONS.map((option) => ({
+                value: option.value,
+                label: option.label,
+              }))}
+            >
+              <SelectTrigger aria-label="出站代理" className="w-full text-sm">
+                <SelectValue placeholder="选择代理类型" />
+              </SelectTrigger>
+              <SelectContent className="text-sm">
+                <SelectGroup>
+                  {PROXY_TYPE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                      <div>
+                        <div>{opt.label}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {opt.description}
+                        </div>
                       </div>
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-          <p className="text-[10px] text-muted-foreground/70">
-            仅影响后端访问当前 API 配置绑定的模型服务，适合 Vertex
-            AI、OpenAI、Anthropic 等国外服务。支持可选代理账号密码。
-          </p>
-        </div>
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              仅用于服务端访问当前配置绑定的模型接口，支持可选代理认证。
+            </p>
+          </div>
 
-        {form.proxyType && form.proxyType !== "none" && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-[1fr_110px] gap-2">
-              <div className="flex min-w-0 flex-col gap-2">
-                <Label
-                  htmlFor="api-proxy-host"
-                  className="text-xs text-muted-foreground"
-                >
-                  代理主机
-                </Label>
-                <Input
-                  placeholder="127.0.0.1"
-                  id="api-proxy-host"
-                  aria-invalid={issue?.field === "api-proxy-host"}
-                  value={form.proxyHost || ""}
-                  onChange={(e) => updateField("proxyHost", e.target.value)}
-                  className="text-sm font-mono"
-                />
-              </div>
-              <div className="flex min-w-0 flex-col gap-2">
-                <Label
-                  htmlFor="api-proxy-port"
-                  className="text-xs text-muted-foreground"
-                >
-                  端口
-                </Label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={65535}
-                  placeholder="7890"
-                  id="api-proxy-port"
-                  aria-invalid={issue?.field === "api-proxy-port"}
-                  value={form.proxyPort ?? ""}
-                  onChange={(e) =>
-                    updateField(
-                      "proxyPort",
-                      e.target.value ? Number(e.target.value) : undefined,
-                    )
-                  }
-                  className="text-sm font-mono"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2">
-              <div className="flex min-w-0 flex-col gap-2">
-                <Label
-                  htmlFor="api-proxy-user"
-                  className="text-xs text-muted-foreground"
-                >
-                  代理用户名
-                </Label>
-                <Input
-                  placeholder="可选"
-                  id="api-proxy-user"
-                  aria-invalid={issue?.field === "api-proxy-user"}
-                  value={form.proxyUsername || ""}
-                  onChange={(e) => updateField("proxyUsername", e.target.value)}
-                  className="text-sm"
-                />
-              </div>
-              <div className="flex min-w-0 flex-col gap-2">
-                <Label
-                  htmlFor="api-proxy-password"
-                  className="text-xs text-muted-foreground"
-                >
-                  代理密码
-                </Label>
-                <div className="relative">
+          {proxyEnabled && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_120px]">
+                <div className="flex min-w-0 flex-col gap-2">
+                  <Label htmlFor="api-proxy-host" className="text-xs text-muted-foreground">
+                    代理主机
+                  </Label>
                   <Input
-                    id="api-proxy-password"
-                    type={showSecrets.proxyPassword ? "text" : "password"}
-                    placeholder="可选"
-                    value={form.proxyPassword || ""}
-                    onChange={(e) =>
-                      updateField("proxyPassword", e.target.value)
-                    }
-                    className="text-sm pr-9"
+                    placeholder="127.0.0.1"
+                    id="api-proxy-host"
+                    aria-invalid={issue?.field === "api-proxy-host"}
+                    value={form.proxyHost || ""}
+                    onChange={(event) => updateField("proxyHost", event.target.value)}
+                    className="font-mono text-sm"
                   />
-                  <button
-                    type="button"
-                    aria-label={
-                      showSecrets.proxyPassword
-                        ? "隐藏代理密码"
-                        : "显示代理密码"
+                </div>
+                <div className="flex min-w-0 flex-col gap-2">
+                  <Label htmlFor="api-proxy-port" className="text-xs text-muted-foreground">
+                    端口
+                  </Label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={65535}
+                    placeholder="7890"
+                    id="api-proxy-port"
+                    aria-invalid={issue?.field === "api-proxy-port"}
+                    value={form.proxyPort ?? ""}
+                    onChange={(event) =>
+                      updateField(
+                        "proxyPort",
+                        event.target.value ? Number(event.target.value) : undefined,
+                      )
                     }
-                    onClick={() =>
-                      setShowSecrets((prev) => ({
-                        ...prev,
-                        proxyPassword: !prev.proxyPassword,
-                      }))
-                    }
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    {showSecrets.proxyPassword ? (
-                      <EyeOff className="h-3.5 w-3.5" />
-                    ) : (
-                      <Eye className="h-3.5 w-3.5" />
-                    )}
-                  </button>
+                    className="font-mono text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="flex min-w-0 flex-col gap-2">
+                  <Label htmlFor="api-proxy-user" className="text-xs text-muted-foreground">
+                    代理用户名（可选）
+                  </Label>
+                  <Input
+                    placeholder="可选"
+                    id="api-proxy-user"
+                    aria-invalid={issue?.field === "api-proxy-user"}
+                    value={form.proxyUsername || ""}
+                    onChange={(event) => updateField("proxyUsername", event.target.value)}
+                    className="text-sm"
+                  />
+                </div>
+                <div className="flex min-w-0 flex-col gap-2">
+                  <Label htmlFor="api-proxy-password" className="text-xs text-muted-foreground">
+                    代理密码（可选）
+                  </Label>
+                  <div className="relative">
+                    <Input
+                      id="api-proxy-password"
+                      type={showSecrets.proxyPassword ? "text" : "password"}
+                      placeholder="可选"
+                      value={form.proxyPassword || ""}
+                      onChange={(event) => updateField("proxyPassword", event.target.value)}
+                      className="pr-9 text-sm"
+                    />
+                    <button
+                      type="button"
+                      aria-label={showSecrets.proxyPassword ? "隐藏代理密码" : "显示代理密码"}
+                      aria-pressed={!!showSecrets.proxyPassword}
+                      onClick={() =>
+                        setShowSecrets((prev) => ({
+                          ...prev,
+                          proxyPassword: !prev.proxyPassword,
+                        }))
+                      }
+                      className="absolute right-2.5 top-1/2 flex size-6 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {showSecrets.proxyPassword ? (
+                        <EyeOff className="size-3.5" />
+                      ) : (
+                        <Eye className="size-3.5" />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
-      </div>
-    </details>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

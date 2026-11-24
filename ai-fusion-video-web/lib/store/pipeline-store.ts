@@ -393,6 +393,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
         status: "running",
         reasoningText: "",
         timeline: [...initialTimeline],
+        historyPrefix: [...initialTimeline],
         lastSequence: 0,
         conversationId,
         contentLoaded: true,
@@ -444,6 +445,7 @@ export const usePipelineStore = create<PipelineStoreState>()((set, get) => ({
                 contentLoading: false,
                 reconnectOnSelect: false,
                 separateNextRootContent: true,
+                historyPrefix: [...candidate.state.timeline],
               },
             }
           : candidate,

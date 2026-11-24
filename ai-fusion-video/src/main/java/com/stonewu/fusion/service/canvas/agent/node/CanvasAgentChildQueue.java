@@ -98,7 +98,7 @@ public class CanvasAgentChildQueue {
         var started = new StartedAgentRun(id, child.getConversationId(), child.getAgentStateSessionId(),
                 child.getOwnerInstanceId(), child.getOwnerEpoch(),
                 child.getLeaseUntil().toInstant(ZoneOffset.UTC), child.getDeadlineAt().toInstant(ZoneOffset.UTC),
-                snapshot, order);
+                snapshot, order, child.getStreamProtocolVersion());
         return new Dispatch(started, child, parent, new CanvasActor(child.getUserId(), child.getActorTeamId()),
                 scope.canvasId(), input);
     }

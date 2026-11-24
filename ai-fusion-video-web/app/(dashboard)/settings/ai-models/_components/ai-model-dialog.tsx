@@ -1,72 +1,83 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useUnsavedDialog } from "@/components/settings/use-unsaved-dialog";
-import { ChevronRight, Loader2 } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
+import { useUnsavedDialog } from "@/components/settings/use-unsaved-dialog";
 import {
   aiModelApi,
-  PLATFORM_LABELS,
-  MODEL_TYPE_OPTIONS,
   MODEL_TYPE_LABELS,
+  MODEL_TYPE_OPTIONS,
+  PLATFORM_LABELS,
   type AiModel,
-  type ApiConfig,
-  type AiModelCreateReq,
   type AiModelUpdateReq,
+  type ApiConfig,
   type ModelPreset,
-  type MultimodalInputTransports,
-  type MultimodalInputType,
 } from "@/lib/api/ai-model";
+import type {
+  ProviderDefinition,
+  ProviderModelCandidate,
+} from "@/lib/api/provider-catalog";
+import { aiModelIssue, type ConfigIssue } from "@/lib/settings/form-validation";
+import { filterModelPresets } from "@/lib/settings/model-preset-filter";
+import {
+  applyModelsDevMatch,
+  findOfficialGooglePreset,
+} from "@/lib/settings/models-dev-match";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogHeader,
-  DialogTitle,
+  DialogClose,
   DialogDescription,
   DialogFooter,
-  DialogClose,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
-import { DialogContent } from "@/components/shared/dialog-content";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { DialogContent } from "@/components/shared/dialog-content";
 import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
-import type { ProviderDefinition } from "@/lib/api/provider-catalog";
-import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { CapabilityPresetSelect } from "./capability-preset-select";
-import { filterModelPresets } from "@/lib/settings/model-preset-filter";
-import { applyModelsDevMatch, findOfficialGooglePreset } from "@/lib/settings/models-dev-match";
-import { ModelConfigForm } from "./model-config-form";
-import { SponsorModelOptions } from "./sponsor-model-options";
-import type { ProviderModelCandidate } from "@/lib/api/provider-catalog";
-import { MultimodalCapabilityEditor } from "./multimodal-capability-editor";
-import { ReasoningEffortLevelsEditor } from "./reasoning-effort-levels-editor";
 import { ComfyUiModelWorkflowField } from "./comfyui-model-workflow-field";
+import { SponsorModelOptions } from "./sponsor-model-options";
 import {
-  parseConfigJson,
-  mergeConfigObjects,
-  stringifyConfigObject,
+  AiModelAdvancedSection,
+  type AdvancedSectionTab,
+  type AiModelFormState,
+} from "./ai-model-advanced-section";
+import { AiModelProtocolSection } from "./ai-model-protocol-section";
+import {
+  buildModelCapabilityHighlights,
+  detachIncompatiblePreset,
+  materializeEffectiveModelConfig,
+  parseModelRawJsonDraft,
+} from "./ai-model-dialog-support";
+import {
   formatSemanticLabel,
-  OPENAI_RESPONSE_MODE_CONFIG_KEYS,
-  MODEL_PROTOCOL_LABELS,
-  INHERIT_PROVIDER_PROTOCOL_VALUE,
-  getProtocolOptionsForModelType,
   getApiConfigDefaultProtocol,
-  supportsReasoningConfig,
-  supportsOpenAiResponsesMode,
-  stripReasoningConfig,
-  sanitizeModelConfigJson,
-  getPositiveNumberValue,
   getFirstConfigString,
+  getProtocolOptionsForModelType,
+  INHERIT_PROVIDER_PROTOCOL_VALUE,
   isCapabilityPresetCompatible,
-  ToggleSettingCard,
+  mergeConfigObjects,
+  MODEL_PROTOCOL_LABELS,
+  OPENAI_RESPONSE_MODE_CONFIG_KEYS,
+  parseConfigJson,
+  sanitizeModelConfigJson,
+  stringifyConfigObject,
+  supportsOpenAiResponsesMode,
+  supportsReasoningConfig,
 } from "./model-config-support";
 
 export interface AiModelDialogProps {
@@ -80,14 +91,33 @@ export interface AiModelDialogProps {
   onSaved: () => void;
 }
 
-type AiModelFormState = AiModelCreateReq & { id?: number; status?: number };
+export function AiModelDialog({
+  open,
+  onOpenChange,
+  editingModel,
+  apiConfigs,
+  providers,
+  defaultApiConfigId,
+  initialCandidate,
+  onSaved,
+}: AiModelDialogProps) {
+  const initialProviderId = apiConfigs.find(
+    (config) => config.id === defaultApiConfigId,
+  )?.providerId;
+  const initialModelType =
+    providers.find((provider) => provider.id === initialProviderId)
+      ?.supportedModelTypes[0] ?? 1;
 
-export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, providers, defaultApiConfigId, initialCandidate, onSaved }: AiModelDialogProps) {
-  const initialProviderId = apiConfigs.find((config) => config.id === defaultApiConfigId)?.providerId;
-  const initialModelType = providers.find((provider) => provider.id === initialProviderId)?.supportedModelTypes[0] ?? 1;
   const [saving, setSaving] = useState(false);
+  const [issue, setIssue] = useState<ConfigIssue | null>(null);
   const [comfyUiCapabilityValid, setComfyUiCapabilityValid] = useState(true);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [advancedTab, setAdvancedTab] = useState<AdvancedSectionTab>("capabilities");
+  const [protocolExpanded, setProtocolExpanded] = useState(false);
+  const [presets, setPresets] = useState<ModelPreset[]>([]);
+  const [rawJsonDraft, setRawJsonDraft] = useState("");
+  const [rawJsonDirty, setRawJsonDirty] = useState(false);
+  const [rawJsonError, setRawJsonError] = useState<string | null>(null);
   const [form, setForm] = useState<AiModelFormState>({
     name: "",
     code: "",
@@ -101,98 +131,161 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, pr
     supportReasoning: false,
     reasoningEffortLevels: [],
     contextWindow: 0,
+    status: 1,
   });
-  const [presets, setPresets] = useState<ModelPreset[]>([]);
-
   const [original, setOriginal] = useState<AiModelFormState | null>(null);
-  const changeOpen = useUnsavedDialog(open, !!original && JSON.stringify(form) !== JSON.stringify(original), saving, onOpenChange);
+
+  const hasUnsavedChanges =
+    !!original
+    && (JSON.stringify(form) !== JSON.stringify(original) || rawJsonDirty);
+  const changeOpen = useUnsavedDialog(open, hasUnsavedChanges, saving, onOpenChange);
 
   useEffect(() => {
-    if (open) {
-      const initializeForm = (value: AiModelFormState) => { setForm(value); setOriginal(value); };
-      aiModelApi.presets().then(setPresets).catch((error) => {
+    if (!open) {
+      return;
+    }
+    const initializeForm = (value: AiModelFormState) => {
+      setForm(value);
+      setOriginal(value);
+    };
+    aiModelApi
+      .presets()
+      .then(setPresets)
+      .catch((error) => {
         console.error("加载模型预设失败:", error);
         toastApiError(error, "加载模型预设失败");
       });
-      if (editingModel) {
-        initializeForm({
-          id: editingModel.id,
-          name: editingModel.name,
-          code: editingModel.code,
-          capabilityPresetCode: editingModel.capabilityPresetCode || "",
-          modelProtocol: editingModel.modelProtocol || "",
-          modelType: editingModel.modelType,
-          description: editingModel.description || "",
-          config: editingModel.config || "",
-          maxConcurrency: editingModel.maxConcurrency ?? 5,
-          defaultModel: editingModel.defaultModel,
-          supportVision: editingModel.supportVision,
-          multimodalInputTypes: editingModel.multimodalInputTypes,
-          multimodalInputTransports: editingModel.multimodalInputTransports,
-          supportReasoning: editingModel.supportReasoning,
-          reasoningEffortLevels: editingModel.reasoningEffortLevels ?? [],
-          contextWindow: editingModel.contextWindow ?? 0,
-          apiConfigId: editingModel.apiConfigId ?? undefined,
-          comfyuiWorkflowId: editingModel.comfyuiWorkflowId ?? undefined,
-          status: editingModel.status,
-        });
-      } else {
-        initializeForm({
-          name: initialCandidate?.name ?? "",
-          code: initialCandidate?.id ?? "",
-          capabilityPresetCode: initialCandidate?.capabilityPresetCode ?? "",
-          modelProtocol: initialCandidate?.modelProtocol ?? "",
-          modelType: initialCandidate?.modelType ?? initialModelType,
-          config: initialCandidate?.config,
-          maxConcurrency: 5,
-          defaultModel: false,
-          supportVision: initialCandidate?.textCapabilities?.inputTypes.includes("image") ?? false,
-          multimodalInputTypes: initialCandidate?.textCapabilities?.inputTypes ?? [],
-          multimodalInputTransports: initialCandidate?.textCapabilities?.inputTransports ?? {},
-          supportReasoning: initialCandidate?.textCapabilities?.reasoning ?? false,
-          reasoningEffortLevels: initialCandidate?.textCapabilities?.reasoningEfforts ?? [],
-          contextWindow: initialCandidate?.textCapabilities?.contextWindow ?? 0,
-          apiConfigId: defaultApiConfigId,
-          comfyuiWorkflowId: undefined,
-        });
-      }
-      setShowAdvanced(!!initialCandidate?.configurationHint);
+
+    if (editingModel) {
+      initializeForm({
+        id: editingModel.id,
+        name: editingModel.name,
+        code: editingModel.code,
+        capabilityPresetCode: editingModel.capabilityPresetCode || "",
+        modelProtocol: editingModel.modelProtocol || "",
+        modelType: editingModel.modelType,
+        description: editingModel.description || "",
+        config: editingModel.config || "",
+        maxConcurrency: editingModel.maxConcurrency ?? 5,
+        defaultModel: editingModel.defaultModel,
+        supportVision: editingModel.supportVision,
+        multimodalInputTypes: editingModel.multimodalInputTypes,
+        multimodalInputTransports: editingModel.multimodalInputTransports,
+        supportReasoning: editingModel.supportReasoning,
+        reasoningEffortLevels: editingModel.reasoningEffortLevels ?? [],
+        contextWindow: editingModel.contextWindow ?? 0,
+        apiConfigId: editingModel.apiConfigId ?? undefined,
+        comfyuiWorkflowId: editingModel.comfyuiWorkflowId ?? undefined,
+        status: editingModel.status,
+      });
+      setProtocolExpanded(Boolean(editingModel.modelProtocol));
+    } else {
+      initializeForm({
+        name: initialCandidate?.name ?? "",
+        code: initialCandidate?.id ?? "",
+        capabilityPresetCode: initialCandidate?.capabilityPresetCode ?? "",
+        modelProtocol: initialCandidate?.modelProtocol ?? "",
+        modelType: initialCandidate?.modelType ?? initialModelType,
+        config: initialCandidate?.config,
+        maxConcurrency: 5,
+        defaultModel: false,
+        supportVision:
+          initialCandidate?.textCapabilities?.inputTypes.includes("image") ?? false,
+        multimodalInputTypes: initialCandidate?.textCapabilities?.inputTypes ?? [],
+        multimodalInputTransports:
+          initialCandidate?.textCapabilities?.inputTransports ?? {},
+        supportReasoning: initialCandidate?.textCapabilities?.reasoning ?? false,
+        reasoningEffortLevels:
+          initialCandidate?.textCapabilities?.reasoningEfforts ?? [],
+        contextWindow: initialCandidate?.textCapabilities?.contextWindow ?? 0,
+        apiConfigId: defaultApiConfigId,
+        comfyuiWorkflowId: undefined,
+        status: 1,
+      });
+      setProtocolExpanded(Boolean(initialCandidate?.modelProtocol));
     }
+    setShowAdvanced(Boolean(initialCandidate?.configurationHint));
+    setAdvancedTab("capabilities");
+    setRawJsonDirty(false);
+    setRawJsonError(null);
+    setIssue(null);
   }, [open, editingModel, defaultApiConfigId, initialModelType, initialCandidate]);
 
-  const updateField = <K extends keyof typeof form>(key: K, value: (typeof form)[K]) => {
-    setForm(prev => ({ ...prev, [key]: value }));
+  const updateField = <K extends keyof AiModelFormState>(
+    key: K,
+    value: AiModelFormState[K],
+  ) => {
+    setForm((prev) => ({ ...prev, [key]: value }));
+    setIssue(null);
   };
 
-  const updateMetaNumberField = (key: "maxConcurrency" | "contextWindow", rawValue: string) => {
-    if (!rawValue.trim()) {
-      updateField(key, 0);
-      return;
-    }
-    const parsed = Number.parseInt(rawValue, 10);
-    updateField(key, Number.isNaN(parsed) ? 0 : parsed);
-  };
-
-  const selectedApiConfig = apiConfigs.find(c => c.id === form.apiConfigId);
-  const selectedProvider = providers.find((provider) => provider.id === selectedApiConfig?.providerId);
-  const modelTypeOptions = MODEL_TYPE_OPTIONS.filter((option) =>
-    !selectedProvider || selectedProvider.supportedModelTypes.includes(option.value));
+  const selectedApiConfig = apiConfigs.find((config) => config.id === form.apiConfigId);
+  const selectedProvider = providers.find(
+    (provider) => provider.id === selectedApiConfig?.providerId,
+  );
+  const modelTypeOptions = MODEL_TYPE_OPTIONS.filter(
+    (option) =>
+      !selectedProvider || selectedProvider.supportedModelTypes.includes(option.value),
+  );
   const selectedPlatform = selectedApiConfig?.platform;
-  const requiresComfyUiWorkflow = selectedPlatform === "comfyui" && (form.modelType === 2 || form.modelType === 3);
+  const requiresComfyUiWorkflow =
+    selectedPlatform === "comfyui" && (form.modelType === 2 || form.modelType === 3);
 
   const selectedCapabilityPreset = form.capabilityPresetCode
-    ? presets.find(p => p.code === form.capabilityPresetCode) || null
+    ? presets.find((preset) => preset.code === form.capabilityPresetCode) || null
     : null;
-  const visiblePresets = filterModelPresets(presets, form.modelType, selectedPlatform, selectedProvider);
-  const selectedPresetConfig = selectedCapabilityPreset?.config as Record<string, unknown> | undefined;
-  const effectiveModelConfig = mergeConfigObjects(selectedPresetConfig || {}, parseConfigJson(form.config));
-  const showOpenAiResponsesMode = form.modelType === 1 && supportsOpenAiResponsesMode(selectedPlatform);
-  const apiModeValue = getFirstConfigString(effectiveModelConfig, OPENAI_RESPONSE_MODE_CONFIG_KEYS) ?? "__unset__";
-  const googlePlatform = ["gemini", "vertex_ai", "vertex_ai_api_key"].includes(selectedPlatform || "");
-  const hasRequestProtocol = form.modelType >= 1 && (form.modelType <= 3 || googlePlatform);
-  const apiConfigDefaultProtocol = getApiConfigDefaultProtocol(selectedApiConfig, form.modelType);
-  const protocolOptions = getProtocolOptionsForModelType(form.modelType, selectedApiConfig?.providerId, providers)
-    .filter(option => form.modelType <= 3 || !googlePlatform || option.value === (selectedPlatform === "gemini" ? "gemini" : "vertex_ai"));
+  const visiblePresets = filterModelPresets(
+    presets,
+    form.modelType,
+    selectedPlatform,
+    selectedProvider,
+  );
+  const selectedPresetConfig = selectedCapabilityPreset?.config as
+    | Record<string, unknown>
+    | undefined;
+  const effectiveModelConfig = useMemo(
+    () => mergeConfigObjects(selectedPresetConfig || {}, parseConfigJson(form.config)),
+    [selectedPresetConfig, form.config],
+  );
+  const formattedEffectiveJson = useMemo(
+    () =>
+      Object.keys(effectiveModelConfig).length > 0
+        ? JSON.stringify(effectiveModelConfig, null, 2)
+        : "",
+    [effectiveModelConfig],
+  );
+
+  useEffect(() => {
+    if (!rawJsonDirty) {
+      setRawJsonDraft(formattedEffectiveJson);
+      setRawJsonError(null);
+    }
+  }, [formattedEffectiveJson, rawJsonDirty]);
+
+  const showOpenAiResponsesMode =
+    form.modelType === 1 && supportsOpenAiResponsesMode(selectedPlatform);
+  const apiModeValue =
+    getFirstConfigString(effectiveModelConfig, OPENAI_RESPONSE_MODE_CONFIG_KEYS)
+    ?? "__unset__";
+  const googlePlatform = ["gemini", "vertex_ai", "vertex_ai_api_key"].includes(
+    selectedPlatform || "",
+  );
+  const hasRequestProtocol =
+    form.modelType >= 1 && (form.modelType <= 3 || googlePlatform);
+  const apiConfigDefaultProtocol = getApiConfigDefaultProtocol(
+    selectedApiConfig,
+    form.modelType,
+  );
+  const protocolOptions = getProtocolOptionsForModelType(
+    form.modelType,
+    selectedApiConfig?.providerId,
+    providers,
+  ).filter(
+    (option) =>
+      form.modelType <= 3
+      || !googlePlatform
+      || option.value === (selectedPlatform === "gemini" ? "gemini" : "vertex_ai"),
+  );
   const modelProtocolOverride = form.modelProtocol?.trim() || "";
   const effectiveModelProtocol = modelProtocolOverride || apiConfigDefaultProtocol;
   const modelProtocolSelectOptions = [
@@ -204,82 +297,70 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, pr
     },
     ...protocolOptions,
   ];
-  const protocolConfigured = !hasRequestProtocol || protocolOptions.some((option) => option.value === effectiveModelProtocol);
-  const comfyUiWorkflowConfigured = !requiresComfyUiWorkflow || (Boolean(form.comfyuiWorkflowId) && comfyUiCapabilityValid);
-  const compatibleCapabilityPresets = visiblePresets.filter(preset => isCapabilityPresetCompatible({
-    preset,
-    modelType: form.modelType,
-    platform: selectedPlatform,
-    effectiveProtocol: effectiveModelProtocol,
-  }));
-  const hasCustomCapabilityConfig = Boolean(form.config?.trim() && form.config.trim() !== "{}");
-
-  const materializeEffectiveConfig = (source: AiModelFormState): string => {
-    const preset = source.capabilityPresetCode
-      ? presets.find(item => item.code === source.capabilityPresetCode)
-      : null;
-    return stringifyConfigObject(mergeConfigObjects(preset?.config || {}, parseConfigJson(source.config)));
-  };
-
-  const detachIncompatibleCapabilityPreset = (
-    previous: AiModelFormState,
-    next: AiModelFormState,
-    nextApiConfig: ApiConfig | undefined
-  ): AiModelFormState => {
-    if (!previous.capabilityPresetCode) return next;
-    const preset = presets.find(item => item.code === previous.capabilityPresetCode);
-    if (!preset) return next;
-    const nextProtocol = next.modelProtocol?.trim()
-      || getApiConfigDefaultProtocol(nextApiConfig, next.modelType);
-    if ((!preset.providerId || preset.providerId === nextApiConfig?.providerId) && isCapabilityPresetCompatible({
+  const protocolConfigured =
+    !hasRequestProtocol
+    || protocolOptions.some((option) => option.value === effectiveModelProtocol);
+  const compatibleCapabilityPresets = visiblePresets.filter((preset) =>
+    isCapabilityPresetCompatible({
       preset,
-      modelType: next.modelType,
-      platform: nextApiConfig?.platform,
-      effectiveProtocol: nextProtocol,
-    })) {
-      return next;
-    }
-    return {
-      ...next,
-      capabilityPresetCode: "",
-      config: materializeEffectiveConfig(previous),
-    };
-  };
+      modelType: form.modelType,
+      platform: selectedPlatform,
+      effectiveProtocol: effectiveModelProtocol,
+    }),
+  );
+  const hasCustomCapabilityConfig = Boolean(
+    form.config?.trim() && form.config.trim() !== "{}",
+  );
 
   const selectCustomCapabilities = () => {
-    setForm(previous => previous.capabilityPresetCode
-      ? {
-          ...previous,
-          capabilityPresetCode: "",
-          config: materializeEffectiveConfig(previous),
-        }
-      : previous);
+    setForm((previous) =>
+      previous.capabilityPresetCode
+        ? {
+            ...previous,
+            capabilityPresetCode: "",
+            config: materializeEffectiveModelConfig(previous, presets),
+          }
+        : previous,
+    );
+    setRawJsonDirty(false);
   };
 
   const applyCapabilityPreset = (preset: ModelPreset) => {
-    setForm(previous => ({
+    setForm((previous) => ({
       ...previous,
       capabilityPresetCode: preset.code,
       name: previous.name || preset.name,
       code: previous.code || preset.modelCode || preset.code,
-      modelProtocol: previous.modelProtocol || apiConfigDefaultProtocol ? previous.modelProtocol
-        : googlePlatform ? selectedPlatform === "gemini" ? "gemini" : "vertex_ai" : preset.modelProtocol || "",
+      modelProtocol:
+        previous.modelProtocol || apiConfigDefaultProtocol
+          ? previous.modelProtocol
+          : googlePlatform
+            ? selectedPlatform === "gemini"
+              ? "gemini"
+              : "vertex_ai"
+            : preset.modelProtocol || "",
       config: "",
       supportReasoning: preset.supportReasoning ?? previous.supportReasoning,
-      reasoningEffortLevels: preset.reasoningEffortLevels ?? previous.reasoningEffortLevels,
+      reasoningEffortLevels:
+        preset.reasoningEffortLevels ?? previous.reasoningEffortLevels,
       contextWindow: preset.contextWindow ?? previous.contextWindow,
-      multimodalInputTypes: preset.multimodalInputTypes ?? previous.multimodalInputTypes,
-      multimodalInputTransports: preset.multimodalInputTransports ?? previous.multimodalInputTransports,
-      supportVision: (preset.multimodalInputTypes ?? previous.multimodalInputTypes)?.includes("image") ?? false,
+      multimodalInputTypes:
+        preset.multimodalInputTypes ?? previous.multimodalInputTypes,
+      multimodalInputTransports:
+        preset.multimodalInputTransports ?? previous.multimodalInputTransports,
+      supportVision:
+        (preset.multimodalInputTypes ?? previous.multimodalInputTypes)?.includes(
+          "image",
+        ) ?? false,
     }));
+    setRawJsonDirty(false);
+    setIssue(null);
   };
 
   const updateCustomCapabilityConfig = (config: string) => {
-    setForm(previous => ({
-      ...previous,
-      capabilityPresetCode: "",
-      config,
-    }));
+    setForm((previous) => ({ ...previous, capabilityPresetCode: "", config }));
+    setRawJsonDirty(false);
+    setIssue(null);
   };
 
   const updateOpenAiResponsesMode = (rawValue: string) => {
@@ -290,26 +371,83 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, pr
     if (rawValue !== "__unset__") {
       next[OPENAI_RESPONSE_MODE_CONFIG_KEYS[0]] = rawValue;
     }
-
     const cleaned = Object.fromEntries(
-      Object.entries(next).filter(([, value]) => value !== "" && value !== undefined && value !== null)
+      Object.entries(next).filter(
+        ([, value]) => value !== "" && value !== undefined && value !== null,
+      ),
     );
     updateCustomCapabilityConfig(stringifyConfigObject(cleaned));
   };
 
-  const handleSave = async () => {
-    if (!form.name.trim() || !form.code.trim() || !form.apiConfigId || !protocolConfigured || !comfyUiWorkflowConfigured) {
+  const handleApplyRawJson = () => {
+    const parsed = parseModelRawJsonDraft(rawJsonDraft);
+    if (!parsed.ok) {
+      setRawJsonError(parsed.error);
       return;
     }
+    updateCustomCapabilityConfig(parsed.value);
+    setRawJsonError(null);
+    toast.success("已应用自定义 JSON 参数");
+  };
+
+  const handleSave = async () => {
+    const invalid = aiModelIssue({
+      name: form.name,
+      code: form.code,
+      apiConfigId: form.apiConfigId,
+      protocolConfigured,
+      requiresComfyUiWorkflow,
+      comfyuiWorkflowId: form.comfyuiWorkflowId,
+      comfyUiCapabilityValid,
+      modelTypeLabel: MODEL_TYPE_LABELS[form.modelType] || "当前",
+      rawJsonDirty,
+      rawJsonDraft,
+    });
+    if (invalid) {
+      setIssue(invalid);
+      if (invalid.field === "model-protocol") {
+        setProtocolExpanded(true);
+      }
+      if (invalid.field === "model-raw-json") {
+        setShowAdvanced(true);
+        setAdvancedTab("json");
+        setRawJsonError(invalid.message);
+      }
+      requestAnimationFrame(() => {
+        document.getElementById(invalid.field)?.focus();
+      });
+      return;
+    }
+
+    let nextConfigRaw = form.config;
+    let nextPresetCode = form.capabilityPresetCode?.trim() || "";
+    if (rawJsonDirty) {
+      const parsed = parseModelRawJsonDraft(rawJsonDraft);
+      if (!parsed.ok) {
+        setRawJsonError(parsed.error);
+        setShowAdvanced(true);
+        setAdvancedTab("json");
+        setIssue({ field: "model-raw-json", message: parsed.error });
+        requestAnimationFrame(() => {
+          document.getElementById("model-raw-json")?.focus();
+        });
+        return;
+      }
+      nextConfigRaw = parsed.value;
+      nextPresetCode = "";
+    }
+
+    setIssue(null);
     setSaving(true);
     try {
-      const normalizedConfig = requiresComfyUiWorkflow ? form.config : sanitizeModelConfigJson({
-        configJson: form.config,
-        modelType: form.modelType,
-        platform: selectedPlatform,
-        supportReasoning: !!form.supportReasoning,
-      });
-      const normalizedCapabilityPresetCode = form.capabilityPresetCode?.trim() || "";
+      const normalizedConfig = requiresComfyUiWorkflow
+        ? nextConfigRaw
+        : sanitizeModelConfigJson({
+            configJson: nextConfigRaw,
+            modelType: form.modelType,
+            platform: selectedPlatform,
+            supportReasoning: !!form.supportReasoning,
+          });
       const normalizedModelProtocol = hasRequestProtocol
         ? form.modelProtocol?.trim() || ""
         : undefined;
@@ -317,9 +455,9 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, pr
       if (editingModel) {
         const updateReq: AiModelUpdateReq = {
           id: editingModel.id,
-          name: form.name,
-          code: form.code,
-          capabilityPresetCode: normalizedCapabilityPresetCode,
+          name: form.name.trim(),
+          code: form.code.trim(),
+          capabilityPresetCode: nextPresetCode,
           modelProtocol: normalizedModelProtocol,
           modelType: form.modelType,
           description: form.description,
@@ -344,13 +482,17 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, pr
       } else {
         await aiModelApi.create({
           ...form,
-          capabilityPresetCode: normalizedCapabilityPresetCode || undefined,
+          name: form.name.trim(),
+          code: form.code.trim(),
+          capabilityPresetCode: nextPresetCode || undefined,
           modelProtocol: normalizedModelProtocol,
           config: normalizedConfig,
         });
       }
+      setRawJsonDirty(false);
       onSaved();
       onOpenChange(false);
+      toast.success(editingModel ? "模型已保存" : "模型已创建");
     } catch (err) {
       console.error("保存 AI 模型失败:", err);
       toastApiError(err, "保存 AI 模型失败");
@@ -359,437 +501,391 @@ export function AiModelDialog({ open, onOpenChange, editingModel, apiConfigs, pr
     }
   };
 
+  const activeCapabilityHighlights = buildModelCapabilityHighlights(
+    form,
+    effectiveModelConfig,
+  );
+
   return (
     <Dialog open={open} onOpenChange={changeOpen}>
-      <DialogContent className="w-[calc(100%-2rem)] sm:max-w-4xl max-h-[calc(100vh-2rem)] sm:max-h-[88vh] flex flex-col overflow-hidden">
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] flex-col overflow-hidden sm:max-h-[88vh] sm:max-w-4xl">
         <DialogHeader className="shrink-0">
           <DialogTitle>{editingModel ? "编辑 AI 模型" : "新建 AI 模型"}</DialogTitle>
-          <DialogDescription>设置模型名称、调用标识和 API 配置。</DialogDescription>
+          <DialogDescription>配置模型标识、能力预设与调用参数。</DialogDescription>
         </DialogHeader>
 
-        <DialogScrollBody className="space-y-4">
-          <div className="grid gap-3 sm:grid-cols-2">
-          {/* 模型名称 */}
-          <div className="space-y-1.5">
-            <Label htmlFor="model-name" className="text-xs text-muted-foreground">模型名称 <span className="text-destructive">*</span></Label>
-            <Input id="model-name"
-              placeholder="例如：claude-sonnet-4.5"
-              value={form.name}
-              onChange={e => updateField("name", e.target.value)}
-              className="text-sm"
-            />
-          </div>
-
-          {/* 模型标识 */}
-          <div className="space-y-1.5">
-            <Label htmlFor="model-code" className="text-xs text-muted-foreground">模型标识 (code) <span className="text-destructive">*</span></Label>
-            <Input id="model-code"
-              placeholder="例如：claude-sonnet-4.5"
-              value={form.code}
-              onChange={e => updateField("code", e.target.value)}
-              className="text-sm font-mono"
-            />
-          </div>
-          </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-          {/* 模型类型 */}
-          <div className="space-y-1.5">
-            <Label htmlFor="model-type" className="text-xs text-muted-foreground">模型类型</Label>
-            <Select
-              value={form.modelType}
-              onValueChange={v => {
-                const nextType = v as number;
-                setForm(prev => {
-                  let next: AiModelFormState = { ...prev, modelType: nextType };
-                  if (nextType !== 1) {
-                    next.supportVision = false;
-                    next.multimodalInputTypes = [];
-                    next.multimodalInputTransports = {};
-                    next.supportReasoning = false;
-                    next.reasoningEffortLevels = [];
-                    next.contextWindow = 0;
-                  }
-                  if (nextType !== prev.modelType) {
-                    next.modelProtocol = "";
-                    next.comfyuiWorkflowId = undefined;
-                  }
-                  next = detachIncompatibleCapabilityPreset(prev, next, selectedApiConfig);
-                  next.config = sanitizeModelConfigJson({
-                    configJson: next.config,
-                    modelType: nextType,
-                    platform: selectedPlatform,
-                    supportReasoning: nextType === 1 ? !!prev.supportReasoning : false,
-                  });
-                  return next;
-                });
-              }}
-              items={modelTypeOptions.map(o => ({ value: o.value, label: o.label }))}
-            >
-              <SelectTrigger id="model-type" className="w-full text-sm">
-                <SelectValue placeholder="选择类型" />
-              </SelectTrigger>
-              <SelectContent className="text-sm">
-                <SelectGroup>
-                  {modelTypeOptions.map(opt => (
-                    <SelectItem key={opt.value} value={opt.value} className="text-sm">
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* API 配置 */}
-          <div className="space-y-1.5">
-            <Label htmlFor="model-api" className="text-xs text-muted-foreground">API 配置 <span className="text-destructive">*</span></Label>
-            <Select
-              value={form.apiConfigId}
-              onValueChange={v => {
-                const nextApiConfigId = v as number;
-                const nextApiConfig = apiConfigs.find(c => c.id === nextApiConfigId);
-                const nextPlatform = nextApiConfig?.platform;
-                const nextProvider = providers.find((provider) => provider.id === nextApiConfig?.providerId);
-                setForm(prev => {
-                  let nextModelType = nextPlatform === "comfyui" && prev.modelType !== 2 && prev.modelType !== 3
-                    ? 2
-                    : prev.modelType;
-                  if (nextProvider && !nextProvider.supportedModelTypes.includes(nextModelType)) {
-                    nextModelType = nextProvider.supportedModelTypes[0];
-                  }
-                  let next: AiModelFormState = {
-                    ...prev,
-                    apiConfigId: nextApiConfigId,
-                    modelType: nextModelType,
-                    modelProtocol: nextPlatform !== "comfyui" && getProtocolOptionsForModelType(nextModelType, nextApiConfig?.providerId, providers)
-                      .some((option) => option.value === prev.modelProtocol) ? prev.modelProtocol : "",
-                    comfyuiWorkflowId: undefined,
-                    maxConcurrency: nextPlatform === "comfyui" ? 1 : prev.maxConcurrency,
-                  };
-                  if (!supportsReasoningConfig(nextPlatform)) {
-                    next.supportReasoning = false;
-                    next.reasoningEffortLevels = [];
-                  }
-                  next = detachIncompatibleCapabilityPreset(prev, next, nextApiConfig);
-                  next.config = sanitizeModelConfigJson({
-                    configJson: next.config,
-                    modelType: prev.modelType,
-                    platform: nextPlatform,
-                    supportReasoning: prev.modelType === 1 && supportsReasoningConfig(nextPlatform)
-                      ? !!prev.supportReasoning
-                      : false,
-                  });
-                  return next;
-                });
-              }}
-              items={apiConfigs.map(c => ({ value: c.id, label: `${c.name}${c.platform ? ` (${PLATFORM_LABELS[c.platform] || c.platform})` : ""}` }))}
-            >
-              <SelectTrigger id="model-api" className="w-full text-sm">
-                <SelectValue placeholder="选择 API 配置" />
-              </SelectTrigger>
-              <SelectContent className="text-sm">
-                <SelectGroup>
-                  {apiConfigs.map(c => (
-                    <SelectItem key={c.id} value={c.id} className="text-sm">
-                      {c.name}
-                      {c.platform && <span className="text-muted-foreground ml-1">({PLATFORM_LABELS[c.platform] || c.platform})</span>}
-                    </SelectItem>
-                  ))}
-                </SelectGroup>
-              </SelectContent>
-            </Select>
-          </div>
-          </div>
-
-          {requiresComfyUiWorkflow && (
-            <ComfyUiModelWorkflowField
-              apiConfigId={form.apiConfigId!}
-              modelType={form.modelType as 2 | 3}
-              value={form.comfyuiWorkflowId}
-              configJson={form.config}
-              capabilityPresetCode={form.capabilityPresetCode}
-              configuredLimits={effectiveModelConfig}
-              onValidityChange={setComfyUiCapabilityValid}
-              onChange={(workflowId, config) => setForm(previous => ({
-                ...previous,
-                comfyuiWorkflowId: workflowId,
-                config,
-              }))}
-            />
-          )}
-
-          {hasRequestProtocol && (
-            <div className="rounded-xl border border-primary/20 bg-primary/[0.035] p-3 space-y-3">
-              <div className="flex flex-wrap items-start justify-between gap-2">
-                <div>
-                  <Label className="text-xs font-medium text-foreground">请求协议</Label>
-                  <p className="mt-1 text-[11px] leading-4 text-muted-foreground">
-                    选择模型使用的接口协议。
-                  </p>
-                </div>
-                <span className="rounded-md border border-border/50 bg-background/70 px-2 py-1 text-[10px] text-muted-foreground">
-                  可继承 API 默认设置
-                </span>
+        <DialogScrollBody className="flex flex-col gap-4 p-2">
+          <fieldset disabled={saving} className="flex min-w-0 flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label htmlFor="model-name" className="text-xs text-muted-foreground">
+                  模型名称 <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="model-name"
+                  aria-invalid={issue?.field === "model-name"}
+                  placeholder="例如：Claude Sonnet 4.5"
+                  value={form.name}
+                  onChange={(event) => updateField("name", event.target.value)}
+                  className="text-sm"
+                />
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="model-protocol" className="text-xs text-muted-foreground">协议覆盖（可选）</Label>
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label htmlFor="model-code" className="text-xs text-muted-foreground">
+                  模型标识（code） <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="model-code"
+                  aria-invalid={issue?.field === "model-code"}
+                  placeholder="例如：claude-sonnet-4-5"
+                  value={form.code}
+                  onChange={(event) => updateField("code", event.target.value)}
+                  className="font-mono text-sm"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label htmlFor="model-type" className="text-xs text-muted-foreground">
+                  模型类型
+                </Label>
                 <Select
-                  value={form.modelProtocol || INHERIT_PROVIDER_PROTOCOL_VALUE}
-                  onValueChange={value => {
-                    const modelProtocol = value === INHERIT_PROVIDER_PROTOCOL_VALUE ? "" : String(value);
-                    setForm(previous => detachIncompatibleCapabilityPreset(
-                      previous,
-                      { ...previous, modelProtocol },
-                      selectedApiConfig
-                    ));
+                  value={form.modelType}
+                  onValueChange={(value) => {
+                    const nextType = value as number;
+                    setForm((prev) => {
+                      let next: AiModelFormState = { ...prev, modelType: nextType };
+                      if (nextType !== 1) {
+                        next.supportVision = false;
+                        next.multimodalInputTypes = [];
+                        next.multimodalInputTransports = {};
+                        next.supportReasoning = false;
+                        next.reasoningEffortLevels = [];
+                        next.contextWindow = 0;
+                      }
+                      if (nextType !== prev.modelType) {
+                        next.modelProtocol = "";
+                        next.comfyuiWorkflowId = undefined;
+                      }
+                      next = detachIncompatiblePreset(prev, next, selectedApiConfig, presets);
+                      next.config = sanitizeModelConfigJson({
+                        configJson: next.config,
+                        modelType: nextType,
+                        platform: selectedPlatform,
+                        supportReasoning: nextType === 1 ? !!prev.supportReasoning : false,
+                      });
+                      return next;
+                    });
+                    setRawJsonDirty(false);
+                    setIssue(null);
                   }}
-                  items={modelProtocolSelectOptions.map(option => ({ value: option.value, label: option.label }))}
+                  items={modelTypeOptions.map((option) => ({
+                    value: option.value,
+                    label: option.label,
+                  }))}
                 >
-                  <SelectTrigger id="model-protocol" className="w-full text-sm">
-                    <SelectValue placeholder={modelProtocolSelectOptions[0]?.label || "继承 API 配置默认"} />
+                  <SelectTrigger id="model-type" className="w-full text-sm">
+                    <SelectValue placeholder="选择类型" />
                   </SelectTrigger>
                   <SelectContent className="text-sm">
                     <SelectGroup>
-                      {modelProtocolSelectOptions.map(option => (
-                        <SelectItem key={option.value} value={option.value} className="text-sm">
-                          {option.label}
+                      {modelTypeOptions.map((opt) => (
+                        <SelectItem key={opt.value} value={opt.value} className="text-sm">
+                          {opt.label}
                         </SelectItem>
                       ))}
                     </SelectGroup>
                   </SelectContent>
                 </Select>
-                <p className="text-[10px] leading-4 text-muted-foreground">
-                  继承 API 默认设置，或为当前模型单独选择。
-                </p>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5 border-t border-border/35 pt-2 text-[10px] text-muted-foreground">
-                <span>有效协议：</span>
-                <span className={cn(
-                  "rounded px-1.5 py-0.5",
-                  effectiveModelProtocol ? "bg-violet-500/10 text-violet-600" : "bg-destructive/10 text-destructive"
-                )}>
-                  {effectiveModelProtocol
-                    ? formatSemanticLabel(effectiveModelProtocol, MODEL_PROTOCOL_LABELS)
-                    : "未配置"}
-                </span>
-                <ChevronRight className="h-3 w-3" />
-                <span className="rounded bg-sky-500/10 px-1.5 py-0.5 text-sky-600">
-                  {modelProtocolOverride
-                    ? "模型覆盖"
-                    : apiConfigDefaultProtocol
-                      ? `${MODEL_TYPE_LABELS[form.modelType]} API 配置默认`
-                      : "缺少协议来源"}
-                </span>
-                <ChevronRight className="h-3 w-3" />
-                <span className="rounded bg-muted px-1.5 py-0.5 text-foreground/75">
-                  {selectedApiConfig?.name || "未选择 API 配置"}
-                </span>
+              <div className="flex min-w-0 flex-col gap-2">
+                <Label htmlFor="model-api" className="text-xs text-muted-foreground">
+                  API 配置 <span className="text-destructive">*</span>
+                </Label>
+                <Select
+                  value={form.apiConfigId}
+                  onValueChange={(value) => {
+                    const nextApiConfigId = value as number;
+                    const nextApiConfig = apiConfigs.find(
+                      (config) => config.id === nextApiConfigId,
+                    );
+                    const nextPlatform = nextApiConfig?.platform;
+                    const nextProvider = providers.find(
+                      (provider) => provider.id === nextApiConfig?.providerId,
+                    );
+                    setForm((prev) => {
+                      let nextModelType =
+                        nextPlatform === "comfyui" && prev.modelType !== 2 && prev.modelType !== 3
+                          ? 2
+                          : prev.modelType;
+                      if (
+                        nextProvider
+                        && !nextProvider.supportedModelTypes.includes(nextModelType)
+                      ) {
+                        nextModelType = nextProvider.supportedModelTypes[0];
+                      }
+                      let next: AiModelFormState = {
+                        ...prev,
+                        apiConfigId: nextApiConfigId,
+                        modelType: nextModelType,
+                        modelProtocol:
+                          nextPlatform !== "comfyui"
+                          && getProtocolOptionsForModelType(
+                            nextModelType,
+                            nextApiConfig?.providerId,
+                            providers,
+                          ).some((option) => option.value === prev.modelProtocol)
+                            ? prev.modelProtocol
+                            : "",
+                        comfyuiWorkflowId: undefined,
+                        maxConcurrency: nextPlatform === "comfyui" ? 1 : prev.maxConcurrency,
+                      };
+                      if (!supportsReasoningConfig(nextPlatform)) {
+                        next.supportReasoning = false;
+                        next.reasoningEffortLevels = [];
+                      }
+                      next = detachIncompatiblePreset(prev, next, nextApiConfig, presets);
+                      next.config = sanitizeModelConfigJson({
+                        configJson: next.config,
+                        modelType: nextModelType,
+                        platform: nextPlatform,
+                        supportReasoning:
+                          nextModelType === 1 && supportsReasoningConfig(nextPlatform)
+                            ? !!prev.supportReasoning
+                            : false,
+                      });
+                      return next;
+                    });
+                    setRawJsonDirty(false);
+                    setIssue(null);
+                  }}
+                  items={apiConfigs.map((config) => ({
+                    value: config.id,
+                    label: `${config.name}${config.platform ? ` (${PLATFORM_LABELS[config.platform] || config.platform})` : ""}`,
+                  }))}
+                >
+                  <SelectTrigger
+                    id="model-api"
+                    aria-invalid={issue?.field === "model-api"}
+                    className="w-full text-sm"
+                  >
+                    <SelectValue placeholder="选择 API 配置" />
+                  </SelectTrigger>
+                  <SelectContent className="text-sm">
+                    <SelectGroup>
+                      {apiConfigs.map((config) => (
+                        <SelectItem key={config.id} value={config.id} className="text-sm">
+                          {config.name}
+                          {config.platform && (
+                            <span className="ml-1 text-muted-foreground">
+                              ({PLATFORM_LABELS[config.platform] || config.platform})
+                            </span>
+                          )}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
               </div>
-              {!protocolConfigured && (
-                <p className="text-[10px] leading-4 text-destructive">
-                  当前模型和 API 配置都没有设置 {MODEL_TYPE_LABELS[form.modelType]} 请求协议，保存前必须补充一处。
-                </p>
-              )}
             </div>
-          )}
 
-          {!requiresComfyUiWorkflow && <CapabilityPresetSelect
-            selectedCode={form.capabilityPresetCode}
-            presets={compatibleCapabilityPresets}
-            allPresets={presets}
-            hasCustomConfig={hasCustomCapabilityConfig}
-            modelCode={form.code}
-            modelType={form.modelType}
-            apiConfigId={form.apiConfigId}
-            platform={selectedPlatform}
-            matchedName={typeof effectiveModelConfig.catalogMatch === "object" && effectiveModelConfig.catalogMatch !== null
-              ? (effectiveModelConfig.catalogMatch as { modelId?: string }).modelId : undefined}
-            onSelectCustom={selectCustomCapabilities}
-            onApplyPreset={applyCapabilityPreset}
-            onApplyOnline={(candidate, fetchedAt) => {
-              const official = findOfficialGooglePreset(candidate, presets, selectedPlatform);
-              const matched = applyModelsDevMatch(form, candidate, fetchedAt, official);
-              setForm({ ...matched, name: form.name || candidate.name,
-                code: form.code || official?.modelCode || candidate.modelId });
-              setShowAdvanced(true);
-            }}
-          />}
+            {requiresComfyUiWorkflow && (
+              <div id="comfyui-workflow" tabIndex={-1}>
+                <ComfyUiModelWorkflowField
+                  apiConfigId={form.apiConfigId!}
+                  modelType={form.modelType as 2 | 3}
+                  value={form.comfyuiWorkflowId}
+                  configJson={form.config}
+                  capabilityPresetCode={form.capabilityPresetCode}
+                  configuredLimits={effectiveModelConfig}
+                  onValidityChange={setComfyUiCapabilityValid}
+                  onChange={(workflowId, config) => {
+                    setForm((previous) => ({
+                      ...previous,
+                      comfyuiWorkflowId: workflowId,
+                      config,
+                    }));
+                    setRawJsonDirty(false);
+                    setIssue(null);
+                  }}
+                />
+              </div>
+            )}
 
-          {/* 默认模型 */}
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={() => updateField("defaultModel", !form.defaultModel)}
-              className={cn(
-                "relative w-9 h-5 rounded-full transition-colors duration-200",
-                form.defaultModel ? "bg-primary" : "bg-muted-foreground/30"
-              )}
-            >
-              <span
-                className={cn(
-                  "absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200",
-                  form.defaultModel && "translate-x-4"
+            {!requiresComfyUiWorkflow && (
+              <div className="flex flex-col gap-2">
+                <CapabilityPresetSelect
+                  selectedCode={form.capabilityPresetCode}
+                  presets={compatibleCapabilityPresets}
+                  allPresets={presets}
+                  hasCustomConfig={hasCustomCapabilityConfig}
+                  modelCode={form.code}
+                  modelType={form.modelType}
+                  apiConfigId={form.apiConfigId}
+                  platform={selectedPlatform}
+                  matchedName={
+                    typeof effectiveModelConfig.catalogMatch === "object"
+                    && effectiveModelConfig.catalogMatch !== null
+                      ? (effectiveModelConfig.catalogMatch as { modelId?: string }).modelId
+                      : undefined
+                  }
+                  onSelectCustom={selectCustomCapabilities}
+                  onApplyPreset={applyCapabilityPreset}
+                  onApplyOnline={(candidate, fetchedAt) => {
+                    const official = findOfficialGooglePreset(
+                      candidate,
+                      presets,
+                      selectedPlatform,
+                    );
+                    const matched = applyModelsDevMatch(
+                      form,
+                      candidate,
+                      fetchedAt,
+                      official,
+                    );
+                    setForm({
+                      ...matched,
+                      name: form.name || candidate.name,
+                      code: form.code || official?.modelCode || candidate.modelId,
+                    });
+                    setRawJsonDirty(false);
+                    setShowAdvanced(true);
+                  }}
+                />
+                {activeCapabilityHighlights.length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    当前能力：{activeCapabilityHighlights.join(" · ")}
+                  </p>
                 )}
-              />
-            </button>
-            <Label className="text-xs text-muted-foreground cursor-pointer" onClick={() => updateField("defaultModel", !form.defaultModel)}>
-              设为默认模型
-            </Label>
-          </div>
-
-          <button
-            type="button"
-            onClick={() => setShowAdvanced(value => !value)}
-            className="flex w-full items-center justify-between rounded-xl border border-border/40 bg-muted/15 px-3 py-2.5 text-left transition-colors hover:border-primary/35"
-          >
-            <span>
-              <span className="block text-sm font-medium">高级设置</span>
-              <span className="mt-0.5 block text-[10px] text-muted-foreground">模型能力、接口模式与自定义 JSON</span>
-            </span>
-            <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", showAdvanced && "rotate-90")} />
-          </button>
-
-          {showAdvanced && showOpenAiResponsesMode && (
-            <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-3">
-              <div>
-                <Label className="text-[11px] text-muted-foreground">OpenAI 兼容对话接口</Label>
               </div>
+            )}
 
-              <Select
-                value={apiModeValue}
-                onValueChange={v => updateOpenAiResponsesMode(String(v))}
-                items={[
-                  { value: "__unset__", label: "自动" },
-                  { value: "chat_completions", label: "Chat Completions" },
-                  { value: "responses", label: "Responses API" },
-                ]}
-              >
-                <SelectTrigger className="w-full text-sm">
-                  <SelectValue placeholder="选择对话接口模式" />
-                </SelectTrigger>
-                <SelectContent className="text-sm">
-                  <SelectGroup>
-                    <SelectItem value="__unset__" className="text-sm">自动</SelectItem>
-                    <SelectItem value="chat_completions" className="text-sm">Chat Completions</SelectItem>
-                    <SelectItem value="responses" className="text-sm">Responses API</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-            </div>
-          )}
+            {hasRequestProtocol && (
+              <AiModelProtocolSection
+                modelType={form.modelType}
+                apiConfigName={selectedApiConfig?.name}
+                apiConfigDefaultProtocol={apiConfigDefaultProtocol}
+                modelProtocolOverride={modelProtocolOverride}
+                effectiveModelProtocol={effectiveModelProtocol}
+                protocolConfigured={protocolConfigured}
+                protocolExpanded={protocolExpanded}
+                onToggleExpand={() => setProtocolExpanded((value) => !value)}
+                options={modelProtocolSelectOptions}
+                invalid={issue?.field === "model-protocol"}
+                onSelectProtocol={(modelProtocol) => {
+                  setForm((previous) =>
+                    detachIncompatiblePreset(
+                      previous,
+                      { ...previous, modelProtocol },
+                      selectedApiConfig,
+                      presets,
+                    ),
+                  );
+                  setIssue(null);
+                }}
+              />
+            )}
 
-          {showAdvanced && <div className="rounded-lg border border-border/40 bg-muted/20 p-3 space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <Label className="text-xs text-muted-foreground">高级能力</Label>
-              {selectedPlatform && (
-                <span className="px-2 py-1 rounded-md bg-background/80 text-[10px] text-muted-foreground">
-                  {PLATFORM_LABELS[selectedPlatform] || selectedPlatform}
-                </span>
-              )}
-            </div>
-
-            <div className="grid gap-3 [grid-template-columns:repeat(auto-fit,minmax(240px,1fr))]">
-              <div className="space-y-1.5">
-                <Label className="text-xs text-muted-foreground">最大并发数</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  step={1}
-                  placeholder="默认 5"
-                  value={getPositiveNumberValue(form.maxConcurrency)}
-                  onChange={e => updateMetaNumberField("maxConcurrency", e.target.value)}
-                  className="text-sm font-mono"
+            <div className={cn("grid gap-3", editingModel ? "sm:grid-cols-2" : "grid-cols-1")}>
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-border/30 bg-background/70 px-3.5 py-2.5">
+                <div className="flex min-w-0 flex-col gap-0.5">
+                  <Label htmlFor="model-default-switch" className="cursor-pointer text-sm font-medium">
+                    设为默认模型
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    作为{MODEL_TYPE_LABELS[form.modelType]}能力的全局默认选项。
+                  </p>
+                </div>
+                <Switch
+                  id="model-default-switch"
+                  checked={!!form.defaultModel}
+                  onCheckedChange={(checked) => updateField("defaultModel", checked)}
                 />
               </div>
 
-              {form.modelType === 1 && (
-                <div className="space-y-1.5">
-                  <Label className="text-xs text-muted-foreground">上下文窗口</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    step={1}
-                    placeholder="例如：128000"
-                    value={getPositiveNumberValue(form.contextWindow)}
-                    onChange={e => updateMetaNumberField("contextWindow", e.target.value)}
-                    className="text-sm font-mono"
+              {editingModel && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-border/30 bg-background/70 px-3.5 py-2.5">
+                  <div className="flex min-w-0 flex-col gap-0.5">
+                    <Label htmlFor="model-status-switch" className="cursor-pointer text-sm font-medium">
+                      启用此模型
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      停用后保留参数设置，暂不出现在模型选择器中。
+                    </p>
+                  </div>
+                  <Switch
+                    id="model-status-switch"
+                    checked={form.status !== 0}
+                    onCheckedChange={(enabled) => updateField("status", enabled ? 1 : 0)}
                   />
                 </div>
               )}
             </div>
 
-            {form.modelType === 1 && (
-              <div className="space-y-2.5">
-                <ToggleSettingCard
-                  checked={!!form.supportReasoning}
-                  title="支持思考"
-                  description="控制推理能力。"
-                  onToggle={() => {
-                    setForm(prev => {
-                      const nextSupportReasoning = !prev.supportReasoning;
-                      return {
-                        ...prev,
-                        supportReasoning: nextSupportReasoning,
-                        reasoningEffortLevels: nextSupportReasoning
-                          ? prev.reasoningEffortLevels?.length
-                            ? prev.reasoningEffortLevels
-                            : selectedCapabilityPreset?.reasoningEffortLevels ?? []
-                          : [],
-                        config: nextSupportReasoning ? prev.config : stripReasoningConfig(prev.config),
-                      };
-                    });
-                  }}
-                />
-
-                {form.supportReasoning ? (
-                  <ReasoningEffortLevelsEditor
-                    levels={form.reasoningEffortLevels ?? []}
-                    onChange={(levels) => updateField("reasoningEffortLevels", levels)}
-                  />
-                ) : null}
-
-                <MultimodalCapabilityEditor
-                  inputTypes={form.multimodalInputTypes ?? []}
-                  transports={form.multimodalInputTransports ?? {}}
-                  onChange={(inputTypes: MultimodalInputType[], transports: MultimodalInputTransports) => {
-                    setForm(previous => ({
-                      ...previous,
-                      supportVision: inputTypes.includes("image"),
-                      multimodalInputTypes: inputTypes,
-                      multimodalInputTransports: transports,
-                    }));
-                  }}
-                />
-              </div>
+            {effectiveModelProtocol === "metaso_video" && (
+              <SponsorModelOptions
+                config={effectiveModelConfig}
+                onChange={(key, enabled) => {
+                  setForm((previous) => ({
+                    ...previous,
+                    config: JSON.stringify({
+                      ...parseConfigJson(previous.config),
+                      [key]: enabled,
+                    }),
+                  }));
+                  setRawJsonDirty(false);
+                }}
+              />
             )}
-          </div>}
 
-          {/* 模型配置 */}
-          {effectiveModelProtocol === "metaso_video" && <SponsorModelOptions
-            config={effectiveModelConfig}
-            onChange={(key, enabled) => setForm((previous) => ({
-              ...previous,
-              config: JSON.stringify({ ...parseConfigJson(previous.config), [key]: enabled }),
-            }))}
-          />}
-          {showAdvanced && <ModelConfigForm
-            modelType={form.modelType}
-            platform={selectedPlatform}
-            supportReasoning={!!form.supportReasoning}
-            configJson={stringifyConfigObject(effectiveModelConfig)}
-            onChange={updateCustomCapabilityConfig}
-          />}
+            <AiModelAdvancedSection
+              open={showAdvanced}
+              onOpenChange={setShowAdvanced}
+              activeTab={advancedTab}
+              onActiveTabChange={setAdvancedTab}
+              form={form}
+              setForm={setForm}
+              selectedPlatform={selectedPlatform}
+              selectedCapabilityPreset={selectedCapabilityPreset}
+              effectiveModelConfig={effectiveModelConfig}
+              showOpenAiResponsesMode={showOpenAiResponsesMode}
+              apiModeValue={apiModeValue}
+              onUpdateOpenAiResponsesMode={updateOpenAiResponsesMode}
+              onUpdateCustomCapabilityConfig={updateCustomCapabilityConfig}
+              rawJsonDraft={rawJsonDraft}
+              rawJsonDirty={rawJsonDirty}
+              rawJsonError={rawJsonError}
+              onRawJsonDraftChange={(value) => {
+                setRawJsonDraft(value);
+                setRawJsonDirty(value !== formattedEffectiveJson);
+                setRawJsonError(null);
+                setIssue(null);
+              }}
+              onApplyRawJson={handleApplyRawJson}
+              onResetRawJson={() => {
+                setRawJsonDraft(formattedEffectiveJson);
+                setRawJsonDirty(false);
+                setRawJsonError(null);
+                setIssue(null);
+              }}
+              invalidField={issue?.field}
+            />
+          </fieldset>
         </DialogScrollBody>
 
+        {issue && (
+          <p id="model-form-error" role="alert" className="shrink-0 text-sm text-destructive">
+            {issue.message}
+          </p>
+        )}
+
         <DialogFooter className="shrink-0">
-          <DialogClose render={<Button variant="outline" size="sm" />}>
-            取消
-          </DialogClose>
-          <Button size="sm" onClick={handleSave} disabled={saving || !form.name.trim() || !form.code.trim() || !form.apiConfigId || !protocolConfigured || !comfyUiWorkflowConfigured}>
-            {saving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+          <DialogClose render={<Button variant="outline" />}>取消</DialogClose>
+          <Button type="button" onClick={handleSave} disabled={saving}>
+            {saving && <Loader2 className="animate-spin" />}
             {editingModel ? "保存" : "创建"}
           </Button>
         </DialogFooter>

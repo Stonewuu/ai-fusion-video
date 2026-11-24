@@ -21,9 +21,18 @@ final class AgentStreamingProvider implements AutoCloseable {
     private final HttpServer server;
     private final ObjectMapper json;
     final AtomicInteger requests = new AtomicInteger();
-    final CountDownLatch release = new CountDownLatch(1);
+    private final AtomicInteger delegations = new AtomicInteger();
+    volatile CountDownLatch release = new CountDownLatch(1);
     volatile long firstTextNanos;
     volatile boolean gate;
+    volatile int chunks = 20;
+    volatile long chunkDelayMs = 100;
+    volatile String toolName;
+    volatile String toolArguments;
+    volatile int children = 1;
+    volatile boolean holdLastChild;
+    final AtomicInteger childRequests = new AtomicInteger();
+    final CountDownLatch lastChildRelease = new CountDownLatch(1);
 
     AgentStreamingProvider(ObjectMapper json) throws IOException {
         this.json = json;
@@ -43,7 +52,11 @@ final class AgentStreamingProvider implements AutoCloseable {
             }
             boolean hasResult = false;
             for (JsonNode message : request.path("messages")) {
-                if ("tool".equals(message.path("role").asText())) hasResult = true;
+                if ("user".equals(message.path("role").asText())) {
+                    hasResult = false;
+                } else if ("tool".equals(message.path("role").asText())) {
+                    hasResult = true;
+                }
             }
             exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
             exchange.sendResponseHeaders(200, 0);
@@ -52,14 +65,26 @@ final class AgentStreamingProvider implements AutoCloseable {
                 firstTextNanos = System.nanoTime();
                 chunk(output, Map.of("content", "首段已到达。\n\n"), null);
                 if (gate && !release.await(15, TimeUnit.SECONDS)) throw new IOException("消费者未收到首段");
-                if (parent && !hasResult) {
-                    chunk(output, Map.of("tool_calls", List.of(Map.of("index", 0, "id", "delegate-1", "type", "function",
-                            "function", Map.of("name", "episode_scene_writer", "arguments", "{\"scriptEpisodeId\":")))), null);
-                    chunk(output, Map.of("tool_calls", List.of(Map.of("index", 0, "function", Map.of("arguments", "730001}")))), "tool_calls");
+                if (holdLastChild && !parent && childRequests.incrementAndGet() == 3
+                        && !lastChildRelease.await(15, TimeUnit.SECONDS)) {
+                    throw new IOException("最后一个子任务未结束验收等待");
+                }
+                if (toolName != null && !hasResult) {
+                    chunk(output, Map.of("tool_calls", List.of(Map.of("index", 0, "id", "write-1", "type", "function",
+                            "function", Map.of("name", toolName, "arguments", toolArguments)))), "tool_calls");
+                } else if (parent && !hasResult) {
+                    int delegation = delegations.incrementAndGet();
+                    for (int child = 0; child < children; child++) {
+                        String callId = "delegate-" + (child + 1) + (delegation == 1 ? "" : "-batch-" + delegation);
+                        chunk(output, Map.of("tool_calls", List.of(Map.of("index", child, "id", callId, "type", "function",
+                                "function", Map.of("name", "episode_scene_writer", "arguments", "{\"scriptEpisodeId\":")))), null);
+                        chunk(output, Map.of("tool_calls", List.of(Map.of("index", child, "function", Map.of("arguments", "730001}")))), null);
+                    }
+                    chunk(output, Map.of(), "tool_calls");
                 } else {
-                    for (int i = 1; i <= 20; i++) {
+                    for (int i = 1; i <= chunks; i++) {
                         chunk(output, Map.of("content", "第" + i + "段内容正在连续显示。\n\n"), null);
-                        Thread.sleep(100);
+                        Thread.sleep(chunkDelayMs);
                     }
                     chunk(output, Map.of(), "stop");
                 }
@@ -90,5 +115,9 @@ final class AgentStreamingProvider implements AutoCloseable {
         output.flush();
     }
 
-    @Override public void close() { release.countDown(); server.stop(0); }
+    @Override public void close() {
+        release.countDown();
+        lastChildRelease.countDown();
+        server.stop(0);
+    }
 }

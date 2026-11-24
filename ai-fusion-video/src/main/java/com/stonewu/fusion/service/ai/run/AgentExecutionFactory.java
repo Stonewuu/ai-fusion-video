@@ -23,12 +23,15 @@ import com.stonewu.fusion.service.ai.model.AiModelRequestOptions;
 import com.stonewu.fusion.service.ai.run.kernel.*;
 import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
 import com.stonewu.fusion.service.ai.run.model.PendingConfirmation;
+import com.stonewu.fusion.service.ai.run.stream.AgentRedisExecutionService;
+import com.stonewu.fusion.service.ai.run.stream.AgentStreamToolBarrier;
 import io.agentscope.core.agent.RuntimeContext;
 import io.agentscope.core.event.AgentEvent;
 import io.agentscope.core.event.RequireUserConfirmEvent;
 import io.agentscope.core.message.Msg;
 import io.agentscope.core.message.ToolUseBlock;
 import org.springframework.stereotype.Component;
+import org.springframework.beans.factory.annotation.Autowired;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
@@ -53,6 +56,8 @@ public final class AgentExecutionFactory {
     private final AgentKernelSpecFactory specFactory;
     private final Duration confirmationTimeout;
     private final List<AgentConfirmationPreviewProvider> confirmationPreviews;
+    @Autowired
+    private AgentRedisExecutionService redisExecutions;
 
     public AgentExecutionFactory(
             AgentScopeHarnessInvoker harnessInvoker,
@@ -100,6 +105,9 @@ public final class AgentExecutionFactory {
                     stateSessionId, deadline, runtimeRequest);
             RuntimeContext runtimeContext = runtimeContextFactory.create(runtimeRequest);
             AgentRunContext run = runtimeRequest.run();
+            if (run.streamProtocolVersion() == 2) {
+                runtimeContext.put(AgentStreamToolBarrier.class, redisExecutions.barrier(runId));
+            }
             return new AgentExecution(
                     runId,
                     ownerInstanceId,

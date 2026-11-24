@@ -17,7 +17,15 @@ public record StartedAgentRun(
         Instant leaseUntil,
         Instant deadline,
         AgentKernelSnapshot kernelSnapshot,
-        long initialMessageOrder) {
+        long initialMessageOrder,
+        int streamProtocolVersion) {
+
+    public StartedAgentRun(String runId, String conversationId, String agentStateSessionId,
+                           String ownerInstanceId, long ownerEpoch, Instant leaseUntil, Instant deadline,
+                           AgentKernelSnapshot kernelSnapshot, long initialMessageOrder) {
+        this(runId, conversationId, agentStateSessionId, ownerInstanceId, ownerEpoch, leaseUntil, deadline,
+                kernelSnapshot, initialMessageOrder, 1);
+    }
 
     public StartedAgentRun {
         requireText(runId, "runId");

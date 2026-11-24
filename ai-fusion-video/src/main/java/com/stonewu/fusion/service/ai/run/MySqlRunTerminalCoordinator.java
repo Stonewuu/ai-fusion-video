@@ -16,6 +16,7 @@ import com.stonewu.fusion.service.ai.run.model.AgentEventEnvelope;
 import com.stonewu.fusion.service.ai.run.model.CommittedAgentEvent;
 import com.stonewu.fusion.service.ai.run.model.RunTerminalRequest;
 import com.stonewu.fusion.service.ai.run.model.SystemTerminalActor;
+import com.stonewu.fusion.service.ai.run.stream.AgentRedisExecutionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -42,6 +43,8 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
     private final AgentRuntimeSchedulers schedulers;
     private final AgentRunRedisSignalService signals;
     private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+    @Autowired
+    private AgentRedisExecutionService redisExecutions;
 
     @Autowired
     void setMetrics(AgentRuntimeMetrics metrics) {
@@ -54,9 +57,9 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
             RunTerminalRequest request,
             String ownerInstanceId,
             long ownerEpoch) {
-        return Mono.fromCallable(() -> repository.terminateOwnedTx(
+        return flushMessages(request.runId()).then(Mono.fromCallable(() -> repository.terminateOwnedTx(
                         failClosedCompletion(request), ownerInstanceId, ownerEpoch))
-                .subscribeOn(schedulers.journal())
+                .subscribeOn(schedulers.journal()))
                 .flatMap(this::afterTerminalCommit);
     }
 
@@ -64,9 +67,18 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
     public Mono<Optional<CommittedAgentEvent>> terminateSystem(
             RunTerminalRequest request,
             SystemTerminalActor actor) {
-        return Mono.fromCallable(() -> repository.terminateSystemTx(request, actor))
-                .subscribeOn(schedulers.journal())
+        return flushMessages(request.runId()).then(Mono.fromCallable(() -> repository.terminateSystemTx(request, actor))
+                .subscribeOn(schedulers.journal()))
                 .flatMap(this::afterTerminalCommit);
+    }
+
+    private Mono<Void> flushMessages(String runId) {
+        return Mono.fromCallable(() -> {
+            AgentRun run = runMapper.selectOne(new LambdaQueryWrapper<AgentRun>()
+                    .select(AgentRun::getStreamProtocolVersion).eq(AgentRun::getRunId, runId));
+            return run != null && run.getStreamProtocolVersion() == 2;
+        }).subscribeOn(schedulers.journal())
+                .flatMap(streaming -> streaming ? redisExecutions.finish(runId) : Mono.empty());
     }
 
     private Mono<Optional<CommittedAgentEvent>> afterTerminalCommit(
@@ -74,7 +86,9 @@ public class MySqlRunTerminalCoordinator implements RunTerminalCoordinator {
         recordTerminal(committed);
         committed.filter(CommittedAgentEvent::publishRequired)
                 .ifPresent(event -> signals.notifyCommitted(event.runId(), event.sequence()));
-        return Mono.just(committed);
+        return committed.isPresent()
+                ? redisExecutions.afterTerminal(committed.get().runId()).thenReturn(committed)
+                : Mono.just(committed);
     }
 
     private void recordTerminal(Optional<CommittedAgentEvent> committed) {
