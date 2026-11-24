@@ -16,8 +16,8 @@ export function createTypeScriptLoader() {
     const source = ts.transpileModule(fs.readFileSync(path.join(root, relative), "utf8"), {
       compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS, esModuleInterop: true },
     }).outputText;
-    const module = { exports: {} };
-    cache.set(relative, module);
+    const loadedModule = { exports: {} };
+    cache.set(relative, loadedModule);
     const require = (name) => {
       if (!name.startsWith(".") && !name.startsWith("@/")) {
         return nodeRequire(name);
@@ -25,8 +25,8 @@ export function createTypeScriptLoader() {
       const target = name.startsWith("@/") ? name.slice(2) : path.posix.join(path.posix.dirname(relative), name);
       return load(`${target}.ts`);
     };
-    vm.runInThisContext(`(function(require,module,exports){${source}\n})`, { filename: relative })(require, module, module.exports);
-    return module.exports;
+    vm.runInThisContext(`(function(require,module,exports){${source}\n})`, { filename: relative })(require, loadedModule, loadedModule.exports);
+    return loadedModule.exports;
   };
   return load;
 }
