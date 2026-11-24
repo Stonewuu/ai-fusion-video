@@ -138,10 +138,10 @@ export function ReasoningEffortLevelsEditor({
 
   return (
     <div className="space-y-2 rounded-lg border border-border/20 bg-background/70 p-3">
-      <div>
-        <p className="text-xs font-medium">思考等级</p>
-        <p className="text-[10px] text-muted-foreground">
-          按能力从高到低排列；助手默认选择第一项。可填写供应商自定义名称。
+      <div className="flex flex-col gap-1">
+        <p className="text-xs font-medium text-foreground">思考等级</p>
+        <p className="text-xs leading-relaxed text-muted-foreground">
+          按能力从高到低排列；助手默认选择第一项，可填写供应商自定义名称。
         </p>
       </div>
 
@@ -164,7 +164,7 @@ export function ReasoningEffortLevelsEditor({
       </DndContext>
 
       {!levels.length ? (
-        <p className="rounded-lg border border-dashed border-border/30 p-3 text-center text-[10px] text-muted-foreground">
+        <p className="rounded-lg border border-dashed border-border/30 p-3 text-center text-xs text-muted-foreground">
           当前没有可选等级，助手将不显示等级选择器。
         </p>
       ) : null}
@@ -180,16 +180,18 @@ export function ReasoningEffortLevelsEditor({
             setError(null);
           }}
           onKeyDown={(event) => {
-            if (event.key !== "Enter") return;
+            if (event.key !== "Enter") {
+              return;
+            }
             event.preventDefault();
             addLevel();
           }}
         />
-        <Button type="button" variant="outline" size="sm" disabled={disabled} onClick={addLevel}>
+        <Button type="button" variant="outline" disabled={disabled} onClick={addLevel}>
           <Plus /> 添加
         </Button>
       </div>
-      {error ? <p className="text-[10px] text-destructive">{error}</p> : null}
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>
   );
 }

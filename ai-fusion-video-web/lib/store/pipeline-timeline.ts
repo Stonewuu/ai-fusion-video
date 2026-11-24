@@ -39,6 +39,8 @@ export type TimelineItem =
       status: ToolTimelineStatus;
       result?: string | null;
       agentName?: string;
+      /** 子运行已结束，父运行尚未收到该次委派的工具返回。 */
+      awaitingChildResult?: boolean;
       children?: SubTimelineItem[];
     }
   | {

@@ -35,6 +35,7 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import com.stonewu.fusion.service.ai.run.stream.AgentRedisExecutionService;
 
 @Service
 public final class DefaultRunExecutionSupervisor implements RunExecutionSupervisor {
@@ -55,6 +56,8 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
     private final AtomicBoolean accepting = new AtomicBoolean(true);
     private final AtomicReference<Mono<Void>> shutdownSignal = new AtomicReference<>();
     private AgentRuntimeMetrics metrics = AgentRuntimeMetrics.noop();
+    @Autowired
+    private AgentRedisExecutionService redisExecutions;
 
     @Autowired
     void setMetrics(AgentRuntimeMetrics metrics) {
@@ -171,12 +174,18 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                         spec,
                         runtimeRequest,
                         deadline)
-                .flatMap(execution -> executions.registerAndLaunch(
+                .flatMap(execution -> (runtimeRequest.run().streamProtocolVersion() == 2
+                        ? redisExecutions.begin(runtimeRequest.run()) : Mono.<Void>empty())
+                        .then(Mono.defer(() -> executions.registerAndLaunch(
                         execution,
                         deadline,
                         chunks::coalesce,
                         events -> events.concatMap(
-                                        event -> appendOwned(execution, event)
+                                        event -> (runtimeRequest.run().streamProtocolVersion() == 2
+                                                ? redisExecutions.accept(execution.runId(), event)
+                                                        .flatMap(committed -> committed.map(Mono::just)
+                                                                .orElseGet(Mono::empty))
+                                                : appendOwned(execution, event))
                                                 .flatMap(committed -> afterAppend(
                                                         execution,
                                                         event,
@@ -194,13 +203,20 @@ public final class DefaultRunExecutionSupervisor implements RunExecutionSupervis
                                                 ownerInstanceId,
                                                 ownerEpoch))
                                 .onErrorResume(failure -> Mono.empty()),
-                        outcome -> completeExecution(
+                        outcome -> (runtimeRequest.run().streamProtocolVersion() == 2
+                                ? redisExecutions.finish(execution.runId()) : Mono.<Void>empty())
+                                .then(completeExecution(
                                 execution,
                                 outcome,
                                 kernelSnapshot,
                                 pauseType.get(),
                                 externalWait.get(),
-                                lastCommittedSequence.get())))
+                                lastCommittedSequence.get()))
+                                .doFinally(ignored -> {
+                                    if (runtimeRequest.run().streamProtocolVersion() == 2) {
+                                        redisExecutions.release(execution.runId());
+                                    }
+                                })))))
                 .onErrorResume(
                         OwnedExecutionRegistry.ExecutionAlreadyOwnedException.class,
                         Mono::error)

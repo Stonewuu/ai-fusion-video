@@ -332,7 +332,9 @@ export function createAssistantConnectionCoordinator(
         const currentRuntime = get().conversationStates[conversationId];
         if (!currentRuntime
           || (currentRuntime.pipeline.runId && currentRuntime.pipeline.runId !== event.runId)
-          || event.sequence <= currentRuntime.pipeline.lastSequence) return;
+          || (event.outputType !== "HISTORY" && event.sequence <= currentRuntime.pipeline.lastSequence)) {
+          return;
+        }
 
         try {
           const nextPipeline = reduceAssistantEvent(currentRuntime.pipeline, event);
@@ -340,6 +342,8 @@ export function createAssistantConnectionCoordinator(
           const terminal = hasTerminal(event);
           const nextStatus = terminal
             ? terminalStatusForEvent(event)
+            : event.outputType === "HISTORY"
+              ? statusFromPipeline(event.runStatus!)
             : currentRuntime.status === "CANCEL_REQUESTED"
               ? "CANCEL_REQUESTED"
               : event.outputType === "USER_CONFIRMATION_REQUIRED"
@@ -358,7 +362,8 @@ export function createAssistantConnectionCoordinator(
             status: nextStatus,
             statusConfirmed: true,
             knownRunId: event.runId,
-            remoteLastSequence: Math.max(runtimeValue.remoteLastSequence ?? 0, event.sequence),
+            remoteLastSequence: event.outputType === "HISTORY" ? event.sequence
+              : Math.max(runtimeValue.remoteLastSequence ?? 0, event.sequence),
             connectionError: undefined,
             messagesLoaded: terminal ? false : runtimeValue.messagesLoaded,
             conversation: { ...runtimeValue.conversation, status: nextStatus },

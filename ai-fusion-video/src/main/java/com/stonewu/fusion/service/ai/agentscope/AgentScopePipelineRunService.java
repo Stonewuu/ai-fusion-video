@@ -27,6 +27,8 @@ import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.configuration.AgentDefinitionConfiguration;
 import com.stonewu.fusion.service.ai.model.AiModelRequestOptions;
 import com.stonewu.fusion.service.ai.run.*;
+import com.stonewu.fusion.service.ai.run.stream.AgentStreamReader;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotPayload;
@@ -87,6 +89,8 @@ public final class AgentScopePipelineRunService {
     private final AgentRuntimeSchedulers schedulers;
     private final ObjectMapper objectMapper;
     private final CanvasAgentScopeService canvasScopes;
+    @Autowired
+    private AgentStreamReader streamReader;
 
     public AgentScopePipelineRunService(
             AiModelService modelService,
@@ -134,7 +138,8 @@ public final class AgentScopePipelineRunService {
     public Flux<AiChatStreamRespVO> stream(AiChatReqVO request, long userId) {
         return start(request, userId)
                 .flatMap(run -> runQueries.requireAuthorizedRun(run.runId(), userId))
-                .flatMapMany(run -> replay.replayThenLive(run.getRunId(), 0)
+                .flatMapMany(run -> run.getStreamProtocolVersion() == 2 ? streamReader.read(run, 0)
+                        : replay.replayThenLive(run.getRunId(), 0)
                         .concatMap(event -> runQueries.project(run, event)));
     }
 
@@ -142,7 +147,8 @@ public final class AgentScopePipelineRunService {
             String conversationId, long userId) {
         return startContinuation(conversationId, userId)
                 .flatMap(run -> runQueries.requireAuthorizedRun(run.runId(), userId))
-                .flatMapMany(run -> replay.replayThenLive(run.getRunId(), 0)
+                .flatMapMany(run -> run.getStreamProtocolVersion() == 2 ? streamReader.read(run, 0)
+                        : replay.replayThenLive(run.getRunId(), 0)
                         .concatMap(event -> runQueries.project(run, event)));
     }
 

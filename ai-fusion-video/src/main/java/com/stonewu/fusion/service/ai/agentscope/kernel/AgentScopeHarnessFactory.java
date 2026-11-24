@@ -12,6 +12,7 @@ import com.stonewu.fusion.service.ai.run.AgentExecutionLimits;
 import com.stonewu.fusion.service.ai.text.LongToolResultMiddleware;
 import com.stonewu.fusion.service.ai.agentscope.message.AgentModelRetryMiddleware;
 import com.stonewu.fusion.service.ai.text.LongToolResultStore;
+import com.stonewu.fusion.service.ai.run.stream.AgentStreamToolMiddleware;
 import com.stonewu.fusion.service.ai.tool.ReadToolResultToolExecutor;
 import io.agentscope.core.model.ExecutionConfig;
 import io.agentscope.core.state.AgentStateStore;
@@ -157,6 +158,7 @@ public final class AgentScopeHarnessFactory {
                             toolkit, ToolExecutionMode.DEFAULT))
                     .middleware(shutdownRecoveryBridge)
                     .middleware(new AgentModelRetryMiddleware(failures))
+                    .middleware(new AgentStreamToolMiddleware())
                     .compaction(compactionConfig(contextWindow))
                     .maxIters(spec.maxIters())
                     .toolExecutionConfig(ExecutionConfig.builder()

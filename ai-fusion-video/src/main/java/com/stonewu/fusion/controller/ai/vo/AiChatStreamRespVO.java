@@ -2,6 +2,7 @@ package com.stonewu.fusion.controller.ai.vo;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.JsonNode;
+import com.stonewu.fusion.entity.ai.AgentMessage;
 import lombok.Data;
 import lombok.experimental.Accessors;
 
@@ -26,6 +27,12 @@ public class AiChatStreamRespVO {
      */
     private String runId;
 
+    /** 产生消息的运行；展示流可以同时包含多个子运行。 */
+    private String sourceRunId;
+
+    /** 审批等控制操作对应的运行。 */
+    private String controlRunId;
+
     /**
      * Monotonic sequence within runId.
      */
@@ -46,10 +53,18 @@ public class AiChatStreamRespVO {
      */
     private String outputType;
 
+    /** 重连快照中的完整消息来自 MySQL，草稿和后续增量来自 Redis。 */
+    private List<AgentMessage> historyMessages;
+    private List<AiChatStreamRespVO> pendingEvents;
+    private String runStatus;
+
     /**
      * 文本内容（增量）
      */
     private String content;
+
+    /** 完整消息替换草稿时为 replace，增量事件不设置。 */
+    private String contentMode;
 
     /**
      * 思考内容（增量）

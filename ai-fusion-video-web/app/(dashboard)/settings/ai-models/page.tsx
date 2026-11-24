@@ -1,16 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import {
-  Download,
-  LayoutGrid,
-  List,
-  Loader2,
-  Plus,
-  Settings2,
-  Upload,
-} from "lucide-react";
+import { Loader2, Plus, Settings2, Upload } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
@@ -24,33 +16,37 @@ import {
   type ApiConfigSaveReq,
   type ModelPreset,
 } from "@/lib/api/ai-model";
-import {
-  Dialog,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
-} from "@/components/ui/dialog";
-import { DialogContent } from "@/components/shared/dialog-content";
+import type { ProviderModelCandidate } from "@/lib/api/provider-catalog";
 import { Button } from "@/components/ui/button";
-import {
-  containerVariants,
-  itemVariants,
-  settingsTypography,
-} from "../_shared";
+import { AudioGenerationDialog } from "@/components/generation/audio/audio-generation-dialog";
+import { containerVariants, itemVariants, settingsTypography } from "../_shared";
+import { useProviderCatalog } from "./_hooks/use-provider-catalog";
+import { useCardMasonryLayout } from "./_hooks/use-card-masonry-layout";
 import { AiModelDialog } from "./_components/ai-model-dialog";
+import type { ModelConnectivityTestState } from "./_components/ai-model-row";
 import { ApiConfigCard } from "./_components/api-config-card";
 import { ApiConfigDialog } from "./_components/api-config-dialog";
-import { ProviderSetupDialog, type ProviderSetupTarget } from "./_components/provider-setup-dialog";
-import type { ProviderModelCandidate } from "@/lib/api/provider-catalog";
-import { useProviderCatalog } from "./_hooks/use-provider-catalog";
-import { ApiConfigSearch, matchingApiConfigs } from "./_components/api-config-search";
-import { FetchRemoteModelsDialog } from "./_components/fetch-remote-models-dialog";
-import { AudioGenerationDialog } from "@/components/generation/audio/audio-generation-dialog";
 import { ComfyUiWorkflowManagerDialog } from "./_components/comfyui-workflow-manager-dialog";
-
-type AiModelViewMode = "list" | "card";
+import { DefaultModelsBar } from "./_components/default-models-bar";
+import { ExportConfigDialog } from "./_components/export-config-dialog";
+import { FetchRemoteModelsDialog } from "./_components/fetch-remote-models-dialog";
+import {
+  ProviderSetupDialog,
+  type ProviderSetupTarget,
+} from "./_components/provider-setup-dialog";
+import {
+  filterApiConfigsAndModels,
+  resolveDefaultModelsByType,
+  type AiModelStatusFilter,
+} from "./_components/ai-models-filter";
+import {
+  exportAiModelsConfigFile,
+  importAiModelsConfigFile,
+} from "./_components/ai-models-io";
+import {
+  AiModelsToolbar,
+  type AiModelViewMode,
+} from "./_components/ai-models-toolbar";
 
 const AI_MODEL_VIEW_MODE_STORAGE_KEY = "fusion-ai-model-view-mode";
 
@@ -60,23 +56,32 @@ function isAiModelViewMode(value: string | null): value is AiModelViewMode {
 
 export default function AiModelsPage() {
   const providerCatalog = useProviderCatalog();
-  const [setupTarget, setSetupTarget] = useState<ProviderSetupTarget | null>(null);
-  const [initialApiValues, setInitialApiValues] = useState<ApiConfigSaveReq | undefined>();
   const { confirm } = useConfirm();
-  const shouldReduceMotion = useReducedMotion();
+  const shouldReduceMotion = Boolean(useReducedMotion());
 
-  // AI 模型列表
   const [models, setModels] = useState<AiModel[]>([]);
   const [modelPresets, setModelPresets] = useState<ModelPreset[]>([]);
-
-  // API 配置列表
   const [configs, setConfigs] = useState<ApiConfig[]>([]);
-  const [query, setQuery] = useState("");
-  const visibleConfigs = matchingApiConfigs(configs, models, query);
   const [configsLoading, setConfigsLoading] = useState(true);
-  const [loadErrors, setLoadErrors] = useState({ configs: false, models: false, presets: false });
+  const [loadErrors, setLoadErrors] = useState({
+    configs: false,
+    models: false,
+    presets: false,
+  });
 
-  // Dialog 状态
+  // 筛选、视图与折叠状态
+  const [query, setQuery] = useState("");
+  const [modelTypeFilter, setModelTypeFilter] = useState(0);
+  const [statusFilter, setStatusFilter] = useState<AiModelStatusFilter>("all");
+  const [viewMode, setViewMode] = useState<AiModelViewMode>("list");
+  const [viewModeReady, setViewModeReady] = useState(false);
+  const [collapsedConfigIds, setCollapsedConfigIds] = useState<Set<number>>(new Set());
+  const [expandedFilterConfigIds, setExpandedFilterConfigIds] = useState<Set<number>>(new Set());
+  const [highlightedConfigId, setHighlightedConfigId] = useState<number | null>(null);
+
+  // 对话框状态
+  const [setupTarget, setSetupTarget] = useState<ProviderSetupTarget | null>(null);
+  const [initialApiValues, setInitialApiValues] = useState<ApiConfigSaveReq | undefined>();
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [editingConfig, setEditingConfig] = useState<ApiConfig | null>(null);
   const [modelDialogOpen, setModelDialogOpen] = useState(false);
@@ -86,35 +91,45 @@ export default function AiModelsPage() {
   const [modelDialogApiConfigId, setModelDialogApiConfigId] = useState<number | undefined>(undefined);
   const [fetchModelsDialogOpen, setFetchModelsDialogOpen] = useState(false);
   const [fetchModelsConfig, setFetchModelsConfig] = useState<ApiConfig | null>(null);
-  const [testingModelIds, setTestingModelIds] = useState<Set<number>>(new Set());
-  const [viewMode, setViewMode] = useState<AiModelViewMode>("list");
-  const [collapsedConfigIds, setCollapsedConfigIds] = useState<Set<number>>(new Set());
-  const importInputRef = useRef<HTMLInputElement>(null);
-  const cardGridRef = useRef<HTMLDivElement>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const [exportIncludeSecrets, setExportIncludeSecrets] = useState(false);
   const [workflowManagerConfig, setWorkflowManagerConfig] = useState<ApiConfig | null>(null);
 
+  // 运行时交互状态
+  const [testingModelIds, setTestingModelIds] = useState<Set<number>>(new Set());
+  const [testResults, setTestResults] = useState<Record<number, ModelConnectivityTestState>>({});
+  const [settingDefaultModelId, setSettingDefaultModelId] = useState<number | null>(null);
+  const [updatingDefaultType, setUpdatingDefaultType] = useState<number | null>(null);
+  const [togglingConfigIds, setTogglingConfigIds] = useState<Set<number>>(new Set());
+  const [togglingModelIds, setTogglingModelIds] = useState<Set<number>>(new Set());
+
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const cardGridRef = useRef<HTMLDivElement>(null);
+  const highlightTimerRef = useRef<number | null>(null);
+
   const loadModels = useCallback(async () => {
     try {
-      const data = await aiModelApi.list();
+      const data = await aiModelApi.listAll();
       setModels(data);
-      setLoadErrors(current => ({ ...current, models: false }));
+      setLoadErrors((current) => ({ ...current, models: false }));
     } catch (err) {
       console.error("加载 AI 模型列表失败:", err);
-      setLoadErrors(current => ({ ...current, models: true }));
+      setLoadErrors((current) => ({ ...current, models: true }));
     }
   }, []);
 
-  const loadConfigs = useCallback(async () => {
+  const loadConfigs = useCallback(async (options?: { showLoading?: boolean }) => {
+    const showLoading = options?.showLoading === true;
     try {
-      setConfigsLoading(true);
+      if (showLoading) {
+        setConfigsLoading(true);
+      }
       const data = await apiConfigApi.listAll();
       setConfigs(data);
-      setLoadErrors(current => ({ ...current, configs: false }));
+      setLoadErrors((current) => ({ ...current, configs: false }));
     } catch (err) {
       console.error("加载 API 配置列表失败:", err);
-      setLoadErrors(current => ({ ...current, configs: true }));
+      setLoadErrors((current) => ({ ...current, configs: true }));
     } finally {
       setConfigsLoading(false);
     }
@@ -124,17 +139,17 @@ export default function AiModelsPage() {
     try {
       const data = await aiModelApi.presets();
       setModelPresets(data);
-      setLoadErrors(current => ({ ...current, presets: false }));
+      setLoadErrors((current) => ({ ...current, presets: false }));
     } catch (err) {
       console.error("加载模型预设失败:", err);
-      setLoadErrors(current => ({ ...current, presets: true }));
+      setLoadErrors((current) => ({ ...current, presets: true }));
     }
   }, []);
 
   useEffect(() => {
-    loadModels();
-    loadConfigs();
-    loadModelPresets();
+    void loadModels();
+    void loadConfigs({ showLoading: true });
+    void loadModelPresets();
   }, [loadConfigs, loadModelPresets, loadModels]);
 
   useEffect(() => {
@@ -142,111 +157,63 @@ export default function AiModelsPage() {
     if (isAiModelViewMode(storedViewMode)) {
       setViewMode(storedViewMode);
     }
+    setViewModeReady(true);
+    return () => {
+      if (highlightTimerRef.current !== null) {
+        window.clearTimeout(highlightTimerRef.current);
+      }
+    };
   }, []);
 
-  useLayoutEffect(() => {
-    const grid = cardGridRef.current;
-    if (!grid) return;
+  const hasActiveFilters =
+    query.trim().length > 0 || modelTypeFilter !== 0 || statusFilter !== "all";
 
-    const cards = Array.from(grid.querySelectorAll<HTMLElement>("[data-api-config-card]"));
-    const desktopColumns = window.matchMedia("(min-width: 1024px)");
-    let layoutFrame: number | undefined;
+  const visibleEntries = useMemo(
+    () =>
+      filterApiConfigsAndModels(configs, models, {
+        query,
+        modelType: modelTypeFilter,
+        status: statusFilter,
+      }),
+    [configs, models, query, modelTypeFilter, statusFilter],
+  );
 
-    const resetLayout = () => {
-      if (layoutFrame !== undefined) window.cancelAnimationFrame(layoutFrame);
-      grid.style.gridAutoRows = "";
-      cards.forEach(card => {
-        card.getAnimations().forEach(animation => animation.cancel());
-        card.style.gridRowEnd = "";
-      });
-    };
+  const defaultSlots = useMemo(
+    () => resolveDefaultModelsByType(models, configs),
+    [models, configs],
+  );
 
-    const layoutCard = (card: HTMLElement) => {
-      const gridStyle = window.getComputedStyle(grid);
-      const rowHeight = Number.parseFloat(gridStyle.gridAutoRows);
-      const rowGap = Number.parseFloat(gridStyle.rowGap);
-      if (!Number.isFinite(rowHeight) || !Number.isFinite(rowGap)) return;
+  const allVisibleCollapsed = useMemo(() => {
+    if (visibleEntries.length === 0) {
+      return false;
+    }
+    return visibleEntries.every((entry) => collapsedConfigIds.has(entry.config.id));
+  }, [visibleEntries, collapsedConfigIds]);
 
-      const cardHeight = card.getBoundingClientRect().height;
-      const rowSpan = Math.ceil((cardHeight + rowGap) / (rowHeight + rowGap));
-      card.style.gridRowEnd = `span ${rowSpan}`;
-    };
+  const layoutSignature = useMemo(
+    () =>
+      visibleEntries
+        .map(
+          (entry) =>
+            `${entry.config.id}:${entry.visibleModels.length}:${expandedFilterConfigIds.has(entry.config.id) ? 1 : 0}`,
+        )
+        .join("|"),
+    [visibleEntries, expandedFilterConfigIds],
+  );
 
-    const layoutCards = (animate: boolean) => {
-      if (viewMode !== "card" || configsLoading || cards.length === 0 || !desktopColumns.matches) {
-        resetLayout();
-        return;
-      }
-
-      const previousRects = animate && !shouldReduceMotion
-        ? new Map(cards.map(card => [card, card.getBoundingClientRect()]))
-        : null;
-
-      cards.forEach(card => {
-        card.getAnimations().forEach(animation => animation.cancel());
-      });
-      grid.style.gridAutoRows = "1px";
-      cards.forEach(layoutCard);
-
-      if (!previousRects) return;
-      cards.forEach(card => {
-        const previousRect = previousRects.get(card);
-        if (!previousRect) return;
-
-        const nextRect = card.getBoundingClientRect();
-        const deltaX = previousRect.left - nextRect.left;
-        const deltaY = previousRect.top - nextRect.top;
-        if (Math.abs(deltaX) < 1 && Math.abs(deltaY) < 1) return;
-
-        card.animate(
-          [
-            { transform: `translate(${deltaX}px, ${deltaY}px)` },
-            { transform: "translate(0, 0)" },
-          ],
-          {
-            duration: 220,
-            easing: "cubic-bezier(0.25, 0.46, 0.45, 0.94)",
-          }
-        );
-      });
-    };
-
-    const scheduleAnimatedLayout = () => {
-      if (layoutFrame !== undefined) window.cancelAnimationFrame(layoutFrame);
-      layoutFrame = window.requestAnimationFrame(() => {
-        layoutFrame = undefined;
-        layoutCards(true);
-      });
-    };
-
-    const resizeObserver = new ResizeObserver(() => {
-      if (viewMode !== "card" || !desktopColumns.matches) return;
-      scheduleAnimatedLayout();
-    });
-
-    cards.forEach(card => resizeObserver.observe(card));
-    const handleColumnsChange = () => layoutCards(false);
-    desktopColumns.addEventListener("change", handleColumnsChange);
-    layoutCards(false);
-
-    return () => {
-      resizeObserver.disconnect();
-      desktopColumns.removeEventListener("change", handleColumnsChange);
-      resetLayout();
-    };
-  }, [configs, configsLoading, shouldReduceMotion, viewMode]);
+  useCardMasonryLayout(cardGridRef, {
+    viewMode,
+    disabled: configsLoading || !viewModeReady,
+    layoutSignature,
+    shouldReduceMotion,
+  });
 
   const handleTestModel = async (model: AiModel) => {
     if (model.modelType === 4) {
       setTryModel(model);
       return;
     }
-    setTestingModelIds((prev) => {
-      const next = new Set(prev);
-      next.add(model.id);
-      return next;
-    });
-
+    setTestingModelIds((prev) => new Set(prev).add(model.id));
     try {
       const result = await aiModelApi.testTextConnectivity(model.id);
       const preview = result.responseText.replace(/\s+/g, " ").trim();
@@ -254,15 +221,22 @@ export default function AiModelsPage() {
       const description = [
         summary ? `回复：${summary}` : "已收到模型响应",
         typeof result.durationMs === "number" ? `${result.durationMs} ms` : "",
-      ].filter(Boolean).join(" · ");
+      ]
+        .filter(Boolean)
+        .join(" · ");
 
-      toast.success(`${result.modelName} 连通正常`, {
-        description,
-      });
+      setTestResults((prev) => ({
+        ...prev,
+        [model.id]: { ok: true, durationMs: result.durationMs, summary: description },
+      }));
+      toast.success(`${result.modelName} 连通正常`, { description });
     } catch (err) {
-      toast.error(`${getModelDisplayParts(model).name} 检测失败`, {
-        description: err instanceof Error ? err.message : "请求失败",
-      });
+      const message = err instanceof Error ? err.message : "请求失败";
+      setTestResults((prev) => ({
+        ...prev,
+        [model.id]: { ok: false, summary: message },
+      }));
+      toast.error(`${getModelDisplayParts(model).name} 检测失败`, { description: message });
     } finally {
       setTestingModelIds((prev) => {
         const next = new Set(prev);
@@ -272,22 +246,105 @@ export default function AiModelsPage() {
     }
   };
 
-  const handleDeleteModel = async (id: number) => {
-    const ok = await confirm({ title: "删除 AI 模型", description: "确定要删除该 AI 模型吗？", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
+  const handleSetDefaultModel = async (model: AiModel) => {
+    setSettingDefaultModelId(model.id);
+    setUpdatingDefaultType(model.modelType);
     try {
-      await aiModelApi.delete(id);
+      await aiModelApi.update({ id: model.id, defaultModel: true });
       await loadModels();
+      toast.success(`已将「${getModelDisplayParts(model).name}」设为默认模型`);
+    } catch (err) {
+      console.error("设置默认模型失败:", err);
+      toastApiError(err, "设置默认模型失败");
+    } finally {
+      setSettingDefaultModelId(null);
+      setUpdatingDefaultType(null);
+    }
+  };
+
+  const handleToggleConfigStatus = async (config: ApiConfig) => {
+    const nextStatus = config.status === 1 ? 0 : 1;
+    setTogglingConfigIds((prev) => new Set(prev).add(config.id));
+    try {
+      await apiConfigApi.update({ id: config.id, name: config.name, status: nextStatus });
+      await loadConfigs();
+      toast.success(
+        nextStatus === 1 ? `已启用「${config.name}」` : `已停用「${config.name}」`,
+      );
+    } catch (err) {
+      console.error("切换 API 配置状态失败:", err);
+      toastApiError(err, "更新服务状态失败");
+    } finally {
+      setTogglingConfigIds((prev) => {
+        const next = new Set(prev);
+        next.delete(config.id);
+        return next;
+      });
+    }
+  };
+
+  const handleToggleModelStatus = async (model: AiModel) => {
+    const nextStatus = model.status === 1 ? 0 : 1;
+    setTogglingModelIds((prev) => new Set(prev).add(model.id));
+    try {
+      await aiModelApi.update({ id: model.id, status: nextStatus });
+      await loadModels();
+      const displayName = getModelDisplayParts(model).name;
+      toast.success(
+        nextStatus === 1 ? `已启用模型「${displayName}」` : `已停用模型「${displayName}」`,
+      );
+    } catch (err) {
+      console.error("切换模型状态失败:", err);
+      toastApiError(err, "更新模型状态失败");
+    } finally {
+      setTogglingModelIds((prev) => {
+        const next = new Set(prev);
+        next.delete(model.id);
+        return next;
+      });
+    }
+  };
+
+  const handleDeleteModel = async (model: AiModel) => {
+    const displayName = getModelDisplayParts(model).name;
+    const ok = await confirm({
+      title: "删除 AI 模型",
+      description: model.defaultModel
+        ? `确定删除默认模型「${displayName}」吗？删除后该能力类型将没有默认模型，此操作不可撤销。`
+        : `确定删除模型「${displayName}」吗？此操作不可撤销。`,
+      variant: "destructive",
+      confirmText: "确定删除",
+    });
+    if (!ok) {
+      return;
+    }
+    try {
+      await aiModelApi.delete(model.id);
+      await loadModels();
+      toast.success(`已删除模型「${displayName}」`);
     } catch (err) {
       console.error("删除模型失败:", err);
       toastApiError(err, "删除模型失败");
     }
   };
 
-  const handleDeleteConfig = async (id: number) => {
-    const ok = await confirm({ title: "删除 API 配置", description: "确定要删除该 API 配置吗？", variant: "destructive", confirmText: "确定删除" }); if (!ok) return;
+  const handleDeleteConfig = async (config: ApiConfig) => {
+    const linkedCount = models.filter((model) => model.apiConfigId === config.id).length;
+    const ok = await confirm({
+      title: "删除 API 配置",
+      description: linkedCount > 0
+        ? `确定删除「${config.name}」吗？其下关联的 ${linkedCount} 个模型将失去连接配置而无法调用，此操作不可撤销。`
+        : `确定删除「${config.name}」吗？此操作不可撤销。`,
+      variant: "destructive",
+      confirmText: "确定删除",
+    });
+    if (!ok) {
+      return;
+    }
     try {
-      await apiConfigApi.delete(id);
-      await loadConfigs();
+      await apiConfigApi.delete(config.id);
+      await Promise.all([loadConfigs(), loadModels()]);
+      toast.success(`已删除 API 配置「${config.name}」`);
     } catch (err) {
       console.error("删除配置失败:", err);
       toastApiError(err, "删除配置失败");
@@ -300,7 +357,7 @@ export default function AiModelsPage() {
   };
 
   const handleToggleConfigCollapse = (configId: number) => {
-    setCollapsedConfigIds(prev => {
+    setCollapsedConfigIds((prev) => {
       const next = new Set(prev);
       if (next.has(configId)) {
         next.delete(configId);
@@ -311,86 +368,57 @@ export default function AiModelsPage() {
     });
   };
 
+  const handleToggleCollapseAll = () => {
+    setCollapsedConfigIds((prev) => {
+      const next = new Set(prev);
+      for (const entry of visibleEntries) {
+        if (allVisibleCollapsed) {
+          next.delete(entry.config.id);
+        } else {
+          next.add(entry.config.id);
+        }
+      }
+      return next;
+    });
+  };
+
+  const handleLocateConfig = (configId: number) => {
+    setQuery("");
+    setModelTypeFilter(0);
+    setStatusFilter("all");
+    setCollapsedConfigIds((prev) => {
+      const next = new Set(prev);
+      next.delete(configId);
+      return next;
+    });
+    setHighlightedConfigId(configId);
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current);
+    }
+    highlightTimerRef.current = window.setTimeout(() => {
+      setHighlightedConfigId(null);
+      highlightTimerRef.current = null;
+    }, 2000);
+    requestAnimationFrame(() => {
+      document.getElementById(`api-config-card-${configId}`)?.scrollIntoView({
+        behavior: shouldReduceMotion ? "auto" : "smooth",
+        block: "center",
+      });
+    });
+  };
+
   const handleExport = (includeSecrets: boolean) => {
-    const exportedConfigs = configs.map(config => ({
-      ...config,
-      ...(includeSecrets ? {} : { apiKey: undefined, appSecret: undefined, proxyPassword: undefined }),
-    }));
-    const payload = {
-      version: 1,
-      exportedAt: new Date().toISOString(),
-      apiConfigs: exportedConfigs,
-      models,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `ai-fusion-config-${new Date().toISOString().slice(0, 10)}.json`;
-    anchor.click();
-    URL.revokeObjectURL(url);
+    exportAiModelsConfigFile(configs, models, includeSecrets);
     toast.success(includeSecrets ? "配置已导出（含密钥）" : "配置已导出");
     setExportDialogOpen(false);
   };
 
   const handleImport = async (file: File) => {
     try {
-      const parsed = JSON.parse(await file.text()) as { apiConfigs?: ApiConfig[]; models?: AiModel[] };
-      if (!Array.isArray(parsed.apiConfigs) || !Array.isArray(parsed.models)) throw new Error("配置文件结构不正确");
-      const configIdMap = new Map<number, number>();
-      let configurationsAwaitingKey = 0;
-      for (const source of parsed.apiConfigs) {
-        const requiresKey = providerCatalog.providers.find((provider) => provider.id === source.providerId)?.quickSetup;
-        const awaitingKey = requiresKey && !source.apiKey?.trim();
-        if (awaitingKey) {
-          configurationsAwaitingKey++;
-        }
-        const createdId = await apiConfigApi.create({
-          name: source.name,
-          providerId: source.providerId || undefined,
-          platform: source.platform || undefined,
-          textProtocol: source.textProtocol || undefined,
-          imageProtocol: source.imageProtocol || undefined,
-          videoProtocol: source.videoProtocol || undefined,
-          apiUrl: source.apiUrl || undefined,
-          autoAppendV1Path: source.autoAppendV1Path,
-          proxyType: source.proxyType || "none",
-          proxyHost: source.proxyHost || undefined,
-          proxyPort: source.proxyPort || undefined,
-          proxyUsername: source.proxyUsername || undefined,
-          proxyPassword: source.proxyPassword || undefined,
-          apiKey: source.apiKey || undefined,
-          appId: source.appId || undefined,
-          appSecret: source.appSecret || undefined,
-          status: awaitingKey ? 0 : source.status,
-          remark: source.remark || undefined,
-        });
-        if (typeof source.id === "number") configIdMap.set(source.id, createdId);
-      }
-      for (const source of parsed.models) {
-        const apiConfigId = source.apiConfigId ? configIdMap.get(source.apiConfigId) : undefined;
-        if (!apiConfigId) continue;
-        await aiModelApi.create({
-          name: source.name,
-          code: source.code,
-          capabilityPresetCode: source.capabilityPresetCode || undefined,
-          modelProtocol: source.modelProtocol || undefined,
-          modelType: source.modelType,
-          icon: source.icon || undefined,
-          description: source.description || undefined,
-          sort: source.sort,
-          config: source.config || undefined,
-          maxConcurrency: source.maxConcurrency || undefined,
-          defaultModel: false,
-          supportVision: source.supportVision,
-          multimodalInputTypes: source.multimodalInputTypes,
-          multimodalInputTransports: source.multimodalInputTransports,
-          supportReasoning: source.supportReasoning,
-          reasoningEffortLevels: source.reasoningEffortLevels ?? [],
-          contextWindow: source.contextWindow || undefined,
-          apiConfigId,
-        });
-      }
+      const { configurationsAwaitingKey } = await importAiModelsConfigFile(
+        file,
+        providerCatalog.providers,
+      );
       await Promise.all([loadConfigs(), loadModels()]);
       toast.success("配置已导入", {
         description: configurationsAwaitingKey
@@ -398,57 +426,31 @@ export default function AiModelsPage() {
           : "已创建新的 API 配置和模型，原配置不会被覆盖。",
       });
     } catch (error) {
-      toast.error("导入失败", { description: error instanceof Error ? error.message : "请检查 JSON 文件" });
+      toast.error("导入失败", {
+        description: error instanceof Error ? error.message : "请检查 JSON 文件",
+      });
     } finally {
-      if (importInputRef.current) importInputRef.current.value = "";
+      if (importInputRef.current) {
+        importInputRef.current.value = "";
+      }
     }
   };
 
-  const renderConfigCard = (config: ApiConfig) => (
-    <ApiConfigCard key={config.id} config={config} models={models} modelPresets={modelPresets}
-      collapsed={!query.trim() && collapsedConfigIds.has(config.id)} testingModelIds={testingModelIds}
-      onToggle={() => handleToggleConfigCollapse(config.id)}
-      provider={providerCatalog.providers.find((provider) => provider.id === config.providerId)}
-      onFetch={() => {
-        const provider = providerCatalog.providers.find((item) => item.id === config.providerId && item.quickSetup);
-        if (provider) {
-          setSetupTarget({
-            provider,
-            existingConfig: config,
-            configuration: { id: config.id, name: config.name, providerId: provider.id },
-          });
-        } else {
-          setFetchModelsConfig(config);
-          setFetchModelsDialogOpen(true);
-        }
-      }}
-      onWorkflow={() => setWorkflowManagerConfig(config)}
-      onEditConfig={() => { setEditingConfig(config); setConfigDialogOpen(true); }}
-      onDeleteConfig={() => void handleDeleteConfig(config.id)}
-      onEditModel={(model) => {
-        setInitialCandidate(null);
-        setEditingModel(model);
-        setModelDialogApiConfigId(undefined);
-        setModelDialogOpen(true);
-      }}
-      onDeleteModel={(id) => void handleDeleteModel(id)}
-      onAddModel={() => {
-        const provider = providerCatalog.providers.find((item) => item.id === config.providerId && item.quickSetup);
-        if (provider) {
-          setSetupTarget({
-            provider,
-            existingConfig: config,
-            configuration: { id: config.id, name: config.name, providerId: provider.id },
-          });
-        } else {
-          setInitialCandidate(null);
-          setEditingModel(null);
-          setModelDialogApiConfigId(config.id);
-          setModelDialogOpen(true);
-        }
-      }}
-      onTestModel={handleTestModel} onModelsChanged={loadModels} />
-  );
+  const openCreateConfig = () => {
+    setInitialCandidate(null);
+    setInitialApiValues(undefined);
+    setEditingConfig(null);
+    setConfigDialogOpen(true);
+  };
+
+  const resetFilters = () => {
+    setQuery("");
+    setModelTypeFilter(0);
+    setStatusFilter("all");
+    setExpandedFilterConfigIds(new Set());
+  };
+
+  const isLoadingView = configsLoading || !viewModeReady;
 
   return (
     <motion.div
@@ -457,164 +459,230 @@ export default function AiModelsPage() {
       initial={false}
       animate="visible"
     >
-      {/* 页面标题 */}
-      <motion.div variants={itemVariants} className="mb-8">
+      <motion.div variants={itemVariants} className="mb-6">
         <h1 className={settingsTypography.pageTitle}>AI 配置</h1>
         <p className={settingsTypography.pageDescription}>
-          管理提供商与模型。
+          管理模型服务商连接、能力协议与全局默认模型。
         </p>
       </motion.div>
 
-      {/* ========== AI 服务管理（统一卡片式） ========== */}
-      <motion.div variants={itemVariants}>
-        <div className="flex items-center justify-between gap-3 mb-3 px-1 flex-wrap">
-          <h3 className={settingsTypography.sectionTitle}>
-            API 配置与模型
-          </h3>
-          <div className="flex items-center gap-2 shrink-0">
-            <input
-              ref={importInputRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={event => {
-                const file = event.target.files?.[0];
-                if (file) void handleImport(file);
-              }}
-            />
-            <button
-              type="button"
-              onClick={() => importInputRef.current?.click()}
-              className="flex h-9 items-center gap-1.5 rounded-xl border border-border/40 px-3 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary"
-            >
-              <Upload className="h-3.5 w-3.5" />
-              导入
-            </button>
-            <button
-              type="button"
-              onClick={() => { setExportIncludeSecrets(false); setExportDialogOpen(true); }}
-              disabled={configs.length === 0}
-              className="flex h-9 items-center gap-1.5 rounded-xl border border-border/40 px-3 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
-            >
-              <Download className="h-3.5 w-3.5" />
-              导出
-            </button>
-            <div
-              className="flex h-9 rounded-xl border border-border/30 bg-card/50 overflow-hidden shrink-0"
-              role="group"
-              aria-label="AI 模型展示方式"
-            >
-              <button
-                type="button"
-                onClick={() => handleViewModeChange("list")}
-                aria-pressed={viewMode === "list"}
-                title="列表视图"
-                className={cn(
-                  "flex h-full w-10 items-center justify-center transition-colors",
-                  viewMode === "list"
-                    ? "bg-white/10 text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <List className="h-4 w-4" />
-              </button>
-              <button
-                type="button"
-                onClick={() => handleViewModeChange("card")}
-                aria-pressed={viewMode === "card"}
-                title="卡片视图"
-                className={cn(
-                  "flex h-full w-10 items-center justify-center transition-colors",
-                  viewMode === "card"
-                    ? "bg-white/10 text-foreground"
-                    : "text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <LayoutGrid className="h-4 w-4" />
-              </button>
-            </div>
-            <Button
-              type="button"
-              onClick={() => {
-                setInitialCandidate(null);
-                setInitialApiValues(undefined);
-                setEditingConfig(null);
-                setConfigDialogOpen(true);
-              }}
-            >
-              <Plus />
-              添加 API 配置
-            </Button>
-          </div>
-        </div>
+      {!isLoadingView && !Object.values(loadErrors).some(Boolean) && configs.length > 0 && (
+        <motion.div variants={itemVariants}>
+          <DefaultModelsBar
+            slots={defaultSlots}
+            updatingModelType={updatingDefaultType}
+            onSelectDefault={handleSetDefaultModel}
+            onLocateConfig={handleLocateConfig}
+          />
+        </motion.div>
+      )}
 
-        <ApiConfigSearch query={query} onChange={setQuery} />
+      <motion.div variants={itemVariants}>
+        <AiModelsToolbar
+          query={query}
+          onQueryChange={setQuery}
+          modelTypeFilter={modelTypeFilter}
+          onModelTypeFilterChange={setModelTypeFilter}
+          statusFilter={statusFilter}
+          onStatusFilterChange={setStatusFilter}
+          viewMode={viewMode}
+          onViewModeChange={handleViewModeChange}
+          hasConfigs={configs.length > 0}
+          allCollapsed={allVisibleCollapsed}
+          onToggleCollapseAll={handleToggleCollapseAll}
+          importInputRef={importInputRef}
+          onImportFile={(file) => void handleImport(file)}
+          onOpenExport={() => {
+            setExportIncludeSecrets(false);
+            setExportDialogOpen(true);
+          }}
+          onOpenCreateConfig={openCreateConfig}
+          totalConfigCount={configs.length}
+          visibleConfigCount={visibleEntries.length}
+          hasActiveFilters={hasActiveFilters}
+          onResetFilters={resetFilters}
+        />
+
         <div
           ref={cardGridRef}
           className={cn(
             viewMode === "card"
-              ? "grid grid-cols-1 lg:grid-cols-2 gap-4 items-start"
-              : "space-y-4"
+              ? "grid grid-cols-1 items-start gap-4 lg:grid-cols-2"
+              : "flex flex-col gap-4",
           )}
         >
-          {configsLoading ? (
-            <div className={cn(
-              "flex items-center justify-center py-8",
-              viewMode === "card" && "lg:col-span-2"
-            )}>
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          {isLoadingView ? (
+            <div
+              role="status"
+              aria-label="加载模型配置"
+              className={cn(
+                "flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground",
+                viewMode === "card" && "lg:col-span-2",
+              )}
+            >
+              <Loader2 className="size-4 animate-spin" />
+              正在加载模型配置…
             </div>
           ) : Object.values(loadErrors).some(Boolean) ? (
-            <div role="alert" className={cn("flex flex-col items-center gap-3 py-8", viewMode === "card" && "lg:col-span-2")}>
+            <div
+              role="alert"
+              className={cn(
+                "flex flex-col items-center gap-3 rounded-xl border border-border/30 bg-card/50 py-10 text-center",
+                viewMode === "card" && "lg:col-span-2",
+              )}
+            >
               <p className="text-sm text-muted-foreground">模型配置暂时无法加载，请重试</p>
-              <Button variant="outline" onClick={() => void Promise.all([loadConfigs(), loadModels(), loadModelPresets()])}>重试</Button>
+              <Button
+                variant="outline"
+                onClick={() =>
+                  void Promise.all([
+                    loadConfigs({ showLoading: true }),
+                    loadModels(),
+                    loadModelPresets(),
+                  ])
+                }
+              >
+                重试
+              </Button>
             </div>
           ) : configs.length === 0 ? (
-            <div className={cn(
-              "rounded-xl border border-dashed border-border/30 py-10 text-center",
-              "bg-card/30",
-              viewMode === "card" && "lg:col-span-2"
-            )}>
-              <Settings2 className="h-8 w-8 text-muted-foreground/20 mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">还没有 API 配置</p>
-              <p className="text-xs text-muted-foreground/60 mt-1">点击上方「添加 API 配置」开始</p>
+            <div
+              className={cn(
+                "flex flex-col items-center gap-3 rounded-xl border border-dashed border-border/40 bg-card/30 px-6 py-12 text-center",
+                viewMode === "card" && "lg:col-span-2",
+              )}
+            >
+              <span className="grid size-12 place-items-center rounded-2xl bg-muted/60 text-muted-foreground">
+                <Settings2 className="size-6" />
+              </span>
+              <div className="space-y-1">
+                <p className="text-sm font-medium text-foreground">还没有 API 配置</p>
+                <p className="text-xs text-muted-foreground">
+                  先添加一个模型服务商连接，即可配置文本、图像、视频或音频模型。
+                </p>
+              </div>
+              <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+                <Button type="button" onClick={openCreateConfig}>
+                  <Plus />
+                  添加 API 配置
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => importInputRef.current?.click()}
+                >
+                  <Upload />
+                  导入配置
+                </Button>
+              </div>
             </div>
-          ) : visibleConfigs.length === 0 ? (
-            <p className="p-4 text-sm text-muted-foreground" role="status">没有匹配的服务或模型，试试其他名称。</p>
+          ) : visibleEntries.length === 0 ? (
+            <div
+              role="status"
+              className={cn(
+                "flex flex-col items-center gap-3 rounded-xl border border-border/30 bg-card/40 px-6 py-10 text-center",
+                viewMode === "card" && "lg:col-span-2",
+              )}
+            >
+              <p className="text-sm text-muted-foreground">
+                没有匹配当前筛选条件的服务或模型。
+              </p>
+              <Button type="button" variant="outline" onClick={resetFilters}>
+                重置筛选
+              </Button>
+            </div>
           ) : (
-            visibleConfigs.map(renderConfigCard)
+            visibleEntries.map((entry) => {
+              const { config } = entry;
+              const provider = providerCatalog.providers.find(
+                (item) => item.id === config.providerId,
+              );
+              return (
+                <ApiConfigCard
+                  key={config.id}
+                  config={config}
+                  provider={provider}
+                  allModels={entry.allModels}
+                  visibleModels={entry.visibleModels}
+                  hiddenModelCount={entry.hiddenModelCount}
+                  showingAllInFilter={expandedFilterConfigIds.has(config.id)}
+                  onToggleShowAllInFilter={() => {
+                    setExpandedFilterConfigIds((prev) => {
+                      const next = new Set(prev);
+                      if (next.has(config.id)) {
+                        next.delete(config.id);
+                      } else {
+                        next.add(config.id);
+                      }
+                      return next;
+                    });
+                  }}
+                  modelPresets={modelPresets}
+                  collapsed={!hasActiveFilters && collapsedConfigIds.has(config.id)}
+                  highlighted={highlightedConfigId === config.id}
+                  testingModelIds={testingModelIds}
+                  testResults={testResults}
+                  settingDefaultModelId={settingDefaultModelId}
+                  togglingConfigStatus={togglingConfigIds.has(config.id)}
+                  togglingModelIds={togglingModelIds}
+                  onToggle={() => handleToggleConfigCollapse(config.id)}
+                  onToggleConfigStatus={() => void handleToggleConfigStatus(config)}
+                  onFetch={() => {
+                    const quickProvider = providerCatalog.providers.find(
+                      (item) => item.id === config.providerId && item.quickSetup,
+                    );
+                    if (quickProvider) {
+                      setSetupTarget({
+                        provider: quickProvider,
+                        existingConfig: config,
+                        configuration: {
+                          id: config.id,
+                          name: config.name,
+                          providerId: quickProvider.id,
+                        },
+                      });
+                    } else {
+                      setFetchModelsConfig(config);
+                      setFetchModelsDialogOpen(true);
+                    }
+                  }}
+                  onWorkflow={() => setWorkflowManagerConfig(config)}
+                  onEditConfig={() => {
+                    setEditingConfig(config);
+                    setConfigDialogOpen(true);
+                  }}
+                  onDeleteConfig={() => void handleDeleteConfig(config)}
+                  onEditModel={(model) => {
+                    setInitialCandidate(null);
+                    setEditingModel(model);
+                    setModelDialogApiConfigId(undefined);
+                    setModelDialogOpen(true);
+                  }}
+                  onDeleteModel={(model) => void handleDeleteModel(model)}
+                  onAddModelManual={() => {
+                    setInitialCandidate(null);
+                    setEditingModel(null);
+                    setModelDialogApiConfigId(config.id);
+                    setModelDialogOpen(true);
+                  }}
+                  onSetDefaultModel={(model) => void handleSetDefaultModel(model)}
+                  onToggleModelStatus={(model) => void handleToggleModelStatus(model)}
+                  onTestModel={(model) => void handleTestModel(model)}
+                />
+              );
+            })
           )}
         </div>
       </motion.div>
 
-      {/* Dialogs */}
-      <Dialog open={exportDialogOpen} onOpenChange={setExportDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>导出配置</DialogTitle>
-            <DialogDescription>选择导出内容。</DialogDescription>
-          </DialogHeader>
-          <button
-            type="button"
-            onClick={() => setExportIncludeSecrets(value => !value)}
-            className="flex items-center justify-between rounded-xl border border-border/40 bg-muted/15 px-3 py-3 text-left"
-          >
-            <span>
-              <span className="block text-sm font-medium">包含密钥</span>
-              <span className="mt-0.5 block text-[10px] text-muted-foreground">仅在可信环境中使用</span>
-            </span>
-            <span className={cn("relative h-5 w-9 rounded-full transition-colors", exportIncludeSecrets ? "bg-primary" : "bg-muted-foreground/25")}>
-              <span className={cn("absolute left-0.5 top-0.5 h-4 w-4 rounded-full bg-white shadow transition-transform", exportIncludeSecrets && "translate-x-4")} />
-            </span>
-          </button>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" size="sm" />}>取消</DialogClose>
-            <Button size="sm" onClick={() => handleExport(exportIncludeSecrets)}>
-              <Download className="h-3.5 w-3.5" />导出
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ExportConfigDialog
+        open={exportDialogOpen}
+        onOpenChange={setExportDialogOpen}
+        includeSecrets={exportIncludeSecrets}
+        onIncludeSecretsChange={setExportIncludeSecrets}
+        onExport={handleExport}
+      />
+
       <ApiConfigDialog
         open={configDialogOpen}
         onOpenChange={setConfigDialogOpen}
@@ -628,9 +696,16 @@ export default function AiModelsPage() {
           setInitialCandidate(null);
           setSetupTarget({ provider, configuration });
         }}
-        onCreateModel={(id) => { setEditingModel(null); setModelDialogApiConfigId(id); setModelDialogOpen(true); }}
-        onSaved={async () => { await Promise.all([loadConfigs(), loadModels()]); }}
+        onCreateModel={(id) => {
+          setEditingModel(null);
+          setModelDialogApiConfigId(id);
+          setModelDialogOpen(true);
+        }}
+        onSaved={async () => {
+          await Promise.all([loadConfigs(), loadModels()]);
+        }}
       />
+
       {setupTarget && (
         <ProviderSetupDialog
           target={setupTarget}
@@ -657,12 +732,20 @@ export default function AiModelsPage() {
           }}
         />
       )}
+
       <ComfyUiWorkflowManagerDialog
         open={workflowManagerConfig !== null}
-        onOpenChange={open => { if (!open) setWorkflowManagerConfig(null); }}
+        onOpenChange={(open) => {
+          if (!open) {
+            setWorkflowManagerConfig(null);
+          }
+        }}
         apiConfig={workflowManagerConfig}
-        onChanged={() => { loadModels(); }}
+        onChanged={() => {
+          void loadModels();
+        }}
       />
+
       <AiModelDialog
         open={modelDialogOpen}
         onOpenChange={(open) => {
@@ -676,16 +759,30 @@ export default function AiModelsPage() {
         providers={providerCatalog.providers}
         defaultApiConfigId={modelDialogApiConfigId}
         initialCandidate={initialCandidate}
-        onSaved={() => { loadModels(); }}
+        onSaved={() => {
+          void loadModels();
+        }}
       />
-      {tryModel && <AudioGenerationDialog model={tryModel} onClose={() => setTryModel(null)} />}
+
+      {tryModel && (
+        <AudioGenerationDialog model={tryModel} onClose={() => setTryModel(null)} />
+      )}
+
       {fetchModelsConfig && (
         <FetchRemoteModelsDialog
           open={fetchModelsDialogOpen}
           onOpenChange={setFetchModelsDialogOpen}
           apiConfig={fetchModelsConfig}
-          existingModelCodes={new Set(models.filter(m => m.apiConfigId === fetchModelsConfig.id).map(m => m.code))}
-          onAdded={() => { loadModels(); }}
+          existingModelCodes={
+            new Set(
+              models
+                .filter((model) => model.apiConfigId === fetchModelsConfig.id)
+                .map((model) => model.code),
+            )
+          }
+          onAdded={() => {
+            void loadModels();
+          }}
         />
       )}
     </motion.div>

@@ -50,8 +50,8 @@ export function AspectRatiosEditor({
   return (
     <div className="flex min-w-0 flex-col gap-3">
       <div className="flex flex-col gap-1">
-        <label className="text-xs text-muted-foreground">
-          {label || "支持的比例 (supportedAspectRatios)"}
+        <label className="text-xs font-medium text-foreground">
+          {label || "支持的比例"}
         </label>
         {hint && <p className="text-xs text-muted-foreground/70">{hint}</p>}
       </div>

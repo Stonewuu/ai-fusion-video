@@ -32,7 +32,7 @@ export function ImageLightbox({
         <SafeImage
           src={src}
           alt={alt}
-          className="mx-auto max-h-[75vh] max-w-full object-contain"
+          className="mx-auto max-h-[75vh] max-w-full rounded-lg bg-background object-contain"
         />
       </DialogContent>
     </Dialog>

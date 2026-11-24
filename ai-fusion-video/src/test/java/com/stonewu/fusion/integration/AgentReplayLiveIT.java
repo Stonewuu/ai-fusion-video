@@ -69,6 +69,8 @@ class AgentReplayLiveIT {
 
     @DynamicPropertySource
     static void configure(DynamicPropertyRegistry properties) {
+        // 此组用例继续保护旧运行的 MySQL 事件读取协议。
+        properties.add("fusion.agentscope.v2.stream-protocol-version", () -> 1);
         properties.add("spring.datasource.url", MYSQL::getJdbcUrl);
         properties.add("spring.datasource.username", MYSQL::getUsername);
         properties.add("spring.datasource.password", MYSQL::getPassword);

@@ -12,6 +12,8 @@ import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshotBuilder;
 import com.stonewu.fusion.service.ai.run.model.*;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
+import org.springframework.beans.factory.annotation.Autowired;
+import com.stonewu.fusion.service.ai.run.stream.AgentStreamChildCompletion;
 import reactor.util.retry.Retry;
 
 import java.time.Duration;
@@ -35,6 +37,8 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
     private final CancellationCoordinator cancellations;
     private final AgentRuntimeInstanceIdentity instanceIdentity;
     private final Duration ownerLease;
+    @Autowired
+    private AgentStreamChildCompletion streamChildren;
 
     public PlatformSubAgentRunService(
             AgentRunCoordinator coordinator,
@@ -98,6 +102,9 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
         return Mono.defer(() -> {
             PlatformSubAgentRun child = Objects.requireNonNull(
                     childRun, "childRun must not be null");
+            if (child.streamProtocolVersion() == 2) {
+                return streamChildren.await(child);
+            }
             return replay.replayThenLive(child.childRunId(), 0)
                     .filter(event -> !event.envelope().payload().path("_platformMirroredChildEvent").asBoolean(false))
                     .takeUntil(event -> TERMINAL_OUTPUT_TYPES.contains(
@@ -195,7 +202,7 @@ public final class PlatformSubAgentRunService implements PlatformSubAgentRunPort
                 command.parentRunId(),
                 command.parentToolCallId(),
                 command.agentName(),
-                admission.status());
+                admission.status(), null, null, started.streamProtocolVersion());
         if (!admission.created()) {
             return Mono.just(response);
         }

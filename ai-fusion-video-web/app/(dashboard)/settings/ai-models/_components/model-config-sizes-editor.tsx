@@ -95,8 +95,8 @@ export function SupportedSizesEditor({
 
   return (
     <div className="space-y-3">
-      <label className="text-xs text-muted-foreground">
-        支持的尺寸 (supportedSizes)
+      <label className="text-xs font-medium text-foreground">
+        支持的尺寸档位
       </label>
 
       {tierNames.map((tier) => {
@@ -241,16 +241,22 @@ export function SupportedSizesEditor({
         ))}
         <div className="ml-auto flex items-center gap-2">
           <Input
+            aria-label="自定义尺寸档位名称"
             placeholder="自定义档位"
             value={newTierName}
             onChange={(e) => setNewTierName(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addTier(newTierName)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                addTier(newTierName);
+              }
+            }}
             className="h-8 w-28 font-mono text-xs"
           />
           <Button
             type="button"
-            variant="ghost"
-            size="xs"
+            variant="outline"
+            size="sm"
             onClick={() => addTier(newTierName)}
             disabled={!newTierName.trim()}
           >

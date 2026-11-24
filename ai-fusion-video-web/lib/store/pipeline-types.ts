@@ -7,11 +7,13 @@ export interface PipelineState {
   reasoningStartTime?: number;
   reasoningDurationMs?: number;
   timeline: TimelineItem[];
+  /** 续跑时保留前一轮已展示的历史，当前运行快照只替换后面的内容。 */
+  historyPrefix?: TimelineItem[];
   runId?: string;
   lastSequence: number;
   conversationId?: string;
   error?: string;
-  /** 页面恢复的 Pipeline 在打开详情前不回放 journal 内容。 */
+  /** 页面恢复的 Pipeline 在打开详情前只查询状态。 */
   contentLoaded?: boolean;
   contentLoading?: boolean;
   /** 仅在详情选中时建立前端 reconnect SSE，不影响后端 Pipeline。 */
@@ -97,7 +99,7 @@ export interface PipelineStoreState {
   setNotificationOpen: (open: boolean) => void;
   setPanelExpanded: (expanded: boolean) => void;
   setExpandedTaskId: (id: string | null) => void;
-  /** 首次打开恢复任务详情时，从 journal 起点加载完整内容。 */
+  /** 打开任务详情时恢复完整历史和草稿，再跟踪后续增量。 */
   loadPipelineContent: (id: string) => void;
   /** 仅终止前端内容流；不会取消后端 Pipeline。 */
   disconnectPipelineContent: (id: string) => void;

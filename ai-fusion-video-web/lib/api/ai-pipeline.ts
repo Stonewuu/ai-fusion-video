@@ -46,7 +46,7 @@ export interface PendingToolCallInfo {
 
 /** A strictly identified event from the durable Pipeline journal. */
 export interface AiChatStreamEvent extends BaseAiChatStreamEvent {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2;
   runId: string;
   sequence: number;
   source?: string;
@@ -104,11 +104,14 @@ export type PipelineRunTarget =
 
 interface StreamCursor {
   runId?: string;
+  schemaVersion?: 1 | 2;
   lastSequence: number;
   terminalSeen: boolean;
+  historySeen?: boolean;
 }
 
 const OUTPUT_TYPES = new Set([
+  "HISTORY",
   "REASONING",
   "CONTENT",
   "TOOL_CALL_STARTED",
@@ -157,22 +160,54 @@ function parsePipelineEvent(jsonText: string): AiChatStreamEvent {
   if (!isRecord(value)) {
     throw new Error("Pipeline SSE data must be an object");
   }
-  if (value.schemaVersion !== 1) {
+  if (value.schemaVersion !== 1 && value.schemaVersion !== 2) {
     throw new Error("Unsupported Pipeline SSE schema version");
   }
   if (typeof value.runId !== "string" || value.runId.trim() !== value.runId || !value.runId) {
     throw new Error("Pipeline SSE runId is invalid");
   }
-  if (!Number.isSafeInteger(value.sequence) || (value.sequence as number) <= 0) {
+  if (!Number.isSafeInteger(value.sequence) || (value.sequence as number) < (value.outputType === "HISTORY" ? 0 : 1)) {
     throw new Error("Pipeline SSE sequence is invalid");
   }
   if (typeof value.outputType !== "string" || !OUTPUT_TYPES.has(value.outputType)) {
     throw new Error("Pipeline SSE outputType is invalid");
   }
+  if (value.outputType === "HISTORY") {
+    const statuses = ["RUNNING", "WAITING_CONFIRMATION", "WAITING_EXTERNAL", "CANCEL_REQUESTED", "COMPLETED", "FAILED", "CANCELLED"];
+    if (value.schemaVersion !== 2 || !statuses.includes(value.runStatus as string)
+      || value.finished !== ["COMPLETED", "FAILED", "CANCELLED"].includes(value.runStatus as string)
+      || !Array.isArray(value.historyMessages) || !Array.isArray(value.pendingEvents)) {
+      throw new Error("会话历史快照无效");
+    }
+    let order = 0;
+    for (const message of value.historyMessages) {
+      if (!isRecord(message) || !["assistant", "tool", "system"].includes(message.role as string)
+        || !Number.isSafeInteger(message.messageOrder) || (message.messageOrder as number) <= order) {
+        throw new Error("会话历史的消息顺序无效");
+      }
+      order = message.messageOrder as number;
+    }
+    for (const pending of value.pendingEvents) {
+      if (!isRecord(pending) || pending.runId !== value.runId || pending.schemaVersion !== 2
+        || pending.outputType === "HISTORY" || !OUTPUT_TYPES.has(pending.outputType as string)) {
+        throw new Error("会话历史的待处理事件无效");
+      }
+    }
+  }
+  if (value.contentMode !== undefined && (
+    value.contentMode !== "replace" || value.schemaVersion !== 2 || value.outputType !== "CONTENT"
+    || typeof value.messageId !== "string" || !value.messageId
+    || typeof value.replyId !== "string" || !value.replyId || typeof value.content !== "string"
+  )) {
+    throw new Error("完整消息的内容或标识无效");
+  }
   return value as unknown as AiChatStreamEvent;
 }
 
 function isRootTerminalEvent(event: AiChatStreamEvent): boolean {
+  if (event.outputType === "HISTORY") {
+    return event.finished === true;
+  }
   return (
     !event.parentToolCallId &&
     !event.agentName &&
@@ -202,17 +237,33 @@ function parseSseEventBlock(
 
   const jsonText = dataLines.join("\n").trim();
   if (!jsonText) return;
+  const event = parsePipelineEvent(jsonText);
+  if (event.outputType === "HISTORY") {
+    if (idLines.length !== 0 || cursor.historySeen || (cursor.runId && cursor.runId !== event.runId)
+      || (cursor.schemaVersion !== undefined && cursor.schemaVersion !== 2)) {
+      throw new Error("会话历史快照与当前连接不一致");
+    }
+    callbacks.onEvent(event);
+    cursor.historySeen = true;
+    cursor.runId = event.runId;
+    cursor.schemaVersion = 2;
+    cursor.lastSequence = event.sequence;
+    cursor.terminalSeen = event.finished === true;
+    return;
+  }
   if (idLines.length !== 1) {
     throw new Error("Pipeline SSE event must contain exactly one id field");
   }
 
   const eventId = parseEventId(idLines[0]);
-  const event = parsePipelineEvent(jsonText);
   if (event.runId !== eventId.runId || event.sequence !== eventId.sequence) {
     throw new Error("Pipeline SSE id does not match its data identity");
   }
   if (cursor.runId && event.runId !== cursor.runId) {
     throw new Error("Pipeline SSE switched to a different run");
+  }
+  if (cursor.schemaVersion !== undefined && event.schemaVersion !== cursor.schemaVersion) {
+    throw new Error("同一次运行的消息流协议发生变化");
   }
   if (event.sequence <= cursor.lastSequence) {
     return;
@@ -220,6 +271,7 @@ function parseSseEventBlock(
 
   callbacks.onEvent(event);
   cursor.runId = event.runId;
+  cursor.schemaVersion = event.schemaVersion;
   cursor.lastSequence = event.sequence;
   if (isRootTerminalEvent(event)) {
     cursor.terminalSeen = true;

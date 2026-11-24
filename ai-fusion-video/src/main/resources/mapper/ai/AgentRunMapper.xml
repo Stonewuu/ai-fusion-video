@@ -1,6 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.stonewu.fusion.mapper.ai.AgentRunMapper">
+    <select id="selectStreamMembers" resultType="com.stonewu.fusion.entity.ai.AgentRun">
+        SELECT id, run_id, conversation_id, user_id, parent_run_id, parent_tool_call_id, agent_name,
+            stream_protocol_version, stream_run_id, status, next_sequence, terminal_sequence,
+            terminal_output_type, projected_through_sequence, projection_completed_at, waiting_reply_id,
+            paused_through_sequence, waiting_tool_call_id, finished_at, error_message, deadline_at
+        FROM afv_agent_run WHERE stream_run_id = #{streamRunId} AND stream_protocol_version = 2
+        ORDER BY id
+    </select>
     <select id="activeMediaScope" resultType="com.stonewu.fusion.entity.ai.AgentRun">
         SELECT run_id, actor_team_id, project_id FROM afv_agent_run
         WHERE run_id = #{runId} AND user_id = #{userId} AND owner_instance_id = #{owner} AND owner_epoch = #{epoch}

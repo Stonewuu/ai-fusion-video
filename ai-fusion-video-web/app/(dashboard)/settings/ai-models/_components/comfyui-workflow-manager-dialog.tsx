@@ -127,7 +127,7 @@ export function ComfyUiWorkflowManagerDialog({
                       </span>
                       <span className="min-w-0">
                         <span className="block truncate text-xs font-medium">{workflow.name}</span>
-                        <span className="mt-0.5 block truncate font-mono text-[10px] text-muted-foreground">{workflow.code}</span>
+                        <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">{workflow.code}</span>
                       </span>
                     </button>
                     <Button variant="destructive-ghost" size="icon-xs" aria-label={`删除 ${workflow.name}`} onClick={() => void deleteWorkflow(workflow)}>
@@ -156,8 +156,28 @@ export function ComfyUiWorkflowManagerDialog({
                 }}
               />
             ) : (
-              <div className="grid h-full place-items-center text-center">
-                <div><p className="text-sm font-medium">选择一个工作流</p><p className="mt-1 text-xs text-muted-foreground">或新建工作流，开始六步配置。</p></div>
+              <div className="grid h-full place-items-center p-6 text-center">
+                <div className="flex max-w-sm flex-col items-center gap-3">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium text-foreground">
+                      {workflows.length === 0 ? "还没有 ComfyUI 工作流" : "选择一个工作流"}
+                    </p>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      导入 ComfyUI 的 API-JSON，完成输入输出绑定、校验并发布后即可关联到模型。
+                    </p>
+                  </div>
+                  <Button
+                    type="button"
+                    disabled={!apiConfig}
+                    onClick={() => {
+                      setCreating(true);
+                      setSelectedId(null);
+                    }}
+                  >
+                    <Plus />
+                    新建工作流
+                  </Button>
+                </div>
               </div>
             )}
           </section>

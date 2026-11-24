@@ -295,6 +295,17 @@ export const aiModelApi = {
   /** 获取启用的 AI 模型列表 */
   list: () => http.get<never, AiModel[]>("/api/ai/model/list"),
 
+  /** 管理页读取全部 AI 模型，包含已停用模型。 */
+  listAll: async (): Promise<AiModel[]> => {
+    const pageSize = 100;
+    const firstPage = await aiModelApi.page({ pageNo: 1, pageSize });
+    const followingPages = await Promise.all(
+      Array.from({ length: Math.max(0, Math.ceil(firstPage.total / pageSize) - 1) }, (_, index) =>
+        aiModelApi.page({ pageNo: index + 2, pageSize })),
+    );
+    return [firstPage, ...followingPages].flatMap((page) => page.list);
+  },
+
   /** 按类型获取 AI 模型列表 */
   listByType: (type: number) =>
     http.get<never, AiModel[]>(`/api/ai/model/list-by-type?type=${type}`),

@@ -11,7 +11,13 @@ public record PlatformSubAgentRun(
         String agentName,
         AgentRunStatus status,
         String result,
-        String error) {
+        String error,
+        int streamProtocolVersion) {
+
+    public PlatformSubAgentRun(String childRunId, String parentRunId, String parentToolCallId,
+                               String agentName, AgentRunStatus status, String result, String error) {
+        this(childRunId, parentRunId, parentToolCallId, agentName, status, result, error, 1);
+    }
 
     public PlatformSubAgentRun {
         requireText(childRunId, "childRunId");

@@ -27,6 +27,31 @@ const event = (sequence, outputType = "CONTENT") => ({
 });
 const frame = (value) => `id: run:${value.sequence}\r\ndata: ${JSON.stringify(value)}\r\n\r\n`;
 
+test("过期历史快照重置旧读取位置，仍使用原运行身份并正确结束连接", async () => {
+  const history = { schemaVersion: 2, runId: "run", sequence: 0, outputType: "HISTORY",
+    runStatus: "COMPLETED", finished: true, historyMessages: [], pendingEvents: [] };
+  const received = [];
+  const api = transport(new Response(`data: ${JSON.stringify(history)}\n\n`));
+  await new Promise((resolve, reject) => {
+    api.reconnectPipelineStream("run", 900, { onEvent: (value) => received.push(value), onComplete: resolve, onError: reject });
+  });
+  assert.equal(received.length, 1);
+  assert.equal(received[0].sequence, 0);
+});
+
+test("活动历史快照后继续接收增量，拒绝嵌套快照和越过运行身份的草稿", async () => {
+  const history = { schemaVersion: 2, runId: "run", sequence: 0, outputType: "HISTORY",
+    runStatus: "RUNNING", finished: false, historyMessages: [], pendingEvents: [] };
+  const received = [];
+  const encode = (value) => `data: ${JSON.stringify(value)}\n\n`;
+  await receive(transport(new Response(encode(history) + frame({ ...event(1), schemaVersion: 2 })
+    + frame({ ...event(2, "DONE"), schemaVersion: 2 }))), (value) => received.push(value.outputType));
+  assert.deepEqual(received, ["HISTORY", "CONTENT", "DONE"]);
+  await assert.rejects(receive(transport(new Response(encode({ ...history, pendingEvents: [history] })))), /待处理事件/);
+  await assert.rejects(receive(transport(new Response(encode({ ...history,
+    pendingEvents: [{ ...event(1), schemaVersion: 2, runId: "another-run" }] })))), /待处理事件/);
+});
+
 function transport(response) {
   class ApiResultError extends Error {
     constructor(code, message) { super(message); this.code = code; }
@@ -73,6 +98,19 @@ test("first event is visible before the next event and terminal cancels an other
 test("partial terminal frame at EOF cannot complete the business run", async () => {
   const incomplete = frame(event(2, "DONE")).slice(0, -4);
   await assert.rejects(receive(transport(new Response(frame(event(1)) + incomplete))), /完整事件/);
+});
+
+test("Redis stream accepts full-message replacement and rejects a protocol change within one run", async () => {
+  const values = [
+    { ...event(1), schemaVersion: 2, replyId: "reply", messageId: "message", content: "半段" },
+    { ...event(2), schemaVersion: 2, replyId: "reply", messageId: "message", contentMode: "replace", content: "完整回复" },
+    { ...event(3, "DONE"), schemaVersion: 2 },
+  ];
+  const received = [];
+  await receive(transport(new Response(values.map(frame).join(""))), (value) => received.push(value));
+  assert.equal(received[1].contentMode, "replace");
+  assert.equal(received[1].content, "完整回复");
+  await assert.rejects(receive(transport(new Response(frame(values[0]) + frame(event(2, "DONE"))))), /协议/);
 });
 
 test("a rejected consumer event closes the response and does not call completion", async () => {

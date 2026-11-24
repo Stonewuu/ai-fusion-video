@@ -15,6 +15,27 @@ public class AgentScopeV2Properties {
     private Execution execution = new Execution();
     private Skills skills = new Skills();
     private Mcp mcp = new Mcp();
+    private int streamProtocolVersion = 2;
+    private Duration streamRetention = Duration.ofDays(1);
+
+    public Duration getStreamRetention() {
+        return streamRetention;
+    }
+
+    public void setStreamRetention(Duration streamRetention) {
+        this.streamRetention = requirePositive(streamRetention, "streamRetention");
+    }
+
+    public int getStreamProtocolVersion() {
+        return streamProtocolVersion;
+    }
+
+    public void setStreamProtocolVersion(int streamProtocolVersion) {
+        if (streamProtocolVersion != 1 && streamProtocolVersion != 2) {
+            throw new IllegalArgumentException("消息流协议版本必须为 1 或 2");
+        }
+        this.streamProtocolVersion = streamProtocolVersion;
+    }
 
     public Cache getCache() {
         return cache;

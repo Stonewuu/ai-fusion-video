@@ -96,7 +96,7 @@ public class CanvasAgentNodeRepository {
                 new StartedAgentRun(run.getRunId(), run.getConversationId(), run.getAgentStateSessionId(),
                         run.getOwnerInstanceId(), run.getOwnerEpoch(), run.getLeaseUntil().toInstant(ZoneOffset.UTC),
                         run.getDeadlineAt().toInstant(ZoneOffset.UTC), snapshot,
-                        Objects.requireNonNull(agents.findInitialMessageOrder(run.getRunId()))));
+                        Objects.requireNonNull(agents.findInitialMessageOrder(run.getRunId())), run.getStreamProtocolVersion()));
     }
 
     public void dispatched(String id, long epoch) {

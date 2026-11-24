@@ -1,6 +1,7 @@
 package com.stonewu.fusion.service.ai.run;
 
 import com.stonewu.fusion.common.BusinessException;
+import com.stonewu.fusion.config.AgentScopeV2Properties;
 import com.stonewu.fusion.entity.ai.AgentConversation;
 import com.stonewu.fusion.entity.ai.AgentMessage;
 import com.stonewu.fusion.entity.ai.AgentRun;
@@ -10,6 +11,7 @@ import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
 import com.stonewu.fusion.service.ai.agentscope.state.AgentStateCleanupPolicyService;
 import com.stonewu.fusion.service.ai.run.kernel.AgentKernelSnapshot;
 import com.stonewu.fusion.service.ai.run.model.*;
+import com.stonewu.fusion.service.canvas.agent.CanvasAgentScopeService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -42,6 +44,8 @@ public class AgentRunCoordinator {
     private final AgentRuntimeSchedulers schedulers;
     private final AgentStateCleanupPolicyService stateCleanupPolicy;
     private final List<AgentChildAdmissionPolicy> childPolicies;
+    private final AgentScopeV2Properties properties;
+    private final CanvasAgentScopeService canvasScopes;
 
     public Mono<StartedAgentRun> start(StartAgentRunCommand command) {
         Objects.requireNonNull(command, "command must not be null");
@@ -90,6 +94,8 @@ public class AgentRunCoordinator {
                 .canvasScopeJson(command.canvasScopeJson())
                 .projectId(conversation.getProjectId())
                 .agentType(command.agentType())
+                .streamProtocolVersion(properties.getStreamProtocolVersion())
+                .streamRunId(command.runId())
                 .kernelFingerprint(command.kernelSnapshot().fingerprint())
                 .agentDefinitionSnapshotJson(command.kernelSnapshot().snapshotJson())
                 .agentStateSessionId(stateSessionId)
@@ -140,6 +146,8 @@ public class AgentRunCoordinator {
                 .canvasScopeJson(parent.getCanvasScopeJson())
                 .projectId(parent.getProjectId())
                 .agentType(command.agentDefinitionStableKey())
+                .streamProtocolVersion(parent.getStreamProtocolVersion())
+                .streamRunId(childStreamRunId(parent, command.childRunId()))
                 .parentRunId(parent.getRunId())
                 .parentToolCallId(command.parentToolCallId())
                 .agentName(command.agentName())
@@ -174,6 +182,14 @@ public class AgentRunCoordinator {
             }
             return existingChildAdmission(command, deadline, replay);
         }
+    }
+
+    private String childStreamRunId(AgentRun parent, String childRunId) {
+        if (parent.getStreamProtocolVersion() == 1) {
+            return childRunId;
+        }
+        var scope = canvasScopes.decode(parent.getCanvasScopeJson());
+        return scope != null && scope.nodeRunId() != null ? childRunId : parent.getStreamRunId();
     }
 
     private ChildRunAdmission existingChildAdmission(
@@ -293,7 +309,8 @@ public class AgentRunCoordinator {
                 toInstant(run.getLeaseUntil()),
                 toInstant(run.getDeadlineAt()),
                 snapshot,
-                initialMessageOrder);
+                initialMessageOrder,
+                run.getStreamProtocolVersion());
     }
 
     private String rootStateSessionId(StartAgentRunCommand command) {

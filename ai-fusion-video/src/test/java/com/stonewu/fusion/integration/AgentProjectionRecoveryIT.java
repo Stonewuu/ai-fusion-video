@@ -66,6 +66,8 @@ class AgentProjectionRecoveryIT {
 
     @DynamicPropertySource
     static void configure(DynamicPropertyRegistry properties) {
+        // 历史运行仍须能从原有 MySQL 事件整理消息。
+        properties.add("fusion.agentscope.v2.stream-protocol-version", () -> 1);
         properties.add("spring.datasource.url", MYSQL::getJdbcUrl);
         properties.add("spring.datasource.username", MYSQL::getUsername);
         properties.add("spring.datasource.password", MYSQL::getPassword);

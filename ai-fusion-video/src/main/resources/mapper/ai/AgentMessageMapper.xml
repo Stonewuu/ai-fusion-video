@@ -1,6 +1,43 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="com.stonewu.fusion.mapper.ai.AgentMessageMapper">
+    <select id="selectStreamHistory" resultType="com.stonewu.fusion.entity.ai.AgentMessage">
+        SELECT message.*, child.status AS child_run_status
+        FROM afv_agent_message message
+        JOIN afv_agent_run run ON run.run_id = message.run_id
+        LEFT JOIN afv_agent_run child ON message.role = 'tool'
+          AND child.parent_run_id = message.run_id AND child.parent_tool_call_id = message.tool_call_id
+        WHERE run.stream_run_id = #{streamRunId}
+          AND message.deleted = 0 AND message.role != 'user'
+        <if test="sourceRunId != null">
+          AND run.run_id = #{sourceRunId}
+        </if>
+        ORDER BY message.message_order
+    </select>
+    <select id="selectConversationHistory" resultType="com.stonewu.fusion.entity.ai.AgentMessage">
+        SELECT message.*, child.status AS child_run_status
+        FROM afv_agent_message message
+        LEFT JOIN afv_agent_run run ON run.run_id = message.run_id
+        LEFT JOIN afv_agent_run child ON message.role = 'tool'
+          AND child.parent_run_id = message.run_id AND child.parent_tool_call_id = message.tool_call_id
+        WHERE message.conversation_id = #{conversationId}
+          AND message.deleted = 0
+          AND (message.role != 'user' OR run.parent_run_id IS NULL)
+        ORDER BY message.message_order
+    </select>
+    <insert id="insertMessages">
+        INSERT INTO afv_agent_message
+            (conversation_id, run_id, projection_key, role, content, references_json, tool_name, tool_status,
+             tool_call_id, parent_tool_call_id, reasoning_content, reasoning_duration_ms, message_order,
+             deleted, create_time, update_time)
+        VALUES
+        <foreach collection="messages" item="message" separator=",">
+            (#{message.conversationId}, #{message.runId}, #{message.projectionKey}, #{message.role},
+             #{message.content}, #{message.referencesJson}, #{message.toolName}, #{message.toolStatus},
+             #{message.toolCallId}, #{message.parentToolCallId}, #{message.reasoningContent},
+             #{message.reasoningDurationMs}, #{message.messageOrder}, 0, #{message.createTime}, #{message.updateTime})
+        </foreach>
+    </insert>
     <select id="selectRootHistory" resultType="com.stonewu.fusion.entity.ai.AgentMessage">
         SELECT message.*
         FROM afv_agent_message message

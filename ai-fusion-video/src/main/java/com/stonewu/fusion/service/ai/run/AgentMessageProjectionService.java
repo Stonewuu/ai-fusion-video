@@ -14,8 +14,11 @@ import com.stonewu.fusion.mapper.ai.AgentMessageMapper;
 import com.stonewu.fusion.mapper.ai.AgentRunMapper;
 import com.stonewu.fusion.service.ai.AgentMessageService;
 import com.stonewu.fusion.service.ai.agentscope.runtime.AgentRuntimeSchedulers;
+import com.stonewu.fusion.service.ai.run.stream.AgentStreamMessagesCommitted;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.support.TransactionTemplate;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -43,6 +46,8 @@ public class AgentMessageProjectionService {
     private final ObjectMapper objectMapper;
     private final TransactionTemplate transactionTemplate;
     private final AgentRuntimeSchedulers schedulers;
+    @Autowired
+    private ApplicationEventPublisher applicationEvents;
 
     public Mono<Void> projectThrough(String runId, long throughSequence) {
         String safeRunId = requireRunId(runId);
@@ -483,6 +488,9 @@ public class AgentMessageProjectionService {
             throw new IllegalStateException(
                     "Agent projection cursor update did not affect exactly one row");
         }
+        if (complete && run.getStreamProtocolVersion() == 2) {
+            applicationEvents.publishEvent(new AgentStreamMessagesCommitted(run.getStreamRunId()));
+        }
     }
 
     private void repairProjectionCompletion(AgentRun run, long cursor) {
@@ -502,6 +510,9 @@ public class AgentMessageProjectionService {
                 .set(AgentRun::getUpdateTime, databaseNow)) != 1) {
             throw new IllegalStateException(
                     "Agent projection completion repair did not affect exactly one row");
+        }
+        if (run.getStreamProtocolVersion() == 2) {
+            applicationEvents.publishEvent(new AgentStreamMessagesCommitted(run.getStreamRunId()));
         }
     }
 

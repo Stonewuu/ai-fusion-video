@@ -1,4 +1,6 @@
 import { applyModelRetry } from "@/lib/store/model-retry-timeline";
+import { replaceMessageSnapshot } from "@/lib/store/message-snapshot-timeline";
+import { messagesToTimeline } from "@/components/dashboard/notification-panel/history";
 import type { AiChatStreamEvent } from "@/lib/api/ai-pipeline";
 import type {
   AgentPipelineState,
@@ -130,7 +132,7 @@ function updateToolStatus(
 ): TimelineItem[] {
   return timeline.map((item) =>
     item.type === "tool" && item.id === toolCallId
-      ? { ...item, status }
+      ? { ...item, status, awaitingChildResult: item.awaitingChildResult || item.status === "calling" || item.status === "approved" }
       : item
   );
 }
@@ -286,12 +288,12 @@ function finishToolCall(
   if (
     matches.length !== 1
     || matches[0].type !== "tool"
-    || !validPreviousStatus(matches[0].status)
+    || (!validPreviousStatus(matches[0].status) && !matches[0].awaitingChildResult)
   ) {
     throw new Error(`Finished tool has no valid in-progress call: ${toolCallId}`);
   }
   return timeline.map((item) => item.type === "tool" && item.id === toolCallId
-    ? { ...item, status, result }
+    ? { ...item, status, result, awaitingChildResult: false }
     : item);
 }
 
@@ -358,6 +360,28 @@ export function reducePipelineEvent(
 ): AgentPipelineState {
   if (prev.runId && prev.runId !== event.runId) {
     throw new Error("Pipeline event belongs to a different run");
+  }
+  if (event.outputType === "HISTORY") {
+    if (!event.historyMessages || !event.pendingEvents || !event.runStatus) {
+      throw new Error("会话历史快照不完整");
+    }
+    let restored: AgentPipelineState = {
+      ...createInitialPipelineState(),
+      status: "running",
+      runId: event.runId,
+      conversationId: event.conversationId,
+      timeline: messagesToTimeline(event.historyMessages),
+    };
+    for (const [index, pending] of event.pendingEvents.entries()) {
+      restored = reducePipelineEvent(restored, {
+        ...pending, schemaVersion: 2, runId: event.runId, sequence: index + 1,
+      });
+    }
+    return {
+      ...restored,
+      lastSequence: event.sequence,
+      status: event.runStatus === "CANCEL_REQUESTED" ? "cancelling" : restored.status,
+    };
   }
   if (event.sequence <= prev.lastSequence) {
     return prev;
@@ -445,6 +469,10 @@ export function reducePipelineEvent(
 
     case "CONTENT":
       next.status = prev.status === "cancelling" ? "cancelling" : "running";
+      if (event.contentMode === "replace") {
+        next.timeline = replaceMessageSnapshot(next.timeline, event);
+        return next;
+      }
       if (event.content) {
         if (isSubAgent) {
           next.timeline = appendToToolChildren(
@@ -610,7 +638,7 @@ export function reducePipelineEvent(
       {
         const existing = prev.pendingConfirmation;
         if (existing && (
-          existing.runId !== event.runId
+          existing.runId !== (event.controlRunId ?? event.runId)
           || existing.replyId !== event.replyId
           || existing.parentToolCallId !== event.parentToolCallId
           || existing.expiresAt !== event.expiresAt
@@ -657,7 +685,7 @@ export function reducePipelineEvent(
               toolCalls: [...existing.toolCalls, ...appendedToolCalls],
             }
           : {
-              runId: event.runId,
+              runId: event.controlRunId ?? event.runId,
               replyId: event.replyId,
               ...(event.parentToolCallId
                 ? { parentToolCallId: event.parentToolCallId }
@@ -695,7 +723,13 @@ export function reducePipelineEvent(
       return next;
 
     case "DONE":
-      if (event.parentToolCallId || event.agentName) return next;
+      if (event.parentToolCallId) {
+        next.timeline = updateToolStatus(next.timeline, event.parentToolCallId, "done");
+        return next;
+      }
+      if (event.agentName) {
+        return next;
+      }
       next.status = "done";
       next.pendingConfirmation = undefined;
       if (event.content) {
@@ -729,6 +763,12 @@ export function reducePipelineEvent(
       return next;
 
     case "CANCELLED":
+      if (isSubAgent) {
+        next.timeline = next.timeline.map((item) => item.type === "tool" && item.id === event.parentToolCallId
+          ? { ...item, status: "cancelled", children: cancelCallingTimelineTools(item.children ?? []),
+              awaitingChildResult: item.awaitingChildResult || item.status === "calling" || item.status === "approved" }
+          : item);
+      }
       if (!event.parentToolCallId && !event.agentName) {
         next.status = "cancelled";
         if (

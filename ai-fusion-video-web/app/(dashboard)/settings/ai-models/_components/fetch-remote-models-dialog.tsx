@@ -1,38 +1,45 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Check, Loader2, Search } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Check, Loader2, Search, X } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { getModelDisplayParts } from "@/lib/model-display";
+import { useUnsavedDialog } from "@/components/settings/use-unsaved-dialog";
 import {
   aiModelApi,
   apiConfigApi,
-  MODEL_TYPE_OPTIONS,
   MODEL_TYPE_LABELS,
+  MODEL_TYPE_OPTIONS,
   type ApiConfig,
   type RemoteModel,
 } from "@/lib/api/ai-model";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
-  DialogHeader,
-  DialogTitle,
+  DialogClose,
   DialogDescription,
   DialogFooter,
-  DialogClose,
+  DialogHeader,
+  DialogTitle,
 } from "@/components/ui/dialog";
-import { DialogContent } from "@/components/shared/dialog-content";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
-  SelectTrigger,
-  SelectValue,
   SelectContent,
   SelectGroup,
   SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
+import { DialogContent } from "@/components/shared/dialog-content";
+import { DialogScrollBody } from "@/components/shared/dialog-scroll-body";
 import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
+import { filterRemoteModels } from "./ai-models-filter";
 import {
   formatSemanticLabel,
   MODEL_PROTOCOL_LABELS,
@@ -58,10 +65,27 @@ export function FetchRemoteModelsDialog({
   const [error, setError] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [adding, setAdding] = useState(false);
+  const [addProgress, setAddProgress] = useState<{ current: number; total: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [modelType, setModelType] = useState<number>(1);
+  const [typeFilter, setTypeFilter] = useState(0);
+  const [hideExisting, setHideExisting] = useState(false);
+  const [defaultModelType, setDefaultModelType] = useState<number>(1);
 
-  const hasUnknownModelTypes = remoteModels.some(model => model.modelType == null);
+  const changeOpen = useUnsavedDialog(
+    open,
+    selectedIds.size > 0,
+    adding,
+    onOpenChange,
+  );
+
+  const hasUnknownModelTypes = remoteModels.some((model) => model.modelType == null);
+  const availableTypes = useMemo(
+    () =>
+      [1, 2, 3, 4].filter((type) =>
+        remoteModels.some((model) => model.modelType === type),
+      ),
+    [remoteModels],
+  );
 
   const fetchModels = useCallback(async () => {
     setLoading(true);
@@ -70,25 +94,46 @@ export function FetchRemoteModelsDialog({
       const models = await apiConfigApi.remoteModels(apiConfig.id);
       setRemoteModels(models);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "获取模型列表失败";
-      setError(msg);
+      const message = err instanceof Error ? err.message : "获取模型列表失败";
+      setError(message);
     } finally {
       setLoading(false);
     }
   }, [apiConfig.id]);
 
   useEffect(() => {
-    if (open) {
-      setRemoteModels([]);
-      setError(null);
-      setSelectedIds(new Set());
-      setSearchQuery("");
-      fetchModels();
+    if (!open) {
+      return;
     }
+    setRemoteModels([]);
+    setError(null);
+    setSelectedIds(new Set());
+    setSearchQuery("");
+    setTypeFilter(0);
+    setHideExisting(false);
+    setAddProgress(null);
+    void fetchModels();
   }, [fetchModels, open]);
 
+  const filteredModels = useMemo(
+    () =>
+      filterRemoteModels(remoteModels, existingModelCodes, {
+        query: searchQuery,
+        modelType: typeFilter,
+        hideExisting,
+      }),
+    [remoteModels, existingModelCodes, searchQuery, typeFilter, hideExisting],
+  );
+
+  const selectableModels = filteredModels.filter(
+    (model) => !existingModelCodes.has(model.id),
+  );
+  const allSelectableSelected =
+    selectableModels.length > 0
+    && selectableModels.every((model) => selectedIds.has(model.id));
+
   const toggleSelect = (id: string) => {
-    setSelectedIds(prev => {
+    setSelectedIds((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -116,252 +161,356 @@ export function FetchRemoteModelsDialog({
       return;
     }
     setAdding(true);
+    const idsToAdd = Array.from(selectedIds);
+    setAddProgress({ current: 0, total: idsToAdd.length });
+
+    let succeeded = 0;
+    const failedIds: string[] = [];
+    let lastError: unknown = null;
+
     try {
       const presets = await aiModelApi.presets();
-      for (const modelId of selectedIds) {
-        const remoteModel = remoteModels.find(model => model.id === modelId);
+      for (const [index, modelId] of idsToAdd.entries()) {
+        setAddProgress({ current: index + 1, total: idsToAdd.length });
+        const remoteModel = remoteModels.find((model) => model.id === modelId);
         const preset = remoteModel?.capabilityPresetCode
-          ? presets.find(item => item.code === remoteModel.capabilityPresetCode)
+          ? presets.find((item) => item.code === remoteModel.capabilityPresetCode)
           : undefined;
-        await aiModelApi.create({
-          name: remoteModel?.displayName || modelId,
-          code: modelId,
-          capabilityPresetCode: remoteModel?.capabilityPresetCode || undefined,
-          modelProtocol: remoteModel?.modelProtocol || preset?.modelProtocol || undefined,
-          modelType: remoteModel?.modelType ?? modelType,
-          description: preset?.description,
-          supportVision: preset?.multimodalInputTypes?.includes("image") ?? false,
-          multimodalInputTypes: preset?.multimodalInputTypes ?? [],
-          multimodalInputTransports: preset?.multimodalInputTransports ?? {},
-          supportReasoning: preset?.supportReasoning ?? false,
-          reasoningEffortLevels: preset?.reasoningEffortLevels ?? [],
-          contextWindow: preset?.contextWindow,
-          apiConfigId: apiConfig.id,
-        });
+        try {
+          await aiModelApi.create({
+            name: remoteModel?.displayName || modelId,
+            code: modelId,
+            capabilityPresetCode: remoteModel?.capabilityPresetCode || undefined,
+            modelProtocol:
+              remoteModel?.modelProtocol || preset?.modelProtocol || undefined,
+            modelType: remoteModel?.modelType ?? defaultModelType,
+            description: preset?.description,
+            supportVision:
+              preset?.multimodalInputTypes?.includes("image") ?? false,
+            multimodalInputTypes: preset?.multimodalInputTypes ?? [],
+            multimodalInputTransports: preset?.multimodalInputTransports ?? {},
+            supportReasoning: preset?.supportReasoning ?? false,
+            reasoningEffortLevels: preset?.reasoningEffortLevels ?? [],
+            contextWindow: preset?.contextWindow,
+            apiConfigId: apiConfig.id,
+          });
+          succeeded++;
+        } catch (err) {
+          failedIds.push(modelId);
+          lastError = err;
+        }
       }
-      onAdded();
-      onOpenChange(false);
+
+      if (succeeded > 0) {
+        onAdded();
+      }
+      if (failedIds.length === 0) {
+        toast.success(`已添加 ${succeeded} 个模型`);
+        onOpenChange(false);
+      } else if (succeeded > 0) {
+        setSelectedIds(new Set(failedIds));
+        toast.warning(`已添加 ${succeeded} 个模型，${failedIds.length} 个失败`, {
+          description:
+            lastError instanceof Error ? lastError.message : "请检查失败项配置后重试",
+        });
+      } else {
+        toastApiError(lastError, "添加模型失败");
+      }
     } catch (err) {
       console.error("添加模型失败:", err);
       toastApiError(err, "添加模型失败");
     } finally {
       setAdding(false);
+      setAddProgress(null);
     }
   };
 
-  const filteredModels = remoteModels.filter(m => {
-    if (!searchQuery.trim()) {
-      return true;
-    }
-    const q = searchQuery.toLowerCase();
-    return m.id.toLowerCase().includes(q) || (m.ownedBy && m.ownedBy.toLowerCase().includes(q));
-  });
-
-  const selectableModels = filteredModels.filter(m => !existingModelCodes.has(m.id));
-  const allSelectableSelected = selectableModels.length > 0 && selectableModels.every(m => selectedIds.has(m.id));
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-4xl max-h-[calc(100vh-2rem)] sm:max-h-[88vh] flex flex-col overflow-hidden">
+    <Dialog open={open} onOpenChange={changeOpen}>
+      <DialogContent className="flex max-h-[calc(100vh-2rem)] w-[calc(100%-2rem)] flex-col overflow-hidden sm:max-h-[88vh] sm:max-w-4xl">
         <DialogHeader className="shrink-0">
-          <DialogTitle>获取模型</DialogTitle>
+          <DialogTitle>获取远程模型</DialogTitle>
           <DialogDescription>
-            选择模型，添加到 {apiConfig.name}
+            从「{apiConfig.name}」读取可用模型并批量添加到当前服务。
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-col gap-3 min-h-0 overflow-y-auto p-1">
-          {/* 搜索框 + 模型类型选择 */}
-          <div className="flex items-center gap-2 shrink-0">
-            <div className="relative flex-1">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        {/* 固定顶栏：搜索、类型默认与筛选控件 */}
+        <div className="flex shrink-0 flex-col gap-3 p-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[200px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="搜索模型..."
+                aria-label="搜索远程模型"
+                placeholder="搜索模型名称、ID 或归属方"
                 value={searchQuery}
-                onChange={e => setSearchQuery(e.target.value)}
-                className="text-sm pl-8 h-9"
+                disabled={adding}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                className={cn("pl-9 text-sm", searchQuery && "pr-9")}
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  aria-label="清空搜索"
+                  title="清空搜索"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <X className="size-3.5" />
+                </button>
+              )}
             </div>
-            {hasUnknownModelTypes ? (
+
+            {hasUnknownModelTypes && (
               <Select
-                value={modelType}
-                onValueChange={v => setModelType(v as number)}
-                items={MODEL_TYPE_OPTIONS.map(o => ({ value: o.value, label: o.label }))}
+                value={defaultModelType}
+                disabled={adding}
+                onValueChange={(value) => setDefaultModelType(value as number)}
+                items={MODEL_TYPE_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: `未标注按：${option.label}`,
+                }))}
               >
-                <SelectTrigger className="w-[148px] text-xs h-9">
+                <SelectTrigger aria-label="未标注模型的默认类型" className="w-44 text-xs">
                   <SelectValue placeholder="默认模型类型" />
                 </SelectTrigger>
                 <SelectContent className="text-xs">
                   <SelectGroup>
-                    {MODEL_TYPE_OPTIONS.map(opt => (
+                    {MODEL_TYPE_OPTIONS.map((opt) => (
                       <SelectItem key={opt.value} value={opt.value} className="text-xs">
-                        {opt.label}
+                        未标注按：{opt.label}
                       </SelectItem>
                     ))}
                   </SelectGroup>
                 </SelectContent>
               </Select>
-            ) : (
-              null
             )}
           </div>
 
-          {hasUnknownModelTypes && (
-            <p className="-mt-1 text-[10px] text-muted-foreground">
-              未标注类型的模型按所选类型添加
-            </p>
-          )}
+          {!loading && !error && remoteModels.length > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center gap-2">
+                {availableTypes.length > 1 && (
+                  <div
+                    className="inline-flex h-9 items-center rounded-4xl bg-muted p-[3px] ring-1 ring-inset ring-border/35"
+                    role="group"
+                    aria-label="按类型筛选远程模型"
+                  >
+                    {[0, ...availableTypes].map((value) => {
+                      const active = typeFilter === value;
+                      const label =
+                        value === 0
+                          ? "全部"
+                          : (MODEL_TYPE_LABELS[value] || `类型${value}`).replace("生成", "");
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          aria-pressed={active}
+                          disabled={adding}
+                          onClick={() => setTypeFilter(value)}
+                          className={cn(
+                            "flex h-full items-center rounded-4xl px-3 text-xs font-medium outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
+                            active
+                              ? "bg-background text-foreground shadow-xs ring-1 ring-border/25 dark:bg-card"
+                              : "text-muted-foreground hover:text-foreground",
+                          )}
+                        >
+                          {label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
 
-          {/* 模型列表 */}
+                <div className="flex items-center gap-2 px-1">
+                  <Switch
+                    id="remote-hide-existing"
+                    checked={hideExisting}
+                    disabled={adding}
+                    onCheckedChange={setHideExisting}
+                  />
+                  <Label
+                    htmlFor="remote-hide-existing"
+                    className="cursor-pointer text-xs text-muted-foreground"
+                  >
+                    隐藏已添加
+                  </Label>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground tabular-nums">
+                  显示 {filteredModels.length} 个 · 已选 {selectedIds.size} 个
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={toggleSelectAll}
+                  disabled={adding || selectableModels.length === 0}
+                >
+                  {allSelectableSelected ? "取消全选" : "全选当前可添加"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 单层列表滚动区域 */}
+        <DialogScrollBody className="flex-1 p-1">
           {loading ? (
-            <div className="flex items-center justify-center py-10">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-              <span className="ml-2 text-sm text-muted-foreground">正在获取模型列表...</span>
+            <div
+              role="status"
+              className="flex items-center justify-center gap-2 py-12 text-sm text-muted-foreground"
+            >
+              <Loader2 className="size-4 animate-spin" />
+              正在获取远程模型列表…
             </div>
           ) : error ? (
-            <div className="text-center py-8 space-y-2">
+            <div role="alert" className="flex flex-col items-center gap-3 py-10 text-center">
               <p className="text-sm text-destructive">{error}</p>
-              <Button variant="outline" size="sm" onClick={fetchModels}>
+              <Button variant="outline" onClick={() => void fetchModels()}>
                 重试
               </Button>
             </div>
           ) : remoteModels.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-muted-foreground">未获取到模型</p>
+            <div className="py-10 text-center text-sm text-muted-foreground">
+              该服务未返回可用模型，请尝试手动添加模型。
             </div>
-          ) : (
-            <>
-              {/* 全选 + 计数 */}
-              <div className="flex items-center justify-between px-1 shrink-0">
+          ) : filteredModels.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-10 text-center">
+              <p className="text-sm text-muted-foreground">没有匹配的模型，换个关键词或筛选条件试试。</p>
+              {(searchQuery || typeFilter !== 0 || hideExisting) && (
                 <Button
+                  type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={toggleSelectAll}
-                  disabled={selectableModels.length === 0}
+                  onClick={() => {
+                    setSearchQuery("");
+                    setTypeFilter(0);
+                    setHideExisting(false);
+                  }}
                 >
-                  {allSelectableSelected ? "取消全选" : "全选可添加"}
+                  清空筛选
                 </Button>
-                <span className="text-[10px] text-muted-foreground">
-                  共 {filteredModels.length} 个模型，已选 {selectedIds.size} 个
-                </span>
-              </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {filteredModels.map((model) => {
+                const alreadyExists = existingModelCodes.has(model.id);
+                const canSelect = !alreadyExists && !adding;
+                const isSelected = selectedIds.has(model.id);
+                const modelDisplay = getModelDisplayParts({
+                  name: model.displayName,
+                  code: model.id,
+                });
 
-              <div className="overflow-y-auto min-h-0 max-h-[400px] p-1 space-y-0.5">
-                {filteredModels.length === 0 && (
-                  <p className="py-8 text-center text-sm text-muted-foreground">没有找到模型，换个关键词试试</p>
-                )}
-                {filteredModels.map(model => {
-                  const alreadyExists = existingModelCodes.has(model.id);
-                  const canSelect = !alreadyExists;
-                  const isSelected = selectedIds.has(model.id);
-                  const modelDisplay = getModelDisplayParts({
-                    name: model.displayName,
-                    code: model.id,
-                  });
-
-                  return (
-                    <button
-                      key={model.id}
-                      type="button"
-                      onClick={() => toggleSelect(model.id)}
-                      disabled={!canSelect}
+                return (
+                  <button
+                    key={model.id}
+                    type="button"
+                    onClick={() => toggleSelect(model.id)}
+                    disabled={!canSelect}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-lg border px-3 py-2.5 text-left outline-none transition-colors duration-150 motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
+                      alreadyExists
+                        ? "cursor-not-allowed border-transparent text-muted-foreground opacity-65"
+                        : isSelected
+                          ? "border-primary/35 bg-primary/8"
+                          : "border-transparent hover:bg-muted/45",
+                    )}
+                  >
+                    <div
                       className={cn(
-                        "flex items-center gap-3 w-full px-3 py-2 rounded-lg border text-left transition-colors duration-150 motion-reduce:transition-none outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                        !canSelect
-                          ? "border-transparent text-muted-foreground cursor-not-allowed"
+                        "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
+                        alreadyExists
+                          ? "border-border bg-muted"
                           : isSelected
-                            ? "bg-primary/10 border border-primary/30"
-                            : "hover:bg-muted/50 border border-transparent"
+                            ? "border-primary bg-primary"
+                            : "border-border/70",
                       )}
                     >
-                      {/* 选择框 */}
-                      <div className={cn(
-                        "w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors",
-                        alreadyExists
-                          ? "bg-muted border-border"
-                          : isSelected
-                            ? "bg-primary border-primary"
-                            : "border-border/60"
-                      )}>
-                        {(isSelected || alreadyExists) && (
-                          <Check className={cn("h-3 w-3", alreadyExists ? "text-muted-foreground" : "text-primary-foreground")} />
+                      {(isSelected || alreadyExists) && (
+                        <Check
+                          className={cn(
+                            "size-3",
+                            alreadyExists ? "text-muted-foreground" : "text-primary-foreground",
+                          )}
+                        />
+                      )}
+                    </div>
+
+                    <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-muted/60">
+                      <ModelVendorIcon
+                        source={{
+                          name: model.displayName,
+                          code: model.id,
+                          platform: model.providerPlatform || apiConfig.platform,
+                          capabilityPresetCode: model.capabilityPresetCode,
+                        }}
+                        className="size-4"
+                      />
+                    </span>
+
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {modelDisplay.name}
+                        </p>
+                        {model.modelType != null && (
+                          <Badge variant="secondary" className="text-xs">
+                            {MODEL_TYPE_LABELS[model.modelType] || `类型${model.modelType}`}
+                          </Badge>
+                        )}
+                        {model.capabilityPresetCode && (
+                          <span
+                            className="rounded-md bg-amber-500/12 px-1.5 py-0.5 text-xs text-amber-700 dark:text-amber-400"
+                            title="已匹配内置模型能力预设"
+                          >
+                            预设：{model.capabilityPresetCode}
+                          </span>
+                        )}
+                        {model.modelProtocol && model.modelProtocol !== "generic" && (
+                          <span className="rounded-md bg-violet-500/10 px-1.5 py-0.5 text-xs text-violet-700 dark:text-violet-400">
+                            {formatSemanticLabel(model.modelProtocol, MODEL_PROTOCOL_LABELS)}
+                          </span>
                         )}
                       </div>
-
-                      <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-muted/60">
-                        <ModelVendorIcon
-                          source={{
-                            name: model.displayName,
-                            code: model.id,
-                            platform: model.providerPlatform || apiConfig.platform,
-                            capabilityPresetCode: model.capabilityPresetCode,
-                          }}
-                          className="size-4"
-                        />
-                      </span>
-
-                      {/* 模型信息 */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-1.5 min-w-0">
-                          <p className="truncate text-sm font-medium">{modelDisplay.name}</p>
-                          {model.modelType != null && (
-                            <span className={cn(
-                              "shrink-0 rounded px-1.5 py-0.5 text-[10px]",
-                              model.modelType === 2
-                                ? "bg-sky-500/10 text-sky-500"
-                                : model.modelType === 3
-                                  ? "bg-emerald-500/10 text-emerald-500"
-                                  : "bg-muted text-muted-foreground"
-                            )}>
-                              {MODEL_TYPE_LABELS[model.modelType] || `类型${model.modelType}`}
-                            </span>
-                          )}
-                          {model.capabilityPresetCode && (
-                            <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-amber-500/10 text-amber-600" title="已精确匹配内置模型能力预设">
-                              能力预设：{model.capabilityPresetCode}
-                            </span>
-                          )}
-                          {model.modelProtocol && model.modelProtocol !== "generic" && (
-                            <span className="shrink-0 rounded px-1.5 py-0.5 text-[10px] bg-violet-500/10 text-violet-600">
-                              {formatSemanticLabel(model.modelProtocol, MODEL_PROTOCOL_LABELS)}
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground space-y-0.5">
-                          {modelDisplay.code && (
-                            <p className="truncate font-mono">{modelDisplay.code}</p>
-                          )}
-                          {model.ownedBy && (
-                            <p>{model.ownedBy}</p>
-                          )}
-                        </div>
+                      <div className="flex flex-wrap items-center gap-x-2 text-xs text-muted-foreground">
+                        {modelDisplay.code && (
+                          <span className="truncate font-mono">{modelDisplay.code}</span>
+                        )}
+                        {model.ownedBy && <span>{model.ownedBy}</span>}
                       </div>
+                    </div>
 
-                      {/* 已添加标记 */}
-                      {alreadyExists && (
-                        <span className="text-[10px] text-muted-foreground shrink-0 px-1.5 py-0.5 rounded bg-muted">
-                          已添加
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
+                    {alreadyExists && (
+                      <Badge variant="outline" className="shrink-0 text-xs">
+                        已添加
+                      </Badge>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           )}
-        </div>
+        </DialogScrollBody>
 
         <DialogFooter className="shrink-0">
-          <DialogClose render={<Button variant="outline" size="sm" />}>
+          <DialogClose render={<Button variant="outline" disabled={adding} />}>
             取消
           </DialogClose>
           <Button
-            size="sm"
+            type="button"
             onClick={handleAdd}
             disabled={adding || selectedIds.size === 0}
           >
-            {adding && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
-            添加 {selectedIds.size > 0 ? `(${selectedIds.size})` : ""}
+            {adding && <Loader2 className="animate-spin" />}
+            {addProgress
+              ? `正在添加 ${addProgress.current}/${addProgress.total}…`
+              : `添加${selectedIds.size > 0 ? ` (${selectedIds.size})` : ""}`}
           </Button>
         </DialogFooter>
       </DialogContent>

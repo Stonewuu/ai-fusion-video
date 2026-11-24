@@ -3,14 +3,14 @@ package com.stonewu.fusion.service.ai.run;
 /**
  * Projects AgentScope 2.0.0 tool-result blocks using their actual error contract.
  */
-final class AgentScopeToolResultStatus {
+public final class AgentScopeToolResultStatus {
 
     private static final String ERROR_PREFIX = "Error: ";
 
     private AgentScopeToolResultStatus() {
     }
 
-    static String project(String state, String result) {
+    public static String project(String state, String result) {
         if (isErrorState(state) || isOfficialErrorBlock(result)) {
             return "error";
         }

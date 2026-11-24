@@ -1,4 +1,6 @@
 import { applyModelRetry } from "@/lib/store/model-retry-timeline";
+import { replaceMessageSnapshot } from "@/lib/store/message-snapshot-timeline";
+import { createInitialPipelineState, reducePipelineEvent } from "@/components/dashboard/agent-pipeline/state";
 import type { AiChatStreamEvent } from "@/lib/api/ai-pipeline";
 import type { AiChatStreamEvent as GenericStreamEvent } from "@/lib/api/ai-assistant";
 import {
@@ -25,6 +27,9 @@ export interface PipelineEventLifecycle {
 }
 
 function isMainAgentTerminalEvent(event: GenericStreamEvent): boolean {
+  if (event.outputType === "HISTORY") {
+    return event.finished === true;
+  }
   return !event.parentToolCallId && !event.agentName && (
     event.outputType === "DONE" ||
     event.outputType === "ERROR" ||
@@ -36,12 +41,12 @@ function isDurablePipelineEvent(
   event: GenericStreamEvent
 ): event is AiChatStreamEvent {
   return (
-    event.schemaVersion === 1 &&
+    (event.schemaVersion === 1 || event.schemaVersion === 2) &&
     typeof event.runId === "string" &&
     event.runId.length > 0 &&
     typeof event.sequence === "number" &&
     Number.isSafeInteger(event.sequence) &&
-    event.sequence > 0
+    event.sequence >= (event.outputType === "HISTORY" ? 0 : 1)
   );
 }
 
@@ -251,7 +256,7 @@ export function createPipelineEventHandler(
             if (next.runId && next.runId !== event.runId) {
               throw new Error("Pipeline event belongs to a different run");
             }
-            if (event.sequence <= next.lastSequence) {
+            if (event.outputType !== "HISTORY" && event.sequence <= next.lastSequence) {
               continue;
             }
             next.runId = event.runId;
@@ -288,6 +293,19 @@ export function createPipelineEventHandler(
           }
 
           switch (event.outputType) {
+            case "HISTORY": {
+              const restored = reducePipelineEvent(createInitialPipelineState(), event as AiChatStreamEvent);
+              next.timeline = [...(next.historyPrefix ?? []), ...restored.timeline];
+              next.reasoningText = restored.reasoningText;
+              next.reasoningStartTime = restored.reasoningStartTime;
+              next.reasoningDurationMs = restored.reasoningDurationMs;
+              next.error = restored.error;
+              next.runStatus = event.runStatus;
+              next.cancelRequested = event.runStatus === "CANCEL_REQUESTED";
+              next.status = restored.status === "done" || restored.status === "error" || restored.status === "cancelled"
+                ? restored.status : "running";
+              break;
+            }
             case "MODEL_RETRY":
               next.timeline = applyModelRetry(next.timeline, event);
               if (!isSubAgent) {
@@ -336,6 +354,10 @@ export function createPipelineEventHandler(
               break;
 
             case "CONTENT":
+              if (event.contentMode === "replace") {
+                next.timeline = replaceMessageSnapshot(next.timeline, event);
+                break;
+              }
               if (event.content) {
                 const content = event.content;
                 if (isSubAgent) {
@@ -545,6 +567,7 @@ export function createPipelineEventHandler(
                             ...item,
                             status: toolStatus,
                             result: event.toolResult,
+                            awaitingChildResult: false,
                             // 补充工具名（占位节点可能为 unknown_sub_agent）
                             ...(event.toolName ? { name: event.toolName } : {}),
                           }
@@ -576,6 +599,10 @@ export function createPipelineEventHandler(
               break;
 
             case "DONE":
+              if (event.parentToolCallId) {
+                next.timeline = next.timeline.map((item) => item.type === "tool" && item.id === event.parentToolCallId
+                  ? { ...item, status: "done" } : item);
+              }
               if (!isMainAgentTerminalEvent(event)) break;
               next.status = "done";
               next.cancelRequested = false;
@@ -632,6 +659,11 @@ export function createPipelineEventHandler(
               break;
 
             case "CANCELLED":
+              if (event.parentToolCallId) {
+                next.timeline = next.timeline.map((item) => item.type === "tool" && item.id === event.parentToolCallId
+                  ? { ...item, status: "cancelled", children: cancelCallingTimelineTools(item.children ?? []) }
+                  : item);
+              }
               if (isMainAgentTerminalEvent(event)) {
                 next.status = "cancelled";
                 next.cancelRequested = false;
@@ -669,6 +701,11 @@ export function createPipelineEventHandler(
     // 完成/错误/取消时触发后续回调
     for (const event of batch) {
       if (terminalNotified || !isMainAgentTerminalEvent(event)) continue;
+      if (event.outputType === "HISTORY") {
+        terminalNotified = true;
+        lifecycle.notifySettlement(id, event.runStatus === "COMPLETED" ? "done"
+          : event.runStatus === "CANCELLED" ? "cancelled" : "error", onComplete, onSettled);
+      }
       if (event.outputType === "DONE" && isMainAgentTerminalEvent(event)) {
         terminalNotified = true;
         lifecycle.notifySettlement(id, "done", onComplete, onSettled);
@@ -697,7 +734,9 @@ export function createPipelineEventHandler(
       if (acceptedRunId && event.runId !== acceptedRunId) {
         throw new Error("Pipeline stream switched to a different run");
       }
-      if (event.sequence <= acceptedSequence) return;
+      if (event.outputType !== "HISTORY" && event.sequence <= acceptedSequence) {
+        return;
+      }
       acceptedRunId = event.runId;
       acceptedSequence = event.sequence;
     }

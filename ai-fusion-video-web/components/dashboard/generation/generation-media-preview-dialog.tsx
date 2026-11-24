@@ -267,7 +267,7 @@ export function GenerationMediaPreviewDialog({
                 alt={preview.title}
                 onLoad={handleImageLoad}
                 draggable={false}
-                className="max-w-none shrink-0 rounded-xl object-contain shadow-2xl ring-1 ring-border/30"
+                className="max-w-none shrink-0 rounded-xl bg-background object-contain shadow-2xl ring-1 ring-border/30"
                 style={{
                   width: renderedWidth ? `${renderedWidth}px` : "auto",
                   height: renderedHeight ? `${renderedHeight}px` : "auto",
