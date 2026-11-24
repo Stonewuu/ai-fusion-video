@@ -23,11 +23,12 @@ spring:
     dashscope:
       api-key: ${AI_DASHSCOPE_API_KEY:sk-placeholder}
 
-# 容器部署只输出错误；本机调试使用 application-local.yaml。
+# 容器以错误日志为主，并保留管理员找回密码验证码。
 logging:
   level:
     root: ERROR
     com.stonewu.fusion: ERROR
+    com.stonewu.fusion.controller.system.AuthController: WARN
     org.springframework.ai: ERROR
 
 mybatis-plus:

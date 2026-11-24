@@ -4,6 +4,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.stonewu.fusion.controller.system.AuthController;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.LoggerFactory;
@@ -15,7 +16,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** 实际启动配置加载与日志系统，验证本机可诊断且 Docker 仅输出错误。 */
+/** 启动日志系统，验证本机诊断日志及 Docker 中管理员找回密码日志的可见性。 */
 class LoggingProfilesTests {
     @Configuration(proxyBeanMethods = false)
     static class Probe {
@@ -27,9 +28,11 @@ class LoggingProfilesTests {
         var root = (Logger) LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME);
         var business = (Logger) LoggerFactory.getLogger("com.stonewu.fusion");
         var ai = (Logger) LoggerFactory.getLogger("org.springframework.ai");
+        var recovery = (Logger) LoggerFactory.getLogger(AuthController.class);
         Level originalRoot = root.getLevel();
         Level originalBusiness = business.getLevel();
         Level originalAi = ai.getLevel();
+        Level originalRecovery = recovery.getLevel();
         var application = new SpringApplication(Probe.class);
         application.setWebApplicationType(WebApplicationType.NONE);
         application.setLogStartupInfo(false);
@@ -41,11 +44,13 @@ class LoggingProfilesTests {
             if (profile.equals("docker")) {
                 assertThat(events("org.example.logging-probe")).containsExactly(Level.ERROR);
                 assertThat(events("org.springframework.ai.logging-probe")).containsExactly(Level.ERROR);
+                assertThat(events(AuthController.class.getName())).containsExactly(Level.WARN, Level.ERROR);
             }
         } finally {
             root.setLevel(originalRoot);
             business.setLevel(originalBusiness);
             ai.setLevel(originalAi);
+            recovery.setLevel(originalRecovery);
         }
     }
 
