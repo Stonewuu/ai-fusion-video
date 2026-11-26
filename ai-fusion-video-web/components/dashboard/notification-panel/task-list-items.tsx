@@ -29,20 +29,18 @@ export function TaskListItem({
       aria-pressed={selected}
       onClick={onClick}
       className={cn(
-        "w-full flex items-center gap-2 px-2.5 py-2 rounded-lg text-left transition-colors mb-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
+        "grid w-full grid-cols-[auto_minmax(0,1fr)] items-center gap-x-2 px-2.5 py-2 rounded-lg text-left transition-colors mb-0.5 outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none",
         selected ? "bg-foreground/10" : "hover:bg-foreground/5"
       )}
     >
       {icon}
-      <div className="flex-1 min-w-0">
-        <p className="text-xs font-medium truncate" title={label}>{label}</p>
-        <p className="text-[10px] text-muted-foreground truncate">{subtitle}</p>
-        {description && (
-          <p className="mt-1 line-clamp-2 break-words text-xs text-muted-foreground" title={description}>
-            {description}
-          </p>
-        )}
-      </div>
+      <span className="min-w-0 truncate text-xs font-medium leading-5" title={label}>{label}</span>
+      <span className="col-start-2 min-w-0 truncate text-[10px] text-muted-foreground">{subtitle}</span>
+      {description && (
+        <span className="col-start-2 mt-1 line-clamp-2 break-words text-xs text-muted-foreground" title={description}>
+          {description}
+        </span>
+      )}
     </button>
   );
 }

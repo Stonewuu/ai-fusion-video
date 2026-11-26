@@ -16,6 +16,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { DirectoryHeader } from "@/components/shared/directory-header";
 import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
 import { AssistantBrandIcon } from "./assistant-brand-icon";
 import {
@@ -96,40 +97,33 @@ function ConversationRow({
 
   return (
     <div
-      role="button"
-      tabIndex={0}
       className={cn(
-        "group mb-1 flex cursor-pointer select-none items-start gap-2 rounded-xl border border-transparent px-2.5 py-2 text-left transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-        selected
-          ? "border-primary/30 bg-primary/10"
-          : "hover:border-border/30 hover:bg-muted/60",
+        "group mb-1 flex min-w-0 items-start gap-2 rounded-xl border border-transparent px-2.5 py-2 transition-colors",
+        selected ? "border-primary/30 bg-primary/10" : "hover:border-border/30 hover:bg-muted/60",
       )}
-      onClick={() => {
-        selectConversation(conversation.conversationId);
-        onSelected?.();
-      }}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
+    >
+      <button
+        type="button"
+        aria-current={selected ? "true" : undefined}
+        className="grid min-w-0 flex-1 grid-cols-[1rem_minmax(0,1fr)] items-center gap-x-2 gap-y-0.5 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
+        onClick={() => {
           selectConversation(conversation.conversationId);
           onSelected?.();
-        }
-      }}
-    >
-      <div className="flex min-w-0 flex-1 items-start gap-2">
-        <span className="mt-0.5 shrink-0"><StatusIcon status={status} unread={unread} /></span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-xs font-medium" title={conversation.title}>
-            {conversation.title || "新对话"}
-          </span>
-          <span className="mt-0.5 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-            <span>{statusLabel(status)}</span>
-            <span aria-hidden="true">·</span>
-            <span>{relativeTime(conversation.lastMessageTime ?? conversation.createTime)}</span>
-            {unread ? <span className="size-1.5 rounded-full bg-primary" aria-label="未读" /> : null}
-          </span>
+        }}
+      >
+        <span aria-hidden="true" className="grid size-4 place-items-center">
+          <StatusIcon status={status} unread={unread} />
         </span>
-      </div>
+        <span className="min-w-0 truncate text-xs font-medium leading-6" title={conversation.title}>
+          {conversation.title || "新对话"}
+        </span>
+        <span className="col-start-2 flex min-w-0 items-center gap-1.5 text-[10px] text-muted-foreground">
+          <span>{statusLabel(status)}</span>
+          <span aria-hidden="true">·</span>
+          <span>{relativeTime(conversation.lastMessageTime ?? conversation.createTime)}</span>
+          {unread ? <span className="size-1.5 rounded-full bg-primary" aria-label="未读" /> : null}
+        </span>
+      </button>
       <Button
         type="button"
         variant="destructive-ghost"
@@ -138,9 +132,8 @@ function ConversationRow({
         title={running ? "运行中的会话不能删除" : "删除会话"}
         disabled={running}
         data-assistant-interactive="true"
-        className="mt-0.5 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100"
-        onClick={(event) => {
-          event.stopPropagation();
+        className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 [@media(hover:none)]:opacity-100"
+        onClick={() => {
           onDelete({
             conversationId: conversation.conversationId,
             id: conversation.id,
@@ -170,15 +163,11 @@ function ConversationList({ onSelected }: { onSelected?: () => void }) {
 
   return (
     <>
-      <div className="flex shrink-0 items-center justify-between border-b border-border/20 px-3 py-3">
-        <div>
-          <p className="text-xs font-semibold">会话</p>
-          <p className="text-[10px] text-muted-foreground">仅显示助手对话</p>
-        </div>
+      <DirectoryHeader title="会话" description="仅显示助手对话" className="border-b border-border/20 p-3">
         <Button
           type="button"
           variant="ghost"
-          size="icon-sm"
+          size="icon"
           aria-label="新建对话"
           title="新建对话"
           data-assistant-interactive="true"
@@ -189,7 +178,7 @@ function ConversationList({ onSelected }: { onSelected?: () => void }) {
         >
           <MessageSquarePlus />
         </Button>
-      </div>
+      </DirectoryHeader>
 
       <OverlayScrollArea
         className="min-h-0 flex-1"

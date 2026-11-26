@@ -290,7 +290,7 @@ export default function AssetEditPanel(props: EditProps) {
                 封面
               </h4>
               <div
-                className="group/cover relative h-[280px] w-full rounded-xl border border-border/30 overflow-hidden bg-muted/5"
+                className="group/cover relative h-[280px] w-full rounded-xl border border-input overflow-hidden bg-muted/5"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={(e) => {
                   e.preventDefault();

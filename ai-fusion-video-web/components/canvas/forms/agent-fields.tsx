@@ -8,7 +8,7 @@ import { CanvasNumberField } from "./field-controls";
 import { canvasTypeNames } from "@/lib/canvas/labels";
 import type { CanvasCapability, CanvasConfig, CanvasValueType } from "@/lib/canvas/types";
 import { useCanvas } from "../canvas-provider";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { CanvasSelect } from "./canvas-select";
 import { CanvasAgentSkillFields } from "./agent-skill-fields";
 
@@ -83,7 +83,7 @@ export function CanvasAgentFields({ capability, config, onChange, disabled, conn
           <div key={kind} className="flex flex-col gap-3 rounded-lg border border-border/20 bg-background/70 p-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
               <span className="flex items-center gap-2 text-sm font-medium"><Icon className="size-4 text-primary" />{label}</span>
-              <CanvasSegmentedControl label={`允许${label}`} value={enabled ? "allow" : "off"}
+              <SegmentedControl label={`允许${label}`} value={enabled ? "allow" : "off"}
                 options={[{ value: "off", label: "关闭", disabled }, { value: "allow", label: "允许", disabled }]}
                 onChange={(value) => {
                   const next = { ...config, [budget]: value === "off" ? 0 : kind === "image" ? 1 : 5 };

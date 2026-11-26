@@ -46,8 +46,8 @@ function ResolutionGrid({ value }: { value: string }) {
 }
 
 const itemClass = cn(
-  "justify-center gap-1 rounded-lg border border-border/30 bg-background/70 px-2 text-sm font-medium tabular-nums text-foreground",
-  "hover:border-border/50 aria-selected:border-primary/55 aria-selected:bg-primary/10 aria-selected:text-primary dark:aria-selected:text-chart-1",
+  "justify-center gap-1 rounded-lg border border-input bg-background/70 px-2 text-sm font-medium tabular-nums text-foreground",
+  "hover:border-ring aria-selected:border-primary/55 aria-selected:bg-primary/10 aria-selected:text-primary dark:aria-selected:text-chart-1",
   "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring motion-reduce:transition-none",
   "[&>span:first-child]:items-center [&>span:last-child:not(:first-child)]:right-1 [&>span:last-child:not(:first-child)>svg]:size-3",
 );

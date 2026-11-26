@@ -2,7 +2,7 @@
 import { useRef, useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import {
   Dialog,
   DialogHeader,
@@ -108,7 +108,7 @@ export function CanvasSequencePreview({
           role="group"
           aria-label="镜头播放控制"
         >
-          <CanvasSegmentedControl
+          <SegmentedControl
             label="播放方式"
             value={continuous ? "continuous" : "single"}
             options={[

@@ -1,17 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import ts from "typescript";
-const source = await readFile(
-  new URL("../lib/scripts/source-import.ts", import.meta.url),
-  "utf8",
-);
-const { outputText } = ts.transpileModule(source, {
-  compilerOptions: {
-    module: ts.ModuleKind.ESNext,
-    target: ts.ScriptTarget.ES2020,
-  },
-});
+import { createTypeScriptLoader } from "./helpers/load-typescript.mjs";
 const {
   deleteSegment,
   duplicateTitles,
@@ -19,9 +8,7 @@ const {
   splitSegment,
   titleKey,
   readSourceFile,
-} = await import(
-  "data:text/javascript;base64," + Buffer.from(outputText).toString("base64")
-);
+} = createTypeScriptLoader()("lib/scripts/source-import.ts");
 
 test("分界编辑只改变范围，所有原文保持完整且顺序不变", () => {
   const source = "第一章\n正文🌕。\n第二章\n原文。";

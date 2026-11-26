@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import type { ScriptSplitRule } from "@/lib/api/script";
-import { MAX_SOURCE_LENGTH, readSourceFile } from "@/lib/scripts/source-import";
+import { readSourceFile } from "@/lib/scripts/source-import";
+import { MAX_SOURCE_LENGTH } from "@/lib/scripts/source-import-limits";
 import { SourceInputFile } from "./source-input-file";
 import { SourceInputSettings } from "./source-input-settings";
 

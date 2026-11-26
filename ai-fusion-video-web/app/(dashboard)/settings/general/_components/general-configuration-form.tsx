@@ -4,6 +4,7 @@ import type { Dispatch, SetStateAction } from "react";
 import { Globe, Mail } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
 import { itemVariants, settingsTypography } from "../../_shared";
 import { isLocalOrPrivateUrl, type SystemConfigs } from "./general-settings-types";
 
@@ -51,10 +52,10 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                     });
                   }}
                   className={cn(
-                    "relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors",
+                    "relative inline-flex h-7 w-12 shrink-0 rounded-full border outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
                     separatePublicOrigins
                       ? "border-primary/40 bg-primary/20"
-                      : "border-border/40 bg-muted/30",
+                      : "border-input bg-muted/30",
                     !isAdmin ? "cursor-not-allowed opacity-60" : "cursor-pointer"
                   )}
                   aria-label="切换前后端不同域名"
@@ -72,9 +73,9 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
 
             {separatePublicOrigins ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <div>
-                  <label htmlFor="site_base_url" className="block text-xs font-medium mb-1.5">前端站点地址</label>
-                  <input id="site_base_url"
+                <div className="flex min-w-0 flex-col gap-2">
+                  <label htmlFor="site_base_url" className="block text-xs font-medium">前端站点地址</label>
+                  <Input id="site_base_url"
                     type="url"
                     disabled={!isAdmin || saving}
                     value={configs.site_base_url}
@@ -82,17 +83,12 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                       setConfigs((prev) => ({ ...prev, site_base_url: e.target.value }))
                     }
                     placeholder="https://app.example.com"
-                    className={cn(
-                      "w-full px-4 py-2.5 rounded-xl text-sm",
-                      "bg-muted/30 border border-border/30",
-                      "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-                      "placeholder:text-muted-foreground/40 disabled:opacity-60"
-                    )}
+                    className="h-11 px-4"
                   />
                 </div>
-                <div>
-                  <label htmlFor="resource_base_url" className="block text-xs font-medium mb-1.5">后端资源地址</label>
-                  <input id="resource_base_url"
+                <div className="flex min-w-0 flex-col gap-2">
+                  <label htmlFor="resource_base_url" className="block text-xs font-medium">后端资源地址</label>
+                  <Input id="resource_base_url"
                     type="url"
                     disabled={!isAdmin || saving}
                     value={configs.resource_base_url}
@@ -100,18 +96,13 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                       setConfigs((prev) => ({ ...prev, resource_base_url: e.target.value }))
                     }
                     placeholder="https://api.example.com"
-                    className={cn(
-                      "w-full px-4 py-2.5 rounded-xl text-sm",
-                      "bg-muted/30 border border-border/30",
-                      "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-                      "placeholder:text-muted-foreground/40 disabled:opacity-60"
-                    )}
+                    className="h-11 px-4"
                   />
                 </div>
               </div>
             ) : (
               <div className="mt-4">
-                <input
+                <Input
                   type="url"
                   aria-label="公网访问地址"
                   disabled={!isAdmin || saving}
@@ -124,12 +115,7 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                     }))
                   }
                   placeholder="https://fusion.example.com"
-                  className={cn(
-                    "w-full px-4 py-2.5 rounded-xl text-sm",
-                    "bg-muted/30 border border-border/30",
-                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
-                  )}
+                  className="h-11 px-4"
                 />
               </div>
             )}
@@ -161,10 +147,10 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                   setConfigs((prev) => ({ ...prev, allow_register: !prev.allow_register }));
                 }}
                 className={cn(
-                  "relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors",
+                  "relative inline-flex h-7 w-12 shrink-0 rounded-full border outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
                   configs.allow_register
                     ? "border-emerald-500/40 bg-emerald-500/20"
-                    : "border-border/40 bg-muted/30",
+                    : "border-input bg-muted/30",
                   !isAdmin ? "cursor-not-allowed opacity-60" : "cursor-pointer"
                 )}
                 aria-label="切换公开注册"
@@ -206,9 +192,9 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
             </p>
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div>
-                <label htmlFor="mail_smtp_host" className="block text-xs text-muted-foreground mb-1.5 font-medium">SMTP 服务器地址</label>
-                <input id="mail_smtp_host"
+              <div className="flex min-w-0 flex-col gap-2">
+                <label htmlFor="mail_smtp_host" className="block text-xs text-muted-foreground font-medium">SMTP 服务器地址</label>
+                <Input id="mail_smtp_host"
                   type="text"
                   disabled={!isAdmin || saving}
                   value={configs.mail_smtp_host || ""}
@@ -216,18 +202,13 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                     setConfigs((prev) => ({ ...prev, mail_smtp_host: e.target.value }))
                   }
                   placeholder="smtp.qq.com"
-                  className={cn(
-                    "w-full px-4 py-2.5 rounded-xl text-sm",
-                    "bg-muted/30 border border-border/30",
-                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
-                  )}
+                  className="h-11 px-4"
                 />
               </div>
 
-              <div>
-                <label htmlFor="mail_smtp_port" className="block text-xs text-muted-foreground mb-1.5 font-medium">SMTP 端口</label>
-                <input id="mail_smtp_port"
+              <div className="flex min-w-0 flex-col gap-2">
+                <label htmlFor="mail_smtp_port" className="block text-xs text-muted-foreground font-medium">SMTP 端口</label>
+                <Input id="mail_smtp_port"
                   type="text"
                   disabled={!isAdmin || saving}
                   value={configs.mail_smtp_port || ""}
@@ -235,18 +216,13 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                     setConfigs((prev) => ({ ...prev, mail_smtp_port: e.target.value }))
                   }
                   placeholder="465"
-                  className={cn(
-                    "w-full px-4 py-2.5 rounded-xl text-sm",
-                    "bg-muted/30 border border-border/30",
-                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
-                  )}
+                  className="h-11 px-4"
                 />
               </div>
 
-              <div>
-                <label htmlFor="mail_username" className="block text-xs text-muted-foreground mb-1.5 font-medium">发件人邮箱账户</label>
-                <input id="mail_username"
+              <div className="flex min-w-0 flex-col gap-2">
+                <label htmlFor="mail_username" className="block text-xs text-muted-foreground font-medium">发件人邮箱账户</label>
+                <Input id="mail_username"
                   type="email"
                   disabled={!isAdmin || saving}
                   value={configs.mail_username || ""}
@@ -254,18 +230,13 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                     setConfigs((prev) => ({ ...prev, mail_username: e.target.value }))
                   }
                   placeholder="your-email@qq.com"
-                  className={cn(
-                    "w-full px-4 py-2.5 rounded-xl text-sm",
-                    "bg-muted/30 border border-border/30",
-                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
-                  )}
+                  className="h-11 px-4"
                 />
               </div>
 
-              <div>
-                <label htmlFor="mail_password" className="block text-xs text-muted-foreground mb-1.5 font-medium">发件箱密码/授权码</label>
-                <input id="mail_password"
+              <div className="flex min-w-0 flex-col gap-2">
+                <label htmlFor="mail_password" className="block text-xs text-muted-foreground font-medium">发件箱密码/授权码</label>
+                <Input id="mail_password"
                   type="password"
                   disabled={!isAdmin || saving}
                   value={configs.mail_password || ""}
@@ -273,18 +244,13 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                     setConfigs((prev) => ({ ...prev, mail_password: e.target.value }))
                   }
                   placeholder="••••••••••••••••"
-                  className={cn(
-                    "w-full px-4 py-2.5 rounded-xl text-sm",
-                    "bg-muted/30 border border-border/30",
-                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
-                  )}
+                  className="h-11 px-4"
                 />
               </div>
 
-              <div>
-                <label htmlFor="mail_from" className="block text-xs text-muted-foreground mb-1.5 font-medium">自定义发件人名称</label>
-                <input id="mail_from"
+              <div className="flex min-w-0 flex-col gap-2">
+                <label htmlFor="mail_from" className="block text-xs text-muted-foreground font-medium">自定义发件人名称</label>
+                <Input id="mail_from"
                   type="text"
                   disabled={!isAdmin || saving}
                   value={configs.mail_from || ""}
@@ -292,12 +258,7 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                     setConfigs((prev) => ({ ...prev, mail_from: e.target.value }))
                   }
                   placeholder="融光视频平台 &lt;your-email@qq.com&gt;"
-                  className={cn(
-                    "w-full px-4 py-2.5 rounded-xl text-sm",
-                    "bg-muted/30 border border-border/30",
-                    "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-                    "placeholder:text-muted-foreground/40 disabled:opacity-60"
-                  )}
+                  className="h-11 px-4"
                 />
               </div>
 
@@ -314,10 +275,10 @@ export function GeneralConfigurationForm({ configs, setConfigs, isAdmin, saving,
                     setConfigs((prev) => ({ ...prev, mail_ssl: !prev.mail_ssl }));
                   }}
                   className={cn(
-                    "relative inline-flex h-7 w-12 shrink-0 rounded-full border transition-colors",
+                    "relative inline-flex h-7 w-12 shrink-0 rounded-full border outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
                     configs.mail_ssl
                       ? "border-emerald-500/40 bg-emerald-500/20"
-                      : "border-border/40 bg-muted/30",
+                      : "border-input bg-muted/30",
                     !isAdmin ? "cursor-not-allowed opacity-60" : "cursor-pointer"
                   )}
                   aria-label="切换邮件SSL"

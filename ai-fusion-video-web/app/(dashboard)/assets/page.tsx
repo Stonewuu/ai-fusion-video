@@ -4,7 +4,7 @@ import { useResourceInvalidation } from "@/hooks/use-resource-invalidation";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import {
-  Search,
+  Check,
   Grid3X3,
   List,
   Loader2,
@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { SearchInput } from "@/components/shared/search-input";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { assetApi, type Asset } from "@/lib/api/asset";
 import { projectApi, type Project } from "@/lib/api/project";
 import { resolveMediaUrl } from "@/lib/api/client";
@@ -226,7 +228,7 @@ export default function AssetsPage() {
           {/* 总计 */}
           <div
             className={cn(
-              "col-span-2 sm:col-span-1 rounded-xl border border-border/30 p-4",
+              "col-span-2 sm:col-span-1 rounded-xl border border-input p-4",
               "bg-card/50 backdrop-blur-sm"
             )}
           >
@@ -246,16 +248,18 @@ export default function AssetsPage() {
             const count = typeCounts[t.value] || 0;
             return (
               <button
+                type="button"
                 key={t.value}
+                aria-pressed={selectedType === t.value}
                 onClick={() => setSelectedType(selectedType === t.value ? "all" : t.value)}
                 className={cn(
-                  "rounded-xl border p-3.5 text-left transition-all",
-                  "bg-card/50 backdrop-blur-sm",
+                  "relative rounded-xl border border-input p-3.5 text-left outline-none backdrop-blur-sm transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 motion-reduce:transition-none",
                   selectedType === t.value
-                    ? "border-border/60 ring-1 ring-border/30"
-                    : "border-border/20 hover:border-border/40"
+                    ? "bg-primary/10"
+                    : "bg-card/50 hover:bg-muted/50"
                 )}
               >
+                {selectedType === t.value && <Check aria-hidden="true" className="absolute right-2 top-2 size-3.5 text-primary" />}
                 <div className="flex items-center gap-2">
                   <div className={cn("h-7 w-7 rounded-lg flex items-center justify-center shrink-0", t.bg)}>
                     <Icon className={cn("h-3.5 w-3.5", t.color)} />
@@ -272,21 +276,21 @@ export default function AssetsPage() {
       </motion.div>
 
       {/* ========== 筛选工具栏 ========== */}
-      <motion.div variants={itemVariants} className="flex items-center gap-3 mb-6 flex-wrap">
+      <motion.div variants={itemVariants} className="mb-6 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 sm:grid-cols-[11rem_minmax(0,1fr)_auto] sm:gap-3">
         {/* 项目选择器 */}
-        <div className="w-44 shrink-0">
+        <div className="col-span-2 min-w-0 sm:col-span-1">
           <Select
             value={selectedProjectId}
             onValueChange={(v) => setSelectedProjectId(v ?? "all")}
             items={projectOptions}
           >
-            <SelectTrigger className="w-full text-xs">
+            <SelectTrigger className="w-full" aria-label="按项目筛选资产">
               <SelectValue placeholder="全部项目" />
             </SelectTrigger>
-            <SelectContent className="text-xs">
+            <SelectContent>
               <SelectGroup>
                 {projectOptions.map((opt) => (
-                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                  <SelectItem key={opt.value} value={opt.value}>
                     {opt.label}
                   </SelectItem>
                 ))}
@@ -295,49 +299,22 @@ export default function AssetsPage() {
           </Select>
         </div>
 
-        {/* 搜索框 */}
-        <div
-          className={cn(
-            "flex-1 min-w-[200px] flex items-center gap-2.5 px-3.5 py-2 rounded-xl",
-            "border border-border/30 bg-card/50 backdrop-blur-sm",
-            "transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 motion-reduce:transition-none"
-          )}
-        >
-          <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-          <input
-            type="text"
-            placeholder="搜索资产名称..."
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/50"
-          />
-        </div>
-
-        {/* 视图切换 */}
-        <div className="flex rounded-xl border border-border/30 bg-card/50 overflow-hidden shrink-0">
-          <button
-            onClick={() => setViewMode("grid")}
-            className={cn(
-              "p-2.5 transition-colors",
-              viewMode === "grid"
-                ? "bg-white/10 text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Grid3X3 className="h-4 w-4" />
-          </button>
-          <button
-            onClick={() => setViewMode("list")}
-            className={cn(
-              "p-2.5 transition-colors",
-              viewMode === "list"
-                ? "bg-white/10 text-foreground"
-                : "text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <List className="h-4 w-4" />
-          </button>
-        </div>
+        <SearchInput
+          aria-label="搜索资产名称"
+          placeholder="搜索资产名称..."
+          value={keyword}
+          onChange={(event) => setKeyword(event.target.value)}
+        />
+        <SegmentedControl
+          label="资产视图"
+          value={viewMode}
+          onChange={setViewMode}
+          compact
+          options={[
+            { value: "grid", label: "网格视图", icon: Grid3X3 },
+            { value: "list", label: "列表视图", icon: List },
+          ]}
+        />
       </motion.div>
 
       {/* ========== 内容区 ========== */}

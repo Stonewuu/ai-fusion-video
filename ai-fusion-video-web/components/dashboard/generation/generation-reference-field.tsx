@@ -150,7 +150,7 @@ export function GenerationReferenceField({
             disabled={!canUpload || uploading}
             onClick={() => inputRef.current?.click()}
             title={uploadDisabledReason}
-            className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-border/55 text-[10px] text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/[0.035] hover:text-primary disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-border/55 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+            className="flex h-16 w-16 shrink-0 flex-col items-center justify-center gap-1 rounded-xl border border-dashed border-input text-[10px] text-muted-foreground transition-colors hover:border-primary/35 hover:bg-primary/[0.035] hover:text-primary disabled:cursor-not-allowed disabled:opacity-45 disabled:hover:border-input disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
           >
             {uploading ? (
               <Loader2 className="h-4 w-4 animate-spin" />

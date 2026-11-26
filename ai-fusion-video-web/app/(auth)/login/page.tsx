@@ -1,5 +1,7 @@
 "use client";
 
+import { AuthInput } from "@/components/auth/auth-input";
+
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -98,7 +100,7 @@ function LoginContent() {
       {/* 登录表单 */}
       <form onSubmit={handleSubmit} className="space-y-4">
         <div className="relative">
-          <input
+          <AuthInput
             type="text"
             placeholder="用户名"
             value={username}
@@ -106,7 +108,6 @@ function LoginContent() {
               setUsername(e.target.value);
               setError("");
             }}
-            className="w-full backdrop-blur-[1px] text-white border border-white/10 rounded-full py-3 px-5 focus:outline-none focus:border-white/30 bg-transparent placeholder:text-white/30 transition-colors"
             required
             autoComplete="username"
             disabled={loading}
@@ -114,7 +115,7 @@ function LoginContent() {
         </div>
 
         <div className="relative">
-          <input
+          <AuthInput
             type="password"
             placeholder="密码"
             value={password}
@@ -122,7 +123,6 @@ function LoginContent() {
               setPassword(e.target.value);
               setError("");
             }}
-            className="w-full backdrop-blur-[1px] text-white border border-white/10 rounded-full py-3 px-5 focus:outline-none focus:border-white/30 bg-transparent placeholder:text-white/30 transition-colors"
             required
             autoComplete="current-password"
             minLength={6}

@@ -1,8 +1,5 @@
 import type { ScriptSourceSegment } from "@/lib/api/script";
-
-export const MAX_SOURCE_LENGTH = 20_000_000;
-export const MAX_SOURCE_FILE_BYTES = 100 * 1024 * 1024;
-export const MAX_EPISODE_LENGTH = 100_000;
+import { MAX_EPISODE_LENGTH, MAX_SOURCE_FILE_BYTES, MAX_SOURCE_LENGTH } from "./source-import-limits";
 
 export function titleKey(title: string): string {
   return title.normalize("NFKC").replace(/\s+/g, "").toLocaleLowerCase();

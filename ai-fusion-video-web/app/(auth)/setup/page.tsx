@@ -1,5 +1,7 @@
 "use client";
 
+import { AuthInput } from "@/components/auth/auth-input";
+
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -106,7 +108,7 @@ export default function SetupPage() {
 
       {/* 表单 */}
       <form onSubmit={handleSubmit} className="space-y-3">
-        <input
+        <AuthInput
           type="text"
           placeholder="管理员用户名"
           value={username}
@@ -114,24 +116,22 @@ export default function SetupPage() {
             setUsername(e.target.value);
             setError("");
           }}
-          className="w-full backdrop-blur-[1px] text-white border border-white/10 rounded-full py-3 px-5 focus:outline-none focus:border-white/30 bg-transparent placeholder:text-white/30 transition-colors"
           required
           autoComplete="username"
           disabled={loading}
           minLength={3}
         />
 
-        <input
+        <AuthInput
           type="text"
           placeholder="昵称（选填）"
           value={nickname}
           onChange={(e) => setNickname(e.target.value)}
-          className="w-full backdrop-blur-[1px] text-white border border-white/10 rounded-full py-3 px-5 focus:outline-none focus:border-white/30 bg-transparent placeholder:text-white/30 transition-colors"
           autoComplete="nickname"
           disabled={loading}
         />
 
-        <input
+        <AuthInput
           type="password"
           placeholder="密码（至少6位）"
           value={password}
@@ -139,14 +139,13 @@ export default function SetupPage() {
             setPassword(e.target.value);
             setError("");
           }}
-          className="w-full backdrop-blur-[1px] text-white border border-white/10 rounded-full py-3 px-5 focus:outline-none focus:border-white/30 bg-transparent placeholder:text-white/30 transition-colors"
           required
           autoComplete="new-password"
           minLength={6}
           disabled={loading}
         />
 
-        <input
+        <AuthInput
           type="password"
           placeholder="确认密码"
           value={confirmPassword}
@@ -154,7 +153,6 @@ export default function SetupPage() {
             setConfirmPassword(e.target.value);
             setError("");
           }}
-          className="w-full backdrop-blur-[1px] text-white border border-white/10 rounded-full py-3 px-5 focus:outline-none focus:border-white/30 bg-transparent placeholder:text-white/30 transition-colors"
           required
           autoComplete="new-password"
           minLength={6}

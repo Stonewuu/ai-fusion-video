@@ -35,7 +35,7 @@ function Stepper({
   onChange: (value: number) => void;
 }) {
   return (
-    <div className="flex h-11 items-center justify-between gap-3 rounded-xl border border-border/40 bg-background/55 px-3">
+    <div className="flex h-11 items-center justify-between gap-3 rounded-xl border border-input bg-background/55 px-3">
       <p className="text-[10px] text-muted-foreground">{label}</p>
       <div className="flex items-center gap-1">
         <button
@@ -82,12 +82,13 @@ function ToggleOption({
     <button
       type="button"
       disabled={disabled}
+      aria-pressed={checked}
       onClick={() => onChange(!checked)}
       className={cn(
-        "flex h-10 items-center justify-between gap-3 rounded-xl border px-3 text-xs transition-all",
+        "flex h-10 items-center justify-between gap-3 rounded-xl border px-3 text-xs outline-none transition-colors focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
         checked
           ? "border-primary/25 bg-primary/[0.065] text-foreground"
-          : "border-border/40 bg-background/55 text-muted-foreground hover:bg-background hover:text-foreground",
+          : "border-input bg-background/55 text-muted-foreground hover:bg-background hover:text-foreground",
         disabled && "cursor-not-allowed opacity-35",
       )}
     >
@@ -97,7 +98,7 @@ function ToggleOption({
           "grid h-5 w-5 place-items-center rounded-md border",
           checked
             ? "border-primary bg-primary text-primary-foreground"
-            : "border-border bg-background",
+            : "border-input bg-background",
         )}
       >
         {checked && <Check className="h-3 w-3" />}

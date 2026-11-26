@@ -23,6 +23,7 @@ import {
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Textarea } from "@/components/ui/textarea";
 import { useProject } from "../project-context";
 import { projectApi, type Project } from "@/lib/api/project";
 import { useConfirm } from "@/components/ui/confirm-dialog";
@@ -353,7 +354,7 @@ export default function ProjectSettingsPage() {
                 "px-3.5 py-1.5 rounded-lg text-sm font-medium transition-all",
                 propsDraft.type === t
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-border/30 hover:border-primary/40"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-input hover:border-ring"
               )}
             >
               {propsDraft.type === t && (
@@ -412,8 +413,8 @@ export default function ProjectSettingsPage() {
                   className={cn(
                     "group relative flex flex-col items-center gap-2 p-3 rounded-xl transition-all",
                     artStyle === preset.key
-                      ? "bg-primary/10 border-2 border-primary shadow-sm"
-                      : "bg-muted/30 border border-border/30 hover:border-primary/40 hover:bg-muted/50"
+                      ? "bg-primary/10 border border-primary shadow-sm"
+                      : "bg-muted/30 border border-input hover:border-ring hover:bg-muted/50"
                   )}
                 >
                   {/* 参考图缩略图 */}
@@ -541,8 +542,8 @@ export default function ProjectSettingsPage() {
                     onClick={() => fileInputRef.current?.click()}
                     disabled={uploading}
                     className={cn(
-                      "w-32 h-32 rounded-xl border-2 border-dashed border-border/40 flex flex-col items-center justify-center gap-2",
-                      "hover:border-primary/40 hover:bg-muted/30 transition-all",
+                      "w-32 h-32 rounded-xl border border-dashed border-input flex flex-col items-center justify-center gap-2",
+                      "hover:border-ring hover:bg-muted/30 transition-all",
                       "text-muted-foreground"
                     )}
                   >
@@ -575,17 +576,12 @@ export default function ProjectSettingsPage() {
               <label className="text-xs font-medium text-muted-foreground mb-2 block">
                 画风描述（中文，用于视频生成提示词前缀）
               </label>
-              <textarea
+              <Textarea
                 value={artStyleDescription}
                 onChange={(e) => setArtStyleDescription(e.target.value)}
                 placeholder="例如：水彩手绘风格画面，柔和的色彩过渡，纸张纹理质感，温暖的暖色调光影…"
                 rows={3}
-                className={cn(
-                  "w-full px-3 py-2 rounded-xl text-sm",
-                  "bg-muted/30 border border-border/30",
-                  "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-                  "placeholder:text-muted-foreground/40 resize-none"
-                )}
+                className="field-sizing-fixed resize-none"
               />
             </div>
 
@@ -594,17 +590,12 @@ export default function ProjectSettingsPage() {
               <label className="text-xs font-medium text-muted-foreground mb-2 block">
                 画风英文提示词（用于图片生成，可选）
               </label>
-              <textarea
+              <Textarea
                 value={artStyleImagePrompt}
                 onChange={(e) => setArtStyleImagePrompt(e.target.value)}
                 placeholder="例如：Watercolor hand-painted style, soft color transitions, paper texture, warm lighting…"
                 rows={3}
-                className={cn(
-                  "w-full px-3 py-2 rounded-xl text-sm",
-                  "bg-muted/30 border border-border/30",
-                  "focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20",
-                  "placeholder:text-muted-foreground/40 resize-none"
-                )}
+                className="field-sizing-fixed resize-none"
               />
             </div>
 
@@ -638,7 +629,7 @@ export default function ProjectSettingsPage() {
                 "flex flex-col items-center gap-1 px-5 py-3 rounded-xl text-sm font-medium transition-all",
                 propsDraft.aspectRatio === ar.label
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-border/30 hover:border-primary/40"
+                  : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-input hover:border-ring"
               )}
             >
               <span className="font-semibold">{ar.label}</span>

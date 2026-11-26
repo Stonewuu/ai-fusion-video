@@ -35,7 +35,7 @@ export function CanvasSegmented<T extends string>({
       role="radiogroup"
       aria-label={label}
       className={cn(
-        "relative grid h-8 shrink-0 auto-cols-fr grid-flow-col items-center rounded-[10px] bg-foreground/[0.055] p-[3px] dark:bg-white/[0.07]",
+        "relative grid h-8 shrink-0 auto-cols-fr grid-flow-col items-center rounded-[10px] border border-input bg-foreground/[0.055] p-0.5 dark:bg-white/[0.07]",
         className,
       )}
       onKeyDown={(event) => {
@@ -58,9 +58,9 @@ export function CanvasSegmented<T extends string>({
       {index >= 0 && (
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-[3px] left-[3px] rounded-[7px] bg-background shadow-[0_1px_2px_rgba(0,0,0,0.09),0_0_0_1px_rgba(0,0,0,0.04)] transition-transform duration-200 ease-out dark:bg-white/[0.14] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(0,0,0,0.3)] motion-reduce:transition-none"
+          className="pointer-events-none absolute inset-y-0.5 left-0.5 rounded-[7px] bg-background shadow-[0_1px_2px_rgba(0,0,0,0.09),0_0_0_1px_rgba(0,0,0,0.04)] transition-transform duration-200 ease-out dark:bg-white/[0.14] dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_1px_2px_rgba(0,0,0,0.3)] motion-reduce:transition-none"
           style={{
-            width: `calc((100% - 6px) / ${options.length})`,
+            width: `calc((100% - 4px) / ${options.length})`,
             transform: `translateX(${index * 100}%)`,
           }}
         />

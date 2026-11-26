@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import {
   LayoutDashboard,
@@ -10,17 +10,15 @@ import {
   Images,
   Users,
   Settings,
-  ArrowLeft,
   Bot,
   HardDrive,
   ImagePlus,
   Video,
   Workflow,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { SidebarHeading } from "./sidebar-heading";
 import { projectApi, type Project } from "@/lib/api/project";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { useAuthStore } from "@/lib/store/auth-store";
@@ -83,6 +81,7 @@ export function SidebarNav({
   onCollapsedChange,
 }: SidebarNavProps) {
   const router = useRouter();
+  const navigationId = useId();
   const reducedMotion = usePrefersReducedMotion();
   const pathname = usePathname();
   const currentUser = useAuthStore((state) => state.user);
@@ -118,8 +117,9 @@ export function SidebarNav({
         : null;
 
   useEffect(() => {
-    if (projectProp !== undefined) return; // 由外部管理，跳过
-    if (!projectId) return;
+    if (projectProp !== undefined || !projectId) {
+      return;
+    }
 
     let cancelled = false;
     projectApi.get(projectId)
@@ -129,7 +129,9 @@ export function SidebarNav({
         }
       })
       .catch((error) => {
-        if (!cancelled) toastApiError(error, "加载项目信息失败");
+        if (!cancelled) {
+          toastApiError(error, "加载项目信息失败");
+        }
       });
 
     return () => {
@@ -174,7 +176,9 @@ export function SidebarNav({
   const getIsActive = (href: string) => {
     if (projectId) {
       const basePath = `/projects/${projectId}`;
-      if (href === basePath) return pathname === basePath;
+      if (href === basePath) {
+        return pathname === basePath;
+      }
       return pathname.startsWith(href);
     }
     return pathname === href;
@@ -204,75 +208,15 @@ export function SidebarNav({
           exit={{ opacity: 0 }}
           transition={{ duration: reducedMotion ? 0 : 0.2, ease: "easeOut" }}
         >
-          {/* 标题区 */}
-          {collapsed ? (
-            <div className="px-1 pt-2 pb-3 flex flex-col items-center gap-2">
-              {onCollapsedChange && (
-                <button
-                  type="button"
-                  onClick={() => onCollapsedChange(false)}
-                  className="h-10 w-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/8 transition-colors"
-                  title="展开菜单栏"
-                  aria-label="展开菜单栏"
-                >
-                  <PanelLeftOpen className="h-4 w-4" />
-                </button>
-              )}
-              {backAction && (
-                <button
-                  type="button"
-                  onClick={backAction}
-                  className="h-10 w-10 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-foreground/5 transition-colors"
-                  title="返回项目列表"
-                  aria-label="返回项目列表"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="px-3 pt-3 pb-3">
-              {backAction && (
-                <>
-                  <button
-                    onClick={backAction}
-                    className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2 group"
-                  >
-                    <ArrowLeft className="h-3.5 w-3.5 group-hover:-translate-x-0.5 transition-transform" />
-                    返回项目列表
-                  </button>
-                  <div className="border-b border-border/30 -mx-3 mb-2" />
-                </>
-              )}
-              <div className="flex items-start justify-between gap-2">
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold truncate">
-                    {projectId && "项目: "}
-                    {sectionTitle}
-                  </h3>
-                  {projectId && project?.description && (
-                    <p className="text-xs text-muted-foreground/60 mt-0.5 line-clamp-1">
-                      {project.description}
-                    </p>
-                  )}
-                </div>
-                {onCollapsedChange && (
-                  <button
-                    type="button"
-                    onClick={() => onCollapsedChange(true)}
-                    className="h-7 w-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-primary hover:bg-primary/8 transition-colors shrink-0"
-                    title="收起菜单栏"
-                    aria-label="收起菜单栏"
-                  >
-                    <PanelLeftClose className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* 导航项 */}
-          <nav className={cn("space-y-0.5", collapsed ? "px-0" : "px-1")}>
+          <SidebarHeading
+            title={sectionTitle}
+            description={project?.description}
+            collapsed={collapsed}
+            navigationId={navigationId}
+            onBack={backAction}
+            onCollapsedChange={onCollapsedChange}
+          />
+          <nav id={navigationId} className={cn("flex flex-col gap-0.5", !collapsed && "px-1")}>
             {items.map((item) => {
               const Icon = item.icon;
               const isActive = getIsActive(item.href);
@@ -285,20 +229,18 @@ export function SidebarNav({
                   aria-label={item.label}
                   aria-current={isActive ? "page" : undefined}
                   className={cn(
-                    "w-full flex items-center rounded-xl text-sm",
+                    "flex h-9 w-full items-center rounded-xl text-sm leading-5",
                     "relative outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
                     collapsed
-                      ? "h-10 justify-center px-0"
-                      : "gap-2.5 px-3 py-2",
+                      ? "justify-center"
+                      : "gap-3 px-3",
                     isActive
                       ? "font-medium text-foreground bg-foreground/10"
                       : "text-muted-foreground hover:text-foreground hover:bg-foreground/6"
                   )}
                 >
-                  <span className={isActive ? item.iconColor : undefined}>
-                    <Icon className="h-[18px] w-[18px]" />
-                  </span>
-                  {!collapsed && <span>{item.label}</span>}
+                  <Icon aria-hidden="true" className={cn("block size-4 shrink-0", isActive && item.iconColor)} />
+                  {!collapsed && <span className="min-w-0 truncate">{item.label}</span>}
                 </button>
               );
             })}

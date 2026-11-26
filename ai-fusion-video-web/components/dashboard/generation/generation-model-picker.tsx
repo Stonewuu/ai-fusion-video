@@ -86,7 +86,7 @@ export function GenerationModelPicker({
         aria-label="选择生成模型"
         title={selectedModel ? getModelDisplayParts(selectedModel).name : "选择模型"}
         className={cn(
-          "min-w-0 border-transparent bg-transparent hover:bg-background/80",
+          "min-w-0 hover:bg-background/80",
           shellClass,
           className,
         )}

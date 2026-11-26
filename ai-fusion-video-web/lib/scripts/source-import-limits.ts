@@ -1,0 +1,5 @@
+export const MAX_SOURCE_LENGTH = 20_000_000;
+export const MAX_SOURCE_FILE_BYTES = 100 * 1024 * 1024;
+export const MAX_EPISODE_LENGTH = 100_000;
+export const MAX_SOURCE_EPISODES = 20_000;
+export const SOURCE_IMPORT_TIMEOUT_MS = 120_000;

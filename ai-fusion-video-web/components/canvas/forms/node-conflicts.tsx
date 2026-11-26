@@ -9,7 +9,7 @@ import {
 } from "@/lib/canvas/node-draft";
 import { canvasFieldLabels } from "@/lib/canvas/labels";
 import type { CanvasNode } from "@/lib/canvas/types";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 
 export function CanvasNodeConflicts({
   draft,
@@ -43,7 +43,7 @@ export function CanvasNodeConflicts({
           <p className="break-words whitespace-pre-wrap text-xs">
             我的草稿：{String(nodeDraftValue(draft, key) ?? "（清空）")}
           </p>
-          <CanvasSegmentedControl
+          <SegmentedControl
             label={`合并${key === "@title" ? "节点名称" : (canvasFieldLabels[key] ?? key)}`}
             value={choices[key] ?? ""}
             className="w-full"

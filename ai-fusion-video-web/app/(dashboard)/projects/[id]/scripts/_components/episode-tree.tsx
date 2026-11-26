@@ -1,13 +1,13 @@
 "use client";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { useReducedMotion } from "framer-motion";
-import { Plus, RotateCw } from "lucide-react";
+import { Plus } from "lucide-react";
+import { EpisodeDirectoryPanel } from "@/components/script/episode-directory-panel";
 import { DirectoryTooltipScope } from "@/components/shared/directory-tooltip";
 import { VirtualDirectory } from "@/components/shared/virtual-directory";
 import { Button } from "@/components/ui/button";
 import type { ScriptEpisode, SceneItem } from "@/lib/api/script";
 import { duplicateTitles, titleKey } from "@/lib/scripts/source-import";
-import { cn } from "@/lib/utils";
 import { EpisodeTreeBlock } from "./episode-tree-block";
 import {
   useEpisodeTreeActions,
@@ -21,6 +21,8 @@ interface Props extends EpisodeTreeActions {
   selectedSceneId: number | null;
   loadingEpisodes: Set<number>;
   episodeScenes: Record<number, SceneItem[]>;
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
   headerAction?: ReactNode;
   onRefresh?: () => void;
   isRefreshing?: boolean;
@@ -35,6 +37,8 @@ export function EpisodeTree(props: Props) {
     loadingEpisodes,
     episodeScenes,
     headerAction,
+    collapsed,
+    onCollapsedChange,
     onRefresh,
     isRefreshing = false,
   } = props;
@@ -62,31 +66,16 @@ export function EpisodeTree(props: Props) {
 
   return (
     <DirectoryTooltipScope>
-      <div
-        data-sidebar-navigation="scripts"
-        className="flex h-full min-h-0 w-full flex-col bg-card/20"
+      <EpisodeDirectoryPanel
+        navigation="scripts"
+        title="剧本目录"
+        count={episodes.length}
+        collapsed={collapsed}
+        onCollapsedChange={onCollapsedChange}
+        onRefresh={onRefresh}
+        isRefreshing={isRefreshing}
+        headerAction={headerAction}
       >
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/20 p-3">
-          <h3 className="text-sm font-semibold">剧本目录</h3>
-          <div className="flex items-center gap-2">
-            {onRefresh && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onRefresh}
-                disabled={isRefreshing}
-                title="刷新剧本目录"
-                aria-label="刷新剧本目录"
-              >
-                <RotateCw className={cn(isRefreshing && "animate-spin")} />
-              </Button>
-            )}
-            <span className="rounded-full bg-muted px-1.5 py-0.5 text-xs font-medium tabular-nums text-muted-foreground">
-              {episodes.length} 集
-            </span>
-            {headerAction}
-          </div>
-        </div>
         <VirtualDirectory
           items={episodes}
           activeId={activeEpisodeId}
@@ -125,7 +114,7 @@ export function EpisodeTree(props: Props) {
             新建分集
           </Button>
         </div>
-      </div>
+      </EpisodeDirectoryPanel>
     </DirectoryTooltipScope>
   );
 }

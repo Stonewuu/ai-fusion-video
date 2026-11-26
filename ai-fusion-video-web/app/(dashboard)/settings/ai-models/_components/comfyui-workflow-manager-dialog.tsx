@@ -15,6 +15,7 @@ import type { ApiConfig } from "@/lib/api/ai-model";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { comfyUiWorkflowApi, type ComfyUiWorkflow } from "@/lib/api/comfyui-workflow";
 import { cn } from "@/lib/utils";
+import { DirectoryHeader } from "@/components/shared/directory-header";
 import { ComfyUiWorkflowEditor } from "./comfyui-workflow-editor";
 
 interface ComfyUiWorkflowManagerDialogProps {
@@ -92,21 +93,21 @@ export function ComfyUiWorkflowManagerDialog({
 
         <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
           <aside data-sidebar-navigation="workflows" className="flex min-h-0 flex-col rounded-xl border border-border/30 bg-card p-3">
-            <div className="flex shrink-0 items-center justify-between gap-2">
-              <div>
-                <p className="text-sm font-semibold">工作流目录</p>
-                <p className="mt-1 text-xs text-muted-foreground">{workflows.length} 个工作流</p>
-              </div>
+            <DirectoryHeader title="工作流目录" description={`${workflows.length} 个工作流`}>
               <Button
                 variant="outline"
-                size="icon-sm"
+                size="icon"
                 aria-label="新建 ComfyUI 工作流"
-                onClick={() => { setCreating(true); setSelectedId(null); }}
+                title="新建工作流"
+                onClick={() => {
+                  setCreating(true);
+                  setSelectedId(null);
+                }}
                 disabled={!apiConfig}
               >
                 <Plus />
               </Button>
-            </div>
+            </DirectoryHeader>
 
             <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
               {loading ? (

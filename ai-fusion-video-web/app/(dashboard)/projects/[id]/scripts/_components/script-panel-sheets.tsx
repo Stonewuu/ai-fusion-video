@@ -1,11 +1,9 @@
 "use client";
 
 import type { ComponentProps, ReactNode } from "react";
-import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { DirectorySheetClose } from "@/components/shared/directory-header";
 import {
   Sheet,
-  SheetClose,
   SheetContent,
   SheetTitle,
 } from "@/components/ui/sheet";
@@ -15,18 +13,6 @@ import { EpisodeTree } from "./episode-tree";
 interface SheetProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-}
-
-function ClosePanel({ label }: { label: string }) {
-  return (
-    <SheetClose
-      render={
-        <Button variant="ghost" size="icon" aria-label={label} title={label} />
-      }
-    >
-      <X />
-    </SheetClose>
-  );
 }
 
 export function ScriptDirectorySheet({
@@ -44,7 +30,7 @@ export function ScriptDirectorySheet({
         <SheetTitle className="sr-only">剧本目录</SheetTitle>
         <EpisodeTree
           {...treeProps}
-          headerAction={<ClosePanel label="关闭剧本目录" />}
+          headerAction={<DirectorySheetClose label="关闭剧本目录" />}
         />
       </SheetContent>
     </Sheet>
@@ -66,7 +52,7 @@ export function ScriptDetailsSheet({
       >
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/20 p-3">
           <SheetTitle>{title}</SheetTitle>
-          <ClosePanel label="关闭详情栏" />
+          <DirectorySheetClose label="关闭详情栏" />
         </div>
         <OverlayScrollArea className="min-h-0 flex-1">
           {children}

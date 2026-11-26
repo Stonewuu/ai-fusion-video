@@ -10,7 +10,7 @@ import { McpContractsDialog } from "@/components/mcp/contracts-dialog";
 import { McpArgumentFields } from "@/components/mcp/argument-fields";
 import type { CanvasConfig } from "@/lib/canvas/types";
 import { CanvasSelect } from "./canvas-select";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 
 export function CanvasMcpFields({ config, onChange, connectedPorts, disabled }: {
   config: CanvasConfig; onChange: (next: CanvasConfig) => void; connectedPorts: string[]; disabled: boolean;
@@ -60,7 +60,7 @@ export function CanvasMcpFields({ config, onChange, connectedPorts, disabled }: 
         </div> : null}
         <div className="flex flex-col gap-2">
           <span className="text-sm font-medium">前置步骤内容如何传入</span>
-          <CanvasSegmentedControl label="MCP 输入方式" value={mode}
+          <SegmentedControl label="MCP 输入方式" value={mode}
             options={[{ value: "NONE", label: "固定参数", disabled }, { value: "TEXT_FIELD", label: "接收文本", disabled }, { value: "JSON_OBJECT", label: "接收 JSON", disabled }]}
             onChange={(value) => {
               const next: CanvasConfig = { ...config, inputMode: value, ...(value === "JSON_OBJECT" ? { argumentsJson: "{}" } : {}) };

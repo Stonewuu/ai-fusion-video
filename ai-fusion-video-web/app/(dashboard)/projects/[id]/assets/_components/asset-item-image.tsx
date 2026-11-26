@@ -116,7 +116,7 @@ export function AssetItemImage({
           "group relative mx-auto aspect-[16/10] w-full max-w-[480px] overflow-hidden rounded-lg border bg-background/70 outline-none transition-colors duration-150 focus-visible:ring-2 focus-visible:ring-ring/50 motion-reduce:transition-none",
           dragging
             ? "border-primary bg-primary/5 ring-2 ring-primary/15"
-            : "border-border/30",
+            : "border-input",
           !imageUrl &&
             !busy &&
             "cursor-pointer border-dashed hover:border-primary/35 hover:bg-primary/5",

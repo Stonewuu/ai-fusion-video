@@ -207,7 +207,7 @@ export function GenerationSimpleComposer({
           "relative isolate overflow-hidden rounded-[28px] border bg-card/76 shadow-[0_6px_20px_-12px_rgba(15,23,42,.4)] backdrop-blur-2xl backdrop-saturate-150 transition-[border-color,box-shadow] duration-150 supports-[backdrop-filter]:bg-card/70 motion-reduce:transition-none",
           dragging
             ? "border-primary/45 ring-4 ring-primary/8"
-            : "border-border/55 focus-within:border-primary/30 focus-within:shadow-[0_8px_24px_-14px_rgba(15,23,42,.46)]",
+            : "border-input focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 focus-within:shadow-[0_8px_24px_-14px_rgba(15,23,42,.46)]",
         )}
       >
         <Button

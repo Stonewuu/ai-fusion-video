@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, ListTree, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogFooter } from "@/components/ui/dialog";
@@ -20,7 +20,9 @@ import { SourcePreview } from "./source-preview";
 import { ImportStepHeader } from "./import-step-header";
 import { ImportDestination } from "./import-destination";
 import { cn } from "@/lib/utils";
-import { MAX_EPISODE_LENGTH, deleteSegment } from "@/lib/scripts/source-import";
+import { deleteSegment } from "@/lib/scripts/source-import";
+import { MAX_EPISODE_LENGTH } from "@/lib/scripts/source-import-limits";
+import { previewScriptSource } from "@/lib/scripts/preview-script-source";
 
 type PreviewDraft = ScriptSourcePreview & { source: string };
 interface DeletedPreview {
@@ -39,7 +41,7 @@ interface Props {
 }
 
 export function ScriptImportDialog(props: Props) {
-  return props.open ? <ImportForm {...props} /> : null;
+  return props.open ? <ImportForm key={props.scriptId} {...props} /> : null;
 }
 
 function ImportForm({
@@ -70,13 +72,17 @@ function ImportForm({
   const [mode, setMode] = useState<"APPEND" | "REPLACE">("APPEND");
   const [version, setVersion] = useState(scriptVersion);
   const [episodes, setEpisodes] = useState<ScriptEpisode[]>([]);
-  const [busy, setBusy] = useState(false);
+  const [requestBusy, setRequestBusy] = useState(false);
+  const [analyzing, setAnalyzing] = useState(false);
+  const activePreview = useRef<AbortController | null>(null);
   const [loadingExisting, setLoadingExisting] = useState(true);
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState(false);
   const [submitError, setSubmitError] = useState(false);
   const hasSource = useMemo(() => source.trim().length > 0, [source]);
   const isPreview = step === "preview" && preview !== null;
+  const busy = requestBusy || analyzing;
+  const errorMessage = error || (isPreview && loadError ? "分集目录加载失败，请刷新分集后重试" : "");
   const canReusePreview =
     previewInput?.source === source &&
     previewInput.rule === rule &&
@@ -98,7 +104,6 @@ function ImportForm({
       .catch(() => {
         if (active) {
           setLoadError(true);
-          setError("分集目录加载失败，请刷新后重试");
         }
       })
       .finally(() => {
@@ -108,11 +113,12 @@ function ImportForm({
       });
     return () => {
       active = false;
+      activePreview.current?.abort();
     };
   }, [scriptId]);
 
   const refresh = async () => {
-    setBusy(true);
+    setRequestBusy(true);
     try {
       const [script, current] = await Promise.all([
         scriptApi.get(scriptId),
@@ -126,12 +132,12 @@ function ImportForm({
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "分集目录加载失败");
     } finally {
-      setBusy(false);
+      setRequestBusy(false);
     }
   };
 
   const loadLegacy = async () => {
-    setBusy(true);
+    setRequestBusy(true);
     setError("");
     try {
       const current = await scriptApi.get(scriptId);
@@ -145,32 +151,24 @@ function ImportForm({
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "原文加载失败");
     } finally {
-      setBusy(false);
+      setRequestBusy(false);
     }
   };
 
   const analyze = async () => {
-    if (
-      !Number.isInteger(targetLength) ||
-      targetLength < 1000 ||
-      targetLength > MAX_EPISODE_LENGTH
-    ) {
-      setError("每集字数应在 1000 至 100000 之间");
-      return;
-    }
     if (preview && canReusePreview) {
       setStep("preview");
       setError("");
       return;
     }
-    setBusy(true);
+    const controller = new AbortController();
+    activePreview.current = controller;
+    setAnalyzing(true);
     setError("");
     try {
-      const result = await scriptApi.previewSource(
-        scriptId,
-        source,
-        rule,
-        targetLength,
+      const result = await previewScriptSource(
+        { source, rule, targetLength },
+        controller.signal,
       );
       setPreview({ ...result, source });
       setPreviewInput({ source, rule, targetLength });
@@ -178,11 +176,14 @@ function ImportForm({
       setDeletedPreview(null);
       setSelected(0);
     } catch (failure) {
-      setError(
-        failure instanceof Error ? failure.message : "分集识别失败，请重试",
-      );
+      if (!controller.signal.aborted) {
+        setError(failure instanceof Error ? failure.message : "分集识别失败，请重试");
+      }
     } finally {
-      setBusy(false);
+      activePreview.current = null;
+      if (!controller.signal.aborted) {
+        setAnalyzing(false);
+      }
     }
   };
 
@@ -201,7 +202,7 @@ function ImportForm({
         return;
       }
     }
-    setBusy(true);
+    setRequestBusy(true);
     setError("");
     try {
       const payload = {
@@ -222,7 +223,7 @@ function ImportForm({
       setError(failure instanceof Error ? failure.message : "导入失败，请重试");
       setSubmitError(true);
     } finally {
-      setBusy(false);
+      setRequestBusy(false);
     }
   };
 
@@ -230,13 +231,13 @@ function ImportForm({
     <Dialog
       open
       onOpenChange={(open) => {
-        if (!open && !busy) {
+        if (!open && !requestBusy) {
           onClose();
         }
       }}
     >
       <DialogContent
-        showCloseButton={!busy}
+        showCloseButton={!requestBusy}
         style={{ backgroundColor: "var(--background)" }}
         className={cn(
           "flex w-[calc(100%-2rem)] max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden rounded-2xl p-0 sm:max-w-6xl",
@@ -333,12 +334,12 @@ function ImportForm({
               原文或规则已修改，下一步将重新生成分集。
             </p>
           )}
-          {error && (
+          {errorMessage && (
             <div className="flex shrink-0 flex-wrap items-center gap-2">
               <p role="alert" className="text-sm text-destructive">
-                {error}
+                {errorMessage}
               </p>
-              {(loadError || submitError) && (
+              {isPreview && (loadError || submitError) && (
                 <Button variant="ghost" disabled={busy} onClick={refresh}>
                   刷新分集
                 </Button>
@@ -361,7 +362,7 @@ function ImportForm({
             )}
             <Button
               variant="ghost"
-              disabled={busy}
+              disabled={requestBusy}
               onClick={onClose}
               className={isPreview ? "ml-auto" : undefined}
             >
@@ -372,11 +373,10 @@ function ImportForm({
               onClick={isPreview ? submit : analyze}
               disabled={
                 busy ||
-                loadingExisting ||
-                loadError ||
                 !hasSource ||
                 (isPreview &&
-                  (preview.segments.length === 0 ||
+                  (loadingExisting || loadError ||
+                    preview.segments.length === 0 ||
                     preview.segments.some((item) => !item.title.trim()))) ||
                 (!isPreview &&
                   (!Number.isInteger(targetLength) ||

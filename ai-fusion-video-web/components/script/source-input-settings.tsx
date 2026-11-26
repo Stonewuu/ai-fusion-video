@@ -11,7 +11,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { ScriptSplitRule } from "@/lib/api/script";
-import { MAX_EPISODE_LENGTH } from "@/lib/scripts/source-import";
+import { MAX_EPISODE_LENGTH } from "@/lib/scripts/source-import-limits";
 
 const rules = [
   { value: "AUTO", label: "自动识别" },

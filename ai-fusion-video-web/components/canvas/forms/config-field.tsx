@@ -24,7 +24,7 @@ import {
   CanvasFieldReset,
   CanvasNumberField,
 } from "./field-controls";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { videoDurationOptions, videoRulesOf, type VideoInputState } from "@/lib/video-model-rules";
 import { GenerationDurationSlider } from "@/components/dashboard/generation/generation-duration-slider";
 
@@ -170,7 +170,7 @@ export function CanvasConfigFieldEditor({
         />
       ) : name === "seed" ? (
         <div className="flex flex-col gap-3">
-          <CanvasSegmentedControl
+          <SegmentedControl
             label="种子模式"
             value={value === undefined || value === -1 ? "random" : "fixed"}
             className="w-full"
@@ -198,7 +198,7 @@ export function CanvasConfigFieldEditor({
           )}
         </div>
       ) : countChoices ? (
-        <CanvasSegmentedControl
+        <SegmentedControl
           label={label}
           value={String(number ?? countMin)}
           className="w-full"

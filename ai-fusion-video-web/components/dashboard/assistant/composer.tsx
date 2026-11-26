@@ -207,7 +207,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
 
   return (
     <div ref={containerRef} className="pointer-events-none absolute inset-x-0 bottom-0 z-10 px-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-      <div className="pointer-events-auto mx-auto w-full max-w-3xl rounded-2xl border border-border/20 bg-card/90 p-2 shadow-xl backdrop-blur-xl backdrop-saturate-150">
+      <div className="pointer-events-auto mx-auto w-full max-w-3xl rounded-2xl border border-input bg-card/90 p-2 shadow-xl focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 backdrop-blur-xl backdrop-saturate-150">
         {visibleAlertMessage ? (
           <div className="mb-2 flex items-center justify-between gap-2 rounded-xl border border-destructive/20 bg-destructive/5 px-2.5 py-1.5 text-[11px] text-destructive">
             <span className="min-w-0 flex-1 truncate">{visibleAlertMessage}</span>
@@ -259,7 +259,7 @@ export function AssistantComposer({ active, tooltipsEnabled, projectId, inputRef
             data-assistant-interactive="true"
             aria-expanded={!!references.picker}
             aria-label="助手消息；输入 @ 引用项目，输入 / 引用 Skill 或 MCP"
-            className="min-h-20 max-h-40 border-0 bg-transparent px-2 py-2 text-sm shadow-none focus-visible:ring-0"
+            className="min-h-20 max-h-40 border-0 [--field-background:transparent] px-2 py-2 text-sm shadow-none focus-visible:ring-0"
             onChange={(event) => references.updateTextWithTrigger(
               event.target.value,
               event.target.selectionStart ?? event.target.value.length,

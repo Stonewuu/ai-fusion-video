@@ -273,7 +273,7 @@ export function SkillImportDialog({
         <div className="min-h-0 overflow-y-auto px-1 py-1">
           <div className="space-y-4">
             <div
-              className="rounded-lg border-2 border-dashed border-border/40 bg-background/70 p-5 text-center"
+              className="rounded-lg border border-dashed border-input bg-background/70 p-5 text-center"
               onDragOver={(event) => event.preventDefault()}
               onDrop={(event) => {
                 event.preventDefault();

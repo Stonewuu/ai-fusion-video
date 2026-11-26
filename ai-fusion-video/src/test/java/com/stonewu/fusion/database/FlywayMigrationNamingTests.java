@@ -88,7 +88,8 @@ class FlywayMigrationNamingTests {
             Map.entry("V1.1.3.1.0__add_media_deletion.sql", 1822981719),
             Map.entry("V1.1.3.1.1__create_google_model_tasks.sql", -2092005375),
             Map.entry("V1.1.3.1.2__restrict_generation_model_types.sql", -207139029),
-            Map.entry("V1.1.4.0.0__expand_agent_output_columns.sql", -977755493));
+            Map.entry("V1.1.4.0.0__expand_agent_output_columns.sql", -977755493),
+            Map.entry("V1.1.4.2.0__agent_stream_protocol.sql", -1576502032));
 
     @Test
     void migrationsUseProductVersionAndContinuousSequence() throws Exception {

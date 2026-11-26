@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CanvasSelect } from "@/components/canvas/forms/canvas-select";
-import { CanvasSegmentedControl } from "@/components/canvas/workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { canvasMcpApi, mcpEffectNames, type McpContract, type McpWorkflowTool, type McpEffect, type McpIdempotency, type McpOutputMode, type McpJsonSchema } from "@/lib/api/canvas-mcp";
 
 export function McpContractEditor({ tools, contract, onSaved, onCancel }: {
@@ -68,14 +68,14 @@ export function McpContractEditor({ tools, contract, onSaved, onCancel }: {
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium">对外部内容的影响</span>
             {tool.readOnly || tool.destructive ? <p className="text-sm text-muted-foreground">{mcpEffectNames[effect]}</p>
-              : <CanvasSegmentedControl label="MCP 操作影响" value={effect}
+              : <SegmentedControl label="MCP 操作影响" value={effect}
                 options={[{ value: "WRITE", label: "修改外部内容", disabled: busy }, { value: "DESTRUCTIVE", label: "删除或覆盖", disabled: busy }]}
                 onChange={(value) => { setEffect(value as McpEffect); setIdempotency("NO_REPLAY"); }} />}
           </div>
           {effect !== "READ_ONLY" ? (
             <div className="flex flex-col gap-2">
               <span className="text-sm font-medium">重复请求约定</span>
-              <CanvasSegmentedControl label="MCP 幂等方式" value={idempotency} onChange={(value) => setIdempotency(value as McpIdempotency)}
+              <SegmentedControl label="MCP 幂等方式" value={idempotency} onChange={(value) => setIdempotency(value as McpIdempotency)}
                 options={[{ value: "NO_REPLAY", label: "不重放", disabled: busy }, { value: "KEYED", label: "提供幂等键", disabled: busy || !stringParameters.length }]} />
               {idempotency === "KEYED" ? <CanvasSelect label="MCP 幂等键参数" value={parameter || null} disabled={busy}
                 placeholder="选择服务用于去重的参数" items={stringParameters.map(([value, field]) => ({ value, label: field.title ?? value }))} onChange={setParameter} /> : null}
@@ -84,7 +84,7 @@ export function McpContractEditor({ tools, contract, onSaved, onCancel }: {
           ) : null}
           <div className="flex flex-col gap-2">
             <span className="text-sm font-medium">返回内容</span>
-            <CanvasSegmentedControl label="MCP 返回内容" value={outputMode}
+            <SegmentedControl label="MCP 返回内容" value={outputMode}
               options={[{ value: "TEXT", label: "纯文本", disabled: busy }, { value: "JSON_TEXT", label: "JSON 文本", disabled: busy }, ...(tool.outputSchema ? [{ value: "STRUCTURED_JSON", label: "结构化 JSON", disabled: busy }] : [])]}
               onChange={(value) => { setOutputMode(value as McpOutputMode); setSchema(JSON.stringify(value === "TEXT" ? { type: "string" } : value === "STRUCTURED_JSON" ? tool.outputSchema : { type: "object" }, null, 2)); }} />
             <p className="text-xs text-muted-foreground">检查通过的内容会成为节点的文本输出，可连接后续智能体、生成或写入节点。</p>

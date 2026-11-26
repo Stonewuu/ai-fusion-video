@@ -2,7 +2,7 @@
 
 import { UserMinus } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CanvasSegmentedControl } from "@/components/canvas/workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import type { ProjectMember } from "@/lib/api/project-members";
 
 export interface ProjectMemberEditorState {
@@ -24,7 +24,7 @@ export function ProjectMemberEditor({ editor, onChange, busy, stale, onReload }:
         <p className="text-sm font-semibold">设置 {editor.member.person.name} 的项目权限</p>
         <p className="text-xs text-muted-foreground">@{editor.member.person.username}</p>
       </div>
-      <CanvasSegmentedControl
+      <SegmentedControl
         label="项目权限"
         value={editor.role}
         options={[

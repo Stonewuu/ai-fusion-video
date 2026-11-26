@@ -131,7 +131,7 @@ export default function ImageInput({
       {value ? (
         <div
           className={cn(
-            "relative rounded-lg overflow-hidden border border-border/20 bg-muted/10 group",
+            "relative rounded-lg overflow-hidden border border-input bg-muted/10 group",
             onPreviewClick && "cursor-zoom-in",
             previewHeight,
             previewContainerClassName
@@ -160,7 +160,7 @@ export default function ImageInput({
       ) : mode === "upload" ? (
         <div
           className={cn(
-            "rounded-lg border-2 border-dashed border-border/30 bg-muted/5 flex flex-col items-center justify-center cursor-pointer",
+            "rounded-lg border border-dashed border-input bg-muted/5 flex flex-col items-center justify-center cursor-pointer",
             "hover:border-primary/30 hover:bg-primary/5 transition-all",
             uploading && "cursor-wait opacity-70",
             previewHeight
@@ -180,7 +180,7 @@ export default function ImageInput({
         </div>
       ) : (
         <div className={cn(
-          "rounded-lg border border-dashed border-border/30 bg-muted/5 flex flex-col items-center justify-center",
+          "rounded-lg border border-dashed border-input bg-muted/5 flex flex-col items-center justify-center",
           previewHeight
         )}>
           <Images className="h-5 w-5 text-muted-foreground/20 mb-1" />

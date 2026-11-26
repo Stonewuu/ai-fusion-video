@@ -4,6 +4,7 @@ import { ChevronRight, Images, RefreshCw, Search } from "lucide-react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import type { AssetWithItems } from "@/lib/api/asset";
 import { cn } from "@/lib/utils";
+import { DirectoryHeader } from "@/components/shared/directory-header";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { OverlayScrollArea } from "@/components/dashboard/overlay-scroll-area";
@@ -50,37 +51,29 @@ export function AssetSidebar({
       className="flex h-full min-h-0 min-w-0 w-full flex-col overflow-hidden rounded-xl border border-border/30 bg-card/50 backdrop-blur-sm"
     >
       <div className="shrink-0 border-b border-border/20 p-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-semibold">资产目录</p>
-            <p className="mt-0.5 text-xs text-muted-foreground">
-              {filteredAssets.length} 个资产
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="image"
-              size="default"
-              onClick={onBatchGenerate}
-              disabled={disabled || !assets.length}
-              title="批量生成资产目录中的全部子资产图片"
-            >
-              <Images />
-              批量生图
-            </Button>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              disabled={disabled}
-              onClick={onRefresh}
-              title="刷新"
-              aria-label="刷新资产"
-            >
-              <RefreshCw />
-            </Button>
-          </div>
-        </div>
+        <DirectoryHeader title="资产目录" description={`${filteredAssets.length} 个资产`}>
+          <Button
+            variant="image"
+            size="default"
+            onClick={onBatchGenerate}
+            disabled={disabled || !assets.length}
+            title="批量生成资产目录中的全部子资产图片"
+          >
+            <Images />
+            批量生图
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon"
+            disabled={disabled}
+            onClick={onRefresh}
+            title="刷新"
+            aria-label="刷新资产"
+          >
+            <RefreshCw />
+          </Button>
+        </DirectoryHeader>
         <div className="relative mt-3">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground/50" />
           <Input
@@ -104,7 +97,7 @@ export function AssetSidebar({
                 "h-6 shrink-0 rounded-lg border px-2 text-xs font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 motion-reduce:transition-none",
                 typeFilter === item.value
                   ? "border-primary/30 bg-primary/10 text-foreground"
-                  : "border-transparent text-muted-foreground hover:border-border/30 hover:bg-muted/50",
+                  : "border-input text-muted-foreground hover:bg-muted/50",
               )}
             >
               {item.label}

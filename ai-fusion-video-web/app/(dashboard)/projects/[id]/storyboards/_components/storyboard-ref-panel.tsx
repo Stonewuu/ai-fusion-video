@@ -65,7 +65,7 @@ export function StoryboardRefPanel({
   const showShot = selectedItem;
 
   return (
-    <div className="w-full lg:w-72 border-l border-border/20 flex flex-col shrink-0 bg-card/20 overflow-y-auto h-full relative">
+    <div className="relative flex h-full min-h-0 w-full shrink-0 flex-col overflow-y-auto border-l border-border/20 bg-card/20">
       {showShot ? (
         <>
           <ItemDetail

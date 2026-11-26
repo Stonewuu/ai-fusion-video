@@ -54,9 +54,9 @@ export function InlineEdit({
       },
       className: cn(
         "w-full px-1 py-0.5 rounded-md text-sm",
-        "bg-transparent border border-transparent",
-        "focus:outline-none focus:bg-muted/30",
-        "transition-all",
+        "border border-input bg-background",
+        "outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50",
+        "transition-colors motion-reduce:transition-none",
         className
       ),
       placeholder,

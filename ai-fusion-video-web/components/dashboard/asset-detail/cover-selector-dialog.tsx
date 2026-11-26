@@ -143,7 +143,7 @@ function CoverSelectorBody({
                           disabled={!url}
                           title={item.name || "未命名子资产"}
                           aria-label={"选用 " + (item.name || "未命名子资产")}
-                          className="overflow-hidden rounded-xl border border-border/30 text-left outline-none hover:border-border/50 focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                          className="overflow-hidden rounded-xl border border-input text-left outline-none hover:border-ring focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                           onClick={() => {
                             if (url) {
                               onSelect(url);

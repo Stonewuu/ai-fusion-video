@@ -130,7 +130,7 @@ export function EditableCell({
   }
 
   const inputClass = cn(
-    "min-h-9 w-full scroll-m-1 rounded-lg border border-border/40 bg-background p-2 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60",
+    "min-h-9 w-full scroll-m-1 rounded-lg border border-input bg-background p-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60",
     className,
   );
   const changed = session.current !== null && value !== session.current.value;

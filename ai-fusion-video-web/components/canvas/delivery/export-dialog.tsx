@@ -29,7 +29,7 @@ import {
 } from "@/lib/api/canvas-exports";
 import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import { useCanvas } from "../canvas-provider";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { CanvasExportHistory, exportSize } from "./export-history";
 import { CanvasTemplateExportPanel } from "../templates/template-export-panel";
 
@@ -144,7 +144,7 @@ export function CanvasExportDialog({ onClose }: { onClose: () => void }) {
             {tab === "template" ? "保存创作流程和内容，用于创建新的独立项目。" : "导出文稿、分镜和媒体。开始后可关闭此窗口，稍后在导出记录中下载。"}
           </DialogDescription>
         </DialogHeader>
-        <CanvasSegmentedControl
+        <SegmentedControl
           label="交付内容"
           value={tab}
           options={[
@@ -161,7 +161,7 @@ export function CanvasExportDialog({ onClose }: { onClose: () => void }) {
             <div className="flex flex-col gap-6">
               <div className="flex flex-col gap-3">
                 <p className="text-sm font-medium">导出范围</p>
-                <CanvasSegmentedControl
+                <SegmentedControl
                   label="导出范围"
                   value={scope}
                   options={[
@@ -237,7 +237,7 @@ export function CanvasExportDialog({ onClose }: { onClose: () => void }) {
                         "flex items-center gap-3 rounded-xl border p-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50",
                         format === item.value
                           ? "border-primary/50 bg-primary/5 dark:border-primary/80 dark:bg-primary/20"
-                          : "border-border/30 bg-card hover:bg-muted/30",
+                          : "border-input bg-card hover:bg-muted/30",
                       )}
                     >
                       <item.icon

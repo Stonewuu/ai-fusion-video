@@ -8,7 +8,6 @@ import { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import {
   Plus,
-  Search,
   FolderKanban,
   Clock,
   Trash2,
@@ -16,6 +15,7 @@ import {
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { SearchInput } from "@/components/shared/search-input";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { projectApi, type Project } from "@/lib/api/project";
 import { CreateProjectDialog } from "@/components/dashboard/create-project-dialog";
@@ -161,22 +161,12 @@ export default function ProjectsPage() {
 
         {/* 搜索栏 */}
         <motion.div variants={itemVariants} className="mb-6">
-          <div
-            className={cn(
-              "flex items-center gap-3 px-4 py-3 rounded-xl",
-              "border border-border/30 bg-card/50 backdrop-blur-sm",
-              "transition-[border-color,box-shadow] duration-150 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 motion-reduce:transition-none"
-            )}
-          >
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="搜索项目名称或描述..."
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
-            />
-          </div>
+          <SearchInput
+            aria-label="搜索项目名称或描述"
+            placeholder="搜索项目名称或描述..."
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
         </motion.div>
 
         {/* 加载状态 */}

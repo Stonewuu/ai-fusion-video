@@ -17,7 +17,7 @@ import {
 } from "@/lib/canvas/resource-draft";
 import { RESOURCE_FIELDS } from "@/lib/canvas/resource-fields";
 import type { CanvasResource } from "@/lib/canvas/types";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { CanvasContentValue } from "../shared/canvas-content-value";
 import { CanvasGuidance } from "../shared/canvas-guidance";
 
@@ -93,7 +93,7 @@ export function CanvasResourceConflicts({
                     <CanvasContentValue type={current.header.resourceType} field={key} value={draft.patch[key]} />
                   </div>
                 </div>
-                <CanvasSegmentedControl
+                <SegmentedControl
                   value={choices[key] ?? ""}
                   label={`如何合并${labels[key] ?? key}`}
                   options={[

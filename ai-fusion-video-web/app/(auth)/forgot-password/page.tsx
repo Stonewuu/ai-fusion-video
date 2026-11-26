@@ -1,5 +1,7 @@
 "use client";
 
+import { AuthInput } from "@/components/auth/auth-input";
+
 import { Suspense, useEffect, useState } from "react";
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -165,7 +167,7 @@ function ForgotPasswordContent() {
       {step === "request" && (
         <form onSubmit={handleRequestSubmit} className="space-y-4">
           <div className="relative">
-            <input
+            <AuthInput
               type="text"
               placeholder="请输入用户名或邮箱地址"
               value={usernameOrEmail}
@@ -173,7 +175,6 @@ function ForgotPasswordContent() {
                 setUsernameOrEmail(e.target.value);
                 setError("");
               }}
-              className="w-full backdrop-blur-[1px] text-white border border-white/10 rounded-full py-3 px-5 focus:outline-none focus:border-white/30 bg-transparent placeholder:text-white/30 transition-colors"
               required
               disabled={loading}
             />
@@ -246,7 +247,7 @@ function ForgotPasswordContent() {
           {/* 如果是日志验证方式，需要手动输入验证码（Token） */}
           {resetType === "log" && (
             <div className="relative">
-              <input
+              <AuthInput
                 type="text"
                 placeholder="请输入日志中显示的验证码"
                 value={token}
@@ -254,7 +255,6 @@ function ForgotPasswordContent() {
                   setToken(e.target.value);
                   setError("");
                 }}
-                className="w-full backdrop-blur-[1px] text-white border border-white/10 rounded-full py-3 px-5 focus:outline-none focus:border-white/30 bg-transparent placeholder:text-white/30 transition-colors"
                 required
                 disabled={loading}
               />
@@ -262,7 +262,7 @@ function ForgotPasswordContent() {
           )}
 
           <div className="relative">
-            <input
+            <AuthInput
               type="password"
               placeholder="请输入新密码"
               value={newPassword}
@@ -270,7 +270,6 @@ function ForgotPasswordContent() {
                 setNewPassword(e.target.value);
                 setError("");
               }}
-              className="w-full backdrop-blur-[1px] text-white border border-white/10 rounded-full py-3 px-5 focus:outline-none focus:border-white/30 bg-transparent placeholder:text-white/30 transition-colors"
               required
               minLength={6}
               disabled={loading}
@@ -278,7 +277,7 @@ function ForgotPasswordContent() {
           </div>
 
           <div className="relative">
-            <input
+            <AuthInput
               type="password"
               placeholder="请再次确认新密码"
               value={confirmPassword}
@@ -286,7 +285,6 @@ function ForgotPasswordContent() {
                 setConfirmPassword(e.target.value);
                 setError("");
               }}
-              className="w-full backdrop-blur-[1px] text-white border border-white/10 rounded-full py-3 px-5 focus:outline-none focus:border-white/30 bg-transparent placeholder:text-white/30 transition-colors"
               required
               minLength={6}
               disabled={loading}

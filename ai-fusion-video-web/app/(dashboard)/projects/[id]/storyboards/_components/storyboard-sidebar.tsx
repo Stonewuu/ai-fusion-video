@@ -1,7 +1,9 @@
 "use client";
+import { EpisodeDirectoryPanel } from "@/components/script/episode-directory-panel";
 import { Button } from "@/components/ui/button";
 import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import {
+  type ReactNode,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -16,10 +18,7 @@ import {
   Plus,
   Clapperboard,
   Trash2,
-  PanelLeftClose,
-  PanelLeftOpen,
   Sparkles,
-  RotateCw,
 } from "lucide-react";
 import {
   DndContext,
@@ -69,7 +68,7 @@ interface StoryboardSidebarProps {
   activeSceneId?: number | null;
   /** 是否以桌面端窄栏形态收起目录 */
   collapsed?: boolean;
-  contained?: boolean;
+  headerAction?: ReactNode;
   onSelect: (selection: SidebarSelection) => void;
   /** 切换桌面端目录收起状态 */
   onCollapsedChange?: (collapsed: boolean) => void;
@@ -403,282 +402,178 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
   };
   return (
     <DirectoryTooltipScope>
-      <div
-        data-sidebar-navigation="storyboards"
-        className={cn(
-          "relative min-h-0 shrink-0 overflow-hidden border-r border-border/20 bg-card/20 h-full transition-[width] duration-200 ease-out motion-reduce:transition-none",
-          props.contained ? "w-full" : collapsed ? "w-12" : "w-64",
-        )}
+      <EpisodeDirectoryPanel
+        navigation="storyboards"
+        title="分镜目录"
+        count={episodes.length}
+        collapsed={collapsed}
+        onCollapsedChange={onCollapsedChange}
+        onRefresh={onRefresh}
+        isRefreshing={isRefreshing}
+        headerAction={props.headerAction}
       >
-        {onCollapsedChange && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-1.5 top-3 z-10"
-            aria-label={collapsed ? "展开分镜目录" : "收起分镜目录"}
-            title={collapsed ? "展开分镜目录" : "收起分镜目录"}
-            aria-expanded={!collapsed}
-            onClick={() => onCollapsedChange(!collapsed)}
-          >
-            {collapsed ? <PanelLeftOpen /> : <PanelLeftClose />}
-          </Button>
-        )}
-        <div
-          inert={collapsed}
-          aria-hidden={collapsed}
-          className={cn(
-            "flex h-full min-h-0 flex-col transition-opacity duration-150 motion-reduce:transition-none",
-            props.contained ? "w-full" : "w-64",
-            collapsed ? "pointer-events-none opacity-0" : "opacity-100",
-          )}
-        >
-          {/* 标题栏 */}
-          <div
-            className={cn(
-              "px-3 py-3 border-b border-primary/8 flex items-center justify-between",
-              onCollapsedChange && "pr-12",
-            )}
-          >
-            <h3 className="text-xs font-semibold text-primary/80 uppercase tracking-wider">
-              分镜目录
-            </h3>
-            <div className="flex items-center gap-1">
-              {onRefresh && (
-                <button
-                  type="button"
-                  onClick={() => void onRefresh()}
-                  disabled={isRefreshing}
-                  className="h-6 w-6 rounded-md flex items-center justify-center text-muted-foreground/70 hover:text-primary hover:bg-primary/8 transition-colors disabled:opacity-50"
-                  title="刷新分镜目录"
-                  aria-label="刷新分镜目录"
-                >
-                  <RotateCw
-                    className={cn(
-                      "h-3.5 w-3.5",
-                      isRefreshing && "animate-spin",
-                    )}
-                  />
-                </button>
-              )}
-              <span className="text-[10px] text-primary/50 bg-primary/6 px-1.5 py-0.5 rounded-full tabular-nums font-medium">
-                {episodes.length} 集
-              </span>
+        <div className="flex min-h-0 flex-1 flex-col">
+          {/* 分镜集列表 */}
+          {loading ? (
+            <div className="px-3 py-4 text-[10px] text-muted-foreground/50 text-center">
+              加载中…
             </div>
-          </div>
-
-          <div className="flex min-h-0 flex-1 flex-col">
-            {/* 分镜集列表 */}
-            {loading ? (
-              <div className="px-3 py-4 text-[10px] text-muted-foreground/50 text-center">
-                加载中…
-              </div>
-            ) : episodes.length === 0 ? (
-              <div className="px-3 py-4 text-[10px] text-muted-foreground/50 text-center">
-                暂无分镜集，点击 + 创建
-              </div>
-            ) : (
-              <VirtualDirectory
-                items={episodes}
-                activeId={selection.episodeId ?? null}
-                expandedIds={expandedEpisodes}
-                draggingId={draggingId}
-                estimateSize={estimateEpisodeSize}
-                onToggle={toggleEpisode}
-                label="分镜分集列表"
-              >
-                {(ep) => {
-                  const isExpanded = expandedEpisodes.has(ep.id);
-                  const isEpisodeSelected =
-                    (selection.type === "episode" ||
-                      selection.type === "scene") &&
-                    selection.episodeId === ep.id;
-                  const scenes = scenesMap[ep.id] || [];
-                  const suggested = scriptByNumber.get(ep.episodeNumber ?? 0);
-                  const suggestedScriptEpisode =
-                    suggested && !boundScriptEpisodeIds.has(suggested.id)
-                      ? suggested
-                      : undefined;
-                  const sourceMissing =
-                    ep.scriptEpisodeId != null &&
-                    !availableScriptEpisodeIds.has(ep.scriptEpisodeId);
-                  const needsBinding =
-                    ep.scriptEpisodeId == null || sourceMissing;
-                  const bindingPanelId = `script-episode-binding-${ep.id}`;
-                  const isBindingPanelOpen = openBindingEpisodeId === ep.id;
-                  return (
-                    <div key={ep.id} className="group/ep mb-0.5">
-                      {/* 集标题行 */}
-                      <div
-                        data-sidebar-row
-                        className={cn(
-                          "flex items-center rounded-lg",
-                          isEpisodeSelected
-                            ? "bg-primary/8"
-                            : "hover:bg-primary/5",
-                        )}
+          ) : episodes.length === 0 ? (
+            <div className="px-3 py-4 text-[10px] text-muted-foreground/50 text-center">
+              暂无分镜集，点击 + 创建
+            </div>
+          ) : (
+            <VirtualDirectory
+              items={episodes}
+              activeId={selection.episodeId ?? null}
+              expandedIds={expandedEpisodes}
+              draggingId={draggingId}
+              estimateSize={estimateEpisodeSize}
+              onToggle={toggleEpisode}
+              label="分镜分集列表"
+            >
+              {(ep) => {
+                const isExpanded = expandedEpisodes.has(ep.id);
+                const isEpisodeSelected =
+                  (selection.type === "episode" ||
+                    selection.type === "scene") &&
+                  selection.episodeId === ep.id;
+                const scenes = scenesMap[ep.id] || [];
+                const suggested = scriptByNumber.get(ep.episodeNumber ?? 0);
+                const suggestedScriptEpisode =
+                  suggested && !boundScriptEpisodeIds.has(suggested.id)
+                    ? suggested
+                    : undefined;
+                const sourceMissing =
+                  ep.scriptEpisodeId != null &&
+                  !availableScriptEpisodeIds.has(ep.scriptEpisodeId);
+                const needsBinding =
+                  ep.scriptEpisodeId == null || sourceMissing;
+                const bindingPanelId = `script-episode-binding-${ep.id}`;
+                const isBindingPanelOpen = openBindingEpisodeId === ep.id;
+                return (
+                  <div key={ep.id} className="group/ep mb-0.5">
+                    {/* 集标题行 */}
+                    <div
+                      data-sidebar-row
+                      className={cn(
+                        "flex items-center rounded-lg",
+                        isEpisodeSelected
+                          ? "bg-primary/8"
+                          : "hover:bg-primary/5",
+                      )}
+                    >
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-xs"
+                        aria-label={`${isExpanded ? "收起" : "展开"}第 ${ep.episodeNumber} 集场次`}
+                        aria-expanded={isExpanded}
+                        onClick={() => toggleEpisode(ep.id)}
                       >
-                        <button
-                          aria-label={`${isExpanded ? "收起" : "展开"}第 ${ep.episodeNumber} 集场次`}
-                          aria-expanded={isExpanded}
-                          onClick={() => toggleEpisode(ep.id)}
-                          className={cn(
-                            "p-2 shrink-0 transition-colors",
-                            isEpisodeSelected
-                              ? "text-primary/60 hover:text-primary"
-                              : "text-muted-foreground/50 hover:text-foreground",
-                          )}
-                        >
-                          <motion.div
-                            animate={{ rotate: isExpanded ? 90 : 0 }}
-                            transition={{ duration: 0.15, ease: "easeOut" }}
+                        <ChevronRight aria-hidden="true" className={cn("transition-transform duration-150 motion-reduce:transition-none", isExpanded && "rotate-90")} />
+                      </Button>
+                      <DirectoryTooltipTrigger
+                        text={ep.title || `第 ${ep.episodeNumber} 集`}
+                        render={
+                          <button
+                            type="button"
+                            data-directory-select={ep.id}
+                            aria-current={isEpisodeSelected ? "true" : undefined}
+                            onClick={() => {
+                              if (!isExpanded) {
+                                toggleEpisode(ep.id);
+                              }
+                              onSelect({ type: "episode", episodeId: ep.id });
+                            }}
+                            className={cn(
+                              "flex h-8 min-w-0 flex-1 items-center gap-2 rounded-lg px-2 text-left text-xs leading-4 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50",
+                              isEpisodeSelected
+                                ? "text-primary font-medium"
+                                : "text-foreground/80 hover:text-foreground",
+                            )}
                           >
-                            <ChevronRight className="h-3 w-3" />
-                          </motion.div>
-                        </button>
-                        <DirectoryTooltipTrigger
-                          text={ep.title || `第 ${ep.episodeNumber} 集`}
-                          render={
-                            <button
-                              data-directory-select={ep.id}
-                              onClick={() => {
-                                if (!isExpanded) {
-                                  toggleEpisode(ep.id);
-                                }
-                                onSelect({ type: "episode", episodeId: ep.id });
-                              }}
+                            <Clapperboard
                               className={cn(
-                                "flex-1 flex items-center gap-1.5 py-2 pr-2 min-w-0 text-left text-sm",
+                                "h-3.5 w-3.5 shrink-0",
                                 isEpisodeSelected
-                                  ? "text-primary font-medium"
-                                  : "text-foreground/80 hover:text-foreground",
+                                  ? "text-primary"
+                                  : "text-muted-foreground",
+                              )}
+                            />
+                            <span
+                              className={cn(
+                                "font-medium truncate text-xs",
+                                isEpisodeSelected && "text-primary",
                               )}
                             >
-                              <Clapperboard
-                                className={cn(
-                                  "h-3.5 w-3.5 shrink-0",
-                                  isEpisodeSelected
-                                    ? "text-primary"
-                                    : "text-muted-foreground",
-                                )}
-                              />
-                              <span
-                                className={cn(
-                                  "font-medium truncate text-xs",
-                                  isEpisodeSelected && "text-primary",
-                                )}
-                              >
-                                {ep.title || `第 ${ep.episodeNumber || "?"} 集`}
-                              </span>
-                            </button>
+                              {ep.title || `第 ${ep.episodeNumber || "?"} 集`}
+                            </span>
+                          </button>
+                        }
+                      />
+                      {!needsBinding && onGenerateEpisodeStoryboard && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onGenerateEpisodeStoryboard(ep);
+                          }}
+                          className="p-1.5 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all"
+                          title="AI 重新生成本集分镜"
+                        >
+                          <Sparkles className="h-3 w-3" />
+                        </button>
+                      )}
+                      <button
+                        onClick={async (e) => {
+                          e.stopPropagation();
+                          if (onDeleteEpisode) {
+                            const success = await onDeleteEpisode(ep);
+                            if (success) {
+                              setEpisodes((prev) =>
+                                prev.filter((o) => o.id !== ep.id),
+                              );
+                              setScenesMap((prev) => {
+                                const next = { ...prev };
+                                delete next[ep.id];
+                                return next;
+                              });
+                            }
+                          }
+                        }}
+                        className="p-1.5 mr-1 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
+                        title="删除分集"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                      <button
+                        onClick={() => handleAddScene(ep.id)}
+                        className="p-1.5 mr-1 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
+                        title="添加场次"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                      {needsBinding && onBindScriptEpisode && (
+                        <ScriptEpisodeBindingReminder
+                          sourceMissing={sourceMissing}
+                          isOpen={isBindingPanelOpen}
+                          isBinding={bindingEpisodeIds.has(ep.id)}
+                          panelId={bindingPanelId}
+                          onToggle={() =>
+                            setOpenBindingEpisodeId((current) =>
+                              current === ep.id ? null : ep.id,
+                            )
                           }
                         />
-                        {!needsBinding && onGenerateEpisodeStoryboard && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onGenerateEpisodeStoryboard(ep);
-                            }}
-                            className="p-1.5 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/10 transition-all"
-                            title="AI 重新生成本集分镜"
-                          >
-                            <Sparkles className="h-3 w-3" />
-                          </button>
-                        )}
-                        <button
-                          onClick={async (e) => {
-                            e.stopPropagation();
-                            if (onDeleteEpisode) {
-                              const success = await onDeleteEpisode(ep);
-                              if (success) {
-                                setEpisodes((prev) =>
-                                  prev.filter((o) => o.id !== ep.id),
-                                );
-                                setScenesMap((prev) => {
-                                  const next = { ...prev };
-                                  delete next[ep.id];
-                                  return next;
-                                });
-                              }
-                            }
-                          }}
-                          className="p-1.5 mr-1 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-all"
-                          title="删除分集"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
-                        <button
-                          onClick={() => handleAddScene(ep.id)}
-                          className="p-1.5 mr-1 shrink-0 rounded-full opacity-0 group-hover/ep:opacity-100 text-muted-foreground hover:text-primary hover:bg-primary/10 transition-all"
-                          title="添加场次"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                        {needsBinding && onBindScriptEpisode && (
-                          <ScriptEpisodeBindingReminder
-                            sourceMissing={sourceMissing}
-                            isOpen={isBindingPanelOpen}
-                            isBinding={bindingEpisodeIds.has(ep.id)}
-                            panelId={bindingPanelId}
-                            onToggle={() =>
-                              setOpenBindingEpisodeId((current) =>
-                                current === ep.id ? null : ep.id,
-                              )
-                            }
-                          />
-                        )}
-                      </div>
+                      )}
+                    </div>
 
-                      <AnimatePresence initial={false}>
-                        {needsBinding &&
-                          onBindScriptEpisode &&
-                          isBindingPanelOpen && (
-                            <motion.div
-                              id={bindingPanelId}
-                              initial={
-                                shouldReduceMotion
-                                  ? false
-                                  : { height: 0, opacity: 0 }
-                              }
-                              animate={{
-                                height: "auto",
-                                opacity: 1,
-                                transition: {
-                                  duration: shouldReduceMotion ? 0 : 0.2,
-                                  ease: "easeOut",
-                                },
-                              }}
-                              exit={{
-                                height: 0,
-                                opacity: 0,
-                                transition: {
-                                  duration: shouldReduceMotion ? 0 : 0.15,
-                                  ease: "easeIn",
-                                },
-                              }}
-                              className="overflow-hidden"
-                            >
-                              <ScriptEpisodeBinding
-                                sourceMissing={sourceMissing}
-                                episodes={scriptEpisodes}
-                                boundEpisodeIds={boundScriptEpisodeIds}
-                                suggestedEpisodeId={suggestedScriptEpisode?.id}
-                                isBinding={bindingEpisodeIds.has(ep.id)}
-                                onBind={(scriptEpisodeId) =>
-                                  handleBindScriptEpisode(
-                                    ep.id,
-                                    String(scriptEpisodeId),
-                                  )
-                                }
-                              />
-                            </motion.div>
-                          )}
-                      </AnimatePresence>
-
-                      {/* 展开的场次列表 */}
-                      <AnimatePresence initial={false}>
-                        {isExpanded && (
+                    <AnimatePresence initial={false}>
+                      {needsBinding &&
+                        onBindScriptEpisode &&
+                        isBindingPanelOpen && (
                           <motion.div
-                            key="scenes"
+                            id={bindingPanelId}
                             initial={
                               shouldReduceMotion
                                 ? false
@@ -702,137 +597,174 @@ export function StoryboardSidebar(props: StoryboardSidebarProps) {
                             }}
                             className="overflow-hidden"
                           >
-                            <div className="ml-3 pl-3 border-l border-primary/15 py-0.5">
-                              {loadingEpisodeIds.has(ep.id) ? (
-                                <p className="p-3 text-xs text-muted-foreground">
-                                  加载中...
-                                </p>
-                              ) : failedEpisodeIds.has(ep.id) ? (
-                                <button
-                                  onClick={() => void loadScenes(ep.id)}
-                                  className="p-3 text-xs text-destructive"
-                                >
-                                  加载失败，点击重试
-                                </button>
-                              ) : scenes.length === 0 ? (
-                                <div className="flex flex-col gap-2">
-                                  <p className="text-[10px] text-muted-foreground/50 px-4 py-2 italic">
-                                    暂无场次
-                                  </p>
-                                  <button
-                                    onClick={() => handleAddScene(ep.id)}
-                                    className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground rounded-md hover:bg-muted/20 transition-colors"
-                                  >
-                                    <Plus className="h-2.5 w-2.5" />
-                                    添加场次
-                                  </button>
-                                </div>
-                              ) : (
-                                <>
-                                  <DndContext
-                                    sensors={sensors}
-                                    collisionDetection={closestCenter}
-                                    onDragStart={({ active }) => {
-                                      setDraggingId(ep.id);
-                                      setDraggedScene(
-                                        scenes.find(
-                                          (scene) => scene.id === active.id,
-                                        )!,
-                                      );
-                                    }}
-                                    onDragCancel={() => {
-                                      setDraggingId(null);
-                                      setDraggedScene(null);
-                                    }}
-                                    onDragEnd={(event) => {
-                                      setDraggingId(null);
-                                      setDraggedScene(null);
-                                      handleDragEnd(ep.id)(event);
-                                    }}
-                                  >
-                                    <SortableContext
-                                      items={scenes.map((s) => s.id)}
-                                      strategy={verticalListSortingStrategy}
-                                    >
-                                      {scenes.map((scene) => (
-                                        <SortableSceneItem
-                                          key={scene.id}
-                                          scene={scene}
-                                          isActive={activeSceneId === scene.id}
-                                          onSelect={() =>
-                                            onSelect({
-                                              type: "scene",
-                                              episodeId: ep.id,
-                                              sceneId: scene.id,
-                                            })
-                                          }
-                                          onDelete={async (e) => {
-                                            e.stopPropagation();
-                                            if (onDeleteScene) {
-                                              const success =
-                                                await onDeleteScene(scene);
-                                              if (success) {
-                                                setScenesMap((prev) => ({
-                                                  ...prev,
-                                                  [ep.id]: (
-                                                    prev[ep.id] || []
-                                                  ).filter(
-                                                    (s) => s.id !== scene.id,
-                                                  ),
-                                                }));
-                                              }
-                                            }
-                                          }}
-                                        />
-                                      ))}
-                                    </SortableContext>
-                                    {typeof document !== "undefined" &&
-                                      createPortal(
-                                        <DragOverlay dropAnimation={null}>
-                                          {draggedScene && (
-                                            <div className="rounded-lg border border-border/40 bg-popover p-2 text-xs shadow-xl">
-                                              {draggedScene.sceneHeading ||
-                                                "场次"}
-                                            </div>
-                                          )}
-                                        </DragOverlay>,
-                                        document.body,
-                                      )}
-                                  </DndContext>
-                                  <button
-                                    onClick={() => handleAddScene(ep.id)}
-                                    className="w-full flex items-center gap-1.5 px-2 py-1.5 mt-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground rounded-md hover:bg-muted/20 transition-colors"
-                                  >
-                                    <Plus className="h-2.5 w-2.5" />
-                                    添加场次
-                                  </button>
-                                </>
-                              )}
-                            </div>
+                            <ScriptEpisodeBinding
+                              sourceMissing={sourceMissing}
+                              episodes={scriptEpisodes}
+                              boundEpisodeIds={boundScriptEpisodeIds}
+                              suggestedEpisodeId={suggestedScriptEpisode?.id}
+                              isBinding={bindingEpisodeIds.has(ep.id)}
+                              onBind={(scriptEpisodeId) =>
+                                handleBindScriptEpisode(
+                                  ep.id,
+                                  String(scriptEpisodeId),
+                                )
+                              }
+                            />
                           </motion.div>
                         )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                }}
-              </VirtualDirectory>
-            )}
-          </div>
-          <div className="px-3 py-2 border-t border-primary/8">
-            <button
-              onClick={handleAddEpisode}
-              className={cn(
-                "w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium",
-                "text-primary/60 bg-primary/5 transition-colors",
-                "border border-dashed border-primary/20 hover:text-primary hover:bg-primary/10 hover:border-primary/40",
-              )}
-            >
-              <Plus className="h-3 w-3" />
-              添加分镜集
-            </button>
-          </div>
+                    </AnimatePresence>
+
+                    {/* 展开的场次列表 */}
+                    <AnimatePresence initial={false}>
+                      {isExpanded && (
+                        <motion.div
+                          key="scenes"
+                          initial={
+                            shouldReduceMotion
+                              ? false
+                              : { height: 0, opacity: 0 }
+                          }
+                          animate={{
+                            height: "auto",
+                            opacity: 1,
+                            transition: {
+                              duration: shouldReduceMotion ? 0 : 0.2,
+                              ease: "easeOut",
+                            },
+                          }}
+                          exit={{
+                            height: 0,
+                            opacity: 0,
+                            transition: {
+                              duration: shouldReduceMotion ? 0 : 0.15,
+                              ease: "easeIn",
+                            },
+                          }}
+                          className="overflow-hidden"
+                        >
+                          <div className="ml-3 pl-3 border-l border-primary/15 py-0.5">
+                            {loadingEpisodeIds.has(ep.id) ? (
+                              <p className="p-3 text-xs text-muted-foreground">
+                                加载中...
+                              </p>
+                            ) : failedEpisodeIds.has(ep.id) ? (
+                              <button
+                                onClick={() => void loadScenes(ep.id)}
+                                className="p-3 text-xs text-destructive"
+                              >
+                                加载失败，点击重试
+                              </button>
+                            ) : scenes.length === 0 ? (
+                              <div className="flex flex-col gap-2">
+                                <p className="text-[10px] text-muted-foreground/50 px-4 py-2 italic">
+                                  暂无场次
+                                </p>
+                                <button
+                                  onClick={() => handleAddScene(ep.id)}
+                                  className="w-full flex items-center gap-1.5 px-2 py-1.5 text-[10px] text-muted-foreground/50 hover:text-muted-foreground rounded-md hover:bg-muted/20 transition-colors"
+                                >
+                                  <Plus className="h-2.5 w-2.5" />
+                                  添加场次
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <DndContext
+                                  sensors={sensors}
+                                  collisionDetection={closestCenter}
+                                  onDragStart={({ active }) => {
+                                    setDraggingId(ep.id);
+                                    setDraggedScene(
+                                      scenes.find(
+                                        (scene) => scene.id === active.id,
+                                      )!,
+                                    );
+                                  }}
+                                  onDragCancel={() => {
+                                    setDraggingId(null);
+                                    setDraggedScene(null);
+                                  }}
+                                  onDragEnd={(event) => {
+                                    setDraggingId(null);
+                                    setDraggedScene(null);
+                                    handleDragEnd(ep.id)(event);
+                                  }}
+                                >
+                                  <SortableContext
+                                    items={scenes.map((s) => s.id)}
+                                    strategy={verticalListSortingStrategy}
+                                  >
+                                    {scenes.map((scene) => (
+                                      <SortableSceneItem
+                                        key={scene.id}
+                                        scene={scene}
+                                        isActive={activeSceneId === scene.id}
+                                        onSelect={() =>
+                                          onSelect({
+                                            type: "scene",
+                                            episodeId: ep.id,
+                                            sceneId: scene.id,
+                                          })
+                                        }
+                                        onDelete={async (e) => {
+                                          e.stopPropagation();
+                                          if (onDeleteScene) {
+                                            const success =
+                                              await onDeleteScene(scene);
+                                            if (success) {
+                                              setScenesMap((prev) => ({
+                                                ...prev,
+                                                [ep.id]: (
+                                                  prev[ep.id] || []
+                                                ).filter(
+                                                  (s) => s.id !== scene.id,
+                                                ),
+                                              }));
+                                            }
+                                          }
+                                        }}
+                                      />
+                                    ))}
+                                  </SortableContext>
+                                  {typeof document !== "undefined" &&
+                                    createPortal(
+                                      <DragOverlay dropAnimation={null}>
+                                        {draggedScene && (
+                                          <div className="rounded-lg border border-border/40 bg-popover p-2 text-xs shadow-xl">
+                                            {draggedScene.sceneHeading ||
+                                              "场次"}
+                                          </div>
+                                        )}
+                                      </DragOverlay>,
+                                      document.body,
+                                    )}
+                                </DndContext>
+                                <button
+                                  onClick={() => handleAddScene(ep.id)}
+                                  className="w-full flex items-center gap-1.5 px-2 py-1.5 mt-1 text-[10px] text-muted-foreground/40 hover:text-muted-foreground rounded-md hover:bg-muted/20 transition-colors"
+                                >
+                                  <Plus className="h-2.5 w-2.5" />
+                                  添加场次
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              }}
+            </VirtualDirectory>
+          )}
         </div>
-      </div>
+        <div className="shrink-0 border-t border-border/20 px-3 py-2">
+          <Button type="button" variant="ghost" className="w-full" onClick={handleAddEpisode}>
+            <Plus aria-hidden="true" />
+            添加分镜集
+          </Button>
+        </div>
+      </EpisodeDirectoryPanel>
     </DirectoryTooltipScope>
   );
 }

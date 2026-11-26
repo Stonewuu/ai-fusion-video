@@ -141,7 +141,7 @@ function EpisodeField({
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
         disabled={saving}
-        className="w-full rounded-xl border border-border/40 bg-background p-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="w-full rounded-xl border border-input bg-background p-3 text-sm focus-visible:border-ring focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
         onKeyDown={(event) => {
           if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
             event.preventDefault();

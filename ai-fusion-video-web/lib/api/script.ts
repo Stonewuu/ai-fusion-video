@@ -1,4 +1,5 @@
 import { http } from "./client";
+import { SOURCE_IMPORT_TIMEOUT_MS } from "@/lib/scripts/source-import-limits";
 
 // ========== 类型定义 ==========
 
@@ -172,23 +173,12 @@ export const scriptApi = {
   ) =>
     http.put<never, Script>("/api/script", { id, version, requestId, patch }),
 
-  previewSource: (
-    id: number,
-    rawContent: string,
-    rule: ScriptSplitRule,
-    targetLength: number,
-  ) =>
-    http.post<never, ScriptSourcePreview>(`/api/script/${id}/source/preview`, {
-      rawContent,
-      rule,
-      targetLength,
-    }),
-
   importSource: (id: number, payload: ScriptSourceImport, requestId: string) =>
-    http.put<never, Script>(`/api/script/${id}/source`, {
-      ...payload,
-      requestId,
-    }),
+    http.put<never, Script>(
+      `/api/script/${id}/source`,
+      { ...payload, requestId },
+      { timeout: SOURCE_IMPORT_TIMEOUT_MS },
+    ),
 
   // ========== 分集 ==========
 

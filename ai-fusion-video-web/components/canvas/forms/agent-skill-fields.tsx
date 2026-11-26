@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import type { CanvasAgentProfile, CanvasConfig } from "@/lib/canvas/types";
 import { useCanvas } from "../canvas-provider";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 
 export function CanvasAgentSkillFields({ profile, config, onChange, disabled }: {
   profile: CanvasAgentProfile | undefined;
@@ -22,7 +22,7 @@ export function CanvasAgentSkillFields({ profile, config, onChange, disabled }: 
       <h3 className="text-sm font-medium">Skill 工作规范</h3>
       <Button variant="ghost" size="xs" nativeButton={false} render={<a href="/settings/agents?section=skills" target="_blank" rel="noopener noreferrer" />} title="在新标签页管理 Skill，保留当前画布">管理<ExternalLink /></Button>
     </div>
-    <CanvasSegmentedControl label="Skill 使用方式" value={custom ? "CUSTOM" : "INHERIT"}
+    <SegmentedControl label="Skill 使用方式" value={custom ? "CUSTOM" : "INHERIT"}
       options={[{ value: "INHERIT", label: "跟随智能体", disabled }, { value: "CUSTOM", label: "单独指定", disabled }]}
       onChange={(mode) => {
         const next: CanvasConfig = { ...config, skillMode: mode };

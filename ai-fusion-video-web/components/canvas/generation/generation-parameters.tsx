@@ -136,6 +136,7 @@ export function GenerationParameters({
             render={
               <CanvasButton
                 variant="secondary"
+                data-field-trigger=""
                 className="min-w-0 flex-1 px-2.5 text-xs tabular-nums @[480px]:flex-none"
                 aria-label="输出参数"
                 title={`输出设置：${summary}`}

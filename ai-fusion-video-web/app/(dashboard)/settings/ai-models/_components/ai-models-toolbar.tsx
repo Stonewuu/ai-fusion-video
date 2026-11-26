@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { MODEL_TYPE_OPTIONS } from "@/lib/api/ai-model";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -123,42 +124,16 @@ export function AiModelsToolbar({
             导出
           </Button>
 
-          <div
-            className="inline-flex h-9 shrink-0 items-center rounded-4xl bg-muted p-[3px] ring-1 ring-inset ring-border/35"
-            role="group"
-            aria-label="展示方式"
-          >
-            <button
-              type="button"
-              onClick={() => onViewModeChange("list")}
-              aria-pressed={viewMode === "list"}
-              aria-label="列表视图"
-              title="列表视图"
-              className={cn(
-                "flex h-full w-9 items-center justify-center rounded-4xl outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
-                viewMode === "list"
-                  ? "bg-background text-foreground shadow-xs ring-1 ring-border/25 dark:bg-card"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <List className="size-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onViewModeChange("card")}
-              aria-pressed={viewMode === "card"}
-              aria-label="卡片视图"
-              title="卡片视图"
-              className={cn(
-                "flex h-full w-9 items-center justify-center rounded-4xl outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
-                viewMode === "card"
-                  ? "bg-background text-foreground shadow-xs ring-1 ring-border/25 dark:bg-card"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              <LayoutGrid className="size-4" />
-            </button>
-          </div>
+          <SegmentedControl
+            label="展示方式"
+            value={viewMode}
+            onChange={onViewModeChange}
+            compact
+            options={[
+              { value: "list", label: "列表视图", icon: List },
+              { value: "card", label: "卡片视图", icon: LayoutGrid },
+            ]}
+          />
 
           <Button type="button" onClick={onOpenCreateConfig}>
             <Plus />
@@ -191,32 +166,15 @@ export function AiModelsToolbar({
             )}
           </div>
 
-          <div
-            className="inline-flex h-9 items-center rounded-4xl bg-muted p-[3px] ring-1 ring-inset ring-border/35"
-            role="group"
-            aria-label="按模型类型筛选"
-          >
-            {[{ value: 0, label: "全部" }, ...MODEL_TYPE_OPTIONS].map((option) => {
-              const active = modelTypeFilter === option.value;
-              const shortLabel = option.value === 0 ? "全部" : option.label.replace("生成", "");
-              return (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => onModelTypeFilterChange(option.value)}
-                  className={cn(
-                    "flex h-full items-center rounded-4xl px-3 text-xs font-medium outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active
-                      ? "bg-background text-foreground shadow-xs ring-1 ring-border/25 dark:bg-card"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {shortLabel}
-                </button>
-              );
-            })}
-          </div>
+          <SegmentedControl
+            label="按模型类型筛选"
+            value={modelTypeFilter}
+            onChange={onModelTypeFilterChange}
+            options={[
+              { value: 0, label: "全部" },
+              ...MODEL_TYPE_OPTIONS.map(({ value, label }) => ({ value, label: label.replace("生成", "") })),
+            ]}
+          />
 
           <Select
             value={statusFilter}

@@ -21,7 +21,7 @@ import {
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import { useCommandRequestKey } from "@/hooks/use-command-request-key";
 import { useCanvas, useCanvasStoreApi } from "../canvas-provider";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { ProjectMembersDialog } from "@/components/project/members-dialog";
 
 type Role = "VIEWER" | "EDITOR" | "MANAGER";
@@ -320,7 +320,7 @@ export function CanvasShareDialog({ onClose }: { onClose: () => void }) {
                   @{editor.person.username}
                 </p>
               </div>
-              <CanvasSegmentedControl
+              <SegmentedControl
                 label="画布权限"
                 value={editor.role}
                 options={roles.map((role) => ({ ...role, disabled: busy }))}
@@ -341,7 +341,7 @@ export function CanvasShareDialog({ onClose }: { onClose: () => void }) {
                     运行前显示范围与用量
                   </p>
                 </div>
-                <CanvasSegmentedControl
+                <SegmentedControl
                   label="允许运行"
                   value={editor.execute ? "yes" : "no"}
                   compact

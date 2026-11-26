@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Loader2, Search, ShieldCheck, Users } from "lucide-react";
+import { Loader2, ShieldCheck, Users } from "lucide-react";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
+import { SearchInput } from "@/components/shared/search-input";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { userApi } from "@/lib/api/user";
 import { getApiErrorMessage } from "@/lib/api/api-error";
@@ -110,17 +111,16 @@ export default function SettingsUsersPage() {
           </p>
         </div>
 
-        <div className="relative w-full md:w-[280px]">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/60" />
-          <input
-            type="text"
-            value={keyword}
-            onChange={(e) => { setKeyword(e.target.value); setPage(1); }}
-            aria-label="按用户名搜索"
-            placeholder="按用户名搜索"
-            className="w-full rounded-xl border border-border/30 bg-card/40 py-2.5 pl-10 pr-4 text-sm outline-none transition-colors focus:border-primary/40"
-          />
-        </div>
+        <SearchInput
+          containerClassName="w-full md:w-[280px]"
+          value={keyword}
+          onChange={(event) => {
+            setKeyword(event.target.value);
+            setPage(1);
+          }}
+          aria-label="按用户名搜索"
+          placeholder="按用户名搜索"
+        />
       </motion.div>
 
       <motion.div variants={itemVariants} className="grid gap-4 md:grid-cols-3">

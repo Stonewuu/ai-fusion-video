@@ -1,5 +1,7 @@
 "use client";
 
+import { Checkbox } from "@/components/ui/checkbox";
+
 import { SafeImage } from "@/components/media/managed-image";
 import { resolveMediaUrl } from "@/lib/api/client";
 import type { StoryboardItem } from "@/lib/api/storyboard";
@@ -142,26 +144,22 @@ export function BatchFrameGenDialog({
             <p className="text-xs font-medium mb-2">生成类型</p>
             <div className="grid grid-cols-2 gap-2">
               <label className="flex items-center gap-2 rounded-lg bg-background/40 px-3 py-2 text-xs">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={includeFirstFrame}
-                  onChange={(event) => {
-                    setIncludeFirstFrame(event.target.checked);
+                  onCheckedChange={(checked) => {
+                    setIncludeFirstFrame(checked);
                     resetSelection();
                   }}
-                  className="h-4 w-4 rounded border-border accent-primary"
                 />
                 <span>首帧</span>
               </label>
               <label className="flex items-center gap-2 rounded-lg bg-background/40 px-3 py-2 text-xs">
-                <input
-                  type="checkbox"
+                <Checkbox
                   checked={includeLastFrame}
-                  onChange={(event) => {
-                    setIncludeLastFrame(event.target.checked);
+                  onCheckedChange={(checked) => {
+                    setIncludeLastFrame(checked);
                     resetSelection();
                   }}
-                  className="h-4 w-4 rounded border-border accent-primary"
                 />
                 <span>尾帧</span>
               </label>
@@ -169,14 +167,13 @@ export function BatchFrameGenDialog({
           </div>
 
           <label className="flex items-start gap-3 rounded-lg border border-border/30 bg-muted/10 px-3 py-3 text-left">
-            <input
-              type="checkbox"
+            <Checkbox
               checked={overwriteExisting}
-              onChange={(event) => {
-                setOverwriteExisting(event.target.checked);
+              onCheckedChange={(checked) => {
+                setOverwriteExisting(checked);
                 resetSelection();
               }}
-              className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
+              className="mt-0.5"
             />
             <span className="min-w-0">
               <span className="block text-xs font-medium">覆盖已有首尾帧</span>

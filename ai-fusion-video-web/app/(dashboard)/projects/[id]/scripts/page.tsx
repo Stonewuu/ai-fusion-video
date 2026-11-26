@@ -27,7 +27,7 @@ import { useSceneNavigation } from "./_components/use-scene-navigation";
 import { SceneDetail } from "./_components/scene-detail";
 import { ScriptOverview } from "./_components/script-overview";
 import {
-  ScriptWorkspacePanel,
+  ScriptDetailsPanel,
   ScriptPanelToggle,
 } from "./_components/script-workspace-panel";
 import {
@@ -680,18 +680,13 @@ export default function ScriptTabPage() {
       animate="visible"
       className="flex min-h-0 grow basis-0 rounded-xl border border-border/20 overflow-hidden bg-card/10"
     >
-      <ScriptWorkspacePanel
-        side="left"
-        collapsed={isScriptSidebarCollapsed}
-        onToggle={() =>
-          handleSetScriptSidebarCollapsed(!isScriptSidebarCollapsed)
-        }
-      >
+      <aside id="script-left-panel" aria-label="剧本目录栏" className="hidden h-full min-h-0 shrink-0 xl:block">
         <EpisodeTree
           {...treeProps}
-          headerAction={<span className="size-9 shrink-0" aria-hidden />}
+          collapsed={isScriptSidebarCollapsed}
+          onCollapsedChange={handleSetScriptSidebarCollapsed}
         />
-      </ScriptWorkspacePanel>
+      </aside>
 
       {/* 中栏：场次卡片列表 */}
       <motion.div
@@ -768,14 +763,14 @@ export default function ScriptTabPage() {
         </div>
       </motion.div>
 
-      <ScriptWorkspacePanel side="right" collapsed={isDetailsCollapsed}>
+      <ScriptDetailsPanel collapsed={isDetailsCollapsed}>
         <h3 className="shrink-0 px-4 pt-4 text-sm font-semibold">
           {detailsTitle}
         </h3>
         <OverlayScrollArea className="min-h-0 flex-1">
           {details}
         </OverlayScrollArea>
-      </ScriptWorkspacePanel>
+      </ScriptDetailsPanel>
       <ScriptDirectorySheet
         open={leftSheetOpen}
         onOpenChange={setLeftSheetOpen}

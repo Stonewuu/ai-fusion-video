@@ -42,7 +42,7 @@ function AssetChoices({ title, icon: Icon, items, selected, onSelect, onPreview,
               <button type="button" role={single ? "radio" : "checkbox"} aria-checked={selected.has(item.id)}
                 onClick={() => onSelect(item.id)} title={`${item.assetName} · ${item.name}`}
                 className={cn("flex w-full flex-col rounded-xl border bg-card text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                  selected.has(item.id) ? "border-primary bg-primary/5" : "border-border/30 hover:border-border/50")}>
+                  selected.has(item.id) ? "border-primary bg-primary/5" : "border-input hover:border-ring")}>
                 <div className="relative flex aspect-video w-full items-center justify-center overflow-hidden rounded-t-xl bg-muted/30">
                   {item.imageUrl ? <SafeImage src={resolveMediaUrl(item.imageUrl)} alt={item.name || item.assetName} className="size-full object-cover" /> : <Icon className="size-6 text-muted-foreground" />}
                   {selected.has(item.id) && <span className="absolute right-2 top-2 rounded-full bg-primary p-1 text-primary-foreground"><Check className="size-3" /></span>}

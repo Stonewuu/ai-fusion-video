@@ -136,7 +136,7 @@ export function GenerationAdvancedPanel({
 
       <OverlayScrollArea className="min-h-0 flex-1">
         <div className="space-y-3 p-3">
-          <section className="rounded-[18px] border border-border/45 bg-background/48 p-3.5">
+          <section className="rounded-[18px] border border-input bg-background/48 p-3.5">
             <div className="flex items-center gap-2.5">
               <span className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-muted text-muted-foreground">
                 <Cpu className="h-3.5 w-3.5" />
@@ -179,7 +179,7 @@ export function GenerationAdvancedPanel({
             )}
           </section>
 
-          <section className="overflow-hidden rounded-[18px] border border-border/45 bg-background/48 shadow-[0_14px_45px_-38px_rgba(15,23,42,.55)] transition-colors duration-150 focus-within:border-primary/25 motion-reduce:transition-none">
+          <section className="overflow-hidden rounded-[18px] border border-border/45 bg-background/48 shadow-[0_14px_45px_-38px_rgba(15,23,42,.55)] transition-colors duration-150 focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50 motion-reduce:transition-none">
             <div className="flex items-center justify-between gap-3 px-3.5 pt-3.5">
               <div>
                 <h4 className="text-xs font-semibold">创作提示词</h4>

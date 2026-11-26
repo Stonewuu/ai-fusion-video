@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Check, Loader2, Search, X } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { toastApiError } from "@/lib/api/toast-api-error";
 import { getModelDisplayParts } from "@/lib/model-display";
 import { useUnsavedDialog } from "@/components/settings/use-unsaved-dialog";
@@ -291,36 +292,16 @@ export function FetchRemoteModelsDialog({
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-center gap-2">
                 {availableTypes.length > 1 && (
-                  <div
-                    className="inline-flex h-9 items-center rounded-4xl bg-muted p-[3px] ring-1 ring-inset ring-border/35"
-                    role="group"
-                    aria-label="按类型筛选远程模型"
-                  >
-                    {[0, ...availableTypes].map((value) => {
-                      const active = typeFilter === value;
-                      const label =
-                        value === 0
-                          ? "全部"
-                          : (MODEL_TYPE_LABELS[value] || `类型${value}`).replace("生成", "");
-                      return (
-                        <button
-                          key={value}
-                          type="button"
-                          aria-pressed={active}
-                          disabled={adding}
-                          onClick={() => setTypeFilter(value)}
-                          className={cn(
-                            "flex h-full items-center rounded-4xl px-3 text-xs font-medium outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
-                            active
-                              ? "bg-background text-foreground shadow-xs ring-1 ring-border/25 dark:bg-card"
-                              : "text-muted-foreground hover:text-foreground",
-                          )}
-                        >
-                          {label}
-                        </button>
-                      );
-                    })}
-                  </div>
+                  <SegmentedControl
+                    label="按类型筛选远程模型"
+                    value={typeFilter}
+                    onChange={setTypeFilter}
+                    options={[0, ...availableTypes].map((value) => ({
+                      value,
+                      label: value === 0 ? "全部" : (MODEL_TYPE_LABELS[value] || `类型${value}`).replace("生成", ""),
+                      disabled: adding,
+                    }))}
+                  />
                 )}
 
                 <div className="flex items-center gap-2 px-1">
@@ -426,10 +407,10 @@ export function FetchRemoteModelsDialog({
                       className={cn(
                         "flex size-4 shrink-0 items-center justify-center rounded border transition-colors",
                         alreadyExists
-                          ? "border-border bg-muted"
+                          ? "border-input bg-muted"
                           : isSelected
                             ? "border-primary bg-primary"
-                            : "border-border/70",
+                            : "border-input",
                       )}
                     >
                       {(isSelected || alreadyExists) && (

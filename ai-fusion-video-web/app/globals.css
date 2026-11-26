@@ -120,30 +120,65 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-/* Product-wide field surfaces and resting borders. Keep upstream Shadcn
-   sources intact; focus, validation and disabled states stay with each control.
-   画布组件（data-slot="canvas-*"）使用独立的填充式外观，不套用这里的底色与描边。 */
+/* 独立字段使用主题底色。组合字段的边框与焦点环由外层绘制。 */
 :where(
-  [data-slot="input"],
-  [data-slot="textarea"],
-  [data-slot="select-trigger"],
-  [data-slot="input-group"],
-  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]):not([data-slot^="canvas-"]),
-  textarea:not([data-slot^="canvas-"]),
-  select
-) {
+  [data-slot="input"], [data-slot="textarea"], [data-slot="select-trigger"],
+  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]),
+  textarea, select
+):not([data-slot^="canvas-"]) {
+  background-color: var(--field-background);
+
+  &:not(:focus-visible, [aria-invalid="true"], [data-invalid], [aria-expanded="true"]) {
+    border-color: var(--input);
+  }
+
+  &:is([aria-invalid="true"], [data-invalid]) {
+    border-color: var(--destructive);
+  }
+}
+
+[data-slot="input-group"] {
   background-color: var(--field-background);
 }
-:where(
-  [data-slot="input"],
-  [data-slot="textarea"],
-  [data-slot="select-trigger"],
-  input:not([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"], [type="hidden"], [type="button"], [type="submit"], [type="reset"], [type="image"]):not([data-slot^="canvas-"]),
-  textarea:not([data-slot^="canvas-"]),
-  select
-):not(:focus-visible):not([aria-invalid="true"]):not([data-invalid]):not(:disabled) {
+
+[data-slot="input-group"] > input {
+  background-color: transparent;
+}
+
+[data-field-trigger] {
+  border-width: 1px;
+  border-style: solid;
+}
+
+[data-field-trigger]:not(:focus-visible, [aria-expanded="true"], [aria-invalid="true"]) {
   border-color: var(--input);
 }
+
+:where([data-slot="checkbox"], [data-slot="switch"], [data-slot="input-group"], [data-slot="canvas-input"], [data-slot="canvas-textarea"]):is([aria-invalid="true"], [data-invalid]) {
+  border-color: var(--destructive);
+}
+
+:where([data-slot="switch"], [data-slot="checkbox"], button[role="radio"], button[role="checkbox"]):not(
+  :focus-visible, [data-checked], [data-indeterminate], [aria-checked="true"], [aria-checked="mixed"],
+  [aria-invalid="true"], [data-invalid]
+) {
+  border-color: var(--input);
+}
+
+/* 原生单选框在未选择时也使用字段边色，高对比度模式由系统绘制。 */
+@media (forced-colors: none) {
+  input[type="radio"]:not(:checked) {
+    appearance: none;
+    border: 1px solid var(--input);
+    border-radius: 50%;
+    background-color: var(--field-background);
+  }
+
+  input[type="radio"]:disabled:not(:checked) {
+    opacity: 0.5;
+  }
+}
+
 :where(input, textarea)::placeholder {
   color: var(--muted-foreground);
   opacity: 1;

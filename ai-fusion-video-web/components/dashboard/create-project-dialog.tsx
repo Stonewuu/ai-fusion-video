@@ -245,10 +245,10 @@ export function CreateProjectDialog({
                         disabled={loading}
                         onClick={() => setProjectType(t)}
                         className={cn(
-                          "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
+                          "px-3 py-1.5 rounded-lg border border-transparent text-sm font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
                           projectType === t
                             ? "bg-primary text-primary-foreground shadow-sm"
-                            : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-border/30 hover:border-primary/40"
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-input hover:border-ring"
                         )}
                       >
                         {projectType === t && (
@@ -275,10 +275,10 @@ export function CreateProjectDialog({
                         disabled={loading}
                         onClick={() => setAspectRatio(ar.label)}
                         className={cn(
-                          "flex flex-col items-center gap-0.5 px-5 py-2 rounded-xl text-sm font-medium transition-colors",
+                          "flex flex-col items-center gap-0.5 px-5 py-2 rounded-xl border border-transparent text-sm font-medium outline-none transition-colors focus-visible:ring-[3px] focus-visible:ring-ring/50",
                           aspectRatio === ar.label
                             ? "bg-primary text-primary-foreground shadow-sm"
-                            : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-border/30 hover:border-primary/40"
+                            : "bg-muted/50 text-muted-foreground hover:bg-muted/80 border border-input hover:border-ring"
                         )}
                       >
                         <span className="font-semibold text-xs">{ar.label}</span>
@@ -321,8 +321,8 @@ export function CreateProjectDialog({
                             className={cn(
                               "relative flex flex-col items-center gap-1.5 p-2 rounded-xl transition-colors",
                               artStyle === preset.key
-                                ? "bg-primary/10 border-2 border-primary shadow-sm"
-                                : "bg-muted/30 border border-border/30 hover:border-primary/40 hover:bg-muted/50"
+                                ? "bg-primary/10 border border-primary shadow-sm"
+                                : "bg-muted/30 border border-input hover:border-ring hover:bg-muted/50"
                             )}
                           >
                             <div className="w-full aspect-square rounded-lg overflow-hidden bg-muted/50 relative">

@@ -41,7 +41,7 @@ export function SourceInputFile({
 }: Props) {
   if (!file) {
     return (
-      <div className="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border/50 bg-muted/20 px-4 py-8 text-center">
+      <div className="flex min-h-72 flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-input bg-muted/20 px-4 py-8 text-center">
         <div className="flex size-14 items-center justify-center rounded-xl bg-primary/10 text-primary">
           <FileUp className="size-7" aria-hidden="true" />
         </div>

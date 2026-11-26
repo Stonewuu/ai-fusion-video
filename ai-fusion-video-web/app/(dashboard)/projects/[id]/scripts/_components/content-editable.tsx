@@ -53,7 +53,7 @@ export function ContentEditable({
       style={maxWidth ? { maxWidth } : undefined}
       className={cn(
         "outline-none rounded-sm cursor-text transition-colors whitespace-pre-wrap wrap-break-word",
-        "hover:bg-muted/10 focus:bg-primary/5",
+        "hover:bg-muted/10 focus:bg-primary/5 focus-visible:ring-2 focus-visible:ring-ring/50",
         className
       )}
       data-placeholder={placeholder}

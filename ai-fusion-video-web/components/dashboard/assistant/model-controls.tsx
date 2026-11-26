@@ -99,7 +99,7 @@ export function AssistantModelControls({
         >
           <SelectTrigger
             data-assistant-interactive="true"
-            className="max-w-56 border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-0"
+            className="max-w-56 px-2 text-xs"
             aria-label="选择对话模型"
           >
             <SelectValue className="sr-only" placeholder="选择模型" />
@@ -151,7 +151,7 @@ export function AssistantModelControls({
         >
           <SelectTrigger
             data-assistant-interactive="true"
-            className="max-w-40 border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-0"
+            className="max-w-40 px-2 text-xs"
             aria-label={`思考强度：${selectedReasoningEffort ?? "未选择"}`}
             title="调整模型回答前的思考强度；强度越高，通常响应越慢"
           >

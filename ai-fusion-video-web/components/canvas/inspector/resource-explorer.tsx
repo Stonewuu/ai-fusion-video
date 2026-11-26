@@ -1,5 +1,5 @@
 "use client";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { useState } from "react";
 import { Plus, RefreshCw, Play, ArrowUpRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -226,7 +226,7 @@ function ExplorerContent({
         >
           <RefreshCw />
         </Button>
-        {child && <CanvasSegmentedControl
+        {child && <SegmentedControl
           label="项目内容视图"
           className="ml-auto"
           value={mode}

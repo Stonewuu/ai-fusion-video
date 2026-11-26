@@ -8,7 +8,7 @@ import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } fr
 import { CanvasDialogContent as DialogContent } from "@/components/canvas/shared/canvas-dialog";
 import { canvasActivityApi, type CanvasActivity } from "@/lib/api/canvas-activity";
 import { getApiErrorMessage } from "@/lib/api/api-error";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { CanvasActivitySummary } from "./activity-summary";
 
 const localDay = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -46,7 +46,7 @@ export function CanvasActivityDialog({ canvasId, onClose }: { canvasId: string; 
           <DialogDescription>汇总这张画布在所选日期内发起的运行与交付。</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 space-y-5 overflow-y-auto px-1 py-1">
-          <CanvasSegmentedControl label="统计日期" value={preset} options={[
+          <SegmentedControl label="统计日期" value={preset} options={[
             { value: "7", label: "近 7 天" }, { value: "30", label: "近 30 天" }, { value: "90", label: "近 90 天" },
           ]} onChange={(value) => { const next = period(Number(value)); setPreset(value); setDates(next); submit(next); }} className="w-full" />
           <form className="grid items-end gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]" onSubmit={(event) => { event.preventDefault(); submit(); }}>

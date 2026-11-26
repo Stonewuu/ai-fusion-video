@@ -180,6 +180,9 @@ export default function DashboardLayout({
           {/* 移动端菜单按钮 */}
           {ready && !isCanvasWorkspace && (
             <button
+              type="button"
+              aria-label={sidebarOpen ? "关闭菜单栏" : "打开菜单栏"}
+              aria-expanded={sidebarOpen}
               onClick={() => setSidebarRoute(sidebarOpen ? null : pathname)}
               className={cn(
                 "fixed left-3 bottom-4 z-60 lg:hidden",

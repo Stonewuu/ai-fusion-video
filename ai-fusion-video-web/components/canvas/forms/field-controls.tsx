@@ -5,7 +5,7 @@ import { CircleHelp, Minus, Plus, RotateCcw } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { CanvasSelect } from "./canvas-select";
 import type { FieldChoice } from "@/lib/canvas/field-presentation";
 
@@ -27,7 +27,7 @@ export function CanvasChoiceField({ label, value, items, onChange, disabled = fa
   };
   return <div className="flex min-w-0 flex-col gap-2">
     {options.length <= 3 && options.every((item) => item.label.length <= 8) ? (
-      <CanvasSegmentedControl label={label} value={selected} className="w-full"
+      <SegmentedControl label={label} value={selected} className="w-full"
         options={options.map((item) => ({ ...item, disabled }))} onChange={select} />
     ) : <CanvasSelect label={label} value={value == null && !showCustom ? null : selected} items={options}
       disabled={disabled} placeholder={placeholder} onChange={select} />}
@@ -41,7 +41,7 @@ export function CanvasBooleanField({ label, value, onChange, disabled, unsupport
   defaultLabel?: string; defaultTitle?: string;
 }) {
   return <div className="flex flex-col gap-2">
-    <CanvasSegmentedControl label={label} value={value === undefined ? "default" : value ? "on" : "off"} className="w-full"
+    <SegmentedControl label={label} value={value === undefined ? "default" : value ? "on" : "off"} className="w-full"
       options={[
         { value: "default", label: defaultLabel, title: defaultTitle, disabled },
         { value: "on", label: "开启", disabled: disabled || unsupported },

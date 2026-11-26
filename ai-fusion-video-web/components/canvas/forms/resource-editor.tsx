@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CanvasSegmentedControl } from "../workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { Save, RotateCcw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SafeImage } from "@/components/media/managed-image";
@@ -93,7 +93,7 @@ export function CanvasResourceEditor({
           {canvasTypeNames[resource.header.resourceType]}
           {dirty ? " · 有未保存草稿" : ""}
         </p>
-        <CanvasSegmentedControl
+        <SegmentedControl
           label="内容查看方式"
           value={mode}
           onChange={setMode}

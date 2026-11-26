@@ -92,7 +92,7 @@ export function AssistantToolPermissionControl({
     >
       <SelectTrigger
         size="sm"
-        className="max-w-36 border-0 bg-transparent px-2 text-xs shadow-none focus-visible:ring-0"
+        className="max-w-36 px-2 text-xs"
         aria-label={`工具执行方式：${active.label}`}
         data-assistant-interactive="true"
       >

@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DialogContent } from "@/components/shared/dialog-content";
-import { CanvasSegmentedControl } from "@/components/canvas/workspace/segmented-control";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { projectMembersApi, projectRoleLabel, type ProjectMember, type ProjectMemberAudit, type ProjectMembers } from "@/lib/api/project-members";
 import { getApiErrorMessage } from "@/lib/api/api-error";
 import { useCommandRequestKey } from "@/hooks/use-command-request-key";
@@ -86,7 +86,7 @@ export function ProjectMembersDialog({ projectId, onClose }: { projectId: number
           <DialogDescription>统一管理项目内容与画布的访问权限。</DialogDescription>
         </DialogHeader>
         <div className="min-h-0 space-y-5 overflow-y-auto px-1 py-1">
-          {!editor && data?.canManage && <CanvasSegmentedControl label="成员信息" value={tab} options={[
+          {!editor && data?.canManage && <SegmentedControl label="成员信息" value={tab} options={[
             { value: "members", label: "成员", icon: Users }, { value: "history", label: "权限记录", icon: History },
           ]} onChange={(value) => { setTab(value); setPage(1); setHistory(null); setError(null); }} />}
           {!editor && tab === "members" && (

@@ -48,10 +48,10 @@ export function GenerationDurationSlider({ value, min, max, automatic, options, 
   </div>;
 
   if (!compact) {
-    return <div className={cn("rounded-lg border border-border/20 bg-background/70 p-3", className)}>{content}</div>;
+    return <div className={cn("rounded-lg border border-input bg-background/70 p-3", className)}>{content}</div>;
   }
   return <PopoverPrimitive.Root>
-    <PopoverPrimitive.Trigger render={<Button variant="ghost" />} aria-label={`调整视频时长，当前${label}`} title={label}
+    <PopoverPrimitive.Trigger render={<Button variant="outline" />} data-field-trigger="" aria-label={`调整视频时长，当前${label}`} title={label}
       className={cn("w-28 shrink-0 sm:w-32", className)}>
       <Clock3 /><span className="min-w-0 flex-1 truncate tabular-nums">{auto ? "自动" : label}</span><ChevronUp />
     </PopoverPrimitive.Trigger>

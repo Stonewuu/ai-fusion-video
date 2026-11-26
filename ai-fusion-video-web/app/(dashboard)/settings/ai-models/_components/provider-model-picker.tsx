@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { SegmentedControl } from "@/components/shared/segmented-control";
 import { ModelVendorIcon } from "@/components/dashboard/model-vendor-icon";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -106,34 +107,16 @@ export function ProviderModelPicker({
 
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <div
-            className="inline-flex h-9 items-center rounded-4xl bg-muted p-[3px] ring-1 ring-inset ring-border/35"
-            role="group"
-            aria-label="模型类型"
-          >
-            {[0, ...types].map((value) => {
-              const active = type === value;
-              const label =
-                value === 0 ? "全部" : MODEL_TYPE_LABELS[value].replace("生成", "");
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  aria-pressed={active}
-                  disabled={busy}
-                  onClick={() => setType(value)}
-                  className={cn(
-                    "flex h-full items-center rounded-4xl px-3 text-xs font-medium outline-none transition-colors motion-reduce:transition-none focus-visible:ring-2 focus-visible:ring-ring",
-                    active
-                      ? "bg-background text-foreground shadow-xs ring-1 ring-border/25 dark:bg-card"
-                      : "text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {label}
-                </button>
-              );
-            })}
-          </div>
+          <SegmentedControl
+            label="模型类型"
+            value={type}
+            onChange={setType}
+            options={[0, ...types].map((value) => ({
+              value,
+              label: value === 0 ? "全部" : MODEL_TYPE_LABELS[value].replace("生成", ""),
+              disabled: busy,
+            }))}
+          />
 
           {existing.size > 0 && (
             <div className="flex items-center gap-2 px-1">

@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { DialogContent } from "@/components/shared/dialog-content";
+import { DirectorySheetClose } from "@/components/shared/directory-header";
 import { Button } from "@/components/ui/button";
 import { VideoPreviewDialog } from "@/components/dashboard/video-preview-dialog";
 import { motion, useReducedMotion, type Variants } from "framer-motion";
@@ -228,17 +229,17 @@ export function StoryboardWorkspace({
       {/* 中栏：按场次分组的分镜内容 */}
       <motion.div
         variants={sectionVariants}
-        className="flex-1 flex flex-col min-h-0 min-w-0"
+        className="@container flex min-h-0 min-w-0 flex-1 flex-col"
       >
         {/* 工具栏 */}
-        <div className="px-4 md:px-5 py-3 border-b border-border/20 flex items-center justify-between shrink-0">
-          <div className="flex items-center gap-2 max-w-[60%]">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-border/20 px-4 py-3 md:px-5">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <Sheet open={leftSheetOpen} onOpenChange={setLeftSheetOpen}>
               <SheetTrigger
                 render={
                   <Button
                     variant="ghost"
-                    size="icon-sm"
+                    size="icon"
                     className="xl:hidden shrink-0"
                     aria-label="打开分镜目录"
                   >
@@ -248,11 +249,12 @@ export function StoryboardWorkspace({
               />
               <SheetContent
                 side="left"
-                className="data-[side=left]:w-[calc(100%-2rem)] p-0 border-r-0 flex flex-col pt-12"
+                showCloseButton={false}
+                className="gap-0 p-0 data-[side=left]:w-[calc(100%-2rem)] motion-reduce:transition-none motion-reduce:transform-none"
               >
                 <SheetTitle className="sr-only">分镜目录</SheetTitle>
                 <StoryboardSidebar
-                  contained
+                  headerAction={<DirectorySheetClose label="关闭分镜目录" />}
                   projectId={projectId}
                   onRefresh={handleManualRefreshStoryboard}
                   isRefreshing={isRefreshingStoryboard}
@@ -271,7 +273,7 @@ export function StoryboardWorkspace({
                 />
               </SheetContent>
             </Sheet>
-            <h2 className="text-base font-semibold flex items-center gap-2 overflow-hidden">
+            <h2 className="flex min-w-0 items-center gap-2 text-base font-semibold">
               <Film className="h-4 w-4 text-primary shrink-0" />
               <span className="truncate">{project?.name || "未命名项目"}</span>
               <span className="hidden sm:inline text-xs text-muted-foreground font-normal ml-1 shrink-0">
@@ -279,7 +281,7 @@ export function StoryboardWorkspace({
               </span>
             </h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="order-last flex w-full min-w-0 flex-wrap items-center gap-2 @3xl:order-none @3xl:w-auto">
             <Button
               variant="ai"
               size="sm"
@@ -329,7 +331,8 @@ export function StoryboardWorkspace({
                 <span className="hidden sm:inline">卡片</span>
               </Button>
             </div>
-            {/* 右侧边栏触发器 */}
+          </div>
+          <div className="flex shrink-0 items-center">
             <Button
               variant="ghost"
               size="icon"
@@ -357,24 +360,31 @@ export function StoryboardWorkspace({
               />
               <SheetContent
                 side="right"
-                className="w-[300px] p-0 border-l-0 flex flex-col pt-12 overflow-y-auto"
+                showCloseButton={false}
+                className="gap-0 overflow-hidden p-0 data-[side=right]:w-[calc(100%-2rem)] motion-reduce:transition-none motion-reduce:transform-none"
               >
-                <StoryboardRefPanel
-                  storyboard={storyboard}
-                  items={allItems}
-                  selectedItem={selectedItem}
-                  activeSceneGroup={activeSceneGroup}
-                  projectId={projectId}
-                  project={project}
-                  assetLookup={assetLookup}
-                  onUpdateFrame={handleUpdateItemFrame}
-                  onGenerateFrame={handleGenerateItemFrame}
-                  onBatchGenerateFrames={handleBatchGenerateSceneFrames}
-                  onEditAssets={(item) => {
-                    setEditingItem(item);
-                    setEditAssetsOpen(true);
-                  }}
-                />
+                <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/20 p-3">
+                  <SheetTitle>分镜详情</SheetTitle>
+                  <DirectorySheetClose label="关闭分镜详情" />
+                </div>
+                <div className="min-h-0 flex-1">
+                  <StoryboardRefPanel
+                    storyboard={storyboard}
+                    items={allItems}
+                    selectedItem={selectedItem}
+                    activeSceneGroup={activeSceneGroup}
+                    projectId={projectId}
+                    project={project}
+                    assetLookup={assetLookup}
+                    onUpdateFrame={handleUpdateItemFrame}
+                    onGenerateFrame={handleGenerateItemFrame}
+                    onBatchGenerateFrames={handleBatchGenerateSceneFrames}
+                    onEditAssets={(item) => {
+                      setEditingItem(item);
+                      setEditAssetsOpen(true);
+                    }}
+                  />
+                </div>
               </SheetContent>
             </Sheet>
           </div>

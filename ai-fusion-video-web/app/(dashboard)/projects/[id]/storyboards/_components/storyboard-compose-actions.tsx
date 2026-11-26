@@ -47,7 +47,7 @@ export function StoryboardComposeActions({ episode, submitting, running, onCompo
     }
   };
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-2">
+    <div className="flex max-w-full flex-wrap items-center gap-2">
       {episode.composedVideoUrl && (
         <Button variant="outline" size="sm" onClick={() => onPreview(episode.composedVideoUrl!)} title="预览最近一次写回的成片">
           <PlayCircle />预览

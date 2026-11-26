@@ -235,10 +235,10 @@ export function SceneCard({
               className={cn(
                 "h-auto! px-2 py-0.5 text-[11px] font-medium shrink-0 rounded-md min-w-0 w-auto gap-1 border",
                 localScene.intExt === "内"
-                  ? "bg-violet-500/10 text-violet-400 border-violet-500/20"
+                  ? "bg-violet-500/10 text-violet-400"
                   : localScene.intExt === "外"
-                  ? "bg-orange-500/10 text-orange-400 border-orange-500/20"
-                  : "bg-muted/50 text-muted-foreground border-border/20"
+                  ? "bg-orange-500/10 text-orange-400"
+                  : "bg-muted/50 text-muted-foreground"
               )}
             >
               <SelectValue placeholder="内/外" />
